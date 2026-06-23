@@ -596,7 +596,7 @@
 
     <script>
         
-        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (통신 장애 100% 극복용)
+        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (통신 장애 100% 극복 및 단어 대폭 추가!)
         const OFFLINE_DICT_DB = {
             "tener": {
                 meaning: "가지다", pos: "verb", verbClass: "irregular", irregularType: "1인칭 및 e ➡️ ie",
@@ -675,6 +675,31 @@
                 meaning: "집", pos: "noun", gender: "feminine",
                 example: "Mi casa es tu casa.", exampleMeaning: "내 집이 곧 네 집이지 (편히 쉬어).",
                 notes: "여성 명사이며, 스페인어권 국가에서 환영할 때 쓰는 친숙한 숙어 표현입니다."
+            },
+            "el ojo": {
+                meaning: "눈", pos: "noun", gender: "masculine",
+                example: "Abre los ojos.", exampleMeaning: "눈을 크게 떠봐.",
+                notes: "남성 명사입니다. 신체 부위인 '눈'을 뜻하며, 복수형은 los ojos입니다."
+            },
+            "la boca": {
+                meaning: "입", pos: "noun", gender: "feminine",
+                example: "Cierra la boca.", exampleMeaning: "입을 다물어라.",
+                notes: "여성 명사입니다. 신체 부위 '입'을 뜻합니다."
+            },
+            "la mano": {
+                meaning: "손", pos: "noun", gender: "feminine",
+                example: "Lávate las manos.", exampleMeaning: "손을 깨끗하게 씻으렴.",
+                notes: "끝이 -o로 끝나지만 예외적으로 아주 유명한 '여성 명사'입니다! 별표 다섯 개!"
+            },
+            "el pie": {
+                meaning: "발", pos: "noun", gender: "masculine",
+                example: "Me duelen los pies.", exampleMeaning: "나 지금 발이 너무 아파.",
+                notes: "남성 명사이며, 복수형은 끝에 s를 붙여 los pies라고 합니다."
+            },
+            "el amigo": {
+                meaning: "친구 (남자)", pos: "noun", gender: "masculine",
+                example: "Él es mi mejor amigo.", exampleMeaning: "그는 나의 가장 친한 친구야.",
+                notes: "여성 친구는 la amiga라고 부릅니다."
             }
         };
 
@@ -687,14 +712,14 @@
                 ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
                 : type === 'error'
                 ? 'bg-rose-50 border-rose-100 text-rose-800'
-                : 'bg-slate-900 border-slate-800 text-white'
+                : 'bg-amber-50 border-amber-100 text-amber-800'
             }`;
             
             const icon = type === 'success' 
                 ? '<i class="fa-solid fa-circle-check text-emerald-500 text-base"></i>' 
                 : type === 'error'
                 ? '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-base"></i>'
-                : '<i class="fa-solid fa-circle-info text-rose-400 text-base"></i>';
+                : '<i class="fa-solid fa-lightbulb text-amber-500 text-base"></i>';
                 
             toast.innerHTML = `${icon} <span class="flex-1">${message}</span>`;
             container.appendChild(toast);
@@ -1323,13 +1348,7 @@
                     document.getElementById('conj-ellos').value = result.conjugations.ellos || '';
                 }
             }
-
-            document.getElementById('input-example').value = result.example || '';
-            document.getElementById('input-example-meaning').value = result.exampleMeaning || '';
-            document.getElementById('input-notes').value = result.notes || '';
-        }
-
-        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업)
+        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
         function runOfflineAutofill(rawWord) {
             const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
             
@@ -1353,25 +1372,25 @@
                     }
                     
                     match = {
-                        meaning: `[동사] ${rawWord}`,
+                        meaning: "", // 뜻은 사용자가 직접 깔끔하게 채울 수 있도록 빈칸 처리
                         pos: "verb",
                         verbClass: "regular",
                         irregularType: "none",
                         conjugations: conj,
                         example: `Quiero ${rawWord} hoy.`,
-                        exampleMeaning: `나는 오늘 ${rawWord}하고 싶다.`,
-                        notes: "동사원형 접미사를 인식하여 규칙 동사 변형표를 자동 계산했습니다."
+                        exampleMeaning: "", // 지저분한 텍스트 방지를 위해 빈칸 처리
+                        notes: "동사의 형태 규칙에 기반하여 현재시제 규칙 변형을 자동 계산했습니다. 한글 뜻을 알맞게 입력해 주세요!"
                     };
                 } else {
                     // 명사형 남/여성 기본 유추
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
                     match = {
-                        meaning: `[명사] ${rawWord}`,
+                        meaning: "", // 뜻은 사용자가 직접 깔끔하게 채울 수 있도록 빈칸 처리
                         pos: "noun",
                         gender: isFeminine ? "feminine" : "masculine",
                         example: `Me gusta ${rawWord}.`,
-                        exampleMeaning: `나는 ${rawWord}이/가 마음에 들어.`,
-                        notes: "단어 형태의 끝맺음 규칙에 기반하여 남성/여성 명사 성별을 자동 유추했습니다."
+                        exampleMeaning: "", // 지저분한 텍스트 방지를 위해 빈칸 처리
+                        notes: "단어의 형태 규칙(어미)에 기반하여 품사와 명사 성별을 유추했습니다. 한글 뜻을 알맞게 입력해 주세요!"
                     };
                 }
             }
@@ -1379,7 +1398,13 @@
             // UI에 적용
             applyAutofillResult(match);
             AudioFX.playSuccess();
-            showToast(`지능형 오프라인 사전 엔진으로 추천을 대체 적용했습니다! ⚡`, "success");
+
+            // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
+            if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
+                showToast(`지능형 오프라인 사전에서 "${rawWord}" 정보를 완벽하게 찾아 적용했습니다! ⚡`, "success");
+            } else {
+                showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
+            }
         }
 
         // Save Word Action
