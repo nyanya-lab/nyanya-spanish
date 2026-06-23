@@ -74,7 +74,7 @@
                     <div>
                         <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
                             냐냐의 스페인어 타격 단어장
-                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 10.0 Real AI</span>
+                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 11.0 Auto Guard</span>
                         </h1>
                     </div>
                 </div>
@@ -608,8 +608,46 @@
 
     <script>
         
-        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (English POS Tags)
+        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (pelo, libro, mesa, casa, comer 등 적극 추가)
         const OFFLINE_DICT_DB = {
+            "pelo": {
+                meaning: "머리카락, 털", pos: "noun", gender: "masculine",
+                example: "Me gusta el pelo largo.", exampleMeaning: "나는 긴 머리가 마음에 들어.",
+                notes: "남성명사입니다. 'pelo' 자체는 머리카락 또는 동물의 털을 넓게 지칭합니다."
+            },
+            "libro": {
+                meaning: "책", pos: "noun", gender: "masculine",
+                example: "Leo un libro en español.", exampleMeaning: "나는 스페인어로 책 한 권을 읽는다.",
+                notes: "남성명사입니다. '-o'로 끝나는 정형적인 형태이며 복수는 libros입니다."
+            },
+            "mesa": {
+                meaning: "책상, 테이블", pos: "noun", gender: "feminine",
+                example: "Pongo el vaso sobre la mesa.", exampleMeaning: "나는 잔을 테이블 위에 올려놓는다.",
+                notes: "여성명사입니다. '-a'로 끝나는 정형적인 형태입니다."
+            },
+            "casa": {
+                meaning: "집", pos: "noun", gender: "feminine",
+                example: "Mi casa es pequeña pero hermosa.", exampleMeaning: "우리 집은 작지만 참 예쁘다.",
+                notes: "여성명사입니다. 'En casa'는 관사 없이 '집에서'라는 숙어로 매우 자주 쓰입니다."
+            },
+            "comer": {
+                meaning: "먹다", pos: "verb", verbClass: "regular", irregularType: "none",
+                conjugations: { yo: "como", tu: "comes", el: "come", nos: "comemos", vos: "coméis", ellos: "comen" },
+                example: "Quiero comer una paella deliciosa.", exampleMeaning: "나는 맛있는 빠에야를 먹고 싶어.",
+                notes: "-er로 끝나는 전형적인 규칙 변화 동사입니다."
+            },
+            "vivir": {
+                meaning: "살다, 거주하다", pos: "verb", verbClass: "regular", irregularType: "none",
+                conjugations: { yo: "vivo", tu: "vives", el: "vive", nos: "vivimos", vos: "vivís", ellos: "viven" },
+                example: "Yo vivo en Seúl hoy en día.", exampleMeaning: "나는 요즘 서울에 살고 있어.",
+                notes: "-ir로 끝나는 대표적인 규칙 동사입니다."
+            },
+            "hablar": {
+                meaning: "말하다, 대화하다", pos: "verb", verbClass: "regular", irregularType: "none",
+                conjugations: { yo: "hablo", tu: "hablas", el: "habla", nos: "hablamos", vos: "habláis", ellos: "hablan" },
+                example: "Ella habla español muy bien.", exampleMeaning: "그녀는 스페인어를 아주 유창하게 구사해.",
+                notes: "-ar로 끝나는 기본형 규칙 변화 동사입니다."
+            },
             "tener": {
                 meaning: "가지다", pos: "verb", verbClass: "irregular", irregularType: "1인칭 및 e ➡️ ie",
                 conjugations: { yo: "tengo", tu: "tienes", el: "tiene", nos: "tenemos", vos: "tenéis", ellos: "tienen" },
@@ -697,7 +735,6 @@
             }, 3000);
         }
 
-        // Web Audio Synthesizer
         const AudioFX = {
             ctx: null,
             init() {
@@ -775,6 +812,17 @@
                 osc.stop(now + 0.25);
             }
         };
+
+        // JSON 추출 및 파싱 안전 가드 탑재 (Conversation block 우회용)
+        function extractAndParseJson(text) {
+            const firstBrace = text.indexOf('{');
+            const lastBrace = text.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                const jsonString = text.substring(firstBrace, lastBrace + 1);
+                return JSON.parse(jsonString);
+            }
+            throw new Error("No valid JSON object found in response");
+        }
 
         // Live Gemini API Connector Utility
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null) {
@@ -1277,13 +1325,10 @@
             try {
                 // 실시간 API 호출 시도
                 const responseText = await callGemini(prompt, system, schema);
-                let cleanJsonText = responseText.trim();
-                if (cleanJsonText.startsWith("```")) {
-                    cleanJsonText = cleanJsonText.replace(/```json|```/g, "").trim();
-                }
-                const result = JSON.parse(cleanJsonText);
+                // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
+                const result = extractAndParseJson(responseText);
 
-                applyAutofillResult(result);
+                applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
                 AudioFX.playSuccess();
                 showToast("구글 Gemini 라이브 AI 정밀 분석 데이터 적용 완료! ✨", "success");
             } catch (e) {
@@ -1295,32 +1340,67 @@
             }
         }
 
-        // 결과값 UI 대입 처리부
-        function applyAutofillResult(result) {
-            document.getElementById('input-meaning').value = result.meaning || '';
-            document.getElementById('input-pos').value = result.pos || 'noun';
+        // 결과값 UI 대입 처리부 (지능형 오버라이트 가드 탑재: 사용자가 치고 있던 소중한 입력을 지키는 최첨단 쉴드)
+        function applyAutofillResult(result, forceOverwrite = false) {
+            const wordVal = document.getElementById('input-word').value.trim();
+            
+            const meaningInput = document.getElementById('input-meaning');
+            // 사용자가 이미 뭔가를 적었다면, 강제 덮어쓰기 모드(추천 클릭)가 아닐 경우 지우지 않고 유지
+            if (forceOverwrite || !meaningInput.value.trim()) {
+                meaningInput.value = result.meaning || '';
+            }
+
+            const posInput = document.getElementById('input-pos');
+            if (forceOverwrite || posInput.value === 'noun') {
+                posInput.value = result.pos || 'noun';
+            }
             togglePosFields();
 
             if (result.pos === 'noun') {
-                document.getElementById('input-gender').value = result.gender || 'none';
-            } else if (result.pos === 'verb') {
-                document.getElementById('input-verb-class').value = result.verbClass || 'regular';
-                toggleVerbTypeDetails();
-                if (result.verbClass === 'irregular') {
-                    document.getElementById('input-verb-irregular-type').value = result.irregularType || "1인칭 불규칙";
+                const genderInput = document.getElementById('input-gender');
+                if (forceOverwrite || genderInput.value === 'none') {
+                    genderInput.value = result.gender || 'none';
                 }
+            } else if (result.pos === 'verb') {
+                const verbClassInput = document.getElementById('input-verb-class');
+                if (forceOverwrite || verbClassInput.value === 'regular') {
+                    verbClassInput.value = result.verbClass || 'regular';
+                }
+                toggleVerbTypeDetails();
+                
+                if (result.verbClass === 'irregular') {
+                    const irrTypeInput = document.getElementById('input-verb-irregular-type');
+                    if (forceOverwrite || irrTypeInput.value === 'none') {
+                        irrTypeInput.value = result.irregularType || "1인칭 불규칙";
+                    }
+                }
+                
                 if (result.conjugations) {
-                    document.getElementById('conj-yo').value = result.conjugations.yo || '';
-                    document.getElementById('conj-tu').value = result.conjugations.tu || '';
-                    document.getElementById('conj-el').value = result.conjugations.el || '';
-                    document.getElementById('conj-nos').value = result.conjugations.nos || '';
-                    document.getElementById('conj-vos').value = result.conjugations.vos || '';
-                    document.getElementById('conj-ellos').value = result.conjugations.ellos || '';
+                    const conjKeys = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
+                    conjKeys.forEach(key => {
+                        const conjInput = document.getElementById(`conj-${key}`);
+                        if (forceOverwrite || !conjInput.value.trim()) {
+                            conjInput.value = result.conjugations[key] || '';
+                        }
+                    });
                 }
             }
-            document.getElementById('input-example').value = result.example || '';
-            document.getElementById('input-example-meaning').value = result.exampleMeaning || '';
-            document.getElementById('input-notes').value = result.notes || '';
+
+            const exampleInput = document.getElementById('input-example');
+            // 기본 형태의 유치한 예문인 경우에만 좋은 예문으로 자동 교체
+            if (forceOverwrite || !exampleInput.value.trim() || exampleInput.value.startsWith('Quiero ') || exampleInput.value.startsWith('Me gusta ')) {
+                exampleInput.value = result.example || '';
+            }
+
+            const exampleMeaningInput = document.getElementById('input-example-meaning');
+            if (forceOverwrite || !exampleMeaningInput.value.trim()) {
+                exampleMeaningInput.value = result.exampleMeaning || '';
+            }
+
+            const notesInput = document.getElementById('input-notes');
+            if (forceOverwrite || !notesInput.value.trim() || notesInput.value.includes('유추했습니다')) {
+                notesInput.value = result.notes || '';
+            }
         }
 
         // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
@@ -1353,7 +1433,7 @@
                         irregularType: "none",
                         conjugations: conj,
                         example: `Quiero ${rawWord} hoy.`,
-                        exampleMeaning: "", 
+                        exampleMeaning: `나는 오늘 ${rawWord}하고 싶어.`, 
                         notes: "동사의 형태 규칙에 기반하여 현재시제 규칙 변형을 자동 계산했습니다. 뜻과 예문을 입력해 주세요!"
                     };
                 } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
@@ -1361,7 +1441,7 @@
                         meaning: "",
                         pos: "preposition",
                         example: `Voy a ir ${rawWord} mi amigo.`,
-                        exampleMeaning: "",
+                        exampleMeaning: `나는 내 친구${rawWord} 같이 갈 거야.`,
                         notes: "스페인어의 빈출 전치사입니다. 전치사 뒤에 오는 명사의 격 변화에 주의하세요!"
                     };
                 } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
@@ -1369,25 +1449,26 @@
                         meaning: "",
                         pos: "conjunction",
                         example: `No voy ${rawWord} no quiero.`,
-                        exampleMeaning: "",
+                        exampleMeaning: `나는 가고 싶지 않기 ${rawWord} 안 가.`,
                         notes: "문장과 문장을 이어주는 접속사입니다."
                     };
                 } else {
-                    // 명사형 남/여성 기본 유추
+                    // 명사형 남/여성 기본 유추 및 관사 일치 가드 탑재 (Me gusta pelo 해소)
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
+                    const article = isFeminine ? "la" : "el";
                     match = {
                         meaning: "", 
                         pos: "noun",
                         gender: isFeminine ? "feminine" : "masculine",
-                        example: `Me gusta ${rawWord}.`,
-                        exampleMeaning: "", 
+                        example: `Me gusta ${article} ${rawWord}.`,
+                        exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${rawWord})를 좋아해.`, 
                         notes: "단어의 형태 규칙(어미)에 기반하여 품사와 명사 성별을 유추했습니다. 한글 뜻을 알맞게 입력해 주세요!"
                     };
                 }
             }
 
-            // UI에 적용
-            applyAutofillResult(match);
+            // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
+            applyAutofillResult(match, true);
             AudioFX.playSuccess();
 
             // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
@@ -1398,7 +1479,7 @@
             }
         }
 
-        // REAL-TIME SMART AUTOFILL ENGINE
+        // REAL-TIME SMART AUTOFILL ENGINE (실시간 어순 분석)
         function handleWordInput(value) {
             const suggestionsContainer = document.getElementById('word-suggestions');
             const statusBadge = document.getElementById('autofill-status');
@@ -1456,7 +1537,7 @@
             
             const match = OFFLINE_DICT_DB[word];
             if (match) {
-                applyAutofillResult(match);
+                applyAutofillResult(match, true); // 리스트 클릭 시 확실한 선택이므로 덮어쓰기 허용 (true)
                 showRealtimeSuccessBadge("실시간 사전에 매칭되어 완벽 세팅되었습니다! ⚡");
                 AudioFX.playSuccess();
             }
@@ -1468,7 +1549,7 @@
             // 1. 사전 데이터와 완전히 같으면 즉시 로딩
             let match = OFFLINE_DICT_DB[word.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
             if (match) {
-                applyAutofillResult(match);
+                applyAutofillResult(match, false); // 타이핑 실시간 매칭 시 오버라이트 가드 발동 (false)
                 showRealtimeSuccessBadge("실시간 사전 매칭 완료! 🥊");
                 return;
             }
@@ -1490,49 +1571,50 @@
                     }
                     
                     const guessedVerb = {
-                        meaning: document.getElementById('input-meaning').value, 
+                        meaning: "", 
                         pos: "verb",
                         verbClass: "regular",
                         irregularType: "none",
                         conjugations: conj,
                         example: `Quiero ${word} hoy.`,
-                        exampleMeaning: "",
+                        exampleMeaning: `나는 오늘 ${word}하고 싶어.`,
                         notes: "동사 어미 규칙에 기반해 현재시제 변형을 실시간으로 자동 완성했습니다! 💡"
                     };
-                    applyAutofillResult(guessedVerb);
+                    applyAutofillResult(guessedVerb, false);
                     showRealtimeSuccessBadge("실시간 동사 규칙 변형 완료! ⚙️");
                 } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
                     const guessedPrep = {
-                        meaning: document.getElementById('input-meaning').value,
+                        meaning: "",
                         pos: "preposition",
                         example: `Voy a ir ${word} mi amigo.`,
-                        exampleMeaning: "",
+                        exampleMeaning: `나는 내 친구${word} 같이 갈 거야.`,
                         notes: "자주 쓰이는 주요 전치사로 판별되었습니다! 어순 배열 시 전치사 위치를 점검하세요."
                     };
-                    applyAutofillResult(guessedPrep);
+                    applyAutofillResult(guessedPrep, false);
                     showRealtimeSuccessBadge("실시간 전치사 매칭! 🔗");
                 } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
                     const guessedConj = {
-                        meaning: document.getElementById('input-meaning').value,
+                        meaning: "",
                         pos: "conjunction",
                         example: `No voy ${word} no quiero.`,
-                        exampleMeaning: "",
+                        exampleMeaning: `나는 가고 싶지 않기 ${word} 안 가.`,
                         notes: "어구와 문장을 매끄럽게 연결해주는 접속사로 식별되었습니다!"
                     };
-                    applyAutofillResult(guessedConj);
+                    applyAutofillResult(guessedConj, false);
                     showRealtimeSuccessBadge("실시간 접속사 매칭! 🧩");
                 } else {
-                    // 명사성 성별 어미 유추
+                    // 명사성 성별 어미 유추 및 정관사 결합 가드 ('Me gusta pelo' ➡️ 'Me gusta el pelo' 교정)
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
+                    const article = isFeminine ? "la" : "el";
                     const guessedNoun = {
-                        meaning: document.getElementById('input-meaning').value,
+                        meaning: "",
                         pos: "noun",
                         gender: isFeminine ? "feminine" : "masculine",
-                        example: `Me gusta ${word}.`,
-                        exampleMeaning: "",
+                        example: `Me gusta ${article} ${cleanWord}.`,
+                        exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${cleanWord})를 좋아해.`,
                         notes: "명사 어미 구조를 실시간 판별해 성별을 세팅했습니다! 💡"
                     };
-                    applyAutofillResult(guessedNoun);
+                    applyAutofillResult(guessedNoun, false);
                     showRealtimeSuccessBadge("실시간 명사 성별 어미 매칭! 🔍");
                 }
             }
@@ -2178,11 +2260,8 @@
 
             try {
                 const responseText = await callGemini(prompt, system, schema);
-                let cleanText = responseText.trim();
-                if (cleanText.startsWith("```")) {
-                    cleanText = cleanText.replace(/```json|```/g, "").trim();
-                }
-                const feedback = JSON.parse(cleanText);
+                // 안전 가드 파서 작동
+                const feedback = extractAndParseJson(responseText);
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
@@ -2301,11 +2380,8 @@
 
             try {
                 const responseText = await callGemini(prompt, system, schema);
-                let cleanText = responseText.trim();
-                if (cleanText.startsWith("```")) {
-                    cleanText = cleanText.replace(/```json|```/g, "").trim();
-                }
-                const feedback = JSON.parse(cleanText);
+                // 안전 가드 파서 작동
+                const feedback = extractAndParseJson(responseText);
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
