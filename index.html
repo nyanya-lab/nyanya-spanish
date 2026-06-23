@@ -74,7 +74,7 @@
                     <div>
                         <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
                             냐냐의 스페인어 타격 단어장
-                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 8.0 Live AI</span>
+                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 9.0 Live AI</span>
                         </h1>
                     </div>
                 </div>
@@ -359,7 +359,7 @@
 
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">스페인어 문장 자유 입력</label>
-                            <textarea id="ai-free-input-es" rows="3" placeholder="예: No tengo los libros ahora. 혹은 기입하고 싶은 임의의 스페인어 문장..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
+                            <textarea id="ai-free-input-es" rows="3" placeholder="예: No tengo los libros agora. 혹은 기입하고 싶은 임의의 스페인어 문장..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
                         </div>
 
                         <div class="flex gap-2 justify-end">
@@ -438,7 +438,7 @@
         </main>
     </div>
 
-    <!-- PRESET 1: ADD & EDIT WORD MODAL -->
+    <!-- PRESET 1: ADD & EDIT WORD MODAL (Improved with Real-time Predict and Dropdown) -->
     <div id="word-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -454,15 +454,24 @@
                 <input type="hidden" id="modal-word-id">
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
+                    <div class="space-y-1.5 relative">
                         <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-red-500">*</span></label>
                         <div class="flex gap-2">
-                            <input type="text" id="input-word" placeholder="예: tener, el agua" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-bold">
+                            <div class="relative flex-1">
+                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" placeholder="예: tener, el agua" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-bold" autocomplete="off">
+                                <!-- Real-time Suggestions Dropdown -->
+                                <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
+                            </div>
                             <!-- Live AI Auto Recommendation Button -->
-                            <button id="ai-autofill-btn" onclick="triggerAiAutofill()" type="button" class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95">
+                            <button id="ai-autofill-btn" onclick="triggerAiAutofill()" type="button" class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 shrink-0">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                                 <span>AI 추천</span>
                             </button>
+                        </div>
+                        <!-- Real-time Automatic State Indicator -->
+                        <div id="autofill-status" class="hidden text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-1 transition-all duration-300">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span id="autofill-status-text">실시간 매칭 완료!</span>
                         </div>
                     </div>
                     <div class="space-y-1.5">
@@ -596,7 +605,7 @@
 
     <script>
         
-        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (통신 장애 100% 극복 및 단어 대폭 추가!)
+        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB
         const OFFLINE_DICT_DB = {
             "tener": {
                 meaning: "가지다", pos: "verb", verbClass: "irregular", irregularType: "1인칭 및 e ➡️ ie",
@@ -872,7 +881,7 @@
                     vos: "tenéis",
                     ellos: "tienen"
                 },
-                example: "No tengo dinero ahora.",
+                example: "No tengo dinero agora.",
                 exampleMeaning: "나 지금 돈이 한 푼도 없어.",
                 notes: "소유를 표현할 때 핵심 동사! 나이를 말할 때도 씁니다. 예: Tengo 20 años",
                 mastered: false
@@ -959,6 +968,9 @@
         let aiChatHistory = [];
         let isAiHintVisible = false;
 
+        // 실시간 입력 타이머
+        let lookupTimeout = null;
+
         window.onload = function() {
             loadFromStorage();
             renderWordList();
@@ -978,6 +990,15 @@
                         e.preventDefault();
                         flipFlashcard();
                     }
+                }
+            });
+
+            // 드롭다운 외부 클릭 시 닫기
+            document.addEventListener('click', function(e) {
+                const suggs = document.getElementById('word-suggestions');
+                const inp = document.getElementById('input-word');
+                if (suggs && e.target !== inp && !suggs.contains(e.target)) {
+                    suggs.classList.add('hidden');
                 }
             });
         };
@@ -1172,6 +1193,7 @@
 
         function openWordModal(wordId = null) {
             document.getElementById('word-modal').classList.remove('hidden');
+            document.getElementById('autofill-status').classList.add('hidden');
             
             if (wordId) {
                 const w = vocabulary.find(item => item.id === wordId);
@@ -1348,6 +1370,11 @@
                     document.getElementById('conj-ellos').value = result.conjugations.ellos || '';
                 }
             }
+            document.getElementById('input-example').value = result.example || '';
+            document.getElementById('input-example-meaning').value = result.exampleMeaning || '';
+            document.getElementById('input-notes').value = result.notes || '';
+        }
+
         // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
         function runOfflineAutofill(rawWord) {
             const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
@@ -1405,6 +1432,138 @@
             } else {
                 showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
             }
+        }
+
+        // REAL-TIME SMART AUTOFILL ENGINE
+        function handleWordInput(value) {
+            const suggestionsContainer = document.getElementById('word-suggestions');
+            const statusBadge = document.getElementById('autofill-status');
+            
+            if (!value.trim()) {
+                suggestionsContainer.classList.add('hidden');
+                statusBadge.classList.add('hidden');
+                return;
+            }
+
+            // 1. 실시간 자동 완성 후보 리스트 노출
+            showSuggestions(value.trim());
+
+            // 2. 타이핑이 0.5초 멈췄을 때 실시간 문법 분석 / 사전 탐색 가동
+            clearTimeout(lookupTimeout);
+            lookupTimeout = setTimeout(() => {
+                triggerRealtimeAutofill(value.trim());
+            }, 500);
+        }
+
+        function showSuggestions(query) {
+            const container = document.getElementById('word-suggestions');
+            const cleanQuery = query.toLowerCase().trim();
+            
+            // 입력어와 연관된 사전 키 필터링
+            const matches = Object.keys(OFFLINE_DICT_DB).filter(key => 
+                key.toLowerCase().includes(cleanQuery)
+            );
+
+            if (matches.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            let html = '';
+            matches.slice(0, 5).forEach(key => { // 최대 5개 표시
+                const item = OFFLINE_DICT_DB[key];
+                html += `
+                    <div onclick="selectSuggestion('${key}')" class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors">
+                        <div class="flex flex-col">
+                            <span class="font-bold text-slate-800">${key}</span>
+                            <span class="text-slate-400 text-[10px]">${item.meaning}</span>
+                        </div>
+                        <span class="text-[9px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">${getPosKoreanName(item.pos, item.gender)}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function selectSuggestion(word) {
+            document.getElementById('input-word').value = word;
+            document.getElementById('word-suggestions').classList.add('hidden');
+            
+            const match = OFFLINE_DICT_DB[word];
+            if (match) {
+                applyAutofillResult(match);
+                showRealtimeSuccessBadge("실시간 사전에 매칭되어 완벽 세팅되었습니다! ⚡");
+                AudioFX.playSuccess();
+            }
+        }
+
+        function triggerRealtimeAutofill(word) {
+            const cleanWord = word.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
+            
+            // 1. 사전 데이터와 완전히 같으면 즉시 로딩
+            let match = OFFLINE_DICT_DB[word.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
+            if (match) {
+                applyAutofillResult(match);
+                showRealtimeSuccessBadge("실시간 사전 매칭 완료! 🥊");
+                return;
+            }
+
+            // 2. 단어가 일정 길이 이상일 때 실시간 문법 규칙 판별
+            if (cleanWord.length >= 2) {
+                // 동사형 종결형 판별 (-ar, -er, -ir)
+                if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir")) {
+                    const ending = cleanWord.slice(-2);
+                    const stem = cleanWord.slice(0, -2);
+                    let conj = {};
+                    
+                    if (ending === "ar") {
+                        conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
+                    } else if (ending === "er") {
+                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
+                    } else { // -ir
+                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
+                    }
+                    
+                    const guessedVerb = {
+                        meaning: document.getElementById('input-meaning').value, // 이미 쳐놓은 뜻은 보존
+                        pos: "verb",
+                        verbClass: "regular",
+                        irregularType: "none",
+                        conjugations: conj,
+                        example: `Quiero ${word} hoy.`,
+                        exampleMeaning: "",
+                        notes: "동사 어미 규칙에 기반해 현재시제 변형을 실시간으로 자동 완성했습니다! 💡"
+                    };
+                    applyAutofillResult(guessedVerb);
+                    showRealtimeSuccessBadge("실시간 동사 규칙 변형 완료! ⚙️");
+                } else {
+                    // 명사성 성별 어미 유추
+                    const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
+                    const guessedNoun = {
+                        meaning: document.getElementById('input-meaning').value,
+                        pos: "noun",
+                        gender: isFeminine ? "feminine" : "masculine",
+                        example: `Me gusta ${word}.`,
+                        exampleMeaning: "",
+                        notes: "명사 어미 구조를 실시간 판별해 성별을 세팅했습니다! 💡"
+                    };
+                    applyAutofillResult(guessedNoun);
+                    showRealtimeSuccessBadge("실시간 명사 성별 어미 매칭! 🔍");
+                }
+            }
+        }
+
+        function showRealtimeSuccessBadge(text) {
+            const badge = document.getElementById('autofill-status');
+            const badgeText = document.getElementById('autofill-status-text');
+            badge.classList.remove('hidden');
+            badgeText.innerText = text;
+            
+            // 3초 후 슬그머니 가리기
+            setTimeout(() => {
+                badge.classList.add('hidden');
+            }, 3000);
         }
 
         // Save Word Action
@@ -1532,7 +1691,7 @@
             `;
         }
 
-        // Render Vocabulary Tab List (Removed PRACTICE ARENA and moved Word to the top)
+        // Render Vocabulary Tab List
         function renderWordList() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
@@ -1592,7 +1751,6 @@
                 html += `
                 <div class="bg-white rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
                     <div class="space-y-4">
-                        <!-- Card Top Layout (Word at top left, actions at top right. PRACTICE ARENA removed!) -->
                         <div class="flex items-start justify-between gap-2">
                             <div class="flex items-center gap-2 flex-wrap min-w-0">
                                 <h3 class="text-xl font-extrabold text-slate-900 tracking-tight break-all">
