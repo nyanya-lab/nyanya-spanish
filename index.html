@@ -74,7 +74,7 @@
                     <div>
                         <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
                             냐냐의 스페인어 타격 단어장
-                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 9.0 Live AI</span>
+                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Ver 10.0 Real AI</span>
                         </h1>
                     </div>
                 </div>
@@ -200,7 +200,7 @@
                                 <!-- Card Front (Spanish Word) -->
                                 <div class="absolute inset-0 bg-gradient-to-br from-white to-slate-50 border-2 border-slate-200 rounded-3xl p-8 flex flex-col justify-between backface-hidden shadow-md">
                                     <div class="flex justify-between items-center">
-                                        <span id="card-front-pos" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">품사</span>
+                                        <span id="card-front-pos" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">POS</span>
                                         <button onclick="speakText(event, 'card-word')" class="text-slate-400 hover:text-red-500 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
                                     </div>
                                     <div class="text-center">
@@ -214,7 +214,7 @@
                                 <!-- Card Back -->
                                 <div class="absolute inset-0 bg-slate-950 text-white rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-red-500/50">
                                     <div class="flex justify-between items-center">
-                                        <span id="card-back-pos" class="text-xs bg-red-950/50 text-red-400 border border-red-900 px-2.5 py-0.5 rounded-full font-bold">M. (남성)</span>
+                                        <span id="card-back-pos" class="text-xs bg-red-950/50 text-red-400 border border-red-900 px-2.5 py-0.5 rounded-full font-bold">POS</span>
                                         <span class="text-xs text-slate-500 font-bold">번역 결과</span>
                                     </div>
                                     <div class="text-center space-y-2 overflow-y-auto max-h-56">
@@ -458,7 +458,7 @@
                         <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-red-500">*</span></label>
                         <div class="flex gap-2">
                             <div class="relative flex-1">
-                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" placeholder="예: tener, el agua" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-bold" autocomplete="off">
+                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-bold" autocomplete="off">
                                 <!-- Real-time Suggestions Dropdown -->
                                 <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
                             </div>
@@ -476,19 +476,22 @@
                     </div>
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-red-500">*</span></label>
-                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-semibold">
+                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-semibold">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">품사 구분</label>
+                        <label class="block text-xs font-bold text-slate-500">품사 구분 (POS)</label>
                         <select id="input-pos" onchange="togglePosFields()" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-medium">
-                            <option value="noun">N. 명사 (Noun)</option>
-                            <option value="verb">V. 동사 (Verb)</option>
-                            <option value="adjective">Adj. 형용사 (Adjective)</option>
-                            <option value="adverb">Adv. 부사 (Adverb)</option>
-                            <option value="phrase">Phr. 회화 표현 (Phrase)</option>
+                            <option value="noun">Noun (N.)</option>
+                            <option value="verb">Verb (V.)</option>
+                            <option value="adjective">Adjective (Adj.)</option>
+                            <option value="adverb">Adverb (Adv.)</option>
+                            <option value="preposition">Preposition (Prep.)</option>
+                            <option value="conjunction">Conjunction (Conj.)</option>
+                            <option value="pronoun">Pronoun (Pron.)</option>
+                            <option value="phrase">Phrase (Phr.)</option>
                         </select>
                     </div>
                     <div class="space-y-1.5">
@@ -605,7 +608,7 @@
 
     <script>
         
-        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB
+        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (English POS Tags)
         const OFFLINE_DICT_DB = {
             "tener": {
                 meaning: "가지다", pos: "verb", verbClass: "irregular", irregularType: "1인칭 및 e ➡️ ie",
@@ -631,29 +634,25 @@
                 example: "¿Qué haces hoy?", exampleMeaning: "너 오늘 뭐 하니?",
                 notes: "1인칭만 hago로 변하는 동사입니다. 날씨를 말할 때도 씁니다. 'Hace frío.'"
             },
-            "ir": {
-                meaning: "가다", pos: "verb", verbClass: "irregular", irregularType: "완전 불규칙",
-                conjugations: { yo: "voy", tu: "vas", el: "va", nos: "vamos", vos: "vais", ellos: "van" },
-                example: "Voy a ir al cine mañana.", exampleMeaning: "나 내일 영화관에 갈 계획이야.",
-                notes: "완전 불규칙하게 변형되는 최상위급 필수 동사입니다."
+            "con": {
+                meaning: "~와 함께", pos: "preposition",
+                example: "Quiero ir al cine con Margarita.", exampleMeaning: "마르가리타랑 같이 영화관에 가고 싶어.",
+                notes: "전치사입니다. '나와 함께'는 conmigo, '너와 함께'는 contigo라고 씁니다!"
             },
-            "ser": {
-                meaning: "~이다 (본질, 성격, 신분)", pos: "verb", verbClass: "irregular", irregularType: "완전 불규칙",
-                conjugations: { yo: "soy", tu: "eres", el: "es", nos: "somos", vos: "sois", ellos: "son" },
-                example: "Yo soy coreano.", exampleMeaning: "나는 한국 사람이야.",
-                notes: "성별, 국적, 이름 등 변하지 않는 영구적인 본질을 정의할 때 씁니다."
+            "para": {
+                meaning: "~을 위해, ~ 방향으로", pos: "preposition",
+                example: "Este regalo es para ti.", exampleMeaning: "이 선물은 너를 위한 거야.",
+                notes: "전치사입니다. por와 para는 쓰임새가 다르니 꼼꼼히 구별해서 암기해 주세요!"
             },
-            "estar": {
-                meaning: "~이다 (상태, 위치)", pos: "verb", verbClass: "irregular", irregularType: "완전 불규칙",
-                conjugations: { yo: "estoy", tu: "estás", el: "está", nos: "estamos", vos: "estáis", ellos: "están" },
-                example: "Estoy cansado ahora.", exampleMeaning: "나 지금 좀 피곤한 상태야.",
-                notes: "일시적인 기분이나 감정 상태, 물건의 임시 위치에 사용합니다."
+            "porque": {
+                meaning: "왜냐하면, ~때문에", pos: "conjunction",
+                example: "No voy porque estoy muy cansado.", exampleMeaning: "나 너무 피곤하기 때문에 안 갈 거야.",
+                notes: "접속사입니다. 질문용 왜(¿Por qué?)는 띄어 쓰고 악센트 기호가 있습니다!"
             },
-            "comer": {
-                meaning: "먹다", pos: "verb", verbClass: "regular",
-                conjugations: { yo: "como", tu: "comes", el: "come", nos: "comemos", vos: "coméis", ellos: "comen" },
-                example: "Yo como una manzana.", exampleMeaning: "나는 사과를 먹는다.",
-                notes: "아주 직관적인 규칙 -er 변형 동사입니다."
+            "y": {
+                meaning: "그리고, ~와/과", pos: "conjunction",
+                example: "Margarita y yo somos amigos.", exampleMeaning: "마르가리타와 나는 친구야.",
+                notes: "접속사입니다. 뒤에 오는 단어가 i 또는 hi로 시작하면 e로 모양을 바꿉니다!"
             },
             "el agua": {
                 meaning: "물", pos: "noun", gender: "masculine",
@@ -664,51 +663,6 @@
                 meaning: "엘리베이터", pos: "noun", gender: "masculine",
                 example: "El ascensor no funciona.", exampleMeaning: "엘리베이터가 고장 나서 작동을 안 해.",
                 notes: "남성명사이며, 작동하지 않을 때는 'funcionar' 동사에 'no'를 붙여 말합니다."
-            },
-            "el coche": {
-                meaning: "자동차", pos: "noun", gender: "masculine",
-                example: "Mi coche es rojo.", exampleMeaning: "내 자동차는 빨간색이야.",
-                notes: "중남미 국가에선 'carro' 또는 'auto'라고 부르기도 합니다."
-            },
-            "la llave": {
-                meaning: "열쇠", pos: "noun", gender: "feminine",
-                example: "No tengo la llave.", exampleMeaning: "나 지금 열쇠가 없어.",
-                notes: "여성명사입니다. 'll' 발음은 중남미에서는 'y' 또는 '지읒'에 가깝게 들려요."
-            },
-            "el libro": {
-                meaning: "책", pos: "noun", gender: "masculine",
-                example: "Leo un libro interesante.", exampleMeaning: "나는 재미있는 책 한 권을 읽고 있어.",
-                notes: "남성 명사입니다. 복수형은 'los libros'가 됩니다."
-            },
-            "la casa": {
-                meaning: "집", pos: "noun", gender: "feminine",
-                example: "Mi casa es tu casa.", exampleMeaning: "내 집이 곧 네 집이지 (편히 쉬어).",
-                notes: "여성 명사이며, 스페인어권 국가에서 환영할 때 쓰는 친숙한 숙어 표현입니다."
-            },
-            "el ojo": {
-                meaning: "눈", pos: "noun", gender: "masculine",
-                example: "Abre los ojos.", exampleMeaning: "눈을 크게 떠봐.",
-                notes: "남성 명사입니다. 신체 부위인 '눈'을 뜻하며, 복수형은 los ojos입니다."
-            },
-            "la boca": {
-                meaning: "입", pos: "noun", gender: "feminine",
-                example: "Cierra la boca.", exampleMeaning: "입을 다물어라.",
-                notes: "여성 명사입니다. 신체 부위 '입'을 뜻합니다."
-            },
-            "la mano": {
-                meaning: "손", pos: "noun", gender: "feminine",
-                example: "Lávate las manos.", exampleMeaning: "손을 깨끗하게 씻으렴.",
-                notes: "끝이 -o로 끝나지만 예외적으로 아주 유명한 '여성 명사'입니다! 별표 다섯 개!"
-            },
-            "el pie": {
-                meaning: "발", pos: "noun", gender: "masculine",
-                example: "Me duelen los pies.", exampleMeaning: "나 지금 발이 너무 아파.",
-                notes: "남성 명사이며, 복수형은 끝에 s를 붙여 los pies라고 합니다."
-            },
-            "el amigo": {
-                meaning: "친구 (남자)", pos: "noun", gender: "masculine",
-                example: "Él es mi mejor amigo.", exampleMeaning: "그는 나의 가장 친한 친구야.",
-                notes: "여성 친구는 la amiga라고 부릅니다."
             }
         };
 
@@ -919,33 +873,22 @@
             },
             {
                 id: "seed-4",
-                word: "el ascensor",
-                meaning: "엘리베이터",
-                pos: "noun",
-                gender: "masculine",
-                example: "El ascensor no funciona.",
-                exampleMeaning: "엘리베이터가 고장 나서 멈췄어.",
-                notes: "기계나 장치가 작동한다는 뜻은 funcionar 동사를 사용합니다.",
+                word: "con",
+                meaning: "~와 함께",
+                pos: "preposition",
+                example: "Quiero ir al cine con Margarita.",
+                exampleMeaning: "마르가리타랑 같이 영화관에 가고 싶어.",
+                notes: "전치사입니다. '나와 함께'는 conmigo, '너와 함께'는 contigo라고 씁니다!",
                 mastered: false
             },
             {
                 id: "seed-5",
-                word: "poder",
-                meaning: "할 수 있다",
-                pos: "verb",
-                verbClass: "irregular",
-                irregularType: "o ➡️ ue",
-                conjugations: {
-                    yo: "puedo",
-                    tu: "puedes",
-                    el: "puede",
-                    nos: "podemos",
-                    vos: "podéis",
-                    ellos: "pueden"
-                },
-                example: "No puedo dártelo.",
-                exampleMeaning: "너한테 그거 지금 넘겨줄 수 없어.",
-                notes: "조동사처럼 뒤에 동사원형이 오며, 대명사들이 결합해 한 단어가 될 수 있어요! dártelo",
+                word: "porque",
+                meaning: "왜냐하면, ~때문에",
+                pos: "conjunction",
+                example: "No voy porque estoy muy cansado.",
+                exampleMeaning: "나 너무 피곤하기 때문에 안 갈 거야.",
+                notes: "접속사입니다. 질문용 왜(¿Por qué?)는 띄어 쓰고 악센트 기호가 있습니다!",
                 mastered: false
             }
         ];
@@ -1282,7 +1225,7 @@
             };
         }
 
-        // PREMIUM LIVE AI AUTOFILL (Improved for 100% robust API loading + Rich Offline Fallback DB)
+        // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
         async function triggerAiAutofill() {
             const rawWord = document.getElementById('input-word').value.trim();
             if (!rawWord) {
@@ -1297,14 +1240,19 @@
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
             showToast("Gemini AI 코치가 정밀 추천 데이터를 생성하는 중입니다...", "info");
 
-            const prompt = `Analyze the Spanish vocabulary "${rawWord}" thoroughly. Return high-quality, encouraging dictionary content in the exact JSON schema layout requested. If it's a verb, conjugations must reflect real, standard Spanish present tense forms. Try to guess its Part of Speech (noun, verb, adjective, adverb, or phrase).`;
-            const system = "You are a professional, world-class Spanish linguist and tutor. Return a structured JSON response matching the provided schema. Ensure meanings are accurate, natural, and formatted nicely in Korean. Do not include markdown wraps or block ticks, just the raw JSON block.";
+            const prompt = `Analyze the Spanish vocabulary "${rawWord}" thoroughly. Perform a deep linguistic lookup and return high-quality, encouraging dictionary content in the exact JSON schema layout requested.
+            - If it's a verb, conjugations must reflect real, standard Spanish present tense forms.
+            - POS (Part of speech) can be one of: 'noun', 'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'pronoun', 'phrase'.
+            - Create a highly conversational, extremely natural Spanish example sentence (구문) that 냐냐 would actually hear or use in real life, rather than a dry textbook example. Provide an accurate Korean translation.
+            - Write a highly encouraging, witty note (notes) in Korean that analyzes word order (어순) or explains subtle gender nuances.`;
+
+            const system = "You are a professional, world-class Spanish linguist and boxing tutor. Return a structured JSON response matching the provided schema. Ensure meanings are accurate, natural, and formatted nicely in Korean. Do not include markdown wraps or block ticks, just the raw JSON block.";
             
             const schema = {
                 type: "OBJECT",
                 properties: {
                     meaning: { type: "STRING", description: "The core Korean translation" },
-                    pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "phrase"] },
+                    pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
                     irregularType: { type: "STRING", description: "Write one of: '1인칭 불규칙', 'e ➡️ ie', 'o ➡️ ue', 'e ➡️ i', '완전 불규칙', '1인칭 및 e ➡️ ie', '1인칭 및 o ➡️ ue'. No other values allowed." },
@@ -1319,9 +1267,9 @@
                             ellos: { type: "STRING" }
                         }
                     },
-                    example: { type: "STRING", description: "A highly useful, natural Spanish example sentence" },
+                    example: { type: "STRING", description: "A conversational, natural Spanish example sentence" },
                     exampleMeaning: { type: "STRING", description: "Accurate, natural Korean translation of the example sentence" },
-                    notes: { type: "STRING", description: "Encouraging, helpful study note in Korean about nuance, usage, or gender details." }
+                    notes: { type: "STRING", description: "Encouraging, helpful study note in Korean about word order, nuances, or gender details." }
                 },
                 required: ["meaning", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
             };
@@ -1337,7 +1285,7 @@
 
                 applyAutofillResult(result);
                 AudioFX.playSuccess();
-                showToast("구글 Gemini 라이브 AI 추천 데이터를 가져왔습니다! ✨", "success");
+                showToast("구글 Gemini 라이브 AI 정밀 분석 데이터 적용 완료! ✨", "success");
             } catch (e) {
                 console.warn("AI API 통신 불가 또는 키 없음: 고지능형 로컬 DB로 자동 즉시 전환", e);
                 runOfflineAutofill(rawWord);
@@ -1399,24 +1347,40 @@
                     }
                     
                     match = {
-                        meaning: "", // 뜻은 사용자가 직접 깔끔하게 채울 수 있도록 빈칸 처리
+                        meaning: "", 
                         pos: "verb",
                         verbClass: "regular",
                         irregularType: "none",
                         conjugations: conj,
                         example: `Quiero ${rawWord} hoy.`,
-                        exampleMeaning: "", // 지저분한 텍스트 방지를 위해 빈칸 처리
-                        notes: "동사의 형태 규칙에 기반하여 현재시제 규칙 변형을 자동 계산했습니다. 한글 뜻을 알맞게 입력해 주세요!"
+                        exampleMeaning: "", 
+                        notes: "동사의 형태 규칙에 기반하여 현재시제 규칙 변형을 자동 계산했습니다. 뜻과 예문을 입력해 주세요!"
+                    };
+                } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
+                    match = {
+                        meaning: "",
+                        pos: "preposition",
+                        example: `Voy a ir ${rawWord} mi amigo.`,
+                        exampleMeaning: "",
+                        notes: "스페인어의 빈출 전치사입니다. 전치사 뒤에 오는 명사의 격 변화에 주의하세요!"
+                    };
+                } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
+                    match = {
+                        meaning: "",
+                        pos: "conjunction",
+                        example: `No voy ${rawWord} no quiero.`,
+                        exampleMeaning: "",
+                        notes: "문장과 문장을 이어주는 접속사입니다."
                     };
                 } else {
                     // 명사형 남/여성 기본 유추
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
                     match = {
-                        meaning: "", // 뜻은 사용자가 직접 깔끔하게 채울 수 있도록 빈칸 처리
+                        meaning: "", 
                         pos: "noun",
                         gender: isFeminine ? "feminine" : "masculine",
                         example: `Me gusta ${rawWord}.`,
-                        exampleMeaning: "", // 지저분한 텍스트 방지를 위해 빈칸 처리
+                        exampleMeaning: "", 
                         notes: "단어의 형태 규칙(어미)에 기반하여 품사와 명사 성별을 유추했습니다. 한글 뜻을 알맞게 입력해 주세요!"
                     };
                 }
@@ -1479,7 +1443,7 @@
                             <span class="font-bold text-slate-800">${key}</span>
                             <span class="text-slate-400 text-[10px]">${item.meaning}</span>
                         </div>
-                        <span class="text-[9px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">${getPosKoreanName(item.pos, item.gender)}</span>
+                        <span class="text-[9px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold uppercase">${getPosAbbreviation(item.pos, item.gender)}</span>
                     </div>
                 `;
             });
@@ -1526,7 +1490,7 @@
                     }
                     
                     const guessedVerb = {
-                        meaning: document.getElementById('input-meaning').value, // 이미 쳐놓은 뜻은 보존
+                        meaning: document.getElementById('input-meaning').value, 
                         pos: "verb",
                         verbClass: "regular",
                         irregularType: "none",
@@ -1537,6 +1501,26 @@
                     };
                     applyAutofillResult(guessedVerb);
                     showRealtimeSuccessBadge("실시간 동사 규칙 변형 완료! ⚙️");
+                } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
+                    const guessedPrep = {
+                        meaning: document.getElementById('input-meaning').value,
+                        pos: "preposition",
+                        example: `Voy a ir ${word} mi amigo.`,
+                        exampleMeaning: "",
+                        notes: "자주 쓰이는 주요 전치사로 판별되었습니다! 어순 배열 시 전치사 위치를 점검하세요."
+                    };
+                    applyAutofillResult(guessedPrep);
+                    showRealtimeSuccessBadge("실시간 전치사 매칭! 🔗");
+                } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
+                    const guessedConj = {
+                        meaning: document.getElementById('input-meaning').value,
+                        pos: "conjunction",
+                        example: `No voy ${word} no quiero.`,
+                        exampleMeaning: "",
+                        notes: "어구와 문장을 매끄럽게 연결해주는 접속사로 식별되었습니다!"
+                    };
+                    applyAutofillResult(guessedConj);
+                    showRealtimeSuccessBadge("실시간 접속사 매칭! 🧩");
                 } else {
                     // 명사성 성별 어미 유추
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
@@ -1715,22 +1699,28 @@
             filtered.forEach(w => {
                 const isVerb = w.pos === 'verb';
                 
-                // 품사 뱃지 축약형 개편 (N, V, M, F, Adj, Adv, Phr)
+                // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
                 let badgeMarkup = '';
                 if (w.pos === 'noun') {
                     if (w.gender === 'masculine') {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-blue-100 text-blue-600 shadow-sm">M. (남성)</span>`;
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-blue-100 text-blue-600 shadow-sm">M.</span>`;
                     } else if (w.gender === 'feminine') {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-rose-100 text-rose-600 shadow-sm">F. (여성)</span>`;
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-rose-100 text-rose-600 shadow-sm">F.</span>`;
                     } else {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-100 text-slate-600 shadow-sm">N. (명사)</span>`;
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-100 text-slate-600 shadow-sm">N.</span>`;
                     }
                 } else if (w.pos === 'verb') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-600 shadow-sm">V. (동사)</span>`;
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-600 shadow-sm">V.</span>`;
                 } else if (w.pos === 'adjective') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>`;
                 } else if (w.pos === 'adverb') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 shadow-sm">Adv.</span>`;
+                } else if (w.pos === 'preposition') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-teal-100 text-teal-700 shadow-sm">Prep.</span>`;
+                } else if (w.pos === 'conjunction') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-cyan-100 text-cyan-700 shadow-sm">Conj.</span>`;
+                } else if (w.pos === 'pronoun') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
                 } else if (w.pos === 'phrase') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
                 }
@@ -1845,7 +1835,7 @@
             const w = vocabulary[currentFlashcardIndex];
             
             document.getElementById('card-word').innerText = w.word;
-            document.getElementById('card-front-pos').innerText = getPosKoreanName(w.pos, w.gender);
+            document.getElementById('card-front-pos').innerText = getPosAbbreviation(w.pos, w.gender);
             
             if (w.pos === 'verb' && w.verbClass === 'irregular') {
                 document.getElementById('card-front-irregular').innerText = `⚠️ 불규칙 (${w.irregularType || '기타'})`;
@@ -1853,7 +1843,7 @@
                 document.getElementById('card-front-irregular').innerText = '';
             }
 
-            document.getElementById('card-back-pos').innerText = getPosKoreanName(w.pos, w.gender);
+            document.getElementById('card-back-pos').innerText = getPosAbbreviation(w.pos, w.gender);
             document.getElementById('card-meaning').innerText = w.meaning;
             document.getElementById('card-notes').innerText = w.notes ? `비고: ${w.notes}` : '';
 
@@ -1907,17 +1897,21 @@
             setTimeout(renderFlashcard, 150);
         }
 
-        function getPosKoreanName(pos, gender = 'none') {
+        // Get English-only Pos Abbreviation
+        function getPosAbbreviation(pos, gender = 'none') {
             switch(pos) {
                 case 'noun': 
-                    if (gender === 'masculine') return 'M. (남성)';
-                    if (gender === 'feminine') return 'F. (여성)';
-                    return 'N. (명사)';
-                case 'verb': return 'V. (동사)';
-                case 'adjective': return 'Adj. (형용사)';
-                case 'adverb': return 'Adv. (부사)';
-                case 'phrase': return 'Phr. (회화 표현)';
-                default: return '기타';
+                    if (gender === 'masculine') return 'M.';
+                    if (gender === 'feminine') return 'F.';
+                    return 'N.';
+                case 'verb': return 'V.';
+                case 'adjective': return 'Adj.';
+                case 'adverb': return 'Adv.';
+                case 'preposition': return 'Prep.';
+                case 'conjunction': return 'Conj.';
+                case 'pronoun': return 'Pron.';
+                case 'phrase': return 'Phr.';
+                default: return 'Oth.';
             }
         }
 
@@ -2112,6 +2106,10 @@
                 } else {
                     aiCurrentKoreanSentence = `우리는 언제쯤 이 일을 제대로 시작하고 ${meaningClean} 수 있게 될까?`;
                 }
+            } else if (aiCurrentWordForMission.pos === 'preposition') {
+                aiCurrentKoreanSentence = `나는 친구들${meaningClean} 함께 바르셀로나 해변을 걷고 있어.`;
+            } else if (aiCurrentWordForMission.pos === 'conjunction') {
+                aiCurrentKoreanSentence = `그가 떠난 이유${meaningClean} 그가 나에게 화가 났기 때문이야.`;
             } else {
                 aiCurrentKoreanSentence = `냐냐님, 우리가 고른 이 예쁜 색은 참 ${meaningClean} 느낌을 선사하네!`;
             }
