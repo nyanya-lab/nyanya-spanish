@@ -93,6 +93,10 @@
                         </div>
                     </div>
                     
+                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> AI 키 미등록
+                    </button>
+
                     <button onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
                         <i id="menu-toggle-icon" class="fa-solid fa-chevron-up text-sm"></i>
                     </button>
@@ -606,8 +610,42 @@
         </div>
     </div>
 
+    <!-- PRESET 3: GEMINI API KEY SETUP MODAL -->
+    <div id="api-key-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">🔑</div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Gemini API 키 등록</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">진짜 AI 추천/채점 기능을 쓰려면 키가 필요해요</p>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
+                <b>왜 필요한가요?</b> 이 앱은 브라우저에서 직접 구글 Gemini API를 호출해요.
+                무료로 키를 발급받아 <b>이 브라우저에만</b> 저장하면 AI 추천과 AI 채점이 진짜로 작동합니다.
+                키는 외부로 전송되지 않고 내 컴퓨터의 localStorage에만 남아요. (단, 이 파일을 다른 사람과 공유하면
+                키가 코드에 노출되니, 본인만 쓰는 파일에 입력해 주세요!)
+            </div>
+
+            <a href="https://aistudio.google.com/apikey" target="_blank" class="block text-center text-xs font-bold text-indigo-600 hover:text-indigo-700 underline">
+                👉 Google AI Studio에서 무료 API 키 발급받기
+            </a>
+
+            <div class="space-y-1.5">
+                <label class="block text-xs font-bold text-slate-500">API 키 입력</label>
+                <input type="password" id="api-key-input" placeholder="AIza..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="clearApiKey()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">키 삭제</button>
+                <button onclick="closeApiKeyModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
+                <button onclick="saveApiKey()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">저장하기</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        
         // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (pelo, libro, mesa, casa, comer 등 적극 추가)
         const OFFLINE_DICT_DB = {
             "pelo": {
@@ -824,9 +862,75 @@
             throw new Error("No valid JSON object found in response");
         }
 
+        // ============================================================
+        // [냐냐 PATCH] Gemini API 키를 브라우저에 직접 저장/조회하는 헬퍼
+        // 원래 코드는 apiKey가 항상 빈 문자열("")이라 모든 AI 호출이
+        // 100% 실패하고 항상 오프라인 추측 로직으로 빠지고 있었습니다.
+        // 이제 사용자가 직접 본인의 무료 Gemini API 키를 등록하면
+        // 진짜 AI 응답을 받아올 수 있습니다.
+        // ============================================================
+        const GEMINI_KEY_STORAGE_NAME = 'nyanya_gemini_api_key';
+
+        function getGeminiApiKey() {
+            return (localStorage.getItem(GEMINI_KEY_STORAGE_NAME) || '').trim();
+        }
+
+        function hasGeminiApiKey() {
+            return getGeminiApiKey().length > 0;
+        }
+
+        function openApiKeyModal() {
+            const modal = document.getElementById('api-key-modal');
+            const input = document.getElementById('api-key-input');
+            input.value = getGeminiApiKey();
+            modal.classList.remove('hidden');
+        }
+
+        function closeApiKeyModal() {
+            document.getElementById('api-key-modal').classList.add('hidden');
+        }
+
+        function saveApiKey() {
+            const input = document.getElementById('api-key-input');
+            const value = input.value.trim();
+            if (!value) {
+                showToast("API 키를 입력해 주세요!", "error");
+                return;
+            }
+            localStorage.setItem(GEMINI_KEY_STORAGE_NAME, value);
+            closeApiKeyModal();
+            showToast("Gemini API 키가 저장되었습니다! 이제부터 진짜 AI 추천이 작동합니다 ✨", "success");
+            updateApiKeyBadge();
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem(GEMINI_KEY_STORAGE_NAME);
+            document.getElementById('api-key-input').value = '';
+            showToast("API 키가 삭제되었습니다.", "warning");
+            updateApiKeyBadge();
+        }
+
+        function updateApiKeyBadge() {
+            const badge = document.getElementById('api-key-status-badge');
+            if (!badge) return;
+            if (hasGeminiApiKey()) {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> AI 연결됨`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
+            } else {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> AI 키 미등록`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
+            }
+        }
+        // ============================================================
+        // [냐냐 PATCH 끝]
+        // ============================================================
+
         // Live Gemini API Connector Utility
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null) {
-            const apiKey = ""; // Runtime automatically provisions this in Canvas
+            const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
+            if (!apiKey) {
+                throw new Error("NO_API_KEY");
+            }
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
             
             const payload = {
@@ -855,7 +959,8 @@
                         body: JSON.stringify(payload)
                     });
                     if (!response.ok) {
-                        throw new Error(`API response status ${response.status}`);
+                        const errBody = await response.text().catch(() => '');
+                        throw new Error(`API response status ${response.status}: ${errBody}`);
                     }
                     const result = await response.json();
                     return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -968,6 +1073,13 @@
             updateStats();
             renderDiary();
             triggerRandomKoEsMission();
+            updateApiKeyBadge();
+
+            if (!hasGeminiApiKey()) {
+                setTimeout(() => {
+                    showToast("AI 추천을 쓰려면 우측 상단 'AI 키 미등록' 배지를 눌러 Gemini API 키를 등록해 주세요!", "warning");
+                }, 800);
+            }
             
             if (window.innerWidth < 768) {
                 collapseMobileMenu();
@@ -1281,6 +1393,13 @@
                 return;
             }
 
+            // [PATCH] API 키가 없으면 굳이 실패할 호출을 시도하지 않고 바로 안내
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어서 AI 추천 대신 오프라인 추측을 사용합니다. 우측 상단 배지에서 키를 등록하면 진짜 AI 추천을 받을 수 있어요!", "warning");
+                runOfflineAutofill(rawWord);
+                return;
+            }
+
             const btn = document.getElementById('ai-autofill-btn');
             const originalHtml = btn.innerHTML;
             
@@ -1332,7 +1451,12 @@
                 AudioFX.playSuccess();
                 showToast("구글 Gemini 라이브 AI 정밀 분석 데이터 적용 완료! ✨", "success");
             } catch (e) {
-                console.warn("AI API 통신 불가 또는 키 없음: 고지능형 로컬 DB로 자동 즉시 전환", e);
+                console.warn("AI API 통신 불가 또는 키 오류: 고지능형 로컬 DB로 자동 즉시 전환", e);
+                if (String(e.message || '').includes('NO_API_KEY')) {
+                    showToast("API 키가 없습니다. 오프라인 추측으로 대체합니다.", "warning");
+                } else {
+                    showToast("Gemini API 호출에 실패했습니다 (키가 유효한지 확인해 주세요). 오프라인 추측으로 대체합니다.", "error");
+                }
                 runOfflineAutofill(rawWord);
             } finally {
                 btn.disabled = false;
@@ -2208,6 +2332,12 @@
                 return;
             }
 
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
             const submitBtn = document.getElementById('ai-ko-es-submit-btn');
             const originalHtml = submitBtn.innerHTML;
             
@@ -2316,7 +2446,7 @@
                 showToast("AI 코치 가드 채점이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! 🥊", "success");
             } catch (e) {
                 console.error(e);
-                showToast("AI 링 통신에 엇박자가 났습니다. 다시 펀치를 날려 주세요!", "error");
+                showToast("AI 링 통신에 엇박자가 났습니다. API 키가 유효한지 확인 후 다시 펀치를 날려 주세요!", "error");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalHtml;
@@ -2327,6 +2457,12 @@
             const userEsText = document.getElementById('ai-free-input-es').value.trim();
             if (!userEsText) {
                 showToast("검사받을 스페인어 문장을 적어주세요!", "error");
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
                 return;
             }
 
@@ -2436,7 +2572,7 @@
                 showToast("자유 문장 어순 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! 🥊", "success");
             } catch (e) {
                 console.error(e);
-                showToast("AI 통신 펀치가 빗나갔습니다. 다시 한번 눌러보세요!", "error");
+                showToast("AI 통신 펀치가 빗나갔습니다. API 키가 유효한지 확인 후 다시 한번 눌러보세요!", "error");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalHtml;
@@ -2488,6 +2624,12 @@
             const inputEl = document.getElementById('ai-followup-input');
             const question = inputEl.value.trim();
             if (!question) return;
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 코치와의 대화를 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
 
             const sendBtn = document.getElementById('ai-chat-send-btn');
             const originalHtml = sendBtn.innerHTML;
