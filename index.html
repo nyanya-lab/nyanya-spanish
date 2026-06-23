@@ -5,15 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>냐냐의 스페인어 타격 단어장 🥊</title>
     
-    <!-- Premium App Icon (Favicon & Apple Touch Icon with Red Metallic & Golden Boxing Glove design) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%23ff3a3a;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23e60000;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23990000;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>🥊</text></svg>">
     <link class="apple-touch-icon" rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%23ff3a3a;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23e60000;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23990000;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>🥊</text></svg>">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nanum+Pen+Script&family=Gowun+Dodum:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
@@ -60,11 +56,9 @@
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col antialiased">
 
-    <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
     <div id="app" class="flex-1 flex flex-col pb-16">
-        <!-- Top Sticky Premium Header -->
         <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
             <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -79,7 +73,6 @@
                     </div>
                 </div>
                 
-                <!-- Right Stats -->
                 <div class="flex items-center gap-2">
                     <div class="hidden sm:flex items-center gap-4 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-200">
                         <div class="text-center px-1">
@@ -105,7 +98,6 @@
         </header>
 
         <main class="max-w-6xl mx-auto w-full px-4 mt-6 flex-1 flex flex-col md:flex-row gap-6">
-            <!-- Sidebar Drawer / Column -->
             <aside id="sidebar-menu" class="md:w-64 flex-shrink-0 flex flex-col gap-4 transition-all duration-300">
                 <div class="space-y-1 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
                     <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all bg-red-600 text-white shadow-md shadow-red-100">
@@ -126,7 +118,6 @@
                     </button>
                 </div>
 
-                <!-- Live Boxing Gym Stats Card -->
                 <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 rounded-2xl shadow-sm space-y-3">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-bold text-rose-400 tracking-wider">GYM STATS</span>
@@ -144,7 +135,6 @@
                     </div>
                 </div>
 
-                <!-- 일일 수련 일지 현황판 -->
                 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
                     <div class="flex items-center gap-2 text-slate-700 text-xs font-bold border-b border-slate-100 pb-2">
                         <i class="fa-solid fa-calendar-check text-rose-500"></i>
@@ -156,12 +146,9 @@
                 </div>
             </aside>
 
-            <!-- Main Content Area -->
             <section class="flex-1 min-w-0">
                 
-                <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-6">
-                    <!-- Search & Action Bar -->
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div class="relative w-full sm:w-72">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -175,12 +162,9 @@
                         </div>
                     </div>
 
-                    <!-- Vocabulary Grid List -->
                     <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Word Cards will be dynamically injected here -->
-                    </div>
+                        </div>
                     
-                    <!-- Empty State -->
                     <div id="vocab-empty-state" class="hidden text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                         <span class="text-5xl block mb-4">🥊</span>
                         <h3 class="text-lg font-bold text-slate-700">체육관에 등록된 단어가 없습니다!</h3>
@@ -191,7 +175,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 2: FLASHCARD PLAYGROUND -->
                 <div id="tab-cards" class="hidden space-y-6">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
                         <h2 class="text-base font-bold text-slate-900">플래시 카드 복습 수련</h2>
@@ -201,7 +184,6 @@
                     <div class="flex flex-col items-center justify-center gap-6 py-6">
                         <div id="flashcard-container" onclick="flipFlashcard()" class="w-full max-w-md h-80 perspective-1000 cursor-pointer">
                             <div id="flashcard-inner" class="w-full h-full transform-style-3d transition-transform duration-500 relative">
-                                <!-- Card Front (Spanish Word) -->
                                 <div class="absolute inset-0 bg-gradient-to-br from-white to-slate-50 border-2 border-slate-200 rounded-3xl p-8 flex flex-col justify-between backface-hidden shadow-md">
                                     <div class="flex justify-between items-center">
                                         <span id="card-front-pos" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">POS</span>
@@ -215,7 +197,6 @@
                                         <i class="fa-solid fa-rotate"></i> 카드를 터치하면 뒤집어집니다
                                     </div>
                                 </div>
-                                <!-- Card Back -->
                                 <div class="absolute inset-0 bg-slate-950 text-white rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-red-500/50">
                                     <div class="flex justify-between items-center">
                                         <span id="card-back-pos" class="text-xs bg-red-950/50 text-red-400 border border-red-900 px-2.5 py-0.5 rounded-full font-bold">POS</span>
@@ -240,7 +221,6 @@
                             </div>
                         </div>
 
-                        <!-- Card Navigation Controls -->
                         <div class="flex items-center gap-6">
                             <button onclick="prevFlashcard()" class="w-12 h-12 bg-white hover:bg-slate-50 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 transition-all shadow-sm active:scale-95"><i class="fa-solid fa-arrow-left"></i></button>
                             <span id="card-progress" class="text-sm font-semibold text-slate-500">0 / 0</span>
@@ -249,7 +229,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 3: BOXING INFINITE QUIZ -->
                 <div id="tab-quiz" class="hidden space-y-6">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
@@ -265,7 +244,6 @@
                         </div>
                     </div>
 
-                    <!-- Arena Battleground Card -->
                     <div id="quiz-arena" class="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xl border border-slate-800">
                         <div class="flex justify-between items-center mb-6 text-xs text-slate-400">
                             <span>BATTLE ARENA</span>
@@ -284,7 +262,6 @@
                     </div>
                 </div>
 
-                <!-- TAB 4: AI 1:1 TRANSLATION RING -->
                 <div id="tab-ai-feedback" class="hidden space-y-6">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -292,12 +269,11 @@
                                 <div class="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-red-100 animate-pulse">🤖</div>
                                 <div>
                                     <h2 class="text-base font-bold text-slate-900">AI 실시간 1:1 양방향 첨삭 링 🥊</h2>
-                                    <p class="text-xs text-slate-500 mt-0.5">실제 구글 Gemini Live 코치가 직접 실시간 어순 분석과 링 피드백을 제공합니다!</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">실제 구글 Gemini Live 튜터가 직접 실시간 어순 분석과 피드백을 제공합니다!</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Premium Mode Switcher Tabs -->
                         <div class="grid grid-cols-2 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
@@ -308,7 +284,6 @@
                         </div>
                     </div>
 
-                    <!-- MODE A: KOREAN TO SPANISH PLAYGROUND -->
                     <div id="ai-pane-ko-es" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
@@ -327,7 +302,6 @@
                             </div>
                         </div>
 
-                        <!-- 힌트 노출 영역 -->
                         <div id="ai-mission-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
 
                         <div class="bg-rose-50 border border-rose-100 p-5 rounded-2xl space-y-2">
@@ -351,7 +325,6 @@
                         </div>
                     </div>
 
-                    <!-- MODE B: SPANISH TO KOREAN PLAYGROUND -->
                     <div id="ai-pane-es-ko" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
                         <div>
                             <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
@@ -374,30 +347,28 @@
                         </div>
                     </div>
 
-                    <!-- AI Feedback Result Panel -->
                     <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
                         <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
                             <div id="ai-coach-icon" class="text-3xl">🥋</div>
                             <div>
-                                <h4 id="ai-coach-title" class="font-bold text-slate-900">AI 타격 코치 피드백</h4>
+                                <h4 id="ai-coach-title" class="font-bold text-slate-900">AI 튜터 피드백</h4>
                                 <p id="ai-coach-verdict" class="text-xs font-semibold text-slate-500">분석 완료!</p>
                             </div>
                         </div>
 
-                        <!-- Correction Zone -->
                         <div id="ai-coach-correction-box" class="hidden bg-red-50 border border-red-100 p-4 rounded-2xl space-y-2">
                             <div class="flex items-center gap-1.5 text-red-800 text-xs font-bold">
                                 <i class="fa-solid fa-shield-halved"></i>
-                                <span>가드 유효타 점검 (수정 필수 부분)</span>
+                                <span>문법 교정 (수정 필수 부분)</span>
                             </div>
                             <div class="text-sm font-semibold space-y-1">
                                 <div class="text-slate-500">냐냐님의 원래 입력: <span id="ai-original-render" class="line-through"></span></div>
-                                <div class="text-slate-800">코치의 정석 가드: <span id="ai-corrected-render" class="text-red-600 font-black underline"></span></div>
+                                <div class="text-slate-800">튜터의 정석 교정: <span id="ai-corrected-render" class="text-red-600 font-black underline"></span></div>
                             </div>
                         </div>
 
                         <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">COACH'S COMMENT</span>
+                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">TUTOR'S COMMENT</span>
                             <p id="ai-coach-message" class="text-sm font-medium leading-relaxed text-slate-800"></p>
                         </div>
 
@@ -409,17 +380,16 @@
                         <div class="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
                             <div class="flex items-center gap-2 text-amber-800 text-xs font-bold mb-1">
                                 <i class="fa-solid fa-lightbulb"></i>
-                                <span>냐냐 전용 오늘의 수련 가드 팁</span>
+                                <span>냐냐 전용 오늘의 문법 팁</span>
                             </div>
                             <p id="ai-coach-tip" class="text-xs text-amber-900/80 leading-relaxed font-medium"></p>
                         </div>
 
-                        <!-- 코치 대화창 -->
                         <div class="border-t border-slate-200 pt-5 space-y-4">
                             <div class="flex items-center justify-between">
                                 <span class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                                     <i class="fa-solid fa-comments text-indigo-500"></i>
-                                    <span>코치님과 끝장 꼬리 대화창 (무제한 질문)</span>
+                                    <span>튜터님과 끝장 꼬리 대화창 (무제한 질문)</span>
                                 </span>
                                 <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">1:1 실시간 링</span>
                             </div>
@@ -442,7 +412,6 @@
         </main>
     </div>
 
-    <!-- PRESET 1: ADD & EDIT WORD MODAL (Improved with Real-time Predict and Dropdown) -->
     <div id="word-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -463,16 +432,13 @@
                         <div class="flex gap-2">
                             <div class="relative flex-1">
                                 <input type="text" id="input-word" oninput="handleWordInput(this.value)" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-bold" autocomplete="off">
-                                <!-- Real-time Suggestions Dropdown -->
                                 <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
                             </div>
-                            <!-- Live AI Auto Recommendation Button -->
                             <button id="ai-autofill-btn" onclick="triggerAiAutofill()" type="button" class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 shrink-0">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                                 <span>AI 추천</span>
                             </button>
                         </div>
-                        <!-- Real-time Automatic State Indicator -->
                         <div id="autofill-status" class="hidden text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-1 transition-all duration-300">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span id="autofill-status-text">실시간 매칭 완료!</span>
@@ -499,7 +465,6 @@
                         </select>
                     </div>
                     <div class="space-y-1.5">
-                        <!-- Dynamic Noun Section -->
                         <div id="field-noun-details" class="space-y-1.5">
                             <label class="block text-xs font-bold text-slate-500">명사 성별</label>
                             <select id="input-gender" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-medium">
@@ -508,7 +473,6 @@
                                 <option value="feminine">F. 여성 명사 (la)</option>
                             </select>
                         </div>
-                        <!-- Dynamic Verb Type Section -->
                         <div id="field-verb-type-details" class="hidden grid grid-cols-2 gap-2">
                             <div>
                                 <label class="block text-xs font-bold text-slate-500">동사 구분</label>
@@ -535,7 +499,6 @@
                     </div>
                 </div>
 
-                <!-- Dynamic Verb Conjugation Grid -->
                 <div id="field-verb-conjugations" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                     <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
                         <i class="fa-solid fa-sliders"></i>
@@ -593,7 +556,6 @@
         </div>
     </div>
 
-    <!-- PRESET 2: CUSTOM CONFIRM MODAL -->
     <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center space-y-4">
             <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto">
@@ -610,7 +572,6 @@
         </div>
     </div>
 
-    <!-- PRESET 3: GEMINI API KEY SETUP MODAL -->
     <div id="api-key-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
             <div class="flex items-center gap-3">
@@ -646,7 +607,6 @@
     </div>
 
     <script>
-        // 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (pelo, libro, mesa, casa, comer 등 적극 추가)
         const OFFLINE_DICT_DB = {
             "pelo": {
                 meaning: "머리카락, 털", pos: "noun", gender: "masculine",
@@ -742,7 +702,6 @@
             }
         };
 
-        // Custom Toast Notification System
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -851,7 +810,6 @@
             }
         };
 
-        // JSON 추출 및 파싱 안전 가드 탑재 (Conversation block 우회용)
         function extractAndParseJson(text) {
             const firstBrace = text.indexOf('{');
             const lastBrace = text.lastIndexOf('}');
@@ -862,13 +820,6 @@
             throw new Error("No valid JSON object found in response");
         }
 
-        // ============================================================
-        // [냐냐 PATCH] Gemini API 키를 브라우저에 직접 저장/조회하는 헬퍼
-        // 원래 코드는 apiKey가 항상 빈 문자열("")이라 모든 AI 호출이
-        // 100% 실패하고 항상 오프라인 추측 로직으로 빠지고 있었습니다.
-        // 이제 사용자가 직접 본인의 무료 Gemini API 키를 등록하면
-        // 진짜 AI 응답을 받아올 수 있습니다.
-        // ============================================================
         const GEMINI_KEY_STORAGE_NAME = 'nyanya_gemini_api_key';
 
         function getGeminiApiKey() {
@@ -921,17 +872,15 @@
                 badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
             }
         }
-        // ============================================================
-        // [냐냐 PATCH 끝]
-        // ============================================================
 
         // Live Gemini API Connector Utility
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null) {
-            const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
+            const apiKey = getGeminiApiKey();
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
             }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            // 모델을 최신화하여 더 빠르고 안정적인 속도를 제공합니다!
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             
             const payload = {
                 contents: [{ parts: [{ text: promptText }] }]
@@ -1052,7 +1001,6 @@
         let isFlashcardFlipped = false;
         let isMenuCollapsed = false;
         
-        // Quiz & Game state
         let quizHistory = [];
         let quizCurrentWord = null;
         let quizComboCount = 0;
@@ -1060,11 +1008,8 @@
         let arenaScore = 0;
         let nyanyaDiary = {}; 
 
-        // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
         let isAiHintVisible = false;
-
-        // 실시간 입력 타이머
         let lookupTimeout = null;
 
         window.onload = function() {
@@ -1096,7 +1041,6 @@
                 }
             });
 
-            // 드롭다운 외부 클릭 시 닫기
             document.addEventListener('click', function(e) {
                 const suggs = document.getElementById('word-suggestions');
                 const inp = document.getElementById('input-word');
@@ -1131,9 +1075,8 @@
             }
         }
 
-        // 수련일지 로그 누적 기록 함수
         function logAction(type) {
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            const today = new Date().toISOString().split('T')[0];
             if (!nyanyaDiary[today]) {
                 nyanyaDiary[today] = { punches: 0, quizzes: 0, masters: 0, aiSessions: 0 };
             }
@@ -1147,7 +1090,6 @@
             renderDiary();
         }
 
-        // 수련 일지 렌더링
         function renderDiary() {
             const container = document.getElementById('nyanya-diary-list');
             const dates = Object.keys(nyanyaDiary).sort((a,b) => b.localeCompare(a));
@@ -1385,7 +1327,6 @@
             };
         }
 
-        // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
         async function triggerAiAutofill() {
             const rawWord = document.getElementById('input-word').value.trim();
             if (!rawWord) {
@@ -1393,7 +1334,6 @@
                 return;
             }
 
-            // [PATCH] API 키가 없으면 굳이 실패할 호출을 시도하지 않고 바로 안내
             if (!hasGeminiApiKey()) {
                 showToast("Gemini API 키가 없어서 AI 추천 대신 오프라인 추측을 사용합니다. 우측 상단 배지에서 키를 등록하면 진짜 AI 추천을 받을 수 있어요!", "warning");
                 runOfflineAutofill(rawWord);
@@ -1405,7 +1345,7 @@
             
             btn.disabled = true;
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
-            showToast("Gemini AI 코치가 정밀 추천 데이터를 생성하는 중입니다...", "info");
+            showToast("Gemini 튜터가 정밀 추천 데이터를 생성하는 중입니다...", "info");
 
             const prompt = `Analyze the Spanish vocabulary "${rawWord}" thoroughly. Perform a deep linguistic lookup and return high-quality, encouraging dictionary content in the exact JSON schema layout requested.
             - If it's a verb, conjugations must reflect real, standard Spanish present tense forms.
@@ -1413,7 +1353,8 @@
             - Create a highly conversational, extremely natural Spanish example sentence (구문) that 냐냐 would actually hear or use in real life, rather than a dry textbook example. Provide an accurate Korean translation.
             - Write a highly encouraging, witty note (notes) in Korean that analyzes word order (어순) or explains subtle gender nuances.`;
 
-            const system = "You are a professional, world-class Spanish linguist and boxing tutor. Return a structured JSON response matching the provided schema. Ensure meanings are accurate, natural, and formatted nicely in Korean. Do not include markdown wraps or block ticks, just the raw JSON block.";
+            // 복싱 코치 대신 '스페인 본토 표준어 원어민 튜터'로 변경했습니다.
+            const system = "당신은 스페인 본토(유럽 스페인어) 표준어의 어휘와 문법에 정통한 친절하고 전문적인 원어민 튜터입니다. 냐냐님이 실생활에서 바로 쓸 수 있는 매우 자연스러운 스페인어 예문과, 어순 및 성수 일치에 대한 유용한 팁을 한국어로 제공해 주세요. 제공된 JSON 스키마 형식에 정확히 맞춰 답변해야 하며, 마크다운 기호 없이 순수 JSON만 반환하세요.";
             
             const schema = {
                 type: "OBJECT",
@@ -1442,12 +1383,10 @@
             };
 
             try {
-                // 실시간 API 호출 시도
                 const responseText = await callGemini(prompt, system, schema);
-                // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
 
-                applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
+                applyAutofillResult(result, true);
                 AudioFX.playSuccess();
                 showToast("구글 Gemini 라이브 AI 정밀 분석 데이터 적용 완료! ✨", "success");
             } catch (e) {
@@ -1464,12 +1403,10 @@
             }
         }
 
-        // 결과값 UI 대입 처리부 (지능형 오버라이트 가드 탑재: 사용자가 치고 있던 소중한 입력을 지키는 최첨단 쉴드)
         function applyAutofillResult(result, forceOverwrite = false) {
             const wordVal = document.getElementById('input-word').value.trim();
             
             const meaningInput = document.getElementById('input-meaning');
-            // 사용자가 이미 뭔가를 적었다면, 강제 덮어쓰기 모드(추천 클릭)가 아닐 경우 지우지 않고 유지
             if (forceOverwrite || !meaningInput.value.trim()) {
                 meaningInput.value = result.meaning || '';
             }
@@ -1511,7 +1448,6 @@
             }
 
             const exampleInput = document.getElementById('input-example');
-            // 기본 형태의 유치한 예문인 경우에만 좋은 예문으로 자동 교체
             if (forceOverwrite || !exampleInput.value.trim() || exampleInput.value.startsWith('Quiero ') || exampleInput.value.startsWith('Me gusta ')) {
                 exampleInput.value = result.example || '';
             }
@@ -1527,16 +1463,12 @@
             }
         }
 
-        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
         function runOfflineAutofill(rawWord) {
             const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
             
-            // 1차: 완전히 일치하는 DB 매핑이 있는지 확인
             let match = OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
             
-            // 2차: 규칙 기반 스마트 유추 가동
             if (!match) {
-                // 동사형 규칙성 판별 (-ar, -er, -ir)
                 if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir")) {
                     const ending = cleanWord.slice(-2);
                     const stem = cleanWord.slice(0, -2);
@@ -1546,7 +1478,7 @@
                         conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
                     } else if (ending === "er") {
                         conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
-                    } else { // -ir
+                    } else { 
                         conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
                     }
                     
@@ -1577,7 +1509,6 @@
                         notes: "문장과 문장을 이어주는 접속사입니다."
                     };
                 } else {
-                    // 명사형 남/여성 기본 유추 및 관사 일치 가드 탑재 (Me gusta pelo 해소)
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
                     const article = isFeminine ? "la" : "el";
                     match = {
@@ -1591,11 +1522,9 @@
                 }
             }
 
-            // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
             applyAutofillResult(match, true);
             AudioFX.playSuccess();
 
-            // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
             if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
                 showToast(`지능형 오프라인 사전에서 "${rawWord}" 정보를 완벽하게 찾아 적용했습니다! ⚡`, "success");
             } else {
@@ -1603,7 +1532,6 @@
             }
         }
 
-        // REAL-TIME SMART AUTOFILL ENGINE (실시간 어순 분석)
         function handleWordInput(value) {
             const suggestionsContainer = document.getElementById('word-suggestions');
             const statusBadge = document.getElementById('autofill-status');
@@ -1614,10 +1542,8 @@
                 return;
             }
 
-            // 1. 실시간 자동 완성 후보 리스트 노출
             showSuggestions(value.trim());
 
-            // 2. 타이핑이 0.5초 멈췄을 때 실시간 문법 분석 / 사전 탐색 가동
             clearTimeout(lookupTimeout);
             lookupTimeout = setTimeout(() => {
                 triggerRealtimeAutofill(value.trim());
@@ -1628,7 +1554,6 @@
             const container = document.getElementById('word-suggestions');
             const cleanQuery = query.toLowerCase().trim();
             
-            // 입력어와 연관된 사전 키 필터링
             const matches = Object.keys(OFFLINE_DICT_DB).filter(key => 
                 key.toLowerCase().includes(cleanQuery)
             );
@@ -1640,7 +1565,7 @@
 
             container.classList.remove('hidden');
             let html = '';
-            matches.slice(0, 5).forEach(key => { // 최대 5개 표시
+            matches.slice(0, 5).forEach(key => { 
                 const item = OFFLINE_DICT_DB[key];
                 html += `
                     <div onclick="selectSuggestion('${key}')" class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors">
@@ -1661,7 +1586,7 @@
             
             const match = OFFLINE_DICT_DB[word];
             if (match) {
-                applyAutofillResult(match, true); // 리스트 클릭 시 확실한 선택이므로 덮어쓰기 허용 (true)
+                applyAutofillResult(match, true);
                 showRealtimeSuccessBadge("실시간 사전에 매칭되어 완벽 세팅되었습니다! ⚡");
                 AudioFX.playSuccess();
             }
@@ -1670,17 +1595,14 @@
         function triggerRealtimeAutofill(word) {
             const cleanWord = word.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
             
-            // 1. 사전 데이터와 완전히 같으면 즉시 로딩
             let match = OFFLINE_DICT_DB[word.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
             if (match) {
-                applyAutofillResult(match, false); // 타이핑 실시간 매칭 시 오버라이트 가드 발동 (false)
+                applyAutofillResult(match, false);
                 showRealtimeSuccessBadge("실시간 사전 매칭 완료! 🥊");
                 return;
             }
 
-            // 2. 단어가 일정 길이 이상일 때 실시간 문법 규칙 판별
             if (cleanWord.length >= 2) {
-                // 동사형 종결형 판별 (-ar, -er, -ir)
                 if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir")) {
                     const ending = cleanWord.slice(-2);
                     const stem = cleanWord.slice(0, -2);
@@ -1690,7 +1612,7 @@
                         conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
                     } else if (ending === "er") {
                         conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
-                    } else { // -ir
+                    } else {
                         conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
                     }
                     
@@ -1727,7 +1649,6 @@
                     applyAutofillResult(guessedConj, false);
                     showRealtimeSuccessBadge("실시간 접속사 매칭! 🧩");
                 } else {
-                    // 명사성 성별 어미 유추 및 정관사 결합 가드 ('Me gusta pelo' ➡️ 'Me gusta el pelo' 교정)
                     const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
                     const article = isFeminine ? "la" : "el";
                     const guessedNoun = {
@@ -1750,13 +1671,11 @@
             badge.classList.remove('hidden');
             badgeText.innerText = text;
             
-            // 3초 후 슬그머니 가리기
             setTimeout(() => {
                 badge.classList.add('hidden');
             }, 3000);
         }
 
-        // Save Word Action
         function saveWord() {
             const wordVal = document.getElementById('input-word').value.trim();
             const meaningVal = document.getElementById('input-meaning').value.trim();
@@ -1848,7 +1767,6 @@
             }
         }
 
-        // 현재시제 변형의 셀에서 불규칙 인칭만 파란색 글씨로 동적으로 골라내는 헬퍼
         function getConjugationCellMarkup(person, val, verbClass, irregularType) {
             if (!val) return `<div class="bg-white p-1 rounded-md border border-slate-100"><span class="text-slate-400 block">${person}</span><strong class="text-slate-800">-</strong></div>`;
             
@@ -1881,7 +1799,6 @@
             `;
         }
 
-        // Render Vocabulary Tab List
         function renderWordList() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
@@ -1905,7 +1822,6 @@
             filtered.forEach(w => {
                 const isVerb = w.pos === 'verb';
                 
-                // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
                 let badgeMarkup = '';
                 if (w.pos === 'noun') {
                     if (w.gender === 'masculine') {
@@ -1968,7 +1884,6 @@
                             </div>
                         </div>
 
-                        <!-- Meaning section -->
                         <div class="space-y-1">
                             <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
                                 <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
@@ -1977,7 +1892,6 @@
                             </p>
                         </div>
 
-                        <!-- 동사 변형표 개편 -->
                         ${isVerb && w.conjugations && Object.values(w.conjugations).some(v => v) ? `
                         <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
                             <div class="flex items-center justify-between">
@@ -1996,7 +1910,6 @@
                         </div>
                         ` : ''}
 
-                        <!-- Example Sentences -->
                         ${w.example ? `
                         <div class="bg-slate-50 border-l-2 border-red-500 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-red-500 uppercase">Ejemplo (예문)</span>
@@ -2006,7 +1919,6 @@
                         ` : ''}
                     </div>
 
-                    <!-- Yellow notes -->
                     ${w.notes ? `
                     <div class="pt-3 border-t border-dashed border-slate-100 bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[11px] text-amber-900 leading-relaxed">
                         <span class="font-bold text-amber-800 block text-[9px] uppercase tracking-wider mb-0.5"><i class="fa-solid fa-thumbtack text-[8px]"></i> 나만의 메모</span>
@@ -2020,7 +1932,6 @@
             grid.innerHTML = html;
         }
 
-        // TAB 2: FLASHCARD PLAYGROUND LOGICS
         function renderFlashcard() {
             const total = vocabulary.length;
             const progressSpan = document.getElementById('card-progress');
@@ -2103,7 +2014,6 @@
             setTimeout(renderFlashcard, 150);
         }
 
-        // Get English-only Pos Abbreviation
         function getPosAbbreviation(pos, gender = 'none') {
             switch(pos) {
                 case 'noun': 
@@ -2121,7 +2031,6 @@
             }
         }
 
-        // TAB 3: ARENA QUIZ GAME LOGICS
         function resetQuiz() {
             if (vocabulary.length < 2) {
                 document.getElementById('quiz-question-text').innerText = '단어가 부족합니다!';
@@ -2216,7 +2125,6 @@
             updateStats();
         }
 
-        // TAB 4: LIVE AI TRANSLATION COACH
         let currentAiMode = 'ko-es';
         let aiCurrentWordForMission = null;
         let aiCurrentKoreanSentence = "";
@@ -2342,8 +2250,8 @@
             const originalHtml = submitBtn.innerHTML;
             
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 가드 채점 중...`;
-            showToast("Gemini AI 코치가 냐냐님의 타격을 분석하고 있습니다...", "info");
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 문법 검토 중...`;
+            showToast("Gemini 튜터가 냐냐님의 작문을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
@@ -2352,19 +2260,20 @@
             
             Evaluate if this translation matches the Korean mission beautifully and is grammatically perfect. Wrap any corrected words in correctedText inside '<span class="text-red-600 font-extrabold underline">corrected_word_here</span>' tags to highlight mistakes in RED.`;
             
-            const system = `You are an encouraging and extremely precise professional Spanish boxing coach named "Gemini Coach" tutoring a passionate student named "냐냐".
-            Evaluate the student's translation. Return feedback matching this exact JSON schema:
+            // 복싱 코치 대신 '스페인 본토 표준어 전문 튜터'로 변경했습니다.
+            const system = `당신은 스페인 본토(유럽 스페인어)를 완벽하게 구사하는 다정하고 예리한 스페인어 전문 튜터 "Gemini 코치"이며, 열정적인 학생 "냐냐"님을 가르치고 있습니다.
+            제출된 번역을 스페인 본토 표준어 기준으로 정밀하게 평가하여, 아래 JSON 스키마에 맞춰 응답하세요:
             {
                "isCorrect": true/false,
-               "verdict": "e.g., 퍼펙트 타격 성공! 🏆 or 가드 돌파 실패! 빗맞음 🥊",
+               "verdict": "e.g., 완벽한 문장이에요! 🏆 or 문법을 살짝 다듬어 볼까요? 📝",
                "correctedText": "The perfect standard Spanish sentence. Wrap corrected/changed words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags to highlight mistakes in RED.",
-               "message": "Enthusiastic evaluation in Korean. Explicitly mention the student '냐냐님' and comment on word order (어순) or conjugations.",
+               "message": "Enthusiastic and kind evaluation in Korean. Explicitly mention the student '냐냐님' and explain word order (어순), gender agreement, or conjugations clearly.",
                "breakdown": [
                   { "word": "Spanish word", "mean": "Korean meaning" }
                ],
-               "tip": "Useful grammatical tip or boxing trainer quote in Korean"
+               "tip": "Useful and encouraging grammatical tip about European Spanish in Korean"
             }
-            Do not wrap JSON in markdown blockticks.`;
+            마크다운 기호(blockticks) 없이 순수 JSON만 반환하세요.`;
 
             const schema = {
                 type: "OBJECT",
@@ -2390,7 +2299,6 @@
 
             try {
                 const responseText = await callGemini(prompt, system, schema);
-                // 안전 가드 파서 작동
                 const feedback = extractAndParseJson(responseText);
 
                 const resultBox = document.getElementById('ai-feedback-result');
@@ -2410,7 +2318,7 @@
                     coachVerdict.className = "text-sm font-bold text-emerald-600";
                     correctionBox.classList.add('hidden');
                 } else {
-                    coachIcon.innerText = "🥊🥊";
+                    coachIcon.innerText = "📝💡";
                     coachVerdict.className = "text-sm font-bold text-red-600";
                     correctionBox.classList.remove('hidden');
                     originalRender.innerText = userText;
@@ -2432,9 +2340,10 @@
 
                 coachTip.innerText = feedback.tip;
 
+                // 대화 기록 초기 설정 변경 (복싱 코치 -> 튜터)
                 aiChatHistory = [
-                    { role: "system", content: "당신은 냐냐님의 상냥하고 활기찬 스페인어 타격 코치입니다. 이전 번역 피드백 내용에 이어지는 냐냐님의 추가적인 질문이나 의구심에 대해 명쾌하고 위트 있게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>코치 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 전문적인 스페인 본토 스페인어 튜터입니다. 이전 번역 피드백 내용에 이어지는 냐냐님의 추가적인 질문이나 의구심에 대해 명쾌하고 다정하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>튜터 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
                 ];
                 renderChatThread();
 
@@ -2443,10 +2352,10 @@
                 saveToStorage();
                 updateStats();
                 resultBox.scrollIntoView({ behavior: 'smooth' });
-                showToast("AI 코치 가드 채점이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! 🥊", "success");
+                showToast("AI 튜터의 문법 교정이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
             } catch (e) {
                 console.error(e);
-                showToast("AI 링 통신에 엇박자가 났습니다. API 키가 유효한지 확인 후 다시 펀치를 날려 주세요!", "error");
+                showToast("AI 튜터와의 통신에 엇박자가 났습니다. API 키가 유효한지 확인 후 다시 시도해 주세요!", "error");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalHtml;
@@ -2471,26 +2380,27 @@
             
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
-            showToast("Gemini AI 코치가 자유 문장의 문법을 분해하고 있습니다...", "info");
+            showToast("Gemini 튜터가 자유 문장의 문법을 분해하고 있습니다...", "info");
             AudioFX.playPunch();
 
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
             
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. Wrap corrected parts in correctedText using '<span class="text-red-600 font-extrabold underline">corrected_text</span>' tags.`;
             
-            const system = `You are an expert Spanish tutor named "Gemini Coach" evaluating a student named "냐냐".
-            Return feedback matching this JSON schema:
+            // 복싱 코치 대신 '스페인 본토 표준어 전문 튜터'로 변경했습니다.
+            const system = `당신은 스페인 본토(유럽 스페인어) 표준어 전문 튜터 "Gemini 코치"이며, 학생 "냐냐"님의 자유 작문을 꼼꼼하고 다정하게 교정해줍니다.
+            아래 JSON 스키마에 맞춰 피드백을 반환하세요:
             {
                "isCorrect": true/false,
-               "verdict": "e.g., 어순 완벽 통과! 🟢 or 가드 어순 경보! 🛑",
+               "verdict": "e.g., 어순과 문법 완벽해요! 🟢 or 문법을 조금 다듬어 볼까요? 🛑",
                "correctedText": "The corrected standard Spanish sentence. Wrap any corrected words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags.",
                "message": "Detailed grammatical analysis in Korean mentioning '냐냐님'. Correct and explain any 어순 (word order) or spelling issues.",
                "breakdown": [
                   { "word": "Spanish word", "mean": "Korean translation" }
                ],
-               "tip": "Valuable grammar tip or boxing advice in Korean."
+               "tip": "Valuable European Spanish grammar tip in Korean."
             }
-            Do not wrap JSON in markdown blockticks.`;
+            마크다운 기호(blockticks) 없이 순수 JSON만 반환하세요.`;
 
             const schema = {
                 type: "OBJECT",
@@ -2516,7 +2426,6 @@
 
             try {
                 const responseText = await callGemini(prompt, system, schema);
-                // 안전 가드 파서 작동
                 const feedback = extractAndParseJson(responseText);
 
                 const resultBox = document.getElementById('ai-feedback-result');
@@ -2536,7 +2445,7 @@
                     coachVerdict.className = "text-sm font-bold text-emerald-600";
                     correctionBox.classList.add('hidden');
                 } else {
-                    coachIcon.innerText = "🥊🛑";
+                    coachIcon.innerText = "📝🛑";
                     coachVerdict.className = "text-sm font-bold text-red-600";
                     correctionBox.classList.remove('hidden');
                     originalRender.innerText = userEsText;
@@ -2558,9 +2467,10 @@
 
                 coachTip.innerText = feedback.tip;
 
+                // 대화 기록 초기 설정 변경 (복싱 코치 -> 튜터)
                 aiChatHistory = [
-                    { role: "system", content: "당신은 냐냐님의 상냥하고 활기찬 스페인어 타격 코치입니다. 이전 자유 작문 첨삭 결과 내용에 이어지는 냐냐님의 추가 질문에 친절하고 정밀하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>코치 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 전문적인 스페인 본토 스페인어 튜터입니다. 이전 자유 작문 첨삭 결과에 이어지는 냐냐님의 질문에 친절하고 정밀하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>튜터 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
                 ];
                 renderChatThread();
 
@@ -2569,10 +2479,10 @@
                 saveToStorage();
                 updateStats();
                 resultBox.scrollIntoView({ behavior: 'smooth' });
-                showToast("자유 문장 어순 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! 🥊", "success");
+                showToast("자유 문장 어순 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
             } catch (e) {
                 console.error(e);
-                showToast("AI 통신 펀치가 빗나갔습니다. API 키가 유효한지 확인 후 다시 한번 눌러보세요!", "error");
+                showToast("AI 통신에 실패했습니다. API 키가 유효한지 확인 후 다시 한번 눌러보세요!", "error");
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalHtml;
@@ -2586,7 +2496,7 @@
             if (aiChatHistory.length <= 2) {
                 threadEl.innerHTML = `
                     <div class="text-center text-slate-400 py-4 font-semibold">
-                        🤖 코치님과의 실시간 추가 질문 링이 오픈되었습니다!<br>
+                        🤖 튜터님과의 실시간 추가 질문 링이 오픈되었습니다!<br>
                         "왜 이 전치사가 들어가죠?", "성별 일치는 어떻게 되나요?" 등을 아래에 편하게 타이핑해 물어보세요.
                     </div>
                 `;
@@ -2626,7 +2536,7 @@
             if (!question) return;
 
             if (!hasGeminiApiKey()) {
-                showToast("Gemini API 키가 등록되지 않아 코치와의 대화를 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                showToast("Gemini API 키가 등록되지 않아 튜터와의 대화를 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
                 openApiKeyModal();
                 return;
             }
@@ -2644,18 +2554,19 @@
 
             let contextPrompt = `이전 대화 맥락:\n`;
             aiChatHistory.slice(0, -1).forEach(m => {
-                contextPrompt += `${m.role === 'user' ? '학생(냐냐)' : '코치'}: ${m.content}\n`;
+                contextPrompt += `${m.role === 'user' ? '학생(냐냐)' : '튜터'}: ${m.content}\n`;
             });
-            contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 코치로서 아주 상냥하고 예리하게 답변해 주세요.`;
+            contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 튜터로서 아주 상냥하고 예리하게 답변해 주세요.`;
 
             try {
-                const response = await callGemini(contextPrompt, "You are a professional, motivating Spanish boxing coach named 'Gemini Coach'. Talk in natural, friendly Korean to student '냐냐님'. Give clear and correct grammar answers.");
+                // 복싱 코치 대신 '스페인 본토 유럽 스페인어 튜터'로 프롬프트 변경
+                const response = await callGemini(contextPrompt, "You are a professional, motivating European Spanish tutor named 'Gemini Coach'. Talk in natural, friendly Korean to student '냐냐님'. Give clear, correct, and encouraging grammar answers.");
                 aiChatHistory.push({ role: "assistant", content: response.trim() });
                 AudioFX.playSuccess();
                 renderChatThread();
             } catch (e) {
                 console.error(e);
-                aiChatHistory.push({ role: "assistant", content: "앗, 냐냐님! 체육관 전파 상태가 고르지 못해 코치가 질문을 살짝 빗맞았습니다. 다시 한번 전송해 주시겠어요?" });
+                aiChatHistory.push({ role: "assistant", content: "앗, 냐냐님! 네트워크 통신 상태가 고르지 못해 답변을 전달하지 못했어요. 다시 한번 전송해 주시겠어요?" });
                 renderChatThread();
             } finally {
                 sendBtn.disabled = false;
