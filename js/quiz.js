@@ -88,7 +88,7 @@ let quizSession = null;
                 box.innerHTML = '';
                 q.choices.forEach((choice, idx) => {
                     box.innerHTML += `
-                        <button onclick="submitMcAnswer('${choice.replace(/'/g, "\\'")}')" class="w-full bg-white border-2 border-slate-200 rounded-2xl py-4 px-5 text-slate-700 text-sm font-bold transition-all text-center flex items-center justify-center gap-2 hover:border-violet-400 hover:bg-violet-50 active:scale-95 shadow-sm">
+                        <button onclick="submitMcAnswer('${choice.replace(/'/g, "\\'")}', this)" class="w-full bg-white border-2 border-slate-200 rounded-2xl py-4 px-5 text-slate-700 text-sm font-bold transition-all text-center flex items-center justify-center gap-2 hover:border-violet-400 hover:bg-violet-50 active:scale-95 shadow-sm">
                             <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-400 text-xs flex items-center justify-center font-black">${idx + 1}</span>
                             <span class="flex-1">${choice}</span>
                         </button>
@@ -113,9 +113,20 @@ let quizSession = null;
                 .replace(/^(el|la|los|las)\s+/, '');
         }
 
-        function submitMcAnswer(choice) {
+        function submitMcAnswer(choice, btnEl) {
             const q = quizSession.questions[quizSession.currentIndex];
-            finishQuizQuestion(choice === q.word.meaning, q);
+            const isCorrect = (choice === q.word.meaning);
+
+            // [냐냐 PATCH-버그수정] 클릭한 선택지가 바로 시각적으로 표시되도록 함
+            // (정답/오답 색 표시 + 다른 선택지들은 비활성화해서 중복 클릭 방지)
+            const allBtns = document.querySelectorAll('#quiz-choices-box button');
+            allBtns.forEach(btn => { btn.disabled = true; btn.classList.add('opacity-60'); });
+            if (btnEl) {
+                btnEl.classList.remove('opacity-60', 'border-slate-200', 'hover:border-violet-400', 'hover:bg-violet-50');
+                btnEl.classList.add(isCorrect ? 'border-emerald-500' : 'border-rose-500', isCorrect ? 'bg-emerald-50' : 'bg-rose-50');
+            }
+
+            finishQuizQuestion(isCorrect, q);
         }
 
         function submitSubjectiveAnswer() {
@@ -176,6 +187,13 @@ let quizSession = null;
             const nextBtn = document.getElementById('quiz-next-btn');
             nextBtn.disabled = false;
             nextBtn.className = "w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95";
+
+            // [냐냐 PATCH-버그수정] 모바일에서 키보드가 열려있거나 화면이 길면 결과 패널이
+            // 화면 밖에 가려져서 "멈춘 것처럼" 보였을 수 있음 — 결과 패널로 자동 스크롤
+            document.getElementById('quiz-subjective-input').blur();
+            setTimeout(() => {
+                document.getElementById('quiz-review-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
         }
 
         function nextQuizQuestion() {
