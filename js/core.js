@@ -532,7 +532,7 @@ const OFFLINE_DICT_DB = {
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
         // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
-        let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
+        let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
         // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
@@ -746,13 +746,14 @@ const OFFLINE_DICT_DB = {
                 gymPunchesCount = payload.gymPunchesCount || 0;
                 arenaScore = payload.arenaScore || 0;
                 nyanyaDiary = payload.nyanyaDiary || {};
-                learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
+                learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+                if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 gymPunchesCount = 0;
                 arenaScore = 0;
                 nyanyaDiary = {};
-                learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
+                learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -792,7 +793,7 @@ const OFFLINE_DICT_DB = {
         // [냐냐 PATCH-수준맞춤] 누적된 작은 통계만으로 AI 프롬프트에 넣을 짧은 요약 문장 생성.
         // 전체 기록을 보내지 않고 이 요약 텍스트(보통 100토큰 이내)만 매번 같이 보냄.
         function buildLearnerProfileSummary() {
-            const { totalAnswered, totalCorrect, wrongByPos } = learnerProfile;
+            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
             if (totalAnswered < 5) {
                 return "학습 데이터가 아직 적어서 평균적인 초급자 기준으로 설명해 주세요.";
             }
@@ -803,12 +804,16 @@ const OFFLINE_DICT_DB = {
 
             const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
             const weakPos = Object.entries(wrongByPos).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos]) => posNameKo[pos] || pos);
+            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => t);
 
             let summary = `학습자 수준: ${level} (정답률 ${accuracy}%, 총 ${totalAnswered}문제 풀이, 등록 단어 ${vocabulary.length}개).`;
             if (weakPos.length > 0) {
                 summary += ` 자주 틀리는 품사: ${weakPos.join(', ')}.`;
             }
-            summary += ` 이 수준에 맞게 문장 난이도와 설명의 깊이를 조절해 주세요 (초급이면 더 짧고 쉬운 표현, 중상급이면 더 자연스럽고 다양한 표현 사용).`;
+            if (weakGrammar.length > 0) {
+                summary += ` 자유 작문에서 자주 틀리는 문법 유형: ${weakGrammar.join(', ')}.`;
+            }
+            summary += ` 이 수준에 맞게 문장 난이도와 설명의 깊이를 조절해 주세요 (초급이면 더 짧고 쉬운 표현, 중상급이면 더 자연스럽고 다양한 표현 사용). 자주 틀리는 문법 유형이 있다면 가능하면 그 부분을 다시 짚어주거나 비슷한 연습이 되도록 신경써 주세요.`;
             return summary;
         }
 
@@ -992,6 +997,20 @@ const OFFLINE_DICT_DB = {
         // 기간이 길어져도(예: 1년) 좌우로 안 늘어나고 한 화면 안에 다 들어옴.
         const CHART_VIEW_WIDTH = 700;
 
+        // [냐냐 PATCH] Y축 기준선 + 라벨 (세로축 기준점이 없다는 피드백 반영).
+        // 마우스를 올리면(데스크탑) 정확한 수치도 <title>로 보이게 함.
+        function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
+            const steps = 4;
+            let html = '';
+            for (let i = 0; i <= steps; i++) {
+                const val = Math.round((maxVal / steps) * i);
+                const y = padding.top + chartH - (i / steps) * chartH;
+                html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
+                html += `<text x="${(padding.left - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="#94a3b8" text-anchor="end">${val}${suffix}</text>`;
+            }
+            return html;
+        }
+
         function renderRecordLineChart(series) {
             const container = document.getElementById('record-line-chart');
             if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
@@ -1008,13 +1027,18 @@ const OFFLINE_DICT_DB = {
             const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
 
             const buildPath = (key) => series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ');
+            const buildDots = (key, color) => series.map((d, i) =>
+                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(d[key]).toFixed(1)}" r="2.5" fill="${color}"><title>${d.date}: ${d[key]}개</title></circle>`
+            ).join('');
 
             container.innerHTML = `
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${height - padding.bottom}" stroke="#e2e8f0" stroke-width="1"/>
-                    <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#e2e8f0" stroke-width="1"/>
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#cbd5e1" stroke-width="1"/>
                     <path d="${buildPath('registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="${buildPath('masteredTotal')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${buildDots('registeredTotal', '#8b5cf6')}
+                    ${buildDots('masteredTotal', '#10b981')}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
@@ -1047,18 +1071,23 @@ const OFFLINE_DICT_DB = {
             let bars = '';
             withRate.forEach((d, i) => {
                 const barH = (d.wrongRate / 100) * chartH;
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"><title>${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)</title></rect>`;
             });
 
             // 전체 풀이 갯수는 자기 자신의 최댓값 기준 꺾은선으로
             const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
             const linePath = withRate.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d.quizTotal).toFixed(1)}`).join(' ');
+            const lineDots = withRate.map((d, i) =>
+                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfTotal(d.quizTotal).toFixed(1)}" r="2.5" fill="#8b5cf6"><title>${d.date}: 전체 ${d.quizTotal}문제</title></circle>`
+            ).join('');
 
             container.innerHTML = `
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#e2e8f0" stroke-width="1"/>
+                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
                     ${recordChartXLabels(withRate, xOf, height)}
                 </svg>
             `;
@@ -1084,12 +1113,13 @@ const OFFLINE_DICT_DB = {
             let bars = '';
             series.forEach((d, i) => {
                 const barH = (d.aiSessions / maxVal) * chartH;
-                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
+                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"><title>${d.date}: ${d.aiSessions}회</title></rect>`;
             });
 
             container.innerHTML = `
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#e2e8f0" stroke-width="1"/>
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     ${recordChartXLabels(series, xOfGroup, height)}
                 </svg>
