@@ -1,7 +1,9 @@
-        let flashcardOrder = [];
+let flashcardOrder = [];
 
         function shuffleFlashcards() {
-            flashcardOrder = vocabulary.map(w => ({ word: w, reversed: Math.random() < 0.5 }));
+            // [냐냐 PATCH] 마스터한 단어는 복습 대상에서 제외 — 아직 안 외운 단어만 복습
+            const pool = vocabulary.filter(w => !w.mastered);
+            flashcardOrder = pool.map(w => ({ word: w, reversed: Math.random() < 0.5 }));
             for (let i = flashcardOrder.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [flashcardOrder[i], flashcardOrder[j]] = [flashcardOrder[j], flashcardOrder[i]];
@@ -13,9 +15,10 @@
             const progressSpan = document.getElementById('card-progress');
             
             if (total === 0) {
+                const allMastered = vocabulary.length > 0;
                 progressSpan.innerText = '0 / 0';
-                document.getElementById('card-word').innerText = '단어 없음';
-                document.getElementById('card-meaning').innerText = '단어를 먼저 등록해 주세요!';
+                document.getElementById('card-word').innerText = allMastered ? '🎉' : '단어 없음';
+                document.getElementById('card-meaning').innerText = allMastered ? '전부 마스터하셨어요! 복습할 단어가 없어요.' : '단어를 먼저 등록해 주세요!';
                 document.getElementById('card-front-pos').innerText = '없음';
                 document.getElementById('card-back-pos').innerText = '없음';
                 document.getElementById('card-notes').innerText = '';
