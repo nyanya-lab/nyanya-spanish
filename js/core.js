@@ -1,4 +1,4 @@
-        const OFFLINE_DICT_DB = {
+const OFFLINE_DICT_DB = {
             "pelo": {
                 meaning: "머리카락, 털", pos: "noun", gender: "masculine",
                 example: "Me gusta el pelo largo.", exampleMeaning: "나는 긴 머리가 마음에 들어.",
@@ -342,12 +342,17 @@
         // ============================================================
 
         // Live Gemini API Connector Utility
-        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low') {
+        // [PATCH-혼합모델] 단순 작업(단어 추천, 문장 생성)은 더 가볍고 빠른 Flash-Lite,
+        // 정밀한 판단이 필요한 작업(첨삭 채점, 문법 설명)은 기존 Flash를 그대로 사용
+        const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
+        const GEMINI_MODEL_FLASH_LITE = 'gemini-3.1-flash-lite';
+
+        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
             }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
             
             const payload = {
                 contents: [{ parts: [{ text: promptText }] }]
@@ -1128,4 +1133,3 @@
             document.getElementById('header-total-vocab').innerText = `${total}개`;
             document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
         }
-
