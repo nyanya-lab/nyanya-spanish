@@ -597,18 +597,21 @@ function togglePosFields() {
                 return queryInWord || queryInMeaning || queryInNotes;
             });
 
-            // [PATCH-20] 정렬 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
+            // [PATCH-20] 정렬/필터 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
             const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
-            if (sortMode === 'alpha-asc') {
-                filtered.sort((a, b) => a.word.localeCompare(b.word));
+            let filteredSorted = filtered;
+            if (sortMode === 'oldest') {
+                filteredSorted = [...filtered].reverse();
+            } else if (sortMode === 'alpha-asc') {
+                filteredSorted = [...filtered].sort((a, b) => a.word.localeCompare(b.word));
             } else if (sortMode === 'alpha-desc') {
-                filtered.sort((a, b) => b.word.localeCompare(a.word));
-            } else if (sortMode === 'mastered') {
-                filtered.sort((a, b) => (b.mastered ? 1 : 0) - (a.mastered ? 1 : 0));
+                filteredSorted = [...filtered].sort((a, b) => b.word.localeCompare(a.word));
+            } else if (sortMode === 'mastered-only') {
+                filteredSorted = filtered.filter(w => w.mastered);
             }
-            // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 정렬 없이 그대로 사용
+            // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
-            if (filtered.length === 0) {
+            if (filteredSorted.length === 0) {
                 grid.innerHTML = '';
                 emptyState.classList.remove('hidden');
                 return;
@@ -616,7 +619,7 @@ function togglePosFields() {
             emptyState.classList.add('hidden');
 
             let html = '';
-            filtered.forEach(w => {
+            filteredSorted.forEach(w => {
                 const isVerb = w.pos === 'verb';
                 
                 // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
@@ -670,7 +673,7 @@ function togglePosFields() {
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
-                                <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-emerald-500 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
                                     <i class="fa-solid fa-check text-xs"></i>
                                 </button>
                                 <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
@@ -722,8 +725,8 @@ function togglePosFields() {
 
                     <!-- 핵심만 정리된 노트 -->
                     ${w.notes ? `
-                    <div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-sm text-amber-900 leading-snug whitespace-pre-line font-bold">
-                        <span class="font-bold text-amber-800 block text-[10px] uppercase tracking-wider mb-1"><i class="fa-solid fa-thumbtack text-[9px]"></i> 핵심 노트</span>
+                    <div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[10px] text-amber-900 leading-snug whitespace-pre-line font-bold -mt-2">
+                        <span class="font-bold text-amber-800 block text-sm uppercase tracking-wider mb-0"><i class="fa-solid fa-thumbtack text-xs"></i> 핵심 노트</span>
                         ${w.notes}
                     </div>
                     ` : ''}
