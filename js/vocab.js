@@ -725,7 +725,7 @@ function togglePosFields() {
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
-                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-sm text-amber-900 leading-snug whitespace-pre-line font-medium -mt-4"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-line font-medium -mt-4"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                 </div>
                 `;
             });
