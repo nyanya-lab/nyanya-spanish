@@ -1,4 +1,4 @@
-        let currentAiMode = 'ko-es';
+let currentAiMode = 'ko-es';
         let aiCurrentWordForMission = null;
         let aiCurrentKoreanSentence = "";
 
@@ -81,39 +81,9 @@
         }
 
         // [PATCH] AI 호출이 실패했을 때만 쓰는 안전한 대체 문장 (기존 curated/rule 로직 재사용)
-        function buildFallbackMission(wordObj) {
-            const word = wordObj.word;
-            const meaning = (wordObj.meaning || '').split(',')[0].trim();
-            const pos = wordObj.pos;
-
-            const curatedMissions = {
-                'tener': "나 지금 급한 일이 있어서 지갑에 현금이 전혀 없어.",
-                'querer': "오늘 밤에 스크램블 에그를 꼭 만들어 먹고 싶은 기분이야.",
-                'poder': "나 지금 처리할 업무가 많아서 그 부탁은 들어주기 어렵겠어.",
-                'hacer': "너 오늘 오후에 시간 있으면 나 좀 도와줄 수 있어?",
-                'comer': "우리 저녁에 빠에야 만들어서 같이 먹을래?",
-                'vivir': "나는 요즘 서울 근처에서 살고 있어.",
-                'hablar': "저 사람은 스페인어를 정말 유창하게 하더라.",
-                'con': "나는 친구와 함께 해변을 걷고 있어.",
-                'para': "이 선물은 너를 위해 준비한 거야.",
-                'porque': "나 오늘 너무 피곤해서 약속에 못 갈 것 같아.",
-                'y': "민수랑 나는 어릴 때부터 친구야.",
-                'pelo': "거울을 보니까 머리가 너무 길어진 것 같아.",
-                'libro': "이 책 좀 빌려줄 수 있어? 진짜 재밌어 보여.",
-                'mesa': "테이블 위에 있는 컵 좀 치워줄래?",
-                'casa': "오늘은 그냥 집에서 푹 쉬고 싶어.",
-                'el agua': "나 지금 너무 목이 말라서 물 한 잔만 줄래?",
-                'el ascensor': "엘리베이터가 고장 나서 계단으로 올라가야 해."
-            };
-
-            if (curatedMissions[word]) return curatedMissions[word];
-            if (pos === 'noun') return `저기 있는 ${meaning} 좀 나한테 갖다 줄래?`;
-            if (pos === 'verb') return `"${word}" (${meaning})를 활용해서, 오늘 있었던 일을 스페인어 한 문장으로 말해보세요!`;
-            if (pos === 'preposition' || pos === 'conjunction') return `"${word}" (${meaning})를 넣어서 자연스러운 스페인어 문장을 만들어보세요!`;
-            return `"${word}" (${meaning})를 활용한 스페인어 문장을 만들어보세요!`;
-        }
-
         // [PATCH] 내 단어장 기반으로 AI가 실시간으로 자연스러운 한국어 미션 문장을 생성
+        // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
+        //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
         async function generateAiMission() {
             const missionHeading = document.getElementById('ai-mission-korean');
             const resultBox = document.getElementById('ai-feedback-result');
@@ -128,26 +98,28 @@
             if (vocabulary.length === 0) {
                 missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
                 aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어서 AI 문장 생성을 사용할 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                missionHeading.innerText = "API 키가 없어서 문장을 생성할 수 없어요.";
+                openApiKeyModal();
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
                 return;
             }
 
             const randIdx = Math.floor(Math.random() * vocabulary.length);
-            aiCurrentWordForMission = vocabulary[randIdx];
-
-            if (!hasGeminiApiKey()) {
-                showToast("Gemini API 키가 없어서 AI 문장 생성 대신 기본 문장을 사용합니다. 우측 상단 배지에서 키를 등록하면 매번 새로운 문장을 받을 수 있어요!", "warning");
-                aiCurrentKoreanSentence = buildFallbackMission(aiCurrentWordForMission);
-                missionHeading.innerText = `"${aiCurrentKoreanSentence}"`;
-                AudioFX.playPunch();
-                return;
-            }
+            const targetWord = vocabulary[randIdx];
 
             const originalBtnHtml = genBtn.innerHTML;
             genBtn.disabled = true;
             genBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
             missionHeading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
 
-            const prompt = `스페인어 단어 "${aiCurrentWordForMission.word}" (뜻: "${aiCurrentWordForMission.meaning}", 품사: ${aiCurrentWordForMission.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.`;
+            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. No explanations, no markdown fences, no preamble.";
             const schema = {
                 type: "OBJECT",
@@ -160,14 +132,16 @@
             try {
                 const responseText = await callGemini(prompt, system, schema, 'low');
                 const result = extractAndParseJson(responseText);
+                aiCurrentWordForMission = targetWord;
                 aiCurrentKoreanSentence = result.sentence;
                 missionHeading.innerText = `"${aiCurrentKoreanSentence}"`;
                 AudioFX.playPunch();
             } catch (e) {
-                console.warn("AI 미션 생성 실패, 기본 문장으로 대체", e);
-                showToast(`${describeGeminiError(e)} 기본 문장으로 대체합니다.`, "error");
-                aiCurrentKoreanSentence = buildFallbackMission(aiCurrentWordForMission);
-                missionHeading.innerText = `"${aiCurrentKoreanSentence}"`;
+                console.warn("AI 미션 생성 실패", e);
+                showToast(describeGeminiError(e), "error");
+                missionHeading.innerText = "문장 생성에 실패했어요. '✨ 랜덤 문장 생성'을 다시 눌러주세요.";
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
             } finally {
                 genBtn.disabled = false;
                 genBtn.innerHTML = originalBtnHtml;
