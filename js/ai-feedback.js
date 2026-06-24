@@ -119,12 +119,13 @@ let currentAiMode = 'ko-es';
             genBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
             missionHeading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
 
-            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.`;
-            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. No explanations, no markdown fences, no preamble.";
+            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
+            매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 단어를 한국어 문장 안에 그대로 노출하면 절대 안 됩니다. 의미는 한국어 뜻("${targetWord.meaning}")으로만 표현하세요.`;
+            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    sentence: { type: "STRING", description: "자연스러운 구어체 한국어 문장 1개 (1문장만)" }
+                    sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개. 스페인어 단어나 알파벳 절대 포함 금지" }
                 },
                 required: ["sentence"]
             };
@@ -132,13 +133,24 @@ let currentAiMode = 'ko-es';
             try {
                 const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
                 const result = extractAndParseJson(responseText);
+                const candidateSentence = (result.sentence || '').trim();
+
+                // [PATCH-안전장치] 그래도 스페인어/알파벳이 섞여 나오면(정답 노출) 실패로 처리
+                if (/[a-zA-Z]/.test(candidateSentence)) {
+                    throw new Error("SENTENCE_CONTAINS_SPANISH");
+                }
+
                 aiCurrentWordForMission = targetWord;
-                aiCurrentKoreanSentence = result.sentence;
+                aiCurrentKoreanSentence = candidateSentence;
                 missionHeading.innerText = `"${aiCurrentKoreanSentence}"`;
                 AudioFX.playPunch();
             } catch (e) {
                 console.warn("AI 미션 생성 실패", e);
-                showToast(describeGeminiError(e), "error");
+                if (String(e.message || '').includes('SENTENCE_CONTAINS_SPANISH')) {
+                    showToast("생성된 문장에 스페인어가 섞여 있어서 다시 시도해 주세요!", "error");
+                } else {
+                    showToast(describeGeminiError(e), "error");
+                }
                 missionHeading.innerText = "문장 생성에 실패했어요. '✨ 랜덤 문장 생성'을 다시 눌러주세요.";
                 aiCurrentWordForMission = null;
                 aiCurrentKoreanSentence = "";
