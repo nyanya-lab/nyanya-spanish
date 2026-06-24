@@ -1,4 +1,4 @@
-        let quizSession = null;
+let quizSession = null;
         let selectedQuizCount = 30;
 
         function initQuizTab() {
@@ -183,7 +183,7 @@
 
             // [PATCH] 퀴즈가 끝났을 때 한 번만 학습일지에 기록 (문제마다 갱신하지 않음)
             touchDiarySnapshot();
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
             nyanyaDiary[today].quizTotal += total;
             nyanyaDiary[today].quizCorrect += correct;
             saveToStorage();
