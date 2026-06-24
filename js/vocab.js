@@ -1,4 +1,4 @@
-        function togglePosFields() {
+function togglePosFields() {
             const pos = document.getElementById('input-pos').value;
             const nounDetails = document.getElementById('field-noun-details');
             const verbTypeDetails = document.getElementById('field-verb-type-details');
@@ -191,7 +191,7 @@
 
             try {
                 // 실시간 API 호출 시도 (thinkingLevel: minimal → 단순 사전 조회라 깊은 추론 불필요, 가장 빠름)
-                const responseText = await callGemini(prompt, system, schema, 'minimal');
+                const responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
 
@@ -722,8 +722,8 @@
 
                     <!-- 핵심만 정리된 노트 -->
                     ${w.notes ? `
-                    <div class="pt-2 border-t border-dashed border-slate-100 bg-amber-50/50 p-2 rounded-2xl border border-amber-200/50 text-[11px] text-amber-900 leading-snug whitespace-pre-line font-medium">
-                        <span class="font-bold text-amber-800 block text-[9px] uppercase tracking-wider mb-0.5"><i class="fa-solid fa-thumbtack text-[8px]"></i> 핵심 노트</span>
+                    <div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-sm text-amber-900 leading-snug whitespace-pre-line font-bold">
+                        <span class="font-bold text-amber-800 block text-[10px] uppercase tracking-wider mb-1"><i class="fa-solid fa-thumbtack text-[9px]"></i> 핵심 노트</span>
                         ${w.notes}
                     </div>
                     ` : ''}
