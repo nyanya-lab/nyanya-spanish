@@ -530,6 +530,10 @@ const OFFLINE_DICT_DB = {
         let arenaScore = 0;
         let nyanyaDiary = {}; 
 
+        // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
+        let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
+
         // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
         let isAiHintVisible = false;
@@ -638,7 +642,8 @@ const OFFLINE_DICT_DB = {
                 vocabulary: vocabulary,
                 gymPunchesCount: gymPunchesCount,
                 arenaScore: arenaScore,
-                nyanyaDiary: nyanyaDiary
+                nyanyaDiary: nyanyaDiary,
+                learnerProfile: learnerProfile
             };
             const json = JSON.stringify(payload);
 
@@ -741,11 +746,13 @@ const OFFLINE_DICT_DB = {
                 gymPunchesCount = payload.gymPunchesCount || 0;
                 arenaScore = payload.arenaScore || 0;
                 nyanyaDiary = payload.nyanyaDiary || {};
+                learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 gymPunchesCount = 0;
                 arenaScore = 0;
                 nyanyaDiary = {};
+                learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {} };
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -780,6 +787,29 @@ const OFFLINE_DICT_DB = {
             const m = String(date.getMonth() + 1).padStart(2, '0');
             const d = String(date.getDate()).padStart(2, '0');
             return `${y}-${m}-${d}`;
+        }
+
+        // [냐냐 PATCH-수준맞춤] 누적된 작은 통계만으로 AI 프롬프트에 넣을 짧은 요약 문장 생성.
+        // 전체 기록을 보내지 않고 이 요약 텍스트(보통 100토큰 이내)만 매번 같이 보냄.
+        function buildLearnerProfileSummary() {
+            const { totalAnswered, totalCorrect, wrongByPos } = learnerProfile;
+            if (totalAnswered < 5) {
+                return "학습 데이터가 아직 적어서 평균적인 초급자 기준으로 설명해 주세요.";
+            }
+            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            let level = "초급";
+            if (accuracy >= 85 && vocabulary.length >= 50) level = "중상급";
+            else if (accuracy >= 70) level = "중급";
+
+            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
+            const weakPos = Object.entries(wrongByPos).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos]) => posNameKo[pos] || pos);
+
+            let summary = `학습자 수준: ${level} (정답률 ${accuracy}%, 총 ${totalAnswered}문제 풀이, 등록 단어 ${vocabulary.length}개).`;
+            if (weakPos.length > 0) {
+                summary += ` 자주 틀리는 품사: ${weakPos.join(', ')}.`;
+            }
+            summary += ` 이 수준에 맞게 문장 난이도와 설명의 깊이를 조절해 주세요 (초급이면 더 짧고 쉬운 표현, 중상급이면 더 자연스럽고 다양한 표현 사용).`;
+            return summary;
         }
 
         function touchDiarySnapshot() {
