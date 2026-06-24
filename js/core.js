@@ -772,8 +772,18 @@ const OFFLINE_DICT_DB = {
         }
 
         // 학습일지 로그 누적 기록 함수
+        // [냐냐 PATCH-날짜버그수정] toISOString()은 UTC 기준이라 한국(UTC+9) 등에서는
+        // 날짜가 하루 어긋날 수 있음(특히 자정~오전 9시, 그리고 차트의 날짜 범위 계산에서는
+        // 항상 하루씩 밀림). 로컬(내 기기) 시간 기준으로 YYYY-MM-DD를 만드는 함수로 통일.
+        function getLocalDateString(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
         function touchDiarySnapshot() {
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
             if (!nyanyaDiary[today]) {
                 nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0 };
             }
@@ -791,7 +801,7 @@ const OFFLINE_DICT_DB = {
 
         function logAction(type, extra) {
             touchDiarySnapshot();
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
 
             if (type === 'quiz') {
                 nyanyaDiary[today].quizTotal++;
@@ -808,7 +818,7 @@ const OFFLINE_DICT_DB = {
         // 학습 일지 렌더링
         function renderDiary() {
             const container = document.getElementById('nyanya-diary-list');
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
             const log = nyanyaDiary[today];
 
             if (!log) {
@@ -846,8 +856,8 @@ const OFFLINE_DICT_DB = {
                 const end = new Date();
                 const start = new Date();
                 start.setDate(end.getDate() - 6);
-                document.getElementById('record-custom-start').value = start.toISOString().split('T')[0];
-                document.getElementById('record-custom-end').value = end.toISOString().split('T')[0];
+                document.getElementById('record-custom-start').value = getLocalDateString(start);
+                document.getElementById('record-custom-end').value = getLocalDateString(end);
                 return; // '적용' 버튼을 눌러야 그려짐
             }
             customBox.classList.add('hidden');
@@ -885,7 +895,7 @@ const OFFLINE_DICT_DB = {
             const endCopy = new Date(end);
             endCopy.setHours(0,0,0,0);
             while (cur <= endCopy) {
-                dates.push(cur.toISOString().split('T')[0]);
+                dates.push(getLocalDateString(cur));
                 cur.setDate(cur.getDate() + 1);
             }
             return dates;
@@ -1132,4 +1142,8 @@ const OFFLINE_DICT_DB = {
             
             document.getElementById('header-total-vocab').innerText = `${total}개`;
             document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
+
+            const todayStr = getLocalDateString();
+            document.getElementById('header-today-date').innerText = todayStr.slice(5).replace('-', '/'); // MM/DD
+            document.getElementById('header-today-date').title = todayStr;
         }
