@@ -130,7 +130,7 @@ let currentAiMode = 'ko-es';
             };
 
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low');
+                const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
                 const result = extractAndParseJson(responseText);
                 aiCurrentWordForMission = targetWord;
                 aiCurrentKoreanSentence = result.sentence;
