@@ -3,19 +3,28 @@ function togglePosFields() {
             const nounDetails = document.getElementById('field-noun-details');
             const verbTypeDetails = document.getElementById('field-verb-type-details');
             const verbConjugations = document.getElementById('field-verb-conjugations');
+            const adjDetails = document.getElementById('field-adj-details');
 
             if (pos === 'noun') {
                 nounDetails.classList.remove('hidden');
                 verbTypeDetails.classList.add('hidden');
                 verbConjugations.classList.add('hidden');
+                adjDetails.classList.add('hidden');
             } else if (pos === 'verb') {
                 nounDetails.classList.add('hidden');
                 verbTypeDetails.classList.remove('hidden');
                 verbConjugations.classList.remove('hidden');
+                adjDetails.classList.add('hidden');
+            } else if (pos === 'adjective') {
+                nounDetails.classList.add('hidden');
+                verbTypeDetails.classList.add('hidden');
+                verbConjugations.classList.add('hidden');
+                adjDetails.classList.remove('hidden');
             } else {
                 nounDetails.classList.add('hidden');
                 verbTypeDetails.classList.add('hidden');
                 verbConjugations.classList.add('hidden');
+                adjDetails.classList.add('hidden');
             }
         }
 
@@ -46,6 +55,7 @@ function togglePosFields() {
                 document.getElementById('input-pos').value = w.pos || 'noun';
                 
                 document.getElementById('input-gender').value = w.gender || 'none';
+                document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
                 document.getElementById('input-verb-class').value = w.verbClass || 'regular';
                 const irrSelect = document.getElementById('input-verb-irregular-type');
                 irrSelect.value = w.irregularType || 'none';
@@ -72,6 +82,7 @@ function togglePosFields() {
                 document.getElementById('input-meaning').value = '';
                 document.getElementById('input-pos').value = 'noun';
                 document.getElementById('input-gender').value = 'none';
+                document.getElementById('input-adj-agreement').value = 'full';
                 document.getElementById('input-verb-class').value = 'regular';
                 document.getElementById('input-verb-irregular-type').value = 'none';
                 document.getElementById('input-verb-irregular-type').disabled = true;
@@ -80,9 +91,23 @@ function togglePosFields() {
                 
                 document.getElementById('input-example').value = '';
                 document.getElementById('input-example-meaning').value = '';
-                document.getElementById('input-notes').value = '';
+                document.getElementById('input-notes').value = '· ';
             }
             togglePosFields();
+        }
+
+        // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
+        function handleNotesEnterKey(event) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            const textarea = event.target;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const insertion = '\n· ';
+            textarea.value = value.slice(0, start) + insertion + value.slice(end);
+            const newPos = start + insertion.length;
+            textarea.selectionStart = textarea.selectionEnd = newPos;
         }
 
         function clearConjugationFields() {
@@ -159,7 +184,7 @@ function togglePosFields() {
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
-            - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
+            - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
 
             const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
             
@@ -169,6 +194,7 @@ function togglePosFields() {
                     meaning: { type: "STRING", description: "핵심 한글 뜻" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
+                    adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성수 둘 다 변화(bueno/buena/buenos/buenas), no-gender=성 변화 없이 수만 변화(feliz/felices), no-number=수 변화 없이 성만 변화, invariable=완전 불변. 형용사가 아니면 'full'" },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
                     irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
@@ -249,6 +275,11 @@ function togglePosFields() {
                 const genderInput = document.getElementById('input-gender');
                 if (forceOverwrite || genderInput.value === 'none') {
                     genderInput.value = result.gender || 'none';
+                }
+            } else if (result.pos === 'adjective') {
+                const adjAgreementInput = document.getElementById('input-adj-agreement');
+                if (forceOverwrite || adjAgreementInput.value === 'full') {
+                    adjAgreementInput.value = result.adjAgreement || 'full';
                 }
             } else if (result.pos === 'verb') {
                 const verbClassInput = document.getElementById('input-verb-class');
@@ -457,6 +488,27 @@ function togglePosFields() {
             }
 
             const modalId = document.getElementById('modal-word-id').value;
+
+            // [냐냐 PATCH] 새 단어 등록 시 이미 같은 철자의 단어가 있으면 확인창 표시
+            if (!modalId) {
+                const dup = vocabulary.find(item => item.word.toLowerCase().trim() === wordVal.toLowerCase());
+                if (dup) {
+                    showConfirm(
+                        `"${dup.word}(${dup.meaning})" 단어가 이미 등록되어 있습니다.`,
+                        "그래도 새로 등록하시겠습니까? (같은 단어가 2개로 등록돼요)",
+                        () => performSaveWord()
+                    );
+                    return;
+                }
+            }
+
+            performSaveWord();
+        }
+
+        function performSaveWord() {
+            const wordVal = document.getElementById('input-word').value.trim();
+            const meaningVal = document.getElementById('input-meaning').value.trim();
+            const modalId = document.getElementById('modal-word-id').value;
             const pos = document.getElementById('input-pos').value;
             
             let wordObj = {
@@ -472,6 +524,8 @@ function togglePosFields() {
 
             if (pos === 'noun') {
                 wordObj.gender = document.getElementById('input-gender').value;
+            } else if (pos === 'adjective') {
+                wordObj.adjAgreement = document.getElementById('input-adj-agreement').value;
             } else if (pos === 'verb') {
                 const verbClass = document.getElementById('input-verb-class').value;
                 wordObj.verbClass = verbClass;
@@ -636,7 +690,11 @@ function togglePosFields() {
                 } else if (w.pos === 'verb') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-orange-100 text-orange-600 shadow-sm">V.</span>`;
                 } else if (w.pos === 'adjective') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>`;
+                    let adjSubLabel = '';
+                    if (w.adjAgreement === 'no-gender') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">성 변화 X</span>';
+                    else if (w.adjAgreement === 'no-number') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">수 변화 X</span>';
+                    else if (w.adjAgreement === 'invariable') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">불변</span>';
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>${adjSubLabel}`;
                 } else if (w.pos === 'adverb') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 shadow-sm">Adv.</span>`;
                 } else if (w.pos === 'preposition') {
@@ -725,7 +783,7 @@ function togglePosFields() {
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
-                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-line font-medium -mt-4"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-line font-medium -mt-2"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                 </div>
                 `;
             });
