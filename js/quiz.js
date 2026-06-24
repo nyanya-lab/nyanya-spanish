@@ -9,12 +9,16 @@ let quizSession = null;
 
             const startBtn = document.getElementById('quiz-start-btn');
             const sub = document.getElementById('quiz-setup-sub');
-            if (vocabulary.length < 2) {
-                sub.innerText = '퀴즈를 시작하려면 단어장에 최소 2개 이상의 단어를 등록해 주어야 합니다!';
+            // [냐냐 PATCH] 마스터한 단어는 퀴즈에서 제외 — 아직 안 외운 단어만 출제
+            const reviewablePool = vocabulary.filter(w => !w.mastered);
+            if (reviewablePool.length < 2) {
+                sub.innerText = vocabulary.length >= 2
+                    ? '복습할 단어가 부족해요! (마스터한 단어는 제외돼요. 전부 마스터하셨다면 멋져요 🎉)'
+                    : '퀴즈를 시작하려면 단어장에 최소 2개 이상의 단어를 등록해 주어야 합니다!';
                 startBtn.disabled = true;
                 startBtn.className = "bg-slate-300 text-white px-8 py-3 rounded-xl text-sm font-bold cursor-not-allowed";
             } else {
-                sub.innerText = '객관식과 주관식(스페인어 작문)이 섞여서 나와요';
+                sub.innerText = '객관식과 주관식(스페인어 작문)이 섞여서 나와요 (마스터한 단어는 제외돼요)';
                 startBtn.disabled = false;
                 startBtn.className = "bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100";
             }
@@ -29,16 +33,19 @@ let quizSession = null;
         }
 
         function startQuiz() {
-            if (vocabulary.length < 2) return;
+            // [냐냐 PATCH] 마스터한 단어는 출제 대상에서 제외 — 아직 안 외운 단어만 퀴즈로 나옴
+            const reviewablePool = vocabulary.filter(w => !w.mastered);
+            if (reviewablePool.length < 2) return;
             // 단어 수가 적으면 같은 단어가 반복 출제될 수 있음 (최대 단어 수의 4배까지만 허용)
-            const count = Math.min(selectedQuizCount, vocabulary.length * 4);
+            const count = Math.min(selectedQuizCount, reviewablePool.length * 4);
             const questions = [];
             for (let i = 0; i < count; i++) {
-                const w = vocabulary[Math.floor(Math.random() * vocabulary.length)];
+                const w = reviewablePool[Math.floor(Math.random() * reviewablePool.length)];
                 const isSubjective = Math.random() < 0.3; // 약 30%는 주관식(스페인어 작문)
                 const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
                 if (!isSubjective) {
                     let choices = [w.meaning];
+                    // 오답 선택지는 마스터한 단어도 포함해서 더 다양하게 뽑음 (실제 출제 대상만 마스터 제외)
                     let pool = vocabulary.filter(x => x.id !== w.id).map(x => x.meaning);
                     pool.sort(() => Math.random() - 0.5);
                     choices = choices.concat(pool.slice(0, 3));
@@ -126,6 +133,16 @@ let quizSession = null;
 
         function finishQuizQuestion(isCorrect, q) {
             const coach = document.getElementById('quiz-coach-character');
+
+            // [냐냐 PATCH-수준맞춤] 누적 정답률/취약 품사만 살짝 갱신 (전체 기록 저장 아님)
+            learnerProfile.totalAnswered++;
+            if (isCorrect) {
+                learnerProfile.totalCorrect++;
+            } else {
+                const pos = q.word.pos || 'etc';
+                learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+            }
+
             if (isCorrect) {
                 AudioFX.playSuccess();
                 quizSession.correctCount++;
