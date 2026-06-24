@@ -173,13 +173,14 @@ function togglePosFields() {
                     irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
                         type: "OBJECT",
+                        description: "현재시제 6인칭 변형. 반드시 표준 스페인(카스티야) 스페인어 기준으로 작성할 것 — 'vos' 키는 아르헨티나식 단수 'vos'가 아니라 스페인의 2인칭 복수 'vosotros'를 의미함 (예: tener→vos:'tenéis', llevar→vos:'lleváis'). 절대 -ás/-és 같은 아르헨티나식 voseo 어미를 쓰지 말 것.",
                         properties: {
-                            yo: { type: "STRING" },
-                            tu: { type: "STRING" },
-                            el: { type: "STRING" },
-                            nos: { type: "STRING" },
-                            vos: { type: "STRING" },
-                            ellos: { type: "STRING" }
+                            yo: { type: "STRING", description: "yo (1인칭 단수)" },
+                            tu: { type: "STRING", description: "tú (2인칭 단수)" },
+                            el: { type: "STRING", description: "él/ella (3인칭 단수)" },
+                            nos: { type: "STRING", description: "nosotros (1인칭 복수)" },
+                            vos: { type: "STRING", description: "vosotros — 스페인식 2인칭 복수 '너희'. 아르헨티나 voseo 아님. -áis/-éis/-ís 어미 사용" },
+                            ellos: { type: "STRING", description: "ellos/ellas (3인칭 복수)" }
                         }
                     },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
@@ -699,7 +700,7 @@ function togglePosFields() {
                         <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
                             <div class="flex items-center justify-between">
                                 <span class="block text-[9px] font-bold text-indigo-500 tracking-wider uppercase">
-                                    현재 변형표 <span class="text-indigo-600 font-extrabold ml-1">(${verbClassText})</span>
+                                    현재시제 <span class="text-indigo-600 font-extrabold ml-1">(${verbClassText})</span>
                                 </span>
                             </div>
                             <div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
@@ -724,7 +725,7 @@ function togglePosFields() {
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
-                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-sm text-amber-900 leading-snug whitespace-pre-line font-bold -mt-4"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-sm text-amber-900 leading-snug whitespace-pre-line font-medium -mt-4"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                 </div>
                 `;
             });
