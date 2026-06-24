@@ -1,0 +1,33 @@
+        body {
+            font-family: 'Gowun Dodum', 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* [냐냐 PATCH-모바일 줌 버그 수정] iOS Safari는 글자 크기가 16px보다 작은
+           input/select/textarea에 포커스가 가면 자동으로 화면을 확대하고, 포커스가
+           빠지면 다시 축소함 — 이게 "자꾸 커졌다 작아졌다" 하는 현상의 원인.
+           모바일 화면에서만 폼 요소 글자 크기를 16px 이상으로 강제해서 방지함. */
+        @media (max-width: 767px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
+        /* Premium 3D Flipping Animation */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+        /* Logo bounce feedback */
+        @keyframes punch-right {
+            0% { transform: scale(1) translateX(0); }
+            50% { transform: scale(1.08) translateX(12px) rotate(2deg); }
+            100% { transform: scale(1) translateX(0); }
+        }
+        .punch-effect-right { animation: punch-right 0.2s ease-out; }
