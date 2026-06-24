@@ -345,7 +345,8 @@ let currentAiMode = 'ko-es';
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
-               "tip": "One short, useful grammar tip in Korean, 1 sentence."
+               "tip": "One short, useful grammar tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
             }
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
@@ -368,9 +369,10 @@ let currentAiMode = 'ko-es';
                             required: ["word", "mean"]
                         }
                     },
-                    tip: { type: "STRING" }
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip"]
+                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip", "issueType"]
             };
 
             try {
@@ -423,10 +425,12 @@ let currentAiMode = 'ko-es';
                 coachTip.innerText = feedback.tip;
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
-                // (자유 작문은 특정 단어/품사가 정해져있지 않아 정답률만 누적)
+                // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
                 learnerProfile.totalAnswered++;
                 if (feedback.isCorrect) {
                     learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
                 }
 
                 aiChatHistory = [
