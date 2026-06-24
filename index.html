@@ -577,7 +577,7 @@
                         <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-violet-400">*</span></label>
                         <div class="flex gap-2">
                             <div class="relative flex-1">
-                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
+                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('word-suggestions').classList.add('hidden'); triggerAiAutofill();}" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
                                 <!-- Real-time Suggestions Dropdown -->
                                 <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
                             </div>
@@ -642,6 +642,16 @@
                                 </select>
                             </div>
                         </div>
+                        <!-- Dynamic Adjective Section -->
+                        <div id="field-adj-details" class="hidden space-y-1.5">
+                            <label class="block text-xs font-bold text-slate-500">형용사 성·수 변화</label>
+                            <select id="input-adj-agreement" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
+                                <option value="full">성수 변화 (기본형, 예: bueno/buena/buenos/buenas)</option>
+                                <option value="no-gender">성 변화 없음, 수만 변화 (예: feliz/felices)</option>
+                                <option value="no-number">수 변화 없음, 성만 변화</option>
+                                <option value="invariable">성·수 변화 없음 (완전 불변)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -692,7 +702,7 @@
 
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-500">비고 / 메모 (Notes)</label>
-                    <textarea id="input-notes" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-line"></textarea>
+                    <textarea id="input-notes" onkeydown="handleNotesEnterKey(event)" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-line"></textarea>
                 </div>
             </div>
 
