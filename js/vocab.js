@@ -163,14 +163,21 @@ function togglePosFields() {
                 return;
             }
 
-            // [PATCH-속도개선] 이미 조회했던 단어면 캐시에서 즉시 불러와 API 호출 자체를 생략
-            const cache = getAiWordCache();
-            const cached = cache[rawWord.toLowerCase().trim()];
-            if (cached) {
-                applyAutofillResult(cached, true);
-                AudioFX.playSuccess();
-                showToast("이전에 조회했던 단어라 바로 적용했어요! ⚡", "success");
-                return;
+            // [PATCH-버그수정] 단어 '수정' 중일 때는 캐시를 건너뛰고 항상 새로 조회함.
+            // (이전 버그로 잘못 저장된 캐시를 고친 후에도 계속 그대로 불러오는 문제 방지 —
+            //  수정 화면에서 AI 추천을 다시 누르는 건 "예전 결과를 고치고 싶다"는 의도이므로)
+            const isEditingExisting = !!document.getElementById('modal-word-id').value;
+
+            // [PATCH-속도개선] 새 단어 등록 중이고 이미 조회했던 단어면 캐시에서 즉시 불러옴
+            if (!isEditingExisting) {
+                const cache = getAiWordCache();
+                const cached = cache[rawWord.toLowerCase().trim()];
+                if (cached) {
+                    applyAutofillResult(cached, true);
+                    AudioFX.playSuccess();
+                    showToast("이전에 조회했던 단어라 바로 적용했어요! ⚡", "success");
+                    return;
+                }
             }
 
             const btn = document.getElementById('ai-autofill-btn');
