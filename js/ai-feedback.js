@@ -6,24 +6,29 @@ let currentAiMode = 'ko-es';
             currentAiMode = mode;
             const btnKoEs = document.getElementById('ai-mode-btn-ko-es');
             const btnEsKo = document.getElementById('ai-mode-btn-es-ko');
+            const btnQuestion = document.getElementById('ai-mode-btn-question');
             const paneKoEs = document.getElementById('ai-pane-ko-es');
             const paneEsKo = document.getElementById('ai-pane-es-ko');
+            const paneQuestion = document.getElementById('ai-pane-question');
             const resultBox = document.getElementById('ai-feedback-result');
 
             resultBox.classList.add('hidden');
 
+            const activeClass = "py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+            const inactiveClass = "py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
+            btnKoEs.className = mode === 'ko-es' ? activeClass : inactiveClass;
+            btnEsKo.className = mode === 'es-ko' ? activeClass : inactiveClass;
+            btnQuestion.className = mode === 'question' ? activeClass : inactiveClass;
+            paneKoEs.classList.toggle('hidden', mode !== 'ko-es');
+            paneEsKo.classList.toggle('hidden', mode !== 'es-ko');
+            paneQuestion.classList.toggle('hidden', mode !== 'question');
+
             if (mode === 'ko-es') {
-                btnKoEs.className = "py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
-                btnEsKo.className = "py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
-                paneKoEs.classList.remove('hidden');
-                paneEsKo.classList.add('hidden');
                 resetKoEsMissionState();
-            } else {
-                btnEsKo.className = "py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
-                btnKoEs.className = "py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
-                paneEsKo.classList.remove('hidden');
-                paneKoEs.classList.add('hidden');
+            } else if (mode === 'es-ko') {
                 document.getElementById('ai-free-input-es').value = '';
+            } else if (mode === 'question') {
+                renderCustomQuestionsList();
             }
         }
 
@@ -32,6 +37,209 @@ let currentAiMode = 'ko-es';
             document.getElementById('ai-free-input-es').value = '';
             document.getElementById('ai-feedback-result').classList.add('hidden');
             document.getElementById('ai-free-input-es').focus();
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 질문에 답하기 코너
+        // ============================================================
+        function toggleQuestionManageBox() {
+            const box = document.getElementById('question-manage-box');
+            const icon = document.getElementById('question-manage-toggle-icon');
+            const isHidden = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
+        }
+
+        function addCustomQuestion() {
+            const input = document.getElementById('new-question-input');
+            const text = input.value.trim();
+            if (!text) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
+            }
+            customQuestions.push({ id: 'q-' + Date.now(), question: text });
+            input.value = '';
+            saveToStorage();
+            renderCustomQuestionsList();
+            showToast("질문을 등록했어요! 📝", "success");
+        }
+
+        function deleteCustomQuestion(id) {
+            customQuestions = customQuestions.filter(q => q.id !== id);
+            saveToStorage();
+            renderCustomQuestionsList();
+        }
+
+        function renderCustomQuestionsList() {
+            const box = document.getElementById('question-list-box');
+            if (!box) return;
+            if (customQuestions.length === 0) {
+                box.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">등록된 질문이 없어요. 위에서 추가해 보세요!</p>';
+                return;
+            }
+            box.innerHTML = customQuestions.map(q => `
+                <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
+                    <span class="text-slate-700 font-semibold truncate pr-2">${q.question}</span>
+                    <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            `).join('');
+        }
+
+        function pickRandomQuestion() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 질문을 등록해 주세요! '내 질문 목록 관리'를 눌러서 추가할 수 있어요.", "error");
+                return;
+            }
+            const randIdx = Math.floor(Math.random() * customQuestions.length);
+            currentQuestionForAnswer = customQuestions[randIdx];
+            document.getElementById('question-display-text').innerText = `"${currentQuestionForAnswer.question}"`;
+            document.getElementById('question-answer-input').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+            AudioFX.playPunch();
+        }
+
+        async function submitQuestionAnswer() {
+            if (!currentQuestionForAnswer) {
+                showToast("먼저 '랜덤 질문 뽑기'를 눌러서 질문을 받아주세요!", "error");
+                return;
+            }
+            const userAnswer = document.getElementById('question-answer-input').value.trim();
+            if (!userAnswer) {
+                showToast("스페인어로 답변을 입력해 주세요!", "error");
+                return;
+            }
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('question-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`;
+            showToast("Gemini AI가 답변을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
+            Student's Spanish Answer: "${userAnswer}"
+
+            Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar). Wrap corrected words in correctedText inside '<span class="text-red-600 font-extrabold underline">corrected_word_here</span>' tags.
+            ${buildLearnerProfileSummary()}`;
+            const system = `You are an expert Spanish tutor evaluating a student named "냐냐" answering a practice question in Spanish.
+            Return feedback matching this JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 답변이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The corrected/improved Spanish answer. Wrap corrected words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags.",
+               "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "tip": "One short, useful grammar or conversational tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
+            }
+            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip", "issueType"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🎉";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝";
+                    coachVerdict.className = "text-sm font-bold text-rose-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerText = userAnswer;
+                    correctedRender.innerHTML = feedback.correctedText;
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+
+                breakdownGrid.innerHTML = '';
+                const seenWordsQ = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWordsQ.has(w)) return;
+                    seenWordsQ.add(w);
+                    breakdownGrid.innerHTML += `
+                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                            <span class="text-slate-500 text-right">${m}</span>
+                        </div>
+                    `;
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 질문-답변 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>질문:</b> ${currentQuestionForAnswer.question}<br><b>냐냐님 답변:</b> ${userAnswer}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 답변:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("채점이 끝났어요! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
         }
 
         function toggleAiHint() {
