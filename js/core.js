@@ -1005,6 +1005,31 @@ const OFFLINE_DICT_DB = {
 
         // [냐냐 PATCH] Y축 기준선 + 라벨 (세로축 기준점이 없다는 피드백 반영).
         // 마우스를 올리면(데스크탑) 정확한 수치도 <title>로 보이게 함.
+        // [냐냐 PATCH-버그수정] 마우스 호버용 title 툴팁이 점이 너무 작아서 잘 안 보였음
+        // → 클릭/탭하면 바로 뜨는 방식으로 교체 (모바일에서도 동작함)
+        function showChartTooltip(event, tooltipId, text) {
+            event.stopPropagation();
+            const tooltip = document.getElementById(tooltipId);
+            if (!tooltip) return;
+            const container = tooltip.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            const clientX = event.clientX !== undefined ? event.clientX : (event.touches && event.touches[0] ? event.touches[0].clientX : 0);
+            const clientY = event.clientY !== undefined ? event.clientY : (event.touches && event.touches[0] ? event.touches[0].clientY : 0);
+            let x = clientX - containerRect.left;
+            let y = clientY - containerRect.top;
+            x = Math.max(30, Math.min(x, containerRect.width - 30));
+            tooltip.innerText = text;
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${Math.max(0, y - 38)}px`;
+            tooltip.classList.remove('hidden');
+            clearTimeout(tooltip._hideTimer);
+            tooltip._hideTimer = setTimeout(() => tooltip.classList.add('hidden'), 2500);
+        }
+
+        function recordChartTooltipDiv(id) {
+            return `<div id="${id}" class="hidden absolute z-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap -translate-x-1/2" style="left:0; top:0;"></div>`;
+        }
+
         function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
             const steps = 4;
             let html = '';
@@ -1033,18 +1058,22 @@ const OFFLINE_DICT_DB = {
             const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
 
             const buildPath = (key) => series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ');
-            const buildDots = (key, color) => series.map((d, i) =>
-                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(d[key]).toFixed(1)}" r="2.5" fill="${color}"><title>${d.date}: ${d[key]}개</title></circle>`
-            ).join('');
+            const buildDots = (key, color, label) => series.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOf(d[key]).toFixed(1);
+                const text = `${d.date}: ${label} ${d[key]}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${color}"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+            }).join('');
 
             container.innerHTML = `
+                ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
                     <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#cbd5e1" stroke-width="1"/>
                     <path d="${buildPath('registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="${buildPath('masteredTotal')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${buildDots('registeredTotal', '#8b5cf6')}
-                    ${buildDots('masteredTotal', '#10b981')}
+                    ${buildDots('registeredTotal', '#8b5cf6', '등록 단어')}
+                    ${buildDots('masteredTotal', '#10b981', '마스터 단어')}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
@@ -1077,17 +1106,26 @@ const OFFLINE_DICT_DB = {
             let bars = '';
             withRate.forEach((d, i) => {
                 const barH = (d.wrongRate / 100) * chartH;
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"><title>${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)</title></rect>`;
+                const barX = (xOf(i) - barWidth / 2).toFixed(1);
+                const barY = (baseY - barH).toFixed(1);
+                const text = `${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
+                bars += `<rect x="${barX}" y="${barY}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
+                // 막대가 너무 얇아서 탭하기 어려우므로, 막대 전체 높이를 덮는 투명한 클릭 영역을 따로 추가
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
             });
 
             // 전체 풀이 갯수는 자기 자신의 최댓값 기준 꺾은선으로
             const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
             const linePath = withRate.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d.quizTotal).toFixed(1)}`).join(' ');
-            const lineDots = withRate.map((d, i) =>
-                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfTotal(d.quizTotal).toFixed(1)}" r="2.5" fill="#8b5cf6"><title>${d.date}: 전체 ${d.quizTotal}문제</title></circle>`
-            ).join('');
+            const lineDots = withRate.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOfTotal(d.quizTotal).toFixed(1);
+                const text = `${d.date}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
+            }).join('');
 
             container.innerHTML = `
+                ${recordChartTooltipDiv('record-quiz-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
@@ -1119,10 +1157,13 @@ const OFFLINE_DICT_DB = {
             let bars = '';
             series.forEach((d, i) => {
                 const barH = (d.aiSessions / maxVal) * chartH;
-                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"><title>${d.date}: ${d.aiSessions}회</title></rect>`;
+                const text = `${d.date}: ${d.aiSessions}회`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
+                bars += `<rect x="${(xOfGroup(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-ai-chart-tooltip', '${text}')"/>`;
             });
 
             container.innerHTML = `
+                ${recordChartTooltipDiv('record-ai-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
