@@ -74,6 +74,17 @@ function togglePosFields() {
 
                 document.getElementById('input-example').value = w.example || '';
                 document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
+                document.getElementById('input-idiom').value = w.idiom || '';
+                document.getElementById('input-idiom-meaning').value = w.idiomMeaning || '';
+                const idiomBox = document.getElementById('idiom-fields-box');
+                const idiomIcon = document.getElementById('idiom-toggle-icon');
+                if (w.idiom) {
+                    idiomBox.classList.remove('hidden');
+                    idiomIcon.className = "fa-solid fa-minus text-xs";
+                } else {
+                    idiomBox.classList.add('hidden');
+                    idiomIcon.className = "fa-solid fa-plus text-xs";
+                }
                 document.getElementById('input-notes').value = w.notes || '';
             } else {
                 document.getElementById('modal-title').innerHTML = `✨ 새로운 단어 등록`;
@@ -91,6 +102,10 @@ function togglePosFields() {
                 
                 document.getElementById('input-example').value = '';
                 document.getElementById('input-example-meaning').value = '';
+                document.getElementById('input-idiom').value = '';
+                document.getElementById('input-idiom-meaning').value = '';
+                document.getElementById('idiom-fields-box').classList.add('hidden');
+                document.getElementById('idiom-toggle-icon').className = "fa-solid fa-plus text-xs";
                 document.getElementById('input-notes').value = '· ';
             }
             togglePosFields();
@@ -108,6 +123,15 @@ function togglePosFields() {
             textarea.value = value.slice(0, start) + insertion + value.slice(end);
             const newPos = start + insertion.length;
             textarea.selectionStart = textarea.selectionEnd = newPos;
+        }
+
+        // [냐냐 PATCH] 관용구 입력칸 펼치기/접기
+        function toggleIdiomSection() {
+            const box = document.getElementById('idiom-fields-box');
+            const icon = document.getElementById('idiom-toggle-icon');
+            const isHidden = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
         }
 
         function clearConjugationFields() {
@@ -191,6 +215,7 @@ function togglePosFields() {
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
+            - idiom은 이 단어가 들어간 흔한 관용구가 있을 때만 작성, 없으면 빈 문자열로 둘 것 (억지로 만들지 말 것).
             - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
 
             const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
@@ -217,6 +242,8 @@ function togglePosFields() {
                         }
                     },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
+                    idiom: { type: "STRING", description: "이 단어가 들어가는 자주 쓰는 관용구/숙어가 있을 때만 1개 작성 (예: ¿Qué tiempo hace?). 흔한 관용구가 없으면 빈 문자열 \"\"로 둘 것. 억지로 만들지 말 것" },
+                    idiomMeaning: { type: "STRING", description: "관용구의 한국어 뜻. 관용구가 없으면 빈 문자열" },
                     exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
                     notes: { type: "STRING", description: "· 로 시작하는 불릿 2줄 이내, 줄바꿈은 \\n, 대화체/인사말 금지, 핵심 문법 사실만. 성별/관사는 반복하지 말 것. 명사형으로 간결하게 끝낼 것" }
                 },
@@ -322,6 +349,14 @@ function togglePosFields() {
             const exampleMeaningInput = document.getElementById('input-example-meaning');
             if (forceOverwrite || !exampleMeaningInput.value.trim()) {
                 exampleMeaningInput.value = result.exampleMeaning || '';
+            }
+
+            // [냐냐 PATCH] AI가 관용구를 찾아줬으면 자동으로 채우고 섹션을 펼침
+            if (result.idiom && result.idiom.trim()) {
+                document.getElementById('input-idiom').value = result.idiom;
+                document.getElementById('input-idiom-meaning').value = result.idiomMeaning || '';
+                document.getElementById('idiom-fields-box').classList.remove('hidden');
+                document.getElementById('idiom-toggle-icon').className = "fa-solid fa-minus text-xs";
             }
 
             const notesInput = document.getElementById('input-notes');
@@ -525,7 +560,9 @@ function togglePosFields() {
                 pos: pos,
                 example: document.getElementById('input-example').value.trim(),
                 exampleMeaning: document.getElementById('input-example-meaning').value.trim(),
-                notes: document.getElementById('input-notes').value.trim(),
+                idiom: document.getElementById('input-idiom').value.trim(),
+                idiomMeaning: document.getElementById('input-idiom-meaning').value.trim(),
+                notes: document.getElementById('input-notes').value.replace(/\s+$/, ''), // [냐냐 PATCH] 맨 앞 들여쓰기 공백은 보존, 끝쪽 공백만 정리
                 mastered: false
             };
 
@@ -554,12 +591,13 @@ function togglePosFields() {
                     vocabulary[index] = wordObj;
                     showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
                 }
+                logAction('snapshot');
             } else {
                 vocabulary.unshift(wordObj);
                 showToast("새 단어가 등록되었습니다! 📚", "success");
+                logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
-            logAction('snapshot');
             closeWordModal();
             renderWordList();
             updateStats();
@@ -592,8 +630,10 @@ function togglePosFields() {
                 if (w.mastered) {
                     AudioFX.playBell();
                     showToast(`"${w.word}" 단어 마스터 완료! 🏆`, "success");
+                    logAction('new-mastered'); // [냐냐 PATCH] 오늘 새로 마스터한 단어 수 추적
+                } else {
+                    logAction('snapshot');
                 }
-                logAction('snapshot');
                 renderWordList();
                 updateStats();
             }
@@ -651,12 +691,15 @@ function togglePosFields() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
+            const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
             
             const filtered = vocabulary.filter(w => {
                 const queryInWord = w.word.toLowerCase().includes(searchVal);
                 const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
                 const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
-                return queryInWord || queryInMeaning || queryInNotes;
+                const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
+                const matchesPos = posFilter === 'all' || w.pos === posFilter;
+                return matchesSearch && matchesPos;
             });
 
             // [PATCH-20] 정렬/필터 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
@@ -698,9 +741,9 @@ function togglePosFields() {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-orange-100 text-orange-600 shadow-sm">V.</span>`;
                 } else if (w.pos === 'adjective') {
                     let adjSubLabel = '';
-                    if (w.adjAgreement === 'no-gender') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">성 변화 X</span>';
-                    else if (w.adjAgreement === 'no-number') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">수 변화 X</span>';
-                    else if (w.adjAgreement === 'invariable') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">불변</span>';
+                    if (w.adjAgreement === 'no-gender') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">성 변화 X</span>';
+                    else if (w.adjAgreement === 'no-number') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">수 변화 X</span>';
+                    else if (w.adjAgreement === 'invariable') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">변화 X</span>';
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>${adjSubLabel}`;
                 } else if (w.pos === 'adverb') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 shadow-sm">Adv.</span>`;
@@ -787,10 +830,17 @@ function togglePosFields() {
                             <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
                         </div>
                         ` : ''}
+                        ${w.idiom ? `
+                        <div class="bg-slate-50 border-l-2 border-fuchsia-400 rounded-r-xl p-2.5 text-xs">
+                            <span class="block text-[8px] font-black text-fuchsia-500 uppercase">Expresión (관용구)</span>
+                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.idiom}</p>
+                            <p class="text-slate-400 italic">${w.idiomMeaning || ''}</p>
+                        </div>
+                        ` : ''}
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
-                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-line font-medium -mt-2"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium -mt-2"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                 </div>
                 `;
             });
