@@ -1,4 +1,5 @@
-const OFFLINE_DICT_DB = {
+// 냐냐를 위한 고지능형 실시간 내장형 오프라인 사전 DB (pelo, libro, mesa, casa, comer 등 적극 추가)
+        const OFFLINE_DICT_DB = {
             "pelo": {
                 meaning: "머리카락, 털", pos: "noun", gender: "masculine",
                 example: "Me gusta el pelo largo.", exampleMeaning: "나는 긴 머리가 마음에 들어.",
@@ -598,6 +599,12 @@ const OFFLINE_DICT_DB = {
                 if (suggs && e.target !== inp && !suggs.contains(e.target)) {
                     suggs.classList.add('hidden');
                 }
+
+                // [냐냐 PATCH] 필터 패널도 바깥 클릭하면 닫힘 (버튼 클릭은 stopPropagation으로 여기까지 안 옴)
+                const filterPanel = document.getElementById('filter-panel');
+                if (filterPanel && !filterPanel.classList.contains('hidden') && !filterPanel.contains(e.target)) {
+                    filterPanel.classList.add('hidden');
+                }
             });
         };
 
@@ -1007,6 +1014,7 @@ const OFFLINE_DICT_DB = {
             document.getElementById('record-stat-ai').innerText = `${totalAi}회`;
 
             renderRecordLineChart(series);
+            renderGrowthDailyChart(series);
             renderQuizChart(series);
             renderAiChart(series);
         }
@@ -1076,16 +1084,24 @@ const OFFLINE_DICT_DB = {
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
 
+            // [냐냐 PATCH] 마스터 단어는 절대 갯수 대신 "총 단어 대비 비율(%)"로 표시
+            const withRatio = series.map(d => ({
+                ...d,
+                masteredRatio: d.registeredTotal > 0 ? (d.masteredTotal / d.registeredTotal) * 100 : 0
+            }));
+
             const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
-            const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const yOfPercent = (val) => padding.top + chartH - (val / 100) * chartH;
 
-            const buildPath = (key) => series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ');
-            const buildDots = (key, color, label) => series.map((d, i) => {
+            const buildPath = (yFn, key) => withRatio.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yFn(d[key]).toFixed(1)}`).join(' ');
+            const buildDots = (yFn, key, color, label, suffix) => withRatio.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
-                const cy = yOf(d[key]).toFixed(1);
-                const text = `${d.date}: ${label} ${d[key]}개`.replace(/'/g, "\\'");
+                const cy = yFn(d[key]).toFixed(1);
+                const valueText = key === 'masteredRatio' ? Math.round(d[key]) : d[key];
+                const text = `${d.date}: ${label} ${valueText}${suffix}`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${color}"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             }).join('');
 
@@ -1094,10 +1110,58 @@ const OFFLINE_DICT_DB = {
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
                     <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#cbd5e1" stroke-width="1"/>
-                    <path d="${buildPath('registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="${buildPath('masteredTotal')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${buildDots('registeredTotal', '#8b5cf6', '등록 단어')}
-                    ${buildDots('masteredTotal', '#10b981', '마스터 단어')}
+                    <path d="${buildPath(yOfCount, 'registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${buildPath(yOfPercent, 'masteredRatio')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+                    ${buildDots(yOfCount, 'registeredTotal', '#8b5cf6', '등록 단어', '개')}
+                    ${buildDots(yOfPercent, 'masteredRatio', '#10b981', '마스터 비율', '%')}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+            `;
+        }
+
+        // 일별 신규 등록(꺾은선) + 신규 마스터(막대) - 둘 다 갯수 기준, 같은 스케일 공유
+        function renderGrowthDailyChart(series) {
+            const container = document.getElementById('record-growth-daily-chart');
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 180;
+            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const maxVal = Math.max(1, ...series.map(d => Math.max(d.newWordsCount, d.newMasteredCount)));
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
+            const barWidth = Math.min(8, groupWidth * 0.5);
+
+            let bars = '';
+            series.forEach((d, i) => {
+                const barH = (d.newMasteredCount / maxVal) * chartH;
+                const text = `${d.date}: 신규 마스터 ${d.newMasteredCount}개`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#10b981" opacity="0.7" rx="1.5"/>`;
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+            });
+
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d.newWordsCount).toFixed(1)}`).join(' ');
+            const lineDots = series.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOf(d.newWordsCount).toFixed(1);
+                const text = `${d.date}: 신규 등록 ${d.newWordsCount}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+            }).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
