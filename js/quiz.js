@@ -146,12 +146,16 @@ let quizSession = null;
             const coach = document.getElementById('quiz-coach-character');
 
             // [냐냐 PATCH-수준맞춤] 누적 정답률/취약 품사만 살짝 갱신 (전체 기록 저장 아님)
-            learnerProfile.totalAnswered++;
-            if (isCorrect) {
-                learnerProfile.totalCorrect++;
-            } else {
-                const pos = q.word.pos || 'etc';
-                learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+            // 방어 코드: learnerProfile이 없어도(파일 버전이 안 맞아도) 퀴즈 본 기능은 멈추지 않게 함
+            if (typeof learnerProfile !== 'undefined' && learnerProfile) {
+                learnerProfile.totalAnswered = (learnerProfile.totalAnswered || 0) + 1;
+                if (isCorrect) {
+                    learnerProfile.totalCorrect = (learnerProfile.totalCorrect || 0) + 1;
+                } else {
+                    if (!learnerProfile.wrongByPos) learnerProfile.wrongByPos = {};
+                    const pos = q.word.pos || 'etc';
+                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+                }
             }
 
             if (isCorrect) {
@@ -190,9 +194,11 @@ let quizSession = null;
 
             // [냐냐 PATCH-버그수정] 모바일에서 키보드가 열려있거나 화면이 길면 결과 패널이
             // 화면 밖에 가려져서 "멈춘 것처럼" 보였을 수 있음 — 결과 패널로 자동 스크롤
-            document.getElementById('quiz-subjective-input').blur();
+            const subjInput = document.getElementById('quiz-subjective-input');
+            if (subjInput) subjInput.blur();
             setTimeout(() => {
-                document.getElementById('quiz-review-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const reviewPanel = document.getElementById('quiz-review-panel');
+                if (reviewPanel) reviewPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
         }
 
