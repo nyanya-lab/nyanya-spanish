@@ -61,6 +61,12 @@ const OFFLINE_DICT_DB = {
                 example: "¿Qué haces hoy?", exampleMeaning: "너 오늘 뭐 하니?",
                 notes: "· 1인칭만 불규칙 (hago)\n· 날씨 표현에도 사용 (Hace frío)"
             },
+            "oír": {
+                meaning: "듣다", pos: "verb", verbClass: "irregular", irregularType: "기타 변형",
+                conjugations: { yo: "oigo", tu: "oyes", el: "oye", nos: "oímos", vos: "oís", ellos: "oyen" },
+                example: "¿Oyes esa música?", exampleMeaning: "그 음악 들려?",
+                notes: "· 1인칭 oigo, 강세없는 인칭은 í→oy\n· nosotros/vosotros만 규칙형 유지"
+            },
             "con": {
                 meaning: "~와 함께", pos: "preposition",
                 example: "Quiero ir al cine con Margarita.", exampleMeaning: "마르가리타랑 같이 영화관에 가고 싶어.",
