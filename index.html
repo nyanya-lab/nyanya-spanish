@@ -124,11 +124,22 @@
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div class="relative w-full sm:w-72">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" id="search-bar" oninput="handleSearchInput()" placeholder="단어, 뜻, 메모 검색..." class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                            <input type="text" id="search-bar" oninput="handleSearchInput()" placeholder="단어, 뜻, 메모 검색..." autocomplete="off" class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                             <button id="search-clear-btn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
                                 <i class="fa-solid fa-circle-xmark"></i>
                             </button>
                         </div>
+                        <select id="pos-filter-select" onchange="renderWordList()" class="bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 w-full sm:w-auto">
+                            <option value="all">전체 품사</option>
+                            <option value="noun">명사</option>
+                            <option value="verb">동사</option>
+                            <option value="adjective">형용사</option>
+                            <option value="adverb">부사</option>
+                            <option value="preposition">전치사</option>
+                            <option value="conjunction">접속사</option>
+                            <option value="pronoun">대명사</option>
+                            <option value="phrase">구문</option>
+                        </select>
                         <select id="sort-select" onchange="renderWordList()" class="bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 w-full sm:w-auto">
                             <option value="recent">최근 추가순</option>
                             <option value="oldest">오래된 순</option>
@@ -193,7 +204,7 @@
                                     </div>
                                     <div class="text-center space-y-2 overflow-y-auto max-h-56">
                                         <h3 id="card-meaning" class="text-2xl font-extrabold text-white">뜻</h3>
-                                        <p id="card-notes" class="text-xs text-slate-400 max-w-xs mx-auto whitespace-pre-line"></p>
+                                        <p id="card-notes" class="text-xs text-slate-400 max-w-xs mx-auto whitespace-pre-wrap"></p>
                                         <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-slate-900/60 p-2 rounded-xl border border-slate-800">
                                             <div><span class="text-slate-500 block">yo</span><strong id="card-conj-yo" class="text-blue-400 font-extrabold"></strong></div>
                                             <div><span class="text-slate-500 block">tú</span><strong id="card-conj-tu" class="text-white"></strong></div>
@@ -281,7 +292,7 @@
                                 <span class="font-bold text-slate-800" id="quiz-review-word"></span>
                                 <span class="text-slate-500 text-sm text-right" id="quiz-review-meaning"></span>
                             </div>
-                            <div id="quiz-review-notes-box" class="hidden bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-900 whitespace-pre-line leading-snug"></div>
+                            <div id="quiz-review-notes-box" class="hidden bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-900 whitespace-pre-wrap leading-snug"></div>
                             <button id="quiz-next-btn" onclick="nextQuizQuestion()" disabled class="w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed">다음 문제</button>
                         </div>
                     </div>
@@ -316,12 +327,15 @@
                         </div>
                         
                         <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-2 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                        <div class="grid grid-cols-3 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
                             </button>
                             <button id="ai-mode-btn-es-ko" onclick="switchAiMode('es-ko')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 🇪🇸 스 ➡️ 🇰🇷 한 (자유 작문 첨삭)
+                            </button>
+                            <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
+                                💬 질문에 답하기
                             </button>
                         </div>
                     </div>
@@ -396,6 +410,57 @@
                         </div>
                     </div>
 
+                    <!-- MODE C: QUESTION & ANSWER PRACTICE -->
+                    <div id="ai-pane-question" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-fuchsia-600 animate-pulse"></span>
+                                <span>질문에 스페인어로 답하기</span>
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-1">내가 등록한 질문 중 하나가 랜덤으로 나와요. 스페인어로 답해보세요!</p>
+                        </div>
+
+                        <!-- 질문 관리 (등록/삭제) -->
+                        <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-600">내 질문 목록 관리</span>
+                                <button id="question-manage-toggle-btn" type="button" onclick="toggleQuestionManageBox()" class="w-6 h-6 rounded-full bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center transition-all">
+                                    <i id="question-manage-toggle-icon" class="fa-solid fa-plus text-xs"></i>
+                                </button>
+                            </div>
+                            <div id="question-manage-box" class="hidden space-y-3">
+                                <div class="flex gap-2">
+                                    <input type="text" id="new-question-input" placeholder="예: ¿Qué tiempo hace hoy?" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500">
+                                    <button onclick="addCustomQuestion()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">추가</button>
+                                </div>
+                                <div id="question-list-box" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-fuchsia-50 border border-fuchsia-100 p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs bg-fuchsia-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">질문 ✨</span>
+                                <button onclick="pickRandomQuestion()" class="bg-white hover:bg-fuchsia-100 text-fuchsia-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-fuchsia-200 transition-all active:scale-95 flex items-center gap-1">
+                                    <i class="fa-solid fa-dice"></i>
+                                    <span>랜덤 질문 뽑기</span>
+                                </button>
+                            </div>
+                            <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! 위에서 질문을 등록하고 "랜덤 질문 뽑기"를 눌러보세요.</h3>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변</label>
+                            <textarea id="question-answer-input" rows="3" placeholder="스페인어로 답을 작성해보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-fuchsia-500 font-semibold"></textarea>
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button id="question-submit-btn" onclick="submitQuestionAnswer()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span>답변 제출하기</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- AI Feedback Result Panel -->
                     <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
                         <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
@@ -451,7 +516,7 @@
                             </div>
 
                             <div class="flex gap-2">
-                                <input type="text" id="ai-followup-input" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" class="flex-1 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <input type="text" id="ai-followup-input" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" autocomplete="off" class="flex-1 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 <button onclick="sendFollowupQuestion()" id="ai-chat-send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
                                     <i class="fa-solid fa-paper-plane"></i>
                                     <span>전송</span>
@@ -488,14 +553,22 @@
                     </div>
 
                     <!-- 요약 스탯 -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">등록 단어</span>
+                            <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
                             <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
                         </div>
                         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">마스터 단어</span>
+                            <span class="block text-[10px] text-slate-400 font-bold">총 마스터 단어</span>
                             <span id="record-stat-mastered" class="text-xl font-black text-emerald-600">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 등록</span>
+                            <span id="record-stat-new-words" class="text-xl font-black text-violet-400">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 마스터</span>
+                            <span id="record-stat-new-mastered" class="text-xl font-black text-emerald-400">0개</span>
                         </div>
                         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
                             <span class="block text-[10px] text-slate-400 font-bold">풀이 퀴즈</span>
@@ -589,7 +662,7 @@
                     </div>
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-violet-400">*</span></label>
-                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold">
+                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold">
                     </div>
                 </div>
 
@@ -645,10 +718,10 @@
                         <div id="field-adj-details" class="hidden space-y-1.5">
                             <label class="block text-xs font-bold text-slate-500">형용사 성·수 변화</label>
                             <select id="input-adj-agreement" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="full">성수 변화 (기본형, 예: bueno/buena/buenos/buenas)</option>
-                                <option value="no-gender">성 변화 없음, 수만 변화 (예: feliz/felices)</option>
-                                <option value="no-number">수 변화 없음, 성만 변화</option>
-                                <option value="invariable">성·수 변화 없음 (완전 불변)</option>
+                                <option value="full">성수 변화</option>
+                                <option value="no-gender">성 변화 X</option>
+                                <option value="no-number">수 변화 X</option>
+                                <option value="invariable">변화 X</option>
                             </select>
                         </div>
                     </div>
@@ -663,27 +736,27 @@
                     <div class="grid grid-cols-3 gap-2">
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
-                            <input type="text" id="conj-yo" placeholder="tengo" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
+                            <input type="text" id="conj-yo" placeholder="tengo" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">tú (너)</span>
-                            <input type="text" id="conj-tu" placeholder="tienes" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
+                            <input type="text" id="conj-tu" placeholder="tienes" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">él/ella (그/그녀)</span>
-                            <input type="text" id="conj-el" placeholder="tiene" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
+                            <input type="text" id="conj-el" placeholder="tiene" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">nosotros (우리)</span>
-                            <input type="text" id="conj-nos" placeholder="tenemos" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
+                            <input type="text" id="conj-nos" placeholder="tenemos" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">vosotros (너희)</span>
-                            <input type="text" id="conj-vos" placeholder="tenéis" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
+                            <input type="text" id="conj-vos" placeholder="tenéis" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">ellos/ellas (그들)</span>
-                            <input type="text" id="conj-ellos" placeholder="tienen" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
+                            <input type="text" id="conj-ellos" placeholder="tienen" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
                     </div>
                 </div>
@@ -691,17 +764,30 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
-                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                     </div>
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
-                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-500">관용구 / 자주 쓰는 표현 (선택)</label>
+                        <button id="idiom-toggle-btn" type="button" onclick="toggleIdiomSection()" class="w-6 h-6 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all">
+                            <i id="idiom-toggle-icon" class="fa-solid fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="idiom-fields-box" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <input type="text" id="input-idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                        <input type="text" id="input-idiom-meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                     </div>
                 </div>
 
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-500">비고 / 메모 (Notes)</label>
-                    <textarea id="input-notes" onkeydown="handleNotesEnterKey(event)" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-line"></textarea>
+                    <textarea id="input-notes" onkeydown="handleNotesEnterKey(event)" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-wrap"></textarea>
                 </div>
             </div>
 
