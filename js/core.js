@@ -450,6 +450,11 @@ const OFFLINE_DICT_DB = {
             try { localStorage.setItem(AI_WORD_CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
         }
 
+        function clearAiWordCacheUI() {
+            try { localStorage.removeItem(AI_WORD_CACHE_KEY); } catch (e) {}
+            showToast("단어 추천 캐시를 초기화했어요! 다음 AI 추천부터 새로 조회해요. ✨", "success");
+        }
+
 
         const DEFAULT_VOCABULARY = [
             {
@@ -539,6 +544,10 @@ const OFFLINE_DICT_DB = {
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
         // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+
+        // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
+        let customQuestions = [];
+        let currentQuestionForAnswer = null;
 
         // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
@@ -649,7 +658,8 @@ const OFFLINE_DICT_DB = {
                 gymPunchesCount: gymPunchesCount,
                 arenaScore: arenaScore,
                 nyanyaDiary: nyanyaDiary,
-                learnerProfile: learnerProfile
+                learnerProfile: learnerProfile,
+                customQuestions: customQuestions
             };
             const json = JSON.stringify(payload);
 
@@ -754,12 +764,14 @@ const OFFLINE_DICT_DB = {
                 nyanyaDiary = payload.nyanyaDiary || {};
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
+                customQuestions = payload.customQuestions || [];
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 gymPunchesCount = 0;
                 arenaScore = 0;
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+                customQuestions = [];
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -826,7 +838,7 @@ const OFFLINE_DICT_DB = {
         function touchDiarySnapshot() {
             const today = getLocalDateString();
             if (!nyanyaDiary[today]) {
-                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0 };
+                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0 };
             }
             // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
             const d = nyanyaDiary[today];
@@ -835,6 +847,8 @@ const OFFLINE_DICT_DB = {
             if (d.quizTotal === undefined) d.quizTotal = d.quizzes || 0;
             if (d.quizCorrect === undefined) d.quizCorrect = 0;
             if (d.aiSessions === undefined) d.aiSessions = 0;
+            if (d.newWordsCount === undefined) d.newWordsCount = 0;
+            if (d.newMasteredCount === undefined) d.newMasteredCount = 0;
 
             d.registeredTotal = vocabulary.length;
             d.masteredTotal = vocabulary.filter(w => w.mastered).length;
@@ -849,8 +863,12 @@ const OFFLINE_DICT_DB = {
                 if (extra) nyanyaDiary[today].quizCorrect++;
             } else if (type === 'ai') {
                 nyanyaDiary[today].aiSessions++;
+            } else if (type === 'new-word') {
+                nyanyaDiary[today].newWordsCount++;
+            } else if (type === 'new-mastered') {
+                nyanyaDiary[today].newMasteredCount++;
             }
-            // 'master'나 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
+            // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
             saveToStorage();
             renderDiary();
@@ -869,8 +887,8 @@ const OFFLINE_DICT_DB = {
 
             container.innerHTML = `
                 <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">
-                    <div>등록 단어: <strong class="text-violet-600">${log.registeredTotal || 0}개</strong></div>
-                    <div>마스터 단어: <strong class="text-emerald-600">${log.masteredTotal || 0}개</strong></div>
+                    <div>등록 단어: <strong class="text-violet-600">${log.newWordsCount || 0}개</strong></div>
+                    <div>마스터 단어: <strong class="text-emerald-600">${log.newMasteredCount || 0}개</strong></div>
                     <div>풀이 퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
                     <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
                 </div>
@@ -967,18 +985,24 @@ const OFFLINE_DICT_DB = {
                     masteredTotal: lastMastered,
                     quizTotal: (log && log.quizTotal) || 0,
                     quizCorrect: (log && log.quizCorrect) || 0,
-                    aiSessions: (log && log.aiSessions) || 0
+                    aiSessions: (log && log.aiSessions) || 0,
+                    newWordsCount: (log && log.newWordsCount) || 0,
+                    newMasteredCount: (log && log.newMasteredCount) || 0
                 };
             });
 
             const totalQuiz = series.reduce((sum, d) => sum + d.quizTotal, 0);
             const totalQuizCorrect = series.reduce((sum, d) => sum + d.quizCorrect, 0);
             const totalAi = series.reduce((sum, d) => sum + d.aiSessions, 0);
+            const totalNewWords = series.reduce((sum, d) => sum + d.newWordsCount, 0);
+            const totalNewMastered = series.reduce((sum, d) => sum + d.newMasteredCount, 0);
             const latestRegistered = series.length ? series[series.length - 1].registeredTotal : vocabulary.length;
             const latestMastered = series.length ? series[series.length - 1].masteredTotal : 0;
 
             document.getElementById('record-stat-words').innerText = `${latestRegistered}개`;
             document.getElementById('record-stat-mastered').innerText = `${latestMastered}개`;
+            document.getElementById('record-stat-new-words').innerText = `${totalNewWords}개`;
+            document.getElementById('record-stat-new-mastered').innerText = `${totalNewMastered}개`;
             document.getElementById('record-stat-quiz').innerText = `${totalQuizCorrect}/${totalQuiz}`;
             document.getElementById('record-stat-ai').innerText = `${totalAi}회`;
 
