@@ -74,16 +74,19 @@ function togglePosFields() {
 
                 document.getElementById('input-example').value = w.example || '';
                 document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
-                document.getElementById('input-idiom').value = w.idiom || '';
-                document.getElementById('input-idiom-meaning').value = w.idiomMeaning || '';
+
+                // [냐냐 PATCH] 관용구 여러 개 지원 — 예전 단일 idiom/idiomMeaning 데이터도 자동 변환
+                clearIdiomRows();
+                const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                 const idiomBox = document.getElementById('idiom-fields-box');
                 const idiomIcon = document.getElementById('idiom-toggle-icon');
-                if (w.idiom) {
-                    idiomBox.classList.remove('hidden');
-                    idiomIcon.className = "fa-solid fa-minus text-xs";
+                if (idiomList.length > 0) {
+                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
+                    if (idiomBox) idiomBox.classList.remove('hidden');
+                    if (idiomIcon) idiomIcon.className = "fa-solid fa-minus text-xs";
                 } else {
-                    idiomBox.classList.add('hidden');
-                    idiomIcon.className = "fa-solid fa-plus text-xs";
+                    if (idiomBox) idiomBox.classList.add('hidden');
+                    if (idiomIcon) idiomIcon.className = "fa-solid fa-plus text-xs";
                 }
                 document.getElementById('input-notes').value = w.notes || '';
             } else {
@@ -102,10 +105,11 @@ function togglePosFields() {
                 
                 document.getElementById('input-example').value = '';
                 document.getElementById('input-example-meaning').value = '';
-                document.getElementById('input-idiom').value = '';
-                document.getElementById('input-idiom-meaning').value = '';
-                document.getElementById('idiom-fields-box').classList.add('hidden');
-                document.getElementById('idiom-toggle-icon').className = "fa-solid fa-plus text-xs";
+                clearIdiomRows();
+                const idiomBoxNew = document.getElementById('idiom-fields-box');
+                const idiomIconNew = document.getElementById('idiom-toggle-icon');
+                if (idiomBoxNew) idiomBoxNew.classList.add('hidden');
+                if (idiomIconNew) idiomIconNew.className = "fa-solid fa-plus text-xs";
                 document.getElementById('input-notes').value = '· ';
             }
             togglePosFields();
@@ -129,9 +133,51 @@ function togglePosFields() {
         function toggleIdiomSection() {
             const box = document.getElementById('idiom-fields-box');
             const icon = document.getElementById('idiom-toggle-icon');
+            if (!box || !icon) return;
             const isHidden = box.classList.contains('hidden');
             box.classList.toggle('hidden');
             icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
+            // 처음 펼칠 때 입력칸이 하나도 없으면 자동으로 1개 추가
+            const entriesBox = document.getElementById('idiom-entries-box');
+            if (isHidden && entriesBox && entriesBox.children.length === 0) {
+                addIdiomRow();
+            }
+        }
+
+        // [냐냐 PATCH] 관용구를 여러 개 등록할 수 있도록 행(row) 추가/삭제
+        let idiomRowCounter = 0;
+        function addIdiomRow(idiomText = '', meaningText = '') {
+            const entriesBox = document.getElementById('idiom-entries-box');
+            if (!entriesBox) { console.warn('idiom-entries-box 엘리먼트를 찾을 수 없음 — index.html이 최신 버전이 아닐 수 있어요'); return; }
+            const rowId = 'idiom-row-' + (idiomRowCounter++);
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.className = 'flex gap-2 items-start';
+            row.innerHTML = `
+                <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-9 h-9 shrink-0 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
+            `;
+            entriesBox.appendChild(row);
+        }
+
+        function clearIdiomRows() {
+            const box = document.getElementById('idiom-entries-box');
+            if (box) box.innerHTML = '';
+        }
+
+        function getIdiomRowsData() {
+            const rows = document.querySelectorAll('#idiom-entries-box > div');
+            const result = [];
+            rows.forEach(row => {
+                const idiomInput = row.querySelector('[data-idiom-field="idiom"]');
+                const meaningInput = row.querySelector('[data-idiom-field="meaning"]');
+                const idiomVal = idiomInput ? idiomInput.value.trim() : '';
+                if (idiomVal) {
+                    result.push({ idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' });
+                }
+            });
+            return result;
         }
 
         function clearConjugationFields() {
@@ -215,7 +261,7 @@ function togglePosFields() {
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
-            - idiom은 이 단어가 들어간 흔한 관용구가 있을 때만 작성, 없으면 빈 문자열로 둘 것 (억지로 만들지 말 것).
+            - idioms는 이 단어가 들어간 진짜 흔한 관용구가 있을 때만 0~2개 배열로 작성, 없으면 빈 배열 []로 둘 것 (억지로 만들지 말 것).
             - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
 
             const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
@@ -242,8 +288,18 @@ function togglePosFields() {
                         }
                     },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
-                    idiom: { type: "STRING", description: "이 단어가 들어가는 자주 쓰는 관용구/숙어가 있을 때만 1개 작성 (예: ¿Qué tiempo hace?). 흔한 관용구가 없으면 빈 문자열 \"\"로 둘 것. 억지로 만들지 말 것" },
-                    idiomMeaning: { type: "STRING", description: "관용구의 한국어 뜻. 관용구가 없으면 빈 문자열" },
+                    idioms: {
+                        type: "ARRAY",
+                        description: "이 단어가 들어가는 자주 쓰는 관용구/숙어. 진짜 흔하게 쓰이는 게 있을 때만 0~2개 작성, 없으면 빈 배열 []. 억지로 만들지 말 것",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                idiom: { type: "STRING", description: "관용구/숙어 (스페인어), 예: ¿Qué tiempo hace?" },
+                                idiomMeaning: { type: "STRING", description: "관용구의 한국어 뜻" }
+                            },
+                            required: ["idiom", "idiomMeaning"]
+                        }
+                    },
                     exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
                     notes: { type: "STRING", description: "· 로 시작하는 불릿 2줄 이내, 줄바꿈은 \\n, 대화체/인사말 금지, 핵심 문법 사실만. 성별/관사는 반복하지 말 것. 명사형으로 간결하게 끝낼 것" }
                 },
@@ -351,12 +407,14 @@ function togglePosFields() {
                 exampleMeaningInput.value = result.exampleMeaning || '';
             }
 
-            // [냐냐 PATCH] AI가 관용구를 찾아줬으면 자동으로 채우고 섹션을 펼침
-            if (result.idiom && result.idiom.trim()) {
-                document.getElementById('input-idiom').value = result.idiom;
-                document.getElementById('input-idiom-meaning').value = result.idiomMeaning || '';
-                document.getElementById('idiom-fields-box').classList.remove('hidden');
-                document.getElementById('idiom-toggle-icon').className = "fa-solid fa-minus text-xs";
+            // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
+            if (result.idioms && result.idioms.length > 0) {
+                clearIdiomRows();
+                result.idioms.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
+                const idiomBoxAi = document.getElementById('idiom-fields-box');
+                const idiomIconAi = document.getElementById('idiom-toggle-icon');
+                if (idiomBoxAi) idiomBoxAi.classList.remove('hidden');
+                if (idiomIconAi) idiomIconAi.className = "fa-solid fa-minus text-xs";
             }
 
             const notesInput = document.getElementById('input-notes');
@@ -560,8 +618,7 @@ function togglePosFields() {
                 pos: pos,
                 example: document.getElementById('input-example').value.trim(),
                 exampleMeaning: document.getElementById('input-example-meaning').value.trim(),
-                idiom: document.getElementById('input-idiom').value.trim(),
-                idiomMeaning: document.getElementById('input-idiom-meaning').value.trim(),
+                idioms: getIdiomRowsData(),
                 notes: document.getElementById('input-notes').value.replace(/\s+$/, ''), // [냐냐 PATCH] 맨 앞 들여쓰기 공백은 보존, 끝쪽 공백만 정리
                 mastered: false
             };
@@ -673,6 +730,11 @@ function togglePosFields() {
         }
 
         // Render Vocabulary Tab List
+        // [냐냐 PATCH] 필터/정렬 패널 펼치기/접기
+        function toggleFilterPanel() {
+            document.getElementById('filter-panel').classList.toggle('hidden');
+        }
+
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
@@ -692,6 +754,7 @@ function togglePosFields() {
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
             const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
+            const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
             
             const filtered = vocabulary.filter(w => {
                 const queryInWord = w.word.toLowerCase().includes(searchVal);
@@ -699,10 +762,17 @@ function togglePosFields() {
                 const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
                 const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
                 const matchesPos = posFilter === 'all' || w.pos === posFilter;
-                return matchesSearch && matchesPos;
+                const matchesMastery = masteryFilter === 'all' || (masteryFilter === 'mastered' && w.mastered) || (masteryFilter === 'not-mastered' && !w.mastered);
+                return matchesSearch && matchesPos && matchesMastery;
             });
 
-            // [PATCH-20] 정렬/필터 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
+            // [냐냐 PATCH] 기본값이 아닌 필터/정렬이 하나라도 켜져 있으면 버튼에 표시점 보여줌
+            const sortModeForBadge = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
+            const hasActiveFilter = posFilter !== 'all' || masteryFilter !== 'all' || sortModeForBadge !== 'recent';
+            const badge = document.getElementById('filter-active-badge');
+            if (badge) badge.classList.toggle('hidden', !hasActiveFilter);
+
+            // [PATCH-20] 정렬 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
             const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
             let filteredSorted = filtered;
             if (sortMode === 'oldest') {
@@ -711,8 +781,6 @@ function togglePosFields() {
                 filteredSorted = [...filtered].sort((a, b) => a.word.localeCompare(b.word));
             } else if (sortMode === 'alpha-desc') {
                 filteredSorted = [...filtered].sort((a, b) => b.word.localeCompare(a.word));
-            } else if (sortMode === 'mastered-only') {
-                filteredSorted = filtered.filter(w => w.mastered);
             }
             // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
@@ -830,13 +898,16 @@ function togglePosFields() {
                             <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
                         </div>
                         ` : ''}
-                        ${w.idiom ? `
+                        ${(() => {
+                            const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                            return idiomList.map(item => `
                         <div class="bg-slate-50 border-l-2 border-fuchsia-400 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-fuchsia-500 uppercase">Expresión (관용구)</span>
-                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.idiom}</p>
-                            <p class="text-slate-400 italic">${w.idiomMeaning || ''}</p>
+                            <p class="font-bold text-slate-800 mt-0.5 select-all">${item.idiom}</p>
+                            <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
                         </div>
-                        ` : ''}
+                            `).join('');
+                        })()}
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
