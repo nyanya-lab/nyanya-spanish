@@ -1,1215 +1,794 @@
-const OFFLINE_DICT_DB = {
-            "pelo": {
-                meaning: "머리카락, 털", pos: "noun", gender: "masculine",
-                example: "Me gusta el pelo largo.", exampleMeaning: "나는 긴 머리가 마음에 들어.",
-                notes: "· 머리카락, 동물의 털 의미"
-            },
-            "libro": {
-                meaning: "책", pos: "noun", gender: "masculine",
-                example: "Leo un libro en español.", exampleMeaning: "나는 스페인어로 책 한 권을 읽는다.",
-                notes: "· -o로 끝나는 전형적인 명사 형태\n· 복수형: libros"
-            },
-            "mesa": {
-                meaning: "책상, 테이블", pos: "noun", gender: "feminine",
-                example: "Pongo el vaso sobre la mesa.", exampleMeaning: "나는 잔을 테이블 위에 올려놓는다.",
-                notes: "· -a로 끝나는 전형적인 명사 형태"
-            },
-            "casa": {
-                meaning: "집", pos: "noun", gender: "feminine",
-                example: "Mi casa es pequeña pero hermosa.", exampleMeaning: "우리 집은 작지만 참 예쁘다.",
-                notes: "· 'en casa'는 관사 없이 '집에서' 의미"
-            },
-            "comer": {
-                meaning: "먹다", pos: "verb", verbClass: "regular", irregularType: "none",
-                conjugations: { yo: "como", tu: "comes", el: "come", nos: "comemos", vos: "coméis", ellos: "comen" },
-                example: "Quiero comer una paella deliciosa.", exampleMeaning: "나는 맛있는 빠에야를 먹고 싶어.",
-                notes: "· -er 규칙 동사\n· 어미만 바꾸면 변형 끝"
-            },
-            "vivir": {
-                meaning: "살다, 거주하다", pos: "verb", verbClass: "regular", irregularType: "none",
-                conjugations: { yo: "vivo", tu: "vives", el: "vive", nos: "vivimos", vos: "vivís", ellos: "viven" },
-                example: "Yo vivo en Seúl hoy en día.", exampleMeaning: "나는 요즘 서울에 살고 있어.",
-                notes: "· -ir 규칙 동사\n· 어미만 바꾸면 변형 끝"
-            },
-            "hablar": {
-                meaning: "말하다, 대화하다", pos: "verb", verbClass: "regular", irregularType: "none",
-                conjugations: { yo: "hablo", tu: "hablas", el: "habla", nos: "hablamos", vos: "habláis", ellos: "hablan" },
-                example: "Ella habla español muy bien.", exampleMeaning: "그녀는 스페인어를 아주 유창하게 구사해.",
-                notes: "· -ar 규칙 동사\n· 가장 기본적인 변화형"
-            },
-            "tener": {
-                meaning: "가지다", pos: "verb", verbClass: "irregular", irregularType: "1인칭 및 e ➡️ ie",
-                conjugations: { yo: "tengo", tu: "tienes", el: "tiene", nos: "tenemos", vos: "tenéis", ellos: "tienen" },
-                example: "No tengo dinero ahora.", exampleMeaning: "나 지금 돈이 한 푼도 없어.",
-                notes: "· 소유를 나타내는 핵심 동사\n· 나이 표현에도 사용 (Tengo 20 años)"
-            },
-            "querer": {
-                meaning: "원하다, 사랑하다", pos: "verb", verbClass: "irregular", irregularType: "e ➡️ ie",
-                conjugations: { yo: "quiero", tu: "quieres", el: "quiere", nos: "queremos", vos: "queréis", ellos: "quieren" },
-                example: "Hoy los quiero comer.", exampleMeaning: "나 오늘 그것들을 꼭 먹고 싶어.",
-                notes: "· e→ie 불규칙 동사\n· nosotros·vosotros는 규칙형 유지"
-            },
-            "poder": {
-                meaning: "할 수 있다", pos: "verb", verbClass: "irregular", irregularType: "o ➡️ ue",
-                conjugations: { yo: "puedo", tu: "puedes", el: "puede", nos: "podemos", vos: "podéis", ellos: "pueden" },
-                example: "No puedo dártelo.", exampleMeaning: "너한테 그거 지금 넘겨줄 수 없어.",
-                notes: "· o→ue 불규칙 동사, 영어 can과 유사\n· 뒤에 동사원형을 바로 붙여 사용"
-            },
-            "hacer": {
-                meaning: "하다, 만들다", pos: "verb", verbClass: "irregular", irregularType: "1인칭",
-                conjugations: { yo: "hago", tu: "haces", el: "hace", nos: "hacemos", vos: "hacéis", ellos: "hacen" },
-                example: "¿Qué haces hoy?", exampleMeaning: "너 오늘 뭐 하니?",
-                notes: "· 1인칭만 불규칙 (hago)\n· 날씨 표현에도 사용 (Hace frío)"
-            },
-            "oír": {
-                meaning: "듣다", pos: "verb", verbClass: "irregular", irregularType: "기타 변형",
-                conjugations: { yo: "oigo", tu: "oyes", el: "oye", nos: "oímos", vos: "oís", ellos: "oyen" },
-                example: "¿Oyes esa música?", exampleMeaning: "그 음악 들려?",
-                notes: "· 1인칭 oigo, 강세없는 인칭은 í→oy\n· nosotros/vosotros만 규칙형 유지"
-            },
-            "con": {
-                meaning: "~와 함께", pos: "preposition",
-                example: "Quiero ir al cine con Margarita.", exampleMeaning: "마르가리타랑 같이 영화관에 가고 싶어.",
-                notes: "· 전치사\n· '나와 함께'=conmigo, '너와 함께'=contigo"
-            },
-            "para": {
-                meaning: "~을 위해, ~ 방향으로", pos: "preposition",
-                example: "Este regalo es para ti.", exampleMeaning: "이 선물은 너를 위한 거야.",
-                notes: "· 전치사 (목적·방향)\n· por와 쓰임이 다르니 구별 필요"
-            },
-            "porque": {
-                meaning: "왜냐하면, ~때문에", pos: "conjunction",
-                example: "No voy porque estoy muy cansado.", exampleMeaning: "나 너무 피곤하기 때문에 안 갈 거야.",
-                notes: "· 접속사 (이유)\n· 의문사 '¿Por qué?'와 표기가 다름"
-            },
-            "y": {
-                meaning: "그리고, ~와/과", pos: "conjunction",
-                example: "Margarita y yo somos amigos.", exampleMeaning: "마르가리타와 나는 친구야.",
-                notes: "· 접속사 (그리고)\n· 뒤에 i/hi로 시작하는 단어가 오면 e로 변함"
-            },
-            "el agua": {
-                meaning: "물", pos: "noun", gender: "masculine",
-                example: "Quiero el agua.", exampleMeaning: "저 그 물 좀 원해요.",
-                notes: "· 문법상 여성명사지만 단수 관사는 el\n· 강세 a로 시작해서 발음 충돌 회피"
-            },
-            "el ascensor": {
-                meaning: "엘리베이터", pos: "noun", gender: "masculine",
-                example: "El ascensor no funciona.", exampleMeaning: "엘리베이터가 고장 나서 작동을 안 해.",
-                notes: "남성명사이며, 작동하지 않을 때는 'funcionar' 동사에 'no'를 붙여 말합니다."
-            }
-        };
+function togglePosFields() {
+            const pos = document.getElementById('input-pos').value;
+            const nounDetails = document.getElementById('field-noun-details');
+            const verbTypeDetails = document.getElementById('field-verb-type-details');
+            const verbConjugations = document.getElementById('field-verb-conjugations');
+            const adjDetails = document.getElementById('field-adj-details');
 
-        // Custom Toast Notification System
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto max-w-xs md:max-w-md ${
-                type === 'success' 
-                ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
-                : type === 'error'
-                ? 'bg-rose-50 border-rose-100 text-rose-800'
-                : 'bg-amber-50 border-amber-100 text-amber-800'
-            }`;
-            
-            const icon = type === 'success' 
-                ? '<i class="fa-solid fa-circle-check text-emerald-500 text-base"></i>' 
-                : type === 'error'
-                ? '<i class="fa-solid fa-triangle-exclamation text-rose-500 text-base"></i>'
-                : '<i class="fa-solid fa-lightbulb text-amber-500 text-base"></i>';
-                
-            toast.innerHTML = `${icon} <span class="flex-1">${message}</span>`;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.classList.remove('translate-y-2', 'opacity-0');
-            }, 10);
-            
-            setTimeout(() => {
-                toast.classList.add('translate-y-2', 'opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        const AudioFX = {
-            ctx: null,
-            init() {
-                if (!this.ctx) {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-            },
-            playPunch() {
-                this.init();
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.15);
-            },
-            playBell() {
-                this.init();
-                const now = this.ctx.currentTime;
-                const osc1 = this.ctx.createOscillator();
-                const gain1 = this.ctx.createGain();
-                osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(1200, now);
-                gain1.gain.setValueAtTime(0.3, now);
-                gain1.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
-                osc1.connect(gain1);
-                gain1.connect(this.ctx.destination);
-                const osc2 = this.ctx.createOscillator();
-                const gain2 = this.ctx.createGain();
-                osc2.type = 'sine';
-                osc2.frequency.setValueAtTime(1500, now);
-                gain2.gain.setValueAtTime(0.15, now);
-                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-                osc2.connect(gain2);
-                gain2.connect(this.ctx.destination);
-                osc1.start(now);
-                osc2.start(now);
-                osc1.stop(now + 1.0);
-                osc2.stop(now + 1.0);
-            },
-            playSuccess() {
-                this.init();
-                const now = this.ctx.currentTime;
-                const notes = [300, 450, 600];
-                notes.forEach((freq, idx) => {
-                    const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(this.ctx.destination);
-                    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
-                    gain.gain.setValueAtTime(0.15, now + idx * 0.08);
-                    gain.gain.exponentialRampToValueAtTime(0.005, now + idx * 0.08 + 0.15);
-                    osc.start(now + idx * 0.08);
-                    osc.stop(now + idx * 0.08 + 0.2);
-                });
-            },
-            playError() {
-                this.init();
-                const now = this.ctx.currentTime;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(180, now);
-                osc.frequency.linearRampToValueAtTime(100, now + 0.25);
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-                osc.start(now);
-                osc.stop(now + 0.25);
-            }
-        };
-
-        // JSON 추출 및 파싱 안전 처리 (불필요한 텍스트 우회용)
-        function extractAndParseJson(text) {
-            const firstBrace = text.indexOf('{');
-            const lastBrace = text.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                const jsonString = text.substring(firstBrace, lastBrace + 1);
-                return JSON.parse(jsonString);
-            }
-            throw new Error("No valid JSON object found in response");
-        }
-
-        // ============================================================
-        // [냐냐 PATCH] Gemini API 키를 브라우저에 직접 저장/조회하는 헬퍼
-        // 원래 코드는 apiKey가 항상 빈 문자열("")이라 모든 AI 호출이
-        // 100% 실패하고 항상 오프라인 추측 로직으로 빠지고 있었습니다.
-        // 이제 사용자가 직접 본인의 무료 Gemini API 키를 등록하면
-        // 진짜 AI 응답을 받아올 수 있습니다.
-        // ============================================================
-        const GEMINI_KEY_STORAGE_NAME = 'nyanya_gemini_api_key';
-
-        function getGeminiApiKey() {
-            return (localStorage.getItem(GEMINI_KEY_STORAGE_NAME) || '').trim();
-        }
-
-        function hasGeminiApiKey() {
-            return getGeminiApiKey().length > 0;
-        }
-
-        function openApiKeyModal() {
-            const modal = document.getElementById('api-key-modal');
-            const input = document.getElementById('api-key-input');
-            input.value = getGeminiApiKey();
-            modal.classList.remove('hidden');
-        }
-
-        function closeApiKeyModal() {
-            document.getElementById('api-key-modal').classList.add('hidden');
-        }
-
-        function saveApiKey() {
-            const input = document.getElementById('api-key-input');
-            const value = input.value.trim();
-            if (!value) {
-                showToast("API 키를 입력해 주세요!", "error");
-                return;
-            }
-            localStorage.setItem(GEMINI_KEY_STORAGE_NAME, value);
-            closeApiKeyModal();
-            showToast("Gemini API 키가 저장되었습니다! 이제부터 진짜 AI 추천이 작동합니다 ✨", "success");
-            updateApiKeyBadge();
-        }
-
-        function clearApiKey() {
-            localStorage.removeItem(GEMINI_KEY_STORAGE_NAME);
-            document.getElementById('api-key-input').value = '';
-            showToast("API 키가 삭제되었습니다.", "warning");
-            updateApiKeyBadge();
-        }
-
-        function updateApiKeyBadge() {
-            const badge = document.getElementById('api-key-status-badge');
-            if (!badge) return;
-            if (hasGeminiApiKey()) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> AI 연결됨`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
+            if (pos === 'noun') {
+                nounDetails.classList.remove('hidden');
+                verbTypeDetails.classList.add('hidden');
+                verbConjugations.classList.add('hidden');
+                adjDetails.classList.add('hidden');
+            } else if (pos === 'verb') {
+                nounDetails.classList.add('hidden');
+                verbTypeDetails.classList.remove('hidden');
+                verbConjugations.classList.remove('hidden');
+                adjDetails.classList.add('hidden');
+            } else if (pos === 'adjective') {
+                nounDetails.classList.add('hidden');
+                verbTypeDetails.classList.add('hidden');
+                verbConjugations.classList.add('hidden');
+                adjDetails.classList.remove('hidden');
             } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> AI 키 미등록`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
+                nounDetails.classList.add('hidden');
+                verbTypeDetails.classList.add('hidden');
+                verbConjugations.classList.add('hidden');
+                adjDetails.classList.add('hidden');
             }
         }
-        // ============================================================
-        // [냐냐 PATCH] 다른 기기로 데이터 옮기기 (이 앱은 서버가 없어서
-        // localStorage에만 저장됨 → 기기/브라우저마다 따로 저장되는 게 정상 동작.
-        // 수동으로 내보내기/가져오기 해서 다른 기기에 옮길 수 있게 함)
-        // ============================================================
-        function openBackupModal() {
-            const exportData = {
-                vocabulary: vocabulary,
-                gymPunchesCount: gymPunchesCount,
-                arenaScore: arenaScore,
-                nyanyaDiary: nyanyaDiary
+
+        function toggleVerbTypeDetails() {
+            const verbClass = document.getElementById('input-verb-class').value;
+            const irrSelect = document.getElementById('input-verb-irregular-type');
+            if (verbClass === 'irregular') {
+                irrSelect.disabled = false;
+                irrSelect.value = "1인칭";
+            } else {
+                irrSelect.disabled = true;
+                irrSelect.value = "none";
+            }
+        }
+
+        function openWordModal(wordId = null) {
+            document.getElementById('word-modal').classList.remove('hidden');
+            document.getElementById('word-suggestions').classList.add('hidden');
+            
+            if (wordId) {
+                const w = vocabulary.find(item => item.id === wordId);
+                if (!w) return;
+                
+                document.getElementById('modal-title').innerHTML = `✏️ 단어 수정하기: <span class="text-indigo-600 font-extrabold">${w.word}</span>`;
+                document.getElementById('modal-word-id').value = w.id;
+                document.getElementById('input-word').value = w.word;
+                document.getElementById('input-meaning').value = w.meaning;
+                document.getElementById('input-pos').value = w.pos || 'noun';
+                
+                document.getElementById('input-gender').value = w.gender || 'none';
+                document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
+                document.getElementById('input-verb-class').value = w.verbClass || 'regular';
+                const irrSelect = document.getElementById('input-verb-irregular-type');
+                irrSelect.value = w.irregularType || 'none';
+                irrSelect.disabled = (w.verbClass !== 'irregular');
+
+                if (w.conjugations) {
+                    document.getElementById('conj-yo').value = w.conjugations.yo || '';
+                    document.getElementById('conj-tu').value = w.conjugations.tu || '';
+                    document.getElementById('conj-el').value = w.conjugations.el || '';
+                    document.getElementById('conj-nos').value = w.conjugations.nos || '';
+                    document.getElementById('conj-vos').value = w.conjugations.vos || '';
+                    document.getElementById('conj-ellos').value = w.conjugations.ellos || '';
+                } else {
+                    clearConjugationFields();
+                }
+
+                document.getElementById('input-example').value = w.example || '';
+                document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
+                document.getElementById('input-notes').value = w.notes || '';
+            } else {
+                document.getElementById('modal-title').innerHTML = `✨ 새로운 단어 등록`;
+                document.getElementById('modal-word-id').value = '';
+                document.getElementById('input-word').value = '';
+                document.getElementById('input-meaning').value = '';
+                document.getElementById('input-pos').value = 'noun';
+                document.getElementById('input-gender').value = 'none';
+                document.getElementById('input-adj-agreement').value = 'full';
+                document.getElementById('input-verb-class').value = 'regular';
+                document.getElementById('input-verb-irregular-type').value = 'none';
+                document.getElementById('input-verb-irregular-type').disabled = true;
+                
+                clearConjugationFields();
+                
+                document.getElementById('input-example').value = '';
+                document.getElementById('input-example-meaning').value = '';
+                document.getElementById('input-notes').value = '· ';
+            }
+            togglePosFields();
+        }
+
+        // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
+        function handleNotesEnterKey(event) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            const textarea = event.target;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const insertion = '\n· ';
+            textarea.value = value.slice(0, start) + insertion + value.slice(end);
+            const newPos = start + insertion.length;
+            textarea.selectionStart = textarea.selectionEnd = newPos;
+        }
+
+        function clearConjugationFields() {
+            document.getElementById('conj-yo').value = '';
+            document.getElementById('conj-tu').value = '';
+            document.getElementById('conj-el').value = '';
+            document.getElementById('conj-nos').value = '';
+            document.getElementById('conj-vos').value = '';
+            document.getElementById('conj-ellos').value = '';
+        }
+
+        function closeWordModal() {
+            document.getElementById('word-modal').classList.add('hidden');
+            hideAiLoadingOverlay();
+        }
+
+        function showConfirm(title, desc, onOk) {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-desc').innerText = desc;
+            modal.classList.remove('hidden');
+
+            const btnOk = document.getElementById('confirm-ok-btn');
+            const btnCancel = document.getElementById('confirm-cancel-btn');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                btnOk.onclick = null;
+                btnCancel.onclick = null;
             };
-            document.getElementById('backup-export-area').value = JSON.stringify(exportData);
-            document.getElementById('backup-import-area').value = '';
-            document.getElementById('backup-modal').classList.remove('hidden');
+
+            btnOk.onclick = () => {
+                onOk();
+                cleanup();
+            };
+            btnCancel.onclick = () => {
+                cleanup();
+            };
         }
 
-        function closeBackupModal() {
-            document.getElementById('backup-modal').classList.add('hidden');
-        }
+        // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
+        async function triggerAiAutofill() {
+            const rawWord = document.getElementById('input-word').value.trim();
+            if (!rawWord) {
+                showToast("단어 입력창에 스페인어 단어를 먼저 적어주세요!", "error");
+                return;
+            }
 
-        function copyBackupExport() {
-            const area = document.getElementById('backup-export-area');
-            area.select();
+            // [PATCH] API 키가 없으면 굳이 실패할 호출을 시도하지 않고 바로 안내
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어서 AI 추천 대신 오프라인 추측을 사용합니다. 우측 상단 배지에서 키를 등록하면 진짜 AI 추천을 받을 수 있어요!", "warning");
+                runOfflineAutofill(rawWord);
+                return;
+            }
+
+            // [PATCH-속도개선] 이미 조회했던 단어면 캐시에서 즉시 불러와 API 호출 자체를 생략
+            const cache = getAiWordCache();
+            const cached = cache[rawWord.toLowerCase().trim()];
+            if (cached) {
+                applyAutofillResult(cached, true);
+                AudioFX.playSuccess();
+                showToast("이전에 조회했던 단어라 바로 적용했어요! ⚡", "success");
+                return;
+            }
+
+            const btn = document.getElementById('ai-autofill-btn');
+            const originalHtml = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            showAiLoadingOverlay();
+
+            // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
+            const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
+            - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
+            - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
+            - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
+
+            const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
+            
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    meaning: { type: "STRING", description: "핵심 한글 뜻" },
+                    pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
+                    gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
+                    adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성수 둘 다 변화(bueno/buena/buenos/buenas), no-gender=성 변화 없이 수만 변화(feliz/felices), no-number=수 변화 없이 성만 변화, invariable=완전 불변. 형용사가 아니면 'full'" },
+                    verbClass: { type: "STRING", enum: ["regular", "irregular"] },
+                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
+                    conjugations: {
+                        type: "OBJECT",
+                        description: "현재시제 6인칭 변형. 반드시 표준 스페인(카스티야) 스페인어 기준으로 작성할 것 — 'vos' 키는 아르헨티나식 단수 'vos'가 아니라 스페인의 2인칭 복수 'vosotros'를 의미함 (예: tener→vos:'tenéis', llevar→vos:'lleváis'). 절대 -ás/-és 같은 아르헨티나식 voseo 어미를 쓰지 말 것.",
+                        properties: {
+                            yo: { type: "STRING", description: "yo (1인칭 단수)" },
+                            tu: { type: "STRING", description: "tú (2인칭 단수)" },
+                            el: { type: "STRING", description: "él/ella (3인칭 단수)" },
+                            nos: { type: "STRING", description: "nosotros (1인칭 복수)" },
+                            vos: { type: "STRING", description: "vosotros — 스페인식 2인칭 복수 '너희'. 아르헨티나 voseo 아님. -áis/-éis/-ís 어미 사용" },
+                            ellos: { type: "STRING", description: "ellos/ellas (3인칭 복수)" }
+                        }
+                    },
+                    example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
+                    exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
+                    notes: { type: "STRING", description: "· 로 시작하는 불릿 2줄 이내, 줄바꿈은 \\n, 대화체/인사말 금지, 핵심 문법 사실만. 성별/관사는 반복하지 말 것. 명사형으로 간결하게 끝낼 것" }
+                },
+                required: ["meaning", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
+            };
+
             try {
-                navigator.clipboard.writeText(area.value);
-                showToast("복사했어요! 다른 기기의 '가져오기'에 붙여넣어 주세요 📋", "success");
+                // 실시간 API 호출 시도 (thinkingLevel: minimal → 단순 사전 조회라 깊은 추론 불필요, 가장 빠름)
+                const responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
+                // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
+                const result = extractAndParseJson(responseText);
+
+                applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
+                saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
+                AudioFX.playSuccess();
+                showToast("Gemini AI 분석 완료! 추천 정보를 적용했어요 ✨", "success");
             } catch (e) {
-                document.execCommand('copy');
-                showToast("복사했어요! 다른 기기의 '가져오기'에 붙여넣어 주세요 📋", "success");
+                console.warn("AI API 통신 실패: 오프라인 추측으로 자동 전환", e);
+                showToast(`${describeGeminiError(e)} 오프라인 추측으로 대체합니다.`, "error");
+                runOfflineAutofill(rawWord);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                hideAiLoadingOverlay();
             }
         }
 
-        function importBackupData() {
-            const raw = document.getElementById('backup-import-area').value.trim();
-            if (!raw) {
-                showToast("붙여넣을 데이터가 없어요!", "error");
+        // [PATCH-속도개선] 로딩 스켈레톤 + 경과시간 표시 (순수 UI 효과라 실제 응답 속도에는 영향 없음)
+        let aiLoadingTimerHandle = null;
+        function showAiLoadingOverlay() {
+            const overlay = document.getElementById('ai-loading-overlay');
+            const timerText = document.getElementById('ai-loading-timer-text');
+            overlay.classList.remove('hidden');
+            const startedAt = Date.now();
+            clearInterval(aiLoadingTimerHandle);
+            aiLoadingTimerHandle = setInterval(() => {
+                const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+                timerText.innerText = `보통 3~5초 정도 걸려요 (${elapsed}초)`;
+            }, 100);
+        }
+        function hideAiLoadingOverlay() {
+            clearInterval(aiLoadingTimerHandle);
+            document.getElementById('ai-loading-overlay').classList.add('hidden');
+        }
+
+        // 결과값 UI 대입 처리부 (사용자가 입력 중인 값은 보존)
+        function applyAutofillResult(result, forceOverwrite = false) {
+            const wordVal = document.getElementById('input-word').value.trim();
+            
+            const meaningInput = document.getElementById('input-meaning');
+            // 사용자가 이미 뭔가를 적었다면, 강제 덮어쓰기 모드(추천 클릭)가 아닐 경우 지우지 않고 유지
+            if (forceOverwrite || !meaningInput.value.trim()) {
+                meaningInput.value = result.meaning || '';
+            }
+
+            const posInput = document.getElementById('input-pos');
+            if (forceOverwrite || posInput.value === 'noun') {
+                posInput.value = result.pos || 'noun';
+            }
+            togglePosFields();
+
+            if (result.pos === 'noun') {
+                const genderInput = document.getElementById('input-gender');
+                if (forceOverwrite || genderInput.value === 'none') {
+                    genderInput.value = result.gender || 'none';
+                }
+            } else if (result.pos === 'adjective') {
+                const adjAgreementInput = document.getElementById('input-adj-agreement');
+                if (forceOverwrite || adjAgreementInput.value === 'full') {
+                    adjAgreementInput.value = result.adjAgreement || 'full';
+                }
+            } else if (result.pos === 'verb') {
+                const verbClassInput = document.getElementById('input-verb-class');
+                if (forceOverwrite || verbClassInput.value === 'regular') {
+                    verbClassInput.value = result.verbClass || 'regular';
+                }
+                toggleVerbTypeDetails();
+                
+                if (result.verbClass === 'irregular') {
+                    const irrTypeInput = document.getElementById('input-verb-irregular-type');
+                    if (forceOverwrite || irrTypeInput.value === 'none') {
+                        irrTypeInput.value = result.irregularType || "1인칭";
+                    }
+                }
+                
+                if (result.conjugations) {
+                    const conjKeys = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
+                    conjKeys.forEach(key => {
+                        const conjInput = document.getElementById(`conj-${key}`);
+                        if (forceOverwrite || !conjInput.value.trim()) {
+                            conjInput.value = result.conjugations[key] || '';
+                        }
+                    });
+                }
+            }
+
+            const exampleInput = document.getElementById('input-example');
+            // 기본 형태의 유치한 예문인 경우에만 좋은 예문으로 자동 교체
+            if (forceOverwrite || !exampleInput.value.trim() || exampleInput.value.startsWith('Quiero ') || exampleInput.value.startsWith('Me gusta ')) {
+                exampleInput.value = result.example || '';
+            }
+
+            const exampleMeaningInput = document.getElementById('input-example-meaning');
+            if (forceOverwrite || !exampleMeaningInput.value.trim()) {
+                exampleMeaningInput.value = result.exampleMeaning || '';
+            }
+
+            const notesInput = document.getElementById('input-notes');
+            if (forceOverwrite || !notesInput.value.trim() || notesInput.value.includes('확인 필요') || notesInput.value.includes('직접 입력 필요')) {
+                notesInput.value = result.notes || '';
+            }
+        }
+
+        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
+        function runOfflineAutofill(rawWord) {
+            const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
+            
+            // 1차: 완전히 일치하는 DB 매핑이 있는지 확인
+            let match = OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
+            
+            // 2차: 규칙 기반 스마트 유추 가동
+            if (!match) {
+                // 동사형 규칙성 판별 (-ar, -er, -ir, 그리고 강세가 있는 -ír도 포함: oír, reír 등)
+                if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir") || cleanWord.endsWith("ír")) {
+                    const ending = cleanWord.slice(-2);
+                    const stem = cleanWord.slice(0, -2);
+                    let conj = {};
+                    
+                    if (ending === "ar") {
+                        conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
+                    } else if (ending === "er") {
+                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
+                    } else { // -ir 또는 -ír
+                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
+                    }
+                    
+                    match = {
+                        meaning: "", 
+                        pos: "verb",
+                        verbClass: "regular",
+                        irregularType: "none",
+                        conjugations: conj,
+                        example: `Quiero ${rawWord} hoy.`,
+                        exampleMeaning: `나는 오늘 ${rawWord}하고 싶어.`, 
+                        notes: "· 어미 규칙으로 현재시제 자동 계산\n· 뜻과 예문은 직접 입력 필요"
+                    };
+                } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
+                    match = {
+                        meaning: "",
+                        pos: "preposition",
+                        example: `Voy a ir ${rawWord} mi amigo.`,
+                        exampleMeaning: `나는 내 친구${rawWord} 같이 갈 거야.`,
+                        notes: "· 자주 쓰이는 전치사\n· 뒤에 오는 명사와의 결합에 주의"
+                    };
+                } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
+                    match = {
+                        meaning: "",
+                        pos: "conjunction",
+                        example: `No voy ${rawWord} no quiero.`,
+                        exampleMeaning: `나는 가고 싶지 않기 ${rawWord} 안 가.`,
+                        notes: "· 문장을 이어주는 접속사"
+                    };
+                } else {
+                    // 명사형 남/여성 기본 유추 및 관사 일치 처리 (Me gusta pelo 해소)
+                    const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
+                    const article = isFeminine ? "la" : "el";
+                    match = {
+                        meaning: "", 
+                        pos: "noun",
+                        gender: isFeminine ? "feminine" : "masculine",
+                        example: `Me gusta ${article} ${cleanWord}.`,
+                        exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${cleanWord})를 좋아해.`, 
+                        notes: "· 어미로 품사·성별 추정 (확인 필요)\n· 뜻은 직접 입력 필요"
+                    };
+                }
+            }
+
+            // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
+            applyAutofillResult(match, true);
+            AudioFX.playSuccess();
+
+            // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
+            if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
+                showToast(`지능형 오프라인 사전에서 "${rawWord}" 정보를 완벽하게 찾아 적용했습니다! ⚡`, "success");
+            } else {
+                showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
+            }
+        }
+
+        // REAL-TIME SMART AUTOFILL ENGINE (실시간 어순 분석)
+        function handleWordInput(value) {
+            const suggestionsContainer = document.getElementById('word-suggestions');
+            
+            if (!value.trim()) {
+                suggestionsContainer.classList.add('hidden');
                 return;
             }
-            let parsed;
-            try {
-                parsed = JSON.parse(raw);
-            } catch (e) {
-                showToast("데이터 형식이 올바르지 않아요. 복사한 내용 전체를 그대로 붙여넣어 주세요!", "error");
+
+            // [PATCH] 어차피 'AI 추천' 버튼으로 정확하게 채우므로, 타이핑만으로 추측해서
+            // 자동으로 채우던 기능은 제거함. 아래는 자동완성 후보 목록만 보여줌.
+            showSuggestions(value.trim());
+        }
+
+        function showSuggestions(query) {
+            const container = document.getElementById('word-suggestions');
+            const cleanQuery = query.toLowerCase().trim();
+            const results = [];
+            const seenKeys = new Set();
+
+            // [PATCH-16] 오프라인 사전뿐 아니라 내가 이미 등록한 단어장 전체에서도 검색
+            vocabulary.forEach(item => {
+                if (item.word.toLowerCase().includes(cleanQuery)) {
+                    seenKeys.add(item.word.toLowerCase());
+                    results.push({ key: item.word, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: item.id });
+                }
+            });
+            Object.keys(OFFLINE_DICT_DB).forEach(key => {
+                if (key.toLowerCase().includes(cleanQuery) && !seenKeys.has(key.toLowerCase())) {
+                    const item = OFFLINE_DICT_DB[key];
+                    results.push({ key: key, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: null });
+                }
+            });
+
+            if (results.length === 0) {
+                container.classList.add('hidden');
                 return;
             }
-            if (!parsed || !Array.isArray(parsed.vocabulary)) {
-                showToast("단어장 데이터를 찾을 수 없어요. 올바른 백업 내용인지 확인해 주세요!", "error");
+
+            container.classList.remove('hidden');
+            let html = '';
+            results.slice(0, 6).forEach(r => {
+                const safeKey = r.key.replace(/'/g, "\\'");
+                html += `
+                    <div onclick="selectSuggestion('${safeKey}', ${r.registeredId ? `'${r.registeredId}'` : 'null'})" class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors gap-2">
+                        <div class="flex flex-col min-w-0">
+                            <span class="font-bold text-slate-800 truncate">${r.key}</span>
+                            <span class="text-slate-400 text-[10px] truncate">${r.meaning}</span>
+                        </div>
+                        <span class="flex items-center gap-1 shrink-0">
+                            ${r.registeredId ? '<span class="text-[9px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">등록됨</span>' : ''}
+                            <span class="text-[9px] bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full font-bold uppercase">${getPosAbbreviation(r.pos, r.gender)}</span>
+                        </span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function selectSuggestion(word, registeredId) {
+            document.getElementById('word-suggestions').classList.add('hidden');
+
+            if (registeredId) {
+                // 이미 등록된 단어 → 중복 등록 대신 수정 모드로 열기
+                openWordModal(registeredId);
+                showToast("이미 등록된 단어예요! 수정 모드로 열었어요 ✏️", "info");
                 return;
             }
+
+            document.getElementById('input-word').value = word;
+            const match = OFFLINE_DICT_DB[word];
+            if (match) {
+                applyAutofillResult(match, true); // 리스트 클릭 시 확실한 선택이므로 덮어쓰기 허용 (true)
+                showToast("오프라인 사전에 매칭되어 적용했어요! ⚡", "success");
+                AudioFX.playSuccess();
+            }
+        }
+
+        // Save Word Action
+        function saveWord() {
+            const wordVal = document.getElementById('input-word').value.trim();
+            const meaningVal = document.getElementById('input-meaning').value.trim();
+            
+            if (!wordVal || !meaningVal) {
+                showToast("단어 이름과 뜻은 필수입니다!", "error");
+                return;
+            }
+
+            const modalId = document.getElementById('modal-word-id').value;
+
+            // [냐냐 PATCH] 새 단어 등록 시 이미 같은 철자의 단어가 있으면 확인창 표시
+            if (!modalId) {
+                const dup = vocabulary.find(item => item.word.toLowerCase().trim() === wordVal.toLowerCase());
+                if (dup) {
+                    showConfirm(
+                        `"${dup.word}(${dup.meaning})" 단어가 이미 등록되어 있습니다.`,
+                        "그래도 새로 등록하시겠습니까? (같은 단어가 2개로 등록돼요)",
+                        () => performSaveWord()
+                    );
+                    return;
+                }
+            }
+
+            performSaveWord();
+        }
+
+        function performSaveWord() {
+            const wordVal = document.getElementById('input-word').value.trim();
+            const meaningVal = document.getElementById('input-meaning').value.trim();
+            const modalId = document.getElementById('modal-word-id').value;
+            const pos = document.getElementById('input-pos').value;
+            
+            let wordObj = {
+                id: modalId || 'word-' + Date.now(),
+                word: wordVal,
+                meaning: meaningVal,
+                pos: pos,
+                example: document.getElementById('input-example').value.trim(),
+                exampleMeaning: document.getElementById('input-example-meaning').value.trim(),
+                notes: document.getElementById('input-notes').value.trim(),
+                mastered: false
+            };
+
+            if (pos === 'noun') {
+                wordObj.gender = document.getElementById('input-gender').value;
+            } else if (pos === 'adjective') {
+                wordObj.adjAgreement = document.getElementById('input-adj-agreement').value;
+            } else if (pos === 'verb') {
+                const verbClass = document.getElementById('input-verb-class').value;
+                wordObj.verbClass = verbClass;
+                wordObj.irregularType = (verbClass === 'irregular') ? document.getElementById('input-verb-irregular-type').value : 'none';
+                wordObj.conjugations = {
+                    yo: document.getElementById('conj-yo').value.trim(),
+                    tu: document.getElementById('conj-tu').value.trim(),
+                    el: document.getElementById('conj-el').value.trim(),
+                    nos: document.getElementById('conj-nos').value.trim(),
+                    vos: document.getElementById('conj-vos').value.trim(),
+                    ellos: document.getElementById('conj-ellos').value.trim()
+                };
+            }
+
+            if (modalId) {
+                const index = vocabulary.findIndex(item => item.id === modalId);
+                if (index !== -1) {
+                    wordObj.mastered = vocabulary[index].mastered || false; // 수정 시 마스터 상태 보존 (기존엔 초기화되던 버그)
+                    vocabulary[index] = wordObj;
+                    showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
+                }
+            } else {
+                vocabulary.unshift(wordObj);
+                showToast("새 단어가 등록되었습니다! 📚", "success");
+            }
+
+            logAction('snapshot');
+            closeWordModal();
+            renderWordList();
+            updateStats();
+        }
+
+        function deleteWord(wordId, event) {
+            if (event) event.stopPropagation();
+            const w = vocabulary.find(item => item.id === wordId);
+            if (!w) return;
+
             showConfirm(
-                "현재 기기의 데이터를 덮어쓸까요?",
-                `가져올 데이터에는 단어 ${parsed.vocabulary.length}개가 들어있어요. 현재 이 기기에 저장된 데이터는 사라집니다.`,
+                `"${w.word}" 단어를 삭제할까요?`,
+                "삭제한 데이터는 다시 꺼낼 수 없습니다.",
                 () => {
-                    vocabulary = parsed.vocabulary;
-                    gymPunchesCount = parsed.gymPunchesCount || 0;
-                    arenaScore = parsed.arenaScore || 0;
-                    nyanyaDiary = parsed.nyanyaDiary || {};
-                    saveToStorage();
+                    vocabulary = vocabulary.filter(item => item.id !== wordId);
+                    logAction('snapshot');
                     renderWordList();
                     updateStats();
-                    renderDiary();
-                    closeBackupModal();
-                    showToast(`단어 ${vocabulary.length}개를 이 기기로 가져왔어요! 🎉`, "success");
+                    showToast("단어를 삭제했습니다. 🗑️", "success");
+                    AudioFX.playError();
                 }
             );
         }
-        // ============================================================
 
-        // Live Gemini API Connector Utility
-        // [PATCH-혼합모델] 단순 작업(단어 추천, 문장 생성)은 더 가볍고 빠른 Flash-Lite,
-        // 정밀한 판단이 필요한 작업(첨삭 채점, 문법 설명)은 기존 Flash를 그대로 사용
-        const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
-        const GEMINI_MODEL_FLASH_LITE = 'gemini-3.1-flash-lite';
-
-        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH) {
-            const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
-            if (!apiKey) {
-                throw new Error("NO_API_KEY");
+        function toggleMasterWord(wordId, event) {
+            if (event) event.stopPropagation();
+            const w = vocabulary.find(item => item.id === wordId);
+            if (w) {
+                w.mastered = !w.mastered;
+                if (w.mastered) {
+                    AudioFX.playBell();
+                    showToast(`"${w.word}" 단어 마스터 완료! 🏆`, "success");
+                }
+                logAction('snapshot');
+                renderWordList();
+                updateStats();
             }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        }
+
+        // 현재시제 변형의 셀에서 불규칙 인칭만 파란색 글씨로 동적으로 골라내는 헬퍼
+        function getConjugationCellMarkup(person, val, verbClass, irregularType) {
+            if (!val) return `<div class="bg-white p-1 rounded-md border border-slate-100"><span class="text-slate-400 block">${person}</span><strong class="text-slate-800">-</strong></div>`;
             
-            const payload = {
-                contents: [{ parts: [{ text: promptText }] }]
-            };
-            
-            if (systemInstruction) {
-                payload.systemInstruction = {
-                    parts: [{ text: systemInstruction }]
-                };
-            }
-            
-            // [PATCH-속도개선] Gemini 3 계열은 기본적으로 깊게 "생각"하고 답하느라 느림.
-            // 단순 사전조회/문장채점 수준에는 깊은 추론이 필요 없으므로 thinkingLevel을 낮춰서
-            // 체감 응답속도를 크게 끌어올림. (minimal/low = 가장 빠름)
-            payload.generationConfig = {
-                thinkingConfig: { thinkingLevel: thinkingLevel.toUpperCase() },
-                maxOutputTokens: 768
-            };
-            if (jsonSchema) {
-                payload.generationConfig.responseMimeType = "application/json";
-                payload.generationConfig.responseSchema = jsonSchema;
-            }
-            
-            // [PATCH-에러분류] 401/403(키 오류), 429(요청 과다/한도초과)는 재시도해도 똑같이 실패하므로
-            // 즉시 정확한 원인을 담아 에러를 던짐. 그 외(네트워크 끊김, 5xx)만 짧게 한 번 재시도.
-            let delay = 300;
-            for (let i = 0; i < 2; i++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    if (!response.ok) {
-                        const errBody = await response.text().catch(() => '');
-                        let apiStatus = '';
-                        let apiMessage = '';
-                        try {
-                            const parsed = JSON.parse(errBody);
-                            apiStatus = parsed?.error?.status || '';
-                            apiMessage = parsed?.error?.message || '';
-                        } catch (parseErr) { /* 본문이 JSON이 아닐 수도 있음 */ }
-                        const err = new Error(`API response status ${response.status}: ${apiMessage || errBody}`);
-                        err.status = response.status;
-                        err.apiStatus = apiStatus;
-                        throw err;
-                    }
-                    const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                } catch (e) {
-                    const permanent = e.status === 400 || e.status === 401 || e.status === 403 || e.status === 429;
-                    if (i === 1 || permanent) throw e;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
+            let isIrregular = false;
+            if (verbClass === 'irregular') {
+                const irr = irregularType || '';
+                if (irr.includes('1인칭') && person === 'yo') {
+                    isIrregular = true;
                 }
-            }
-        }
-
-        // [PATCH-에러분류] callGemini가 던진 에러를 사용자에게 보여줄 정확한 한국어 메시지로 변환
-        function describeGeminiError(e) {
-            const msg = String(e && e.message || '');
-            if (msg.includes('NO_API_KEY')) {
-                return "API 키가 없어서 AI를 사용할 수 없습니다.";
-            }
-            if (e && e.status === 401 || e && e.status === 403) {
-                return "Gemini API 키가 유효하지 않아요. 우측 상단 배지에서 키를 다시 확인해 주세요.";
-            }
-            if (e && e.status === 429) {
-                return "요청이 너무 많아서 잠시 제한됐어요 (무료 요금제는 분당/일일 요청 수 제한이 있어요). 1분 정도 후에 다시 시도해 주세요.";
-            }
-            if (e && e.status === 400) {
-                return "요청 형식에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.";
-            }
-            if (e && (e.status >= 500)) {
-                return "Gemini 서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.";
-            }
-            return "AI 통신 중 네트워크 문제가 발생했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
-        }
-
-        // [PATCH-속도개선] 같은 단어를 다시 조회할 때 AI를 또 호출하지 않고 즉시 재사용하기 위한 캐시
-        const AI_WORD_CACHE_KEY = 'nyanya_ai_word_cache';
-        function getAiWordCache() {
-            try { return JSON.parse(localStorage.getItem(AI_WORD_CACHE_KEY) || '{}'); }
-            catch (e) { return {}; }
-        }
-        function saveAiWordCache(word, result) {
-            const cache = getAiWordCache();
-            cache[word.toLowerCase().trim()] = result;
-            try { localStorage.setItem(AI_WORD_CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
-        }
-
-
-        const DEFAULT_VOCABULARY = [
-            {
-                id: "seed-1",
-                word: "tener",
-                meaning: "가지다",
-                pos: "verb",
-                verbClass: "irregular",
-                irregularType: "1인칭 및 e ➡️ ie",
-                conjugations: {
-                    yo: "tengo",
-                    tu: "tienes",
-                    el: "tiene",
-                    nos: "tenemos",
-                    vos: "tenéis",
-                    ellos: "tienen"
-                },
-                example: "No tengo dinero ahora.",
-                exampleMeaning: "나 지금 돈이 한 푼도 없어.",
-                notes: "· 소유를 나타내는 핵심 동사\n· 나이 표현에도 사용 (Tengo 20 años)",
-                mastered: false
-            },
-            {
-                id: "seed-2",
-                word: "el agua",
-                meaning: "물",
-                pos: "noun",
-                gender: "masculine",
-                example: "Quiero el agua.",
-                exampleMeaning: "저 그 물 좀 원해요.",
-                notes: "· 문법상 여성명사지만 단수 관사는 el\n· 복수형은 여성형 las aguas",
-                mastered: false
-            },
-            {
-                id: "seed-3",
-                word: "querer",
-                meaning: "원하다",
-                pos: "verb",
-                verbClass: "irregular",
-                irregularType: "e ➡️ ie",
-                conjugations: {
-                    yo: "quiero",
-                    tu: "quieres",
-                    el: "quiere",
-                    nos: "queremos",
-                    vos: "queréis",
-                    ellos: "quieren"
-                },
-                example: "Hoy los quiero comer.",
-                exampleMeaning: "나 오늘 그것들을 꼭 먹고 싶어.",
-                notes: "· e→ie 불규칙 동사\n· nosotros·vosotros는 규칙형 유지",
-                mastered: false
-            },
-            {
-                id: "seed-4",
-                word: "con",
-                meaning: "~와 함께",
-                pos: "preposition",
-                example: "Quiero ir al cine con Margarita.",
-                exampleMeaning: "마르가리타랑 같이 영화관에 가고 싶어.",
-                notes: "· 전치사\n· '나와 함께'=conmigo, '너와 함께'=contigo",
-                mastered: false
-            },
-            {
-                id: "seed-5",
-                word: "porque",
-                meaning: "왜냐하면, ~때문에",
-                pos: "conjunction",
-                example: "No voy porque estoy muy cansado.",
-                exampleMeaning: "나 너무 피곤하기 때문에 안 갈 거야.",
-                notes: "· 접속사 (이유)\n· 의문사 '¿Por qué?'와 표기가 다름",
-                mastered: false
-            }
-        ];
-
-        let vocabulary = [];
-        let activeTab = 'list';
-        let currentFlashcardIndex = 0;
-        let isFlashcardFlipped = false;
-        let isMenuCollapsed = false;
-        
-        // Quiz & Game state
-        let gymPunchesCount = 0;
-        let arenaScore = 0;
-        let nyanyaDiary = {}; 
-
-        // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
-        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
-        let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
-
-        // AI 꼬리대화 히스토리 및 힌트 상태 관리
-        let aiChatHistory = [];
-        let isAiHintVisible = false;
-
-        // 실시간 입력 타이머
-        // (실시간 입력 타이머는 더 이상 사용하지 않음 — AI 추천 버튼으로 대체됨)
-
-        window.onload = async function() {
-            await loadFromStorage();
-            renderWordList();
-            updateStats();
-            renderDiary();
-            resetKoEsMissionState();
-            updateApiKeyBadge();
-
-            if (!hasGeminiApiKey()) {
-                setTimeout(() => {
-                    showToast("AI 추천을 쓰려면 우측 상단 'AI 키 미등록' 배지를 눌러 Gemini API 키를 등록해 주세요!", "warning");
-                }, 800);
-            }
-
-            if (!hasSyncPassword()) {
-                setTimeout(() => {
-                    showToast("기기 간 자동 동기화를 쓰려면 '동기화 비밀번호 설정하기' 배지를 눌러주세요!", "info");
-                }, 1600);
-            }
-            
-            if (window.innerWidth < 768) {
-                collapseMobileMenu();
-            }
-
-            document.addEventListener('keydown', function(e) {
-                if (activeTab === 'cards') {
-                    if (e.key === 'ArrowRight') nextFlashcard();
-                    if (e.key === 'ArrowLeft') prevFlashcard();
-                    if (e.key === ' ') {
-                        e.preventDefault();
-                        flipFlashcard();
-                    }
+                if (irr.includes('e ➡️ ie') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
+                    isIrregular = true;
                 }
-            });
-
-            // 드롭다운 외부 클릭 시 닫기
-            document.addEventListener('click', function(e) {
-                const suggs = document.getElementById('word-suggestions');
-                const inp = document.getElementById('input-word');
-                if (suggs && e.target !== inp && !suggs.contains(e.target)) {
-                    suggs.classList.add('hidden');
+                if (irr.includes('o ➡️ ue') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
+                    isIrregular = true;
                 }
-            });
-        };
-
-        // ============================================================
-        // [냐냐 PATCH-진짜 동기화] Firebase Realtime Database를 1순위로 사용.
-        // 이 방식은 Claude 안이든 밖이든, 폰이든 PC든, 어떤 브라우저에서 열어도
-        // 똑같이 동기화됨 (Claude에 의존하지 않는 진짜 서버 저장).
-        // Firebase 연결이 안 될 때만 Claude 아티팩트 저장소 → 이 기기 로컬 저장소 순으로 대체.
-        // ============================================================
-        const FIREBASE_DB_URL = 'https://nyanya-vocab-default-rtdb.firebaseio.com';
-        const SYNC_PASSWORD_KEY = 'nyanya_sync_password';
-
-        // [냐냐 PATCH-비밀번호 동기화] 비밀번호 자체가 Firebase 안에서의 "내 데이터 경로"가 됨.
-        // 이 비밀번호는 코드(GitHub)에는 절대 들어가지 않고 이 기기의 localStorage에만 저장됨.
-        // Firebase 규칙에서 이 경로를 모르는 사람은 읽기/쓰기가 막히도록 설정해야 진짜 보안이 생김
-        // (콘솔 → Realtime Database → 규칙에서 와일드카드 규칙으로 변경 필요).
-        function getSyncPassword() {
-            return (localStorage.getItem(SYNC_PASSWORD_KEY) || '').trim();
-        }
-        function hasSyncPassword() {
-            return getSyncPassword().length > 0;
-        }
-        function getFirebaseDataPath() {
-            const pw = getSyncPassword();
-            if (!pw) return null;
-            return `${FIREBASE_DB_URL}/vocab/${encodeURIComponent(pw)}.json`;
-        }
-
-        function openSyncPasswordModal() {
-            document.getElementById('sync-password-input').value = getSyncPassword();
-            document.getElementById('sync-password-modal').classList.remove('hidden');
-        }
-        function closeSyncPasswordModal() {
-            document.getElementById('sync-password-modal').classList.add('hidden');
-        }
-        async function saveSyncPassword() {
-            const value = document.getElementById('sync-password-input').value.trim();
-            if (!value) {
-                showToast("비밀번호를 입력해 주세요!", "error");
-                return;
-            }
-            localStorage.setItem(SYNC_PASSWORD_KEY, value);
-            closeSyncPasswordModal();
-            showToast("비밀번호가 저장됐어요! 동기화를 다시 확인하는 중...", "info");
-            await loadFromStorage();
-            renderWordList();
-            updateStats();
-            renderDiary();
-        }
-
-        function hasServerStorage() {
-            return typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function';
-        }
-
-        async function saveToStorage() {
-            const payload = {
-                vocabulary: vocabulary,
-                gymPunchesCount: gymPunchesCount,
-                arenaScore: arenaScore,
-                nyanyaDiary: nyanyaDiary,
-                learnerProfile: learnerProfile
-            };
-            const json = JSON.stringify(payload);
-
-            // 항상 이 기기에도 백업 저장 (모든 동기화 방법이 실패해도 최소한 이 기기에서는 안전)
-            try { localStorage.setItem('nyanya_data_v2', json); } catch (e) {}
-
-            // 1순위: Firebase (어디서 열어도 동기화됨) — 비밀번호를 설정해야 사용 가능
-            const firebasePath = getFirebaseDataPath();
-            if (firebasePath) {
-                try {
-                    const res = await fetch(firebasePath, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: json
-                    });
-                    if (res.ok) {
-                        updateSyncBadge(true);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn("Firebase 저장 실패, 다른 저장소로 대체", e);
+                if (irr.includes('e ➡️ i') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
+                    isIrregular = true;
+                }
+                if (irr.includes('완전 불규칙')) {
+                    isIrregular = true;
                 }
             }
 
-            // 2순위: Claude 아티팩트 저장소 (Claude 안에서만 동기화)
-            if (hasServerStorage()) {
-                try {
-                    await window.storage.set('nyanya-vocab-data', json, false);
-                    updateSyncBadge('claude-only');
-                    return;
-                } catch (e) {
-                    console.warn("Claude 저장소도 실패, 이 기기에만 저장됨", e);
-                }
-            }
-
-            updateSyncBadge(false);
-        }
-
-        async function loadFromStorage() {
-            let payload = null;
-            let firebaseReachable = false;
-
-            // 1순위: Firebase에서 불러오기 — 비밀번호를 설정해야 사용 가능
-            const firebasePath = getFirebaseDataPath();
-            if (firebasePath) {
-                try {
-                    const res = await fetch(firebasePath);
-                    if (res.ok) {
-                        firebaseReachable = true;
-                        const data = await res.json();
-                        if (data) payload = data;
-                    }
-                } catch (e) {
-                    console.warn("Firebase 연결 실패, 다른 저장소 확인", e);
-                }
-            }
-
-            if (firebasePath && firebaseReachable) {
-                updateSyncBadge(true);
-            } else if (!firebasePath) {
-                updateSyncBadge('no-password');
-            } else if (hasServerStorage()) {
-                // 2순위: Claude 아티팩트 저장소
-                try {
-                    const result = await window.storage.get('nyanya-vocab-data', false);
-                    if (result && result.value) payload = JSON.parse(result.value);
-                    updateSyncBadge('claude-only');
-                } catch (e) {
-                    updateSyncBadge(false);
-                }
-            } else {
-                updateSyncBadge(false);
-            }
-
-            if (!payload) {
-                // 3순위: 이 기기 로컬 백업 (통합 키)
-                try {
-                    const localV2 = localStorage.getItem('nyanya_data_v2');
-                    if (localV2) payload = JSON.parse(localV2);
-                } catch (e) {}
-            }
-
-            if (!payload) {
-                // 4순위: 예전 버전(분리된 키)에 저장된 데이터가 있으면 마이그레이션
-                const oldVocab = localStorage.getItem('nyanya_vocabulary');
-                if (oldVocab) {
-                    try {
-                        payload = {
-                            vocabulary: JSON.parse(oldVocab),
-                            gymPunchesCount: parseInt(localStorage.getItem('nyanya_punches') || '0'),
-                            arenaScore: parseInt(localStorage.getItem('nyanya_score') || '0'),
-                            nyanyaDiary: JSON.parse(localStorage.getItem('nyanya_diary') || '{}')
-                        };
-                    } catch (e) {}
-                }
-            }
-
-            if (payload) {
-                vocabulary = payload.vocabulary || [...DEFAULT_VOCABULARY];
-                gymPunchesCount = payload.gymPunchesCount || 0;
-                arenaScore = payload.arenaScore || 0;
-                nyanyaDiary = payload.nyanyaDiary || {};
-                learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
-                if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
-            } else {
-                vocabulary = [...DEFAULT_VOCABULARY];
-                gymPunchesCount = 0;
-                arenaScore = 0;
-                nyanyaDiary = {};
-                learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
-            }
-
-            // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
-            // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
-            saveToStorage();
-        }
-
-        function updateSyncBadge(state) {
-            const badge = document.getElementById('sync-status-badge');
-            if (!badge) return;
-            if (state === true) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 모든 기기 동기화 중`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
-            } else if (state === 'claude-only') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Claude 안에서만 동기화`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 cursor-pointer";
-            } else if (state === 'no-password') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span> 동기화 비밀번호 설정하기`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
-            } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 이 기기에만 저장됨`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
-            }
-        }
-
-        // 학습일지 로그 누적 기록 함수
-        // [냐냐 PATCH-날짜버그수정] toISOString()은 UTC 기준이라 한국(UTC+9) 등에서는
-        // 날짜가 하루 어긋날 수 있음(특히 자정~오전 9시, 그리고 차트의 날짜 범위 계산에서는
-        // 항상 하루씩 밀림). 로컬(내 기기) 시간 기준으로 YYYY-MM-DD를 만드는 함수로 통일.
-        function getLocalDateString(date = new Date()) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-
-        // [냐냐 PATCH-수준맞춤] 누적된 작은 통계만으로 AI 프롬프트에 넣을 짧은 요약 문장 생성.
-        // 전체 기록을 보내지 않고 이 요약 텍스트(보통 100토큰 이내)만 매번 같이 보냄.
-        function buildLearnerProfileSummary() {
-            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
-            if (totalAnswered < 5) {
-                return "학습 데이터가 아직 적어서 평균적인 초급자 기준으로 설명해 주세요.";
-            }
-            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
-            let level = "초급";
-            if (accuracy >= 85 && vocabulary.length >= 50) level = "중상급";
-            else if (accuracy >= 70) level = "중급";
-
-            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
-            const weakPos = Object.entries(wrongByPos).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos]) => posNameKo[pos] || pos);
-            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => t);
-
-            let summary = `학습자 수준: ${level} (정답률 ${accuracy}%, 총 ${totalAnswered}문제 풀이, 등록 단어 ${vocabulary.length}개).`;
-            if (weakPos.length > 0) {
-                summary += ` 자주 틀리는 품사: ${weakPos.join(', ')}.`;
-            }
-            if (weakGrammar.length > 0) {
-                summary += ` 자유 작문에서 자주 틀리는 문법 유형: ${weakGrammar.join(', ')}.`;
-            }
-            summary += ` 이 수준에 맞게 문장 난이도와 설명의 깊이를 조절해 주세요 (초급이면 더 짧고 쉬운 표현, 중상급이면 더 자연스럽고 다양한 표현 사용). 자주 틀리는 문법 유형이 있다면 가능하면 그 부분을 다시 짚어주거나 비슷한 연습이 되도록 신경써 주세요.`;
-            return summary;
-        }
-
-        function touchDiarySnapshot() {
-            const today = getLocalDateString();
-            if (!nyanyaDiary[today]) {
-                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0 };
-            }
-            // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
-            const d = nyanyaDiary[today];
-            if (d.registeredTotal === undefined) d.registeredTotal = 0;
-            if (d.masteredTotal === undefined) d.masteredTotal = 0;
-            if (d.quizTotal === undefined) d.quizTotal = d.quizzes || 0;
-            if (d.quizCorrect === undefined) d.quizCorrect = 0;
-            if (d.aiSessions === undefined) d.aiSessions = 0;
-
-            d.registeredTotal = vocabulary.length;
-            d.masteredTotal = vocabulary.filter(w => w.mastered).length;
-        }
-
-        function logAction(type, extra) {
-            touchDiarySnapshot();
-            const today = getLocalDateString();
-
-            if (type === 'quiz') {
-                nyanyaDiary[today].quizTotal++;
-                if (extra) nyanyaDiary[today].quizCorrect++;
-            } else if (type === 'ai') {
-                nyanyaDiary[today].aiSessions++;
-            }
-            // 'master'나 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
-
-            saveToStorage();
-            renderDiary();
-        }
-
-        // 학습 일지 렌더링
-        function renderDiary() {
-            const container = document.getElementById('nyanya-diary-list');
-            const today = getLocalDateString();
-            const log = nyanyaDiary[today];
-
-            if (!log) {
-                container.innerHTML = `<p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>`;
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">
-                    <div>등록 단어: <strong class="text-violet-600">${log.registeredTotal || 0}개</strong></div>
-                    <div>마스터 단어: <strong class="text-emerald-600">${log.masteredTotal || 0}개</strong></div>
-                    <div>풀이 퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
-                    <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
+            const colorClass = isIrregular ? 'text-blue-600 font-black' : 'text-slate-700 font-semibold';
+            return `
+                <div class="bg-white p-1 rounded-md border border-slate-100">
+                    <span class="text-slate-400 block">${person}</span>
+                    <strong class="${colorClass}">${val}</strong>
                 </div>
             `;
         }
 
-        // ============================================================
-        // [냐냐 PATCH] 학습기록 탭: 기간별 통계 + 그래프
-        // ============================================================
-        let currentRecordRange = '7d';
-
-        function setRecordRange(range) {
-            currentRecordRange = range;
-            document.querySelectorAll('.record-range-btn').forEach(btn => {
-                btn.className = "record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500";
-            });
-            const btnMap = { '7d': 'range-btn-7d', '30d': 'range-btn-30d', '1y': 'range-btn-1y', 'custom': 'range-btn-custom' };
-            const activeBtn = document.getElementById(btnMap[range]);
-            if (activeBtn) activeBtn.className = "record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
-
-            const customBox = document.getElementById('record-custom-range-box');
-            if (range === 'custom') {
-                customBox.classList.remove('hidden');
-                const end = new Date();
-                const start = new Date();
-                start.setDate(end.getDate() - 6);
-                document.getElementById('record-custom-start').value = getLocalDateString(start);
-                document.getElementById('record-custom-end').value = getLocalDateString(end);
-                return; // '적용' 버튼을 눌러야 그려짐
-            }
-            customBox.classList.add('hidden');
-
-            let days = 7;
-            if (range === '30d') days = 30;
-            else if (range === '1y') days = 365;
-
-            const end = new Date();
-            const start = new Date();
-            start.setDate(end.getDate() - (days - 1));
-            renderRecordsForRange(start, end);
+        // Render Vocabulary Tab List
+        function handleSearchInput() {
+            const val = document.getElementById('search-bar').value;
+            document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
+            renderWordList();
         }
 
-        function applyCustomRecordRange() {
-            const startVal = document.getElementById('record-custom-start').value;
-            const endVal = document.getElementById('record-custom-end').value;
-            if (!startVal || !endVal) {
-                showToast("시작일과 종료일을 모두 선택해 주세요!", "error");
+        function clearSearch() {
+            const bar = document.getElementById('search-bar');
+            bar.value = '';
+            document.getElementById('search-clear-btn').classList.add('hidden');
+            bar.focus();
+            renderWordList();
+        }
+
+        function renderWordList() {
+            const grid = document.getElementById('vocabulary-grid');
+            const emptyState = document.getElementById('vocab-empty-state');
+            const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
+            
+            const filtered = vocabulary.filter(w => {
+                const queryInWord = w.word.toLowerCase().includes(searchVal);
+                const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
+                const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
+                return queryInWord || queryInMeaning || queryInNotes;
+            });
+
+            // [PATCH-20] 정렬/필터 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
+            const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
+            let filteredSorted = filtered;
+            if (sortMode === 'oldest') {
+                filteredSorted = [...filtered].reverse();
+            } else if (sortMode === 'alpha-asc') {
+                filteredSorted = [...filtered].sort((a, b) => a.word.localeCompare(b.word));
+            } else if (sortMode === 'alpha-desc') {
+                filteredSorted = [...filtered].sort((a, b) => b.word.localeCompare(a.word));
+            } else if (sortMode === 'mastered-only') {
+                filteredSorted = filtered.filter(w => w.mastered);
+            }
+            // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
+
+            if (filteredSorted.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
                 return;
             }
-            const start = new Date(startVal);
-            const end = new Date(endVal);
-            if (start > end) {
-                showToast("시작일이 종료일보다 늦을 수 없어요!", "error");
-                return;
-            }
-            renderRecordsForRange(start, end);
-        }
+            emptyState.classList.add('hidden');
 
-        function getDateRangeArray(start, end) {
-            const dates = [];
-            const cur = new Date(start);
-            cur.setHours(0,0,0,0);
-            const endCopy = new Date(end);
-            endCopy.setHours(0,0,0,0);
-            while (cur <= endCopy) {
-                dates.push(getLocalDateString(cur));
-                cur.setDate(cur.getDate() + 1);
-            }
-            return dates;
-        }
-
-        function renderRecordsForRange(start, end) {
-            const dateKeys = getDateRangeArray(start, end);
-            const allKeysSorted = Object.keys(nyanyaDiary).sort();
-
-            // 누적값(등록 단어/마스터 단어)은 그 날 기록이 없으면 이전 값을 그대로 이어붙임(carry-forward)
-            let lastRegistered = 0, lastMastered = 0;
-            for (const k of allKeysSorted) {
-                if (k < dateKeys[0]) {
-                    if (nyanyaDiary[k].registeredTotal !== undefined) lastRegistered = nyanyaDiary[k].registeredTotal;
-                    if (nyanyaDiary[k].masteredTotal !== undefined) lastMastered = nyanyaDiary[k].masteredTotal;
-                }
-            }
-
-            const series = dateKeys.map(date => {
-                const log = nyanyaDiary[date];
-                if (log) {
-                    if (log.registeredTotal !== undefined) lastRegistered = log.registeredTotal;
-                    if (log.masteredTotal !== undefined) lastMastered = log.masteredTotal;
-                }
-                return {
-                    date,
-                    registeredTotal: lastRegistered,
-                    masteredTotal: lastMastered,
-                    quizTotal: (log && log.quizTotal) || 0,
-                    quizCorrect: (log && log.quizCorrect) || 0,
-                    aiSessions: (log && log.aiSessions) || 0
-                };
-            });
-
-            const totalQuiz = series.reduce((sum, d) => sum + d.quizTotal, 0);
-            const totalQuizCorrect = series.reduce((sum, d) => sum + d.quizCorrect, 0);
-            const totalAi = series.reduce((sum, d) => sum + d.aiSessions, 0);
-            const latestRegistered = series.length ? series[series.length - 1].registeredTotal : vocabulary.length;
-            const latestMastered = series.length ? series[series.length - 1].masteredTotal : 0;
-
-            document.getElementById('record-stat-words').innerText = `${latestRegistered}개`;
-            document.getElementById('record-stat-mastered').innerText = `${latestMastered}개`;
-            document.getElementById('record-stat-quiz').innerText = `${totalQuizCorrect}/${totalQuiz}`;
-            document.getElementById('record-stat-ai').innerText = `${totalAi}회`;
-
-            renderRecordLineChart(series);
-            renderQuizChart(series);
-            renderAiChart(series);
-        }
-
-        function recordChartXLabels(series, xOf, height) {
-            const labelEvery = Math.max(1, Math.ceil(series.length / 7));
             let html = '';
-            series.forEach((d, i) => {
-                if (i % labelEvery === 0 || i === series.length - 1) {
-                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="9" fill="#94a3b8" text-anchor="middle">${d.date.slice(5)}</text>`;
+            filteredSorted.forEach(w => {
+                const isVerb = w.pos === 'verb';
+                
+                // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
+                let badgeMarkup = '';
+                if (w.pos === 'noun') {
+                    if (w.gender === 'masculine') {
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-blue-100 text-blue-600 shadow-sm">M.</span>`;
+                    } else if (w.gender === 'feminine') {
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-rose-100 text-rose-600 shadow-sm">F.</span>`;
+                    } else {
+                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-100 text-slate-600 shadow-sm">N.</span>`;
+                    }
+                } else if (w.pos === 'verb') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-orange-100 text-orange-600 shadow-sm">V.</span>`;
+                } else if (w.pos === 'adjective') {
+                    let adjSubLabel = '';
+                    if (w.adjAgreement === 'no-gender') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">성 변화 X</span>';
+                    else if (w.adjAgreement === 'no-number') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">수 변화 X</span>';
+                    else if (w.adjAgreement === 'invariable') adjSubLabel = ' <span class="px-1.5 py-0.5 text-[8px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200">불변</span>';
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>${adjSubLabel}`;
+                } else if (w.pos === 'adverb') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 shadow-sm">Adv.</span>`;
+                } else if (w.pos === 'preposition') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-teal-100 text-teal-700 shadow-sm">Prep.</span>`;
+                } else if (w.pos === 'conjunction') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-cyan-100 text-cyan-700 shadow-sm">Conj.</span>`;
+                } else if (w.pos === 'pronoun') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
+                } else if (w.pos === 'phrase') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
                 }
-            });
-            return html;
-        }
 
-        // [PATCH] 차트 너비를 기간 길이에 비례해서 늘리지 않고 항상 화면(컨테이너) 폭에 맞춤.
-        // viewBox는 고정값(CHART_VIEW_WIDTH)을 쓰고 svg width="100%"로 반응형 처리 →
-        // 기간이 길어져도(예: 1년) 좌우로 안 늘어나고 한 화면 안에 다 들어옴.
-        const CHART_VIEW_WIDTH = 700;
+                const cardStyle = w.mastered 
+                    ? 'border border-emerald-100 bg-emerald-50/40 shadow-xs' 
+                    : 'border border-slate-200 shadow-xs bg-white';
 
-        // [냐냐 PATCH] Y축 기준선 + 라벨 (세로축 기준점이 없다는 피드백 반영).
-        // 마우스를 올리면(데스크탑) 정확한 수치도 <title>로 보이게 함.
-        function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
-            const steps = 4;
-            let html = '';
-            for (let i = 0; i <= steps; i++) {
-                const val = Math.round((maxVal / steps) * i);
-                const y = padding.top + chartH - (i / steps) * chartH;
-                html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
-                html += `<text x="${(padding.left - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="#94a3b8" text-anchor="end">${val}${suffix}</text>`;
-            }
-            return html;
-        }
-
-        function renderRecordLineChart(series) {
-            const container = document.getElementById('record-line-chart');
-            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
-
-            const width = CHART_VIEW_WIDTH;
-            const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 32 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-
-            const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
-            const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
-
-            const buildPath = (key) => series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ');
-            const buildDots = (key, color) => series.map((d, i) =>
-                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(d[key]).toFixed(1)}" r="2.5" fill="${color}"><title>${d.date}: ${d[key]}개</title></circle>`
-            ).join('');
-
-            container.innerHTML = `
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
-                    <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#cbd5e1" stroke-width="1"/>
-                    <path d="${buildPath('registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="${buildPath('masteredTotal')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${buildDots('registeredTotal', '#8b5cf6')}
-                    ${buildDots('masteredTotal', '#10b981')}
-                    ${recordChartXLabels(series, xOf, height)}
-                </svg>
-            `;
-        }
-
-        // 퀴즈 차트: 전체 풀이 갯수(꺾은선) + 오답률%(막대)를 한 차트에 겹쳐서 표시
-        function renderQuizChart(series) {
-            const container = document.getElementById('record-quiz-chart');
-            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
-
-            const width = CHART_VIEW_WIDTH;
-            const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-            const baseY = height - padding.bottom;
-
-            const withRate = series.map(d => ({
-                ...d,
-                wrongRate: d.quizTotal > 0 ? ((d.quizTotal - d.quizCorrect) / d.quizTotal) * 100 : 0
-            }));
-
-            const maxTotal = Math.max(1, ...withRate.map(d => d.quizTotal));
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
-            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
-            const barWidth = Math.min(8, groupWidth * 0.5);
-
-            // 오답률(%)은 0~100 고정 스케일의 막대로
-            let bars = '';
-            withRate.forEach((d, i) => {
-                const barH = (d.wrongRate / 100) * chartH;
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"><title>${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)</title></rect>`;
-            });
-
-            // 전체 풀이 갯수는 자기 자신의 최댓값 기준 꺾은선으로
-            const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
-            const linePath = withRate.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d.quizTotal).toFixed(1)}`).join(' ');
-            const lineDots = withRate.map((d, i) =>
-                `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfTotal(d.quizTotal).toFixed(1)}" r="2.5" fill="#8b5cf6"><title>${d.date}: 전체 ${d.quizTotal}문제</title></circle>`
-            ).join('');
-
-            container.innerHTML = `
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
-                    ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${lineDots}
-                    ${recordChartXLabels(withRate, xOf, height)}
-                </svg>
-            `;
-        }
-
-        // AI 첨삭 차트: 일별 횟수 막대그래프
-        function renderAiChart(series) {
-            const container = document.getElementById('record-ai-chart');
-            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
-
-            const width = CHART_VIEW_WIDTH;
-            const height = 140;
-            const padding = { top: 16, right: 12, bottom: 28, left: 24 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-            const baseY = height - padding.bottom;
-
-            const maxVal = Math.max(1, ...series.map(d => d.aiSessions));
-            const groupWidth = chartW / series.length;
-            const barWidth = Math.min(10, groupWidth * 0.6);
-            const xOfGroup = (i) => padding.left + i * groupWidth + groupWidth / 2;
-
-            let bars = '';
-            series.forEach((d, i) => {
-                const barH = (d.aiSessions / maxVal) * chartH;
-                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"><title>${d.date}: ${d.aiSessions}회</title></rect>`;
-            });
-
-            container.innerHTML = `
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
-                    ${bars}
-                    ${recordChartXLabels(series, xOfGroup, height)}
-                </svg>
-            `;
-        }
-
-        function toggleMobileMenu() {
-            if (isMenuCollapsed) expandMobileMenu();
-            else collapseMobileMenu();
-        }
-
-        function collapseMobileMenu() {
-            const menu = document.getElementById('sidebar-menu');
-            const icon = document.getElementById('menu-toggle-icon');
-            menu.classList.add('hidden', 'md:flex');
-            icon.className = "fa-solid fa-chevron-down text-sm";
-            isMenuCollapsed = true;
-        }
-
-        function expandMobileMenu() {
-            const menu = document.getElementById('sidebar-menu');
-            const icon = document.getElementById('menu-toggle-icon');
-            menu.classList.remove('hidden');
-            icon.className = "fa-solid fa-chevron-up text-sm";
-            isMenuCollapsed = false;
-        }
-
-        function changeTab(tabId) {
-            activeTab = tabId;
-            document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            
-            if (window.innerWidth < 768) {
-                collapseMobileMenu();
-            }
-
-            const btns = {
-                'list': 'nav-list',
-                'cards': 'nav-cards',
-                'quiz': 'nav-quiz',
-                'ai-feedback': 'nav-ai',
-                'records': 'nav-records'
-            };
-            
-            Object.keys(btns).forEach(key => {
-                const el = document.getElementById(btns[key]);
-                if (key === tabId) {
-                    el.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
-                } else {
-                    el.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
+                let verbClassText = '';
+                if (isVerb) {
+                    if (w.verbClass === 'regular') {
+                        verbClassText = '규칙';
+                    } else {
+                        verbClassText = `불규칙(${w.irregularType || '기타'})`;
+                    }
                 }
+
+                html += `
+                <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
+                    <div class="space-y-4">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2 flex-wrap min-w-0">
+                                <h3 class="text-xl font-extrabold text-slate-900 tracking-tight break-all">
+                                    ${w.word}
+                                </h3>
+                                ${badgeMarkup}
+                                <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                    <i class="fa-solid fa-check text-xs"></i>
+                                </button>
+                                <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
+                                    <i class="fa-solid fa-pen text-xs"></i>
+                                </button>
+                                <button onclick="deleteWord('${w.id}', event)" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-slate-400 flex items-center justify-center transition-all">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Meaning section -->
+                        <div class="space-y-1">
+                            <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
+                                <span>뜻:</span>
+                                <strong class="text-slate-800 font-bold">${w.meaning}</strong>
+                            </p>
+                        </div>
+
+                        <!-- 동사 변형표 개편 -->
+                        ${isVerb && w.conjugations && Object.values(w.conjugations).some(v => v) ? `
+                        <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="block text-[9px] font-bold text-indigo-500 tracking-wider uppercase">
+                                    현재시제 <span class="text-indigo-600 font-extrabold ml-1">(${verbClassText})</span>
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                                ${getConjugationCellMarkup('yo', w.conjugations.yo, w.verbClass, w.irregularType)}
+                                ${getConjugationCellMarkup('tú', w.conjugations.tu, w.verbClass, w.irregularType)}
+                                ${getConjugationCellMarkup('él', w.conjugations.el, w.verbClass, w.irregularType)}
+                                ${getConjugationCellMarkup('nos', w.conjugations.nos, w.verbClass, w.irregularType)}
+                                ${getConjugationCellMarkup('vos', w.conjugations.vos, w.verbClass, w.irregularType)}
+                                ${getConjugationCellMarkup('ellos', w.conjugations.ellos, w.verbClass, w.irregularType)}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <!-- Example Sentences -->
+                        ${w.example ? `
+                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
+                            <span class="block text-[8px] font-black text-violet-500 uppercase">Ejemplo (예문)</span>
+                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
+                            <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- 핵심만 정리된 노트 -->
+                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-line font-medium -mt-2"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                </div>
+                `;
             });
 
-            if (tabId === 'cards') {
-                currentFlashcardIndex = 0;
-                isFlashcardFlipped = false;
-                document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
-                shuffleFlashcards();
-                renderFlashcard();
-            } else if (tabId === 'quiz') {
-                initQuizTab();
-            } else if (tabId === 'ai-feedback') {
-                resetKoEsMissionState();
-            } else if (tabId === 'records') {
-                setRecordRange('7d');
-            }
+            grid.innerHTML = html;
         }
 
-        function triggerPunchLogo() {
-            AudioFX.playPunch();
-            
-            const logo = document.getElementById('header-logo');
-            logo.classList.add('punch-effect-right');
-            setTimeout(() => logo.classList.remove('punch-effect-right'), 200);
-        }
-
-        function updateStats() {
-            const total = vocabulary.length;
-            const mastered = vocabulary.filter(w => w.mastered).length;
-            
-            document.getElementById('header-total-vocab').innerText = `${total}개`;
-            document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
-
-            const todayStr = getLocalDateString();
-            document.getElementById('header-today-date').innerText = todayStr.slice(5).replace('-', '/'); // MM/DD
-            document.getElementById('header-today-date').title = todayStr;
-        }
+        // TAB 2: FLASHCARD PLAYGROUND LOGICS
