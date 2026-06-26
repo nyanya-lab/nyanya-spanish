@@ -450,7 +450,10 @@
 
                         <div class="bg-fuchsia-50 border border-fuchsia-100 p-5 rounded-2xl space-y-2">
                             <div class="flex items-center justify-between gap-2">
-                                <span id="question-topic-badge" class="text-xs bg-fuchsia-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">질문 ✨</span>
+                                <button id="question-topic-reveal-btn" onclick="toggleTopicReveal()" class="text-xs bg-white text-fuchsia-600 px-2.5 py-0.5 rounded-full font-bold border border-fuchsia-200 transition-all active:scale-95 flex items-center gap-1">
+                                    <i class="fa-solid fa-eye text-[10px]"></i>
+                                    <span id="question-topic-badge">주제 보기</span>
+                                </button>
                                 <div class="flex gap-2">
                                     <button onclick="openTopicPickerModal()" class="bg-white hover:bg-fuchsia-100 text-fuchsia-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-fuchsia-200 transition-all active:scale-95 flex items-center gap-1">
                                         <i class="fa-solid fa-list-check"></i>
@@ -944,7 +947,7 @@
                 </button>
             </div>
 
-            <div class="p-6 space-y-5">
+            <div class="px-6 pt-3 pb-6 space-y-5">
                 <!-- 질문 등록 -->
                 <div class="bg-fuchsia-50 border border-fuchsia-100 rounded-2xl p-4 space-y-3">
                     <span class="text-xs font-bold text-fuchsia-700">새 질문 등록</span>
