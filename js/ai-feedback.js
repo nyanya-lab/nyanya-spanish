@@ -86,7 +86,7 @@ let currentAiMode = 'ko-es';
             refreshTopicsDatalist();
         }
 
-        // 주제별로 묶어서 보여주기 (+ 검색 필터)
+        // 주제별로 묶어서 보여주기 (+ 검색 필터 + 수정 버튼)
         function renderCustomQuestionsList() {
             const box = document.getElementById('question-list-box');
             if (!box) return;
@@ -101,7 +101,6 @@ let currentAiMode = 'ko-es';
                 return;
             }
 
-            // 주제별 그룹핑
             const groups = {};
             filtered.forEach(q => {
                 const t = q.topic || '기타';
@@ -116,8 +115,9 @@ let currentAiMode = 'ko-es';
                         <span class="text-[10px] text-slate-400">${qs.length}개</span>
                     </div>
                     ${qs.map(q => `
-                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1">
-                            <span class="text-slate-700 font-semibold truncate pr-2">${q.question}</span>
+                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1 gap-2">
+                            <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
+                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-fuchsia-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
                             <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
                     `).join('')}
@@ -125,7 +125,39 @@ let currentAiMode = 'ko-es';
             `).join('');
         }
 
-        // ── 랜덤 질문 주제 선택 모달 ──
+        // ── 질문 수정 ──
+        function openQuestionEditModal(id) {
+            const q = customQuestions.find(item => item.id === id);
+            if (!q) return;
+            document.getElementById('edit-question-id').value = q.id;
+            document.getElementById('edit-question-topic-input').value = q.topic || '기타';
+            document.getElementById('edit-question-input').value = q.question;
+            document.getElementById('question-edit-modal').classList.remove('hidden');
+        }
+        function closeQuestionEditModal() {
+            document.getElementById('question-edit-modal').classList.add('hidden');
+        }
+        function saveEditedQuestion() {
+            const id = document.getElementById('edit-question-id').value;
+            const newText = document.getElementById('edit-question-input').value.trim();
+            const newTopic = document.getElementById('edit-question-topic-input').value.trim() || '기타';
+            if (!newText) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
+            }
+            const q = customQuestions.find(item => item.id === id);
+            if (q) {
+                q.question = newText;
+                q.topic = newTopic;
+                saveToStorage();
+                renderCustomQuestionsList();
+                refreshTopicsDatalist();
+                closeQuestionEditModal();
+                showToast("질문을 수정했어요! ✏️", "success");
+            }
+        }
+
+        // ── 랜덤 질문 주제 설정 모달 (체크박스 다중선택, 설정 저장) ──
         function openTopicPickerModal() {
             if (customQuestions.length === 0) {
                 showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
@@ -134,37 +166,71 @@ let currentAiMode = 'ko-es';
             const listBox = document.getElementById('topic-picker-list');
             const topics = [...new Set(customQuestions.map(q => q.topic || '기타'))];
 
-            let html = `
-                <button onclick="pickRandomQuestion('__ALL__')" class="w-full text-left bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 flex items-center justify-between">
-                    <span>전체 주제에서 뽑기</span>
-                    <span class="text-xs opacity-80">${customQuestions.length}개</span>
-                </button>
-            `;
-            html += topics.map(t => {
+            // 저장된 선택이 비어있으면(=전체) 모두 체크된 상태로 보여줌
+            const allSelected = selectedQuestionTopics.length === 0;
+
+            listBox.innerHTML = `
+                <label class="flex items-center gap-2 bg-fuchsia-50 px-4 py-3 rounded-xl cursor-pointer border border-fuchsia-100">
+                    <input type="checkbox" id="topic-check-all" onchange="toggleAllTopicChecks(this.checked)" ${allSelected ? 'checked' : ''} class="w-4 h-4 accent-fuchsia-600">
+                    <span class="text-sm font-bold text-fuchsia-700">전체 주제</span>
+                </label>
+                <div class="h-px bg-slate-100 my-1"></div>
+            ` + topics.map(t => {
                 const count = customQuestions.filter(q => (q.topic || '기타') === t).length;
+                const checked = allSelected || selectedQuestionTopics.includes(t);
                 return `
-                    <button onclick="pickRandomQuestion('${t.replace(/'/g, "\\'")}')" class="w-full text-left bg-slate-50 hover:bg-fuchsia-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-between border border-slate-100">
-                        <span>${t}</span>
+                    <label class="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 rounded-xl cursor-pointer border border-slate-100 hover:bg-fuchsia-50 transition-colors">
+                        <span class="flex items-center gap-2">
+                            <input type="checkbox" data-topic-check="${t.replace(/"/g, '&quot;')}" onchange="onTopicCheckChange()" ${checked ? 'checked' : ''} class="w-4 h-4 accent-fuchsia-600">
+                            <span class="text-sm font-semibold text-slate-700">${t}</span>
+                        </span>
                         <span class="text-xs text-slate-400">${count}개</span>
-                    </button>
+                    </label>
                 `;
             }).join('');
 
-            listBox.innerHTML = html;
             document.getElementById('topic-picker-modal').classList.remove('hidden');
         }
         function closeTopicPickerModal() {
             document.getElementById('topic-picker-modal').classList.add('hidden');
         }
-
-        function pickRandomQuestion(topic) {
+        function toggleAllTopicChecks(checked) {
+            document.querySelectorAll('[data-topic-check]').forEach(cb => { cb.checked = checked; });
+        }
+        function onTopicCheckChange() {
+            // 개별 체크가 모두 켜졌는지 보고 '전체' 체크 상태 동기화
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const allChecked = all.length > 0 && all.every(cb => cb.checked);
+            const allBox = document.getElementById('topic-check-all');
+            if (allBox) allBox.checked = allChecked;
+        }
+        function saveTopicSelection() {
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const checkedTopics = all.filter(cb => cb.checked).map(cb => cb.getAttribute('data-topic-check'));
+            if (checkedTopics.length === 0) {
+                showToast("최소 한 개 주제는 선택해 주세요!", "error");
+                return;
+            }
+            // 전부 선택이면 빈 배열로 저장(= 전체)해서 새 주제가 생겨도 자동 포함되게 함
+            selectedQuestionTopics = (checkedTopics.length === all.length) ? [] : checkedTopics;
+            saveToStorage();
             closeTopicPickerModal();
-            const pool = (topic === '__ALL__' || !topic)
+            const label = selectedQuestionTopics.length === 0 ? '전체 주제' : selectedQuestionTopics.join(', ');
+            showToast(`랜덤 뽑기 주제를 '${label}'(으)로 설정했어요! 🎯`, "success");
+        }
+
+        function pickRandomQuestion() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
+                return;
+            }
+            // 저장된 주제 설정에 따라 후보군 결정 (빈 배열이면 전체)
+            const pool = selectedQuestionTopics.length === 0
                 ? customQuestions
-                : customQuestions.filter(q => (q.topic || '기타') === topic);
+                : customQuestions.filter(q => selectedQuestionTopics.includes(q.topic || '기타'));
 
             if (pool.length === 0) {
-                showToast("그 주제에 등록된 질문이 없어요!", "error");
+                showToast("설정한 주제에 질문이 없어요. '주제 설정'에서 다시 골라주세요!", "error");
                 return;
             }
             const randIdx = Math.floor(Math.random() * pool.length);
