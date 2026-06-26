@@ -374,6 +374,64 @@ let vocabulary = [];
         let currentRecordRange = '7d';
 
         // [냐냐 PATCH] 학습기록 그래프 카드 접기/펼치기
+        // [냐냐 PATCH] 학습 수준 데이터를 사용자가 직접 볼 수 있게 보기 좋게 렌더링
+        function renderLearnerProfileDisplay() {
+            const box = document.getElementById('learner-profile-display');
+            if (!box) return;
+            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
+
+            if (!totalAnswered || totalAnswered < 5) {
+                box.innerHTML = `<p class="text-slate-400 text-xs leading-relaxed">아직 데이터가 적어요! 퀴즈나 AI 첨삭을 ${5 - (totalAnswered || 0)}번 더 하면 수준 분석이 시작돼요. (현재 ${totalAnswered || 0}/5)</p>`;
+                return;
+            }
+
+            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            let level = "초급";
+            let levelColor = "text-emerald-600";
+            if (accuracy >= 85 && vocabulary.length >= 50) { level = "중상급"; levelColor = "text-violet-600"; }
+            else if (accuracy >= 70) { level = "중급"; levelColor = "text-blue-600"; }
+
+            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
+            const weakPos = Object.entries(wrongByPos || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+            let html = `
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-white/70 rounded-2xl p-3 text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold">추정 수준</span>
+                        <span class="text-lg font-black ${levelColor}">${level}</span>
+                    </div>
+                    <div class="bg-white/70 rounded-2xl p-3 text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold">전체 정답률</span>
+                        <span class="text-lg font-black text-slate-700">${accuracy}%</span>
+                    </div>
+                </div>
+                <p class="text-[11px] text-slate-400 mb-3">총 ${totalAnswered}문제 풀이 (퀴즈 + AI 첨삭 합산)</p>
+            `;
+
+            if (weakPos.length > 0) {
+                html += `<div class="mb-2">
+                    <span class="text-[11px] font-bold text-slate-500">자주 틀리는 품사</span>
+                    <div class="flex flex-wrap gap-1.5 mt-1">
+                        ${weakPos.map(([pos, cnt]) => `<span class="text-[11px] font-semibold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full border border-rose-100">${posNameKo[pos] || pos} ${cnt}회</span>`).join('')}
+                    </div>
+                </div>`;
+            }
+            if (weakGrammar.length > 0) {
+                html += `<div>
+                    <span class="text-[11px] font-bold text-slate-500">자유 작문에서 자주 틀리는 문법</span>
+                    <div class="flex flex-wrap gap-1.5 mt-1">
+                        ${weakGrammar.map(([t, cnt]) => `<span class="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">${t} ${cnt}회</span>`).join('')}
+                    </div>
+                </div>`;
+            }
+            if (weakPos.length === 0 && weakGrammar.length === 0) {
+                html += `<p class="text-[11px] text-emerald-600 font-semibold">아직 약점으로 잡힌 부분이 없어요. 잘하고 있어요! 🎉</p>`;
+            }
+
+            box.innerHTML = html;
+        }
+
         function toggleChartCard(bodyId, btnEl) {
             const body = document.getElementById(bodyId);
             if (!body) return;
@@ -506,6 +564,7 @@ let vocabulary = [];
             renderGrowthDailyChart(series);
             renderQuizChart(series);
             renderAiChart(series);
+            renderLearnerProfileDisplay();
         }
 
         function recordChartXLabels(series, xOf, height) {
@@ -582,27 +641,37 @@ let vocabulary = [];
             const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
+            const baseY = height - padding.bottom;
             const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
-            const yOfPercent = (val) => padding.top + chartH - (val / 100) * chartH;
+            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
+            const barWidth = Math.min(8, groupWidth * 0.5);
 
-            const buildPath = (yFn, key) => withRatio.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yFn(d[key]).toFixed(1)}`).join(' ');
-            const buildDots = (yFn, key, color, label, suffix) => withRatio.map((d, i) => {
+            // [냐냐 PATCH] 마스터 비율(%)은 막대그래프로 표시
+            let bars = '';
+            withRatio.forEach((d, i) => {
+                const barH = (d.masteredRatio / 100) * chartH;
+                const text = `${d.date}: 마스터 비율 ${Math.round(d.masteredRatio)}%`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#10b981" opacity="0.7" rx="1.5"/>`;
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+            });
+
+            // 등록 단어 수는 꺾은선
+            const linePath = withRatio.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(d.registeredTotal).toFixed(1)}`).join(' ');
+            const lineDots = withRatio.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
-                const cy = yFn(d[key]).toFixed(1);
-                const valueText = key === 'masteredRatio' ? Math.round(d[key]) : d[key];
-                const text = `${d.date}: ${label} ${valueText}${suffix}`.replace(/'/g, "\\'");
-                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${color}"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+                const cy = yOfCount(d.registeredTotal).toFixed(1);
+                const text = `${d.date}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             }).join('');
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
-                    <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="#cbd5e1" stroke-width="1"/>
-                    <path d="${buildPath(yOfCount, 'registeredTotal')}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="${buildPath(yOfPercent, 'masteredRatio')}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-                    ${buildDots(yOfCount, 'registeredTotal', '#8b5cf6', '등록 단어', '개')}
-                    ${buildDots(yOfPercent, 'masteredRatio', '#10b981', '마스터 비율', '%')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
@@ -629,18 +698,18 @@ let vocabulary = [];
 
             let bars = '';
             series.forEach((d, i) => {
-                const barH = (d.newMasteredCount / maxVal) * chartH;
-                const text = `${d.date}: 신규 마스터 ${d.newMasteredCount}개`.replace(/'/g, "\\'");
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#10b981" opacity="0.7" rx="1.5"/>`;
+                const barH = (d.newWordsCount / maxVal) * chartH;
+                const text = `${d.date}: 신규 등록 ${d.newWordsCount}개`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#8b5cf6" opacity="0.7" rx="1.5"/>`;
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
 
-            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d.newWordsCount).toFixed(1)}`).join(' ');
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d.newMasteredCount).toFixed(1)}`).join(' ');
             const lineDots = series.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
-                const cy = yOf(d.newWordsCount).toFixed(1);
-                const text = `${d.date}: 신규 등록 ${d.newWordsCount}개`.replace(/'/g, "\\'");
-                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+                const cy = yOf(d.newMasteredCount).toFixed(1);
+                const text = `${d.date}: 신규 마스터 ${d.newMasteredCount}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#10b981"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             }).join('');
 
             container.innerHTML = `
@@ -649,7 +718,7 @@ let vocabulary = [];
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${linePath}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
