@@ -877,6 +877,11 @@ let vocabulary = [];
             } else if (tabId === 'ai-feedback') {
                 resetKoEsMissionState();
             } else if (tabId === 'records') {
+                // [냐냐 PATCH] 학습기록 탭 열 때마다 '숫자 요약'은 항상 접힌 상태로 시작
+                const statsBody = document.getElementById('summary-stats-body');
+                if (statsBody) statsBody.classList.add('hidden');
+                const statsChevron = document.querySelector("button[onclick=\"toggleChartCard('summary-stats-body', this)\"] i");
+                if (statsChevron) statsChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
             }
         }
