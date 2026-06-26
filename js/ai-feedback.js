@@ -28,7 +28,7 @@ let currentAiMode = 'ko-es';
             } else if (mode === 'es-ko') {
                 document.getElementById('ai-free-input-es').value = '';
             } else if (mode === 'question') {
-                renderCustomQuestionsList();
+                // 질문 목록은 '질문 관리' 모달에서 보여주므로 여기선 별도 처리 불필요
             }
         }
 
@@ -42,57 +42,136 @@ let currentAiMode = 'ko-es';
         // ============================================================
         // [냐냐 PATCH] 질문에 답하기 코너
         // ============================================================
-        function toggleQuestionManageBox() {
-            const box = document.getElementById('question-manage-box');
-            const icon = document.getElementById('question-manage-toggle-icon');
-            const isHidden = box.classList.contains('hidden');
-            box.classList.toggle('hidden');
-            icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
+        // ── 질문 관리 모달 ──
+        function openQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.remove('hidden');
+            document.getElementById('question-search-input').value = '';
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+        }
+        function closeQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.add('hidden');
+        }
+
+        // 등록된 주제들을 모아서 입력창 자동완성(datalist)에 채움
+        function refreshTopicsDatalist() {
+            const datalist = document.getElementById('question-topics-datalist');
+            if (!datalist) return;
+            const topics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
+            datalist.innerHTML = topics.map(t => `<option value="${t.replace(/"/g, '&quot;')}">`).join('');
         }
 
         function addCustomQuestion() {
             const input = document.getElementById('new-question-input');
+            const topicInput = document.getElementById('new-question-topic-input');
             const text = input.value.trim();
+            const topic = topicInput.value.trim() || '기타';
             if (!text) {
                 showToast("질문 내용을 입력해 주세요!", "error");
                 return;
             }
-            customQuestions.push({ id: 'q-' + Date.now(), question: text });
+            customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
             input.value = '';
+            // 주제는 연속 등록 편하게 유지
             saveToStorage();
             renderCustomQuestionsList();
-            showToast("질문을 등록했어요! 📝", "success");
+            refreshTopicsDatalist();
+            showToast(`'${topic}' 주제에 질문을 등록했어요! 📝`, "success");
         }
 
         function deleteCustomQuestion(id) {
             customQuestions = customQuestions.filter(q => q.id !== id);
             saveToStorage();
             renderCustomQuestionsList();
+            refreshTopicsDatalist();
         }
 
+        // 주제별로 묶어서 보여주기 (+ 검색 필터)
         function renderCustomQuestionsList() {
             const box = document.getElementById('question-list-box');
             if (!box) return;
-            if (customQuestions.length === 0) {
-                box.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">등록된 질문이 없어요. 위에서 추가해 보세요!</p>';
+            const searchVal = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
+
+            const filtered = customQuestions.filter(q =>
+                !searchVal || q.question.toLowerCase().includes(searchVal) || (q.topic || '').toLowerCase().includes(searchVal)
+            );
+
+            if (filtered.length === 0) {
+                box.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">${customQuestions.length === 0 ? '등록된 질문이 없어요. 위에서 추가해 보세요!' : '검색 결과가 없어요.'}</p>`;
                 return;
             }
-            box.innerHTML = customQuestions.map(q => `
-                <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
-                    <span class="text-slate-700 font-semibold truncate pr-2">${q.question}</span>
-                    <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+
+            // 주제별 그룹핑
+            const groups = {};
+            filtered.forEach(q => {
+                const t = q.topic || '기타';
+                if (!groups[t]) groups[t] = [];
+                groups[t].push(q);
+            });
+
+            box.innerHTML = Object.entries(groups).map(([topic, qs]) => `
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-extrabold text-fuchsia-600 bg-fuchsia-50 px-2 py-0.5 rounded-full">${topic}</span>
+                        <span class="text-[10px] text-slate-400">${qs.length}개</span>
+                    </div>
+                    ${qs.map(q => `
+                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1">
+                            <span class="text-slate-700 font-semibold truncate pr-2">${q.question}</span>
+                            <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    `).join('')}
                 </div>
             `).join('');
         }
 
-        function pickRandomQuestion() {
+        // ── 랜덤 질문 주제 선택 모달 ──
+        function openTopicPickerModal() {
             if (customQuestions.length === 0) {
-                showToast("먼저 질문을 등록해 주세요! '내 질문 목록 관리'를 눌러서 추가할 수 있어요.", "error");
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
                 return;
             }
-            const randIdx = Math.floor(Math.random() * customQuestions.length);
-            currentQuestionForAnswer = customQuestions[randIdx];
+            const listBox = document.getElementById('topic-picker-list');
+            const topics = [...new Set(customQuestions.map(q => q.topic || '기타'))];
+
+            let html = `
+                <button onclick="pickRandomQuestion('__ALL__')" class="w-full text-left bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 flex items-center justify-between">
+                    <span>전체 주제에서 뽑기</span>
+                    <span class="text-xs opacity-80">${customQuestions.length}개</span>
+                </button>
+            `;
+            html += topics.map(t => {
+                const count = customQuestions.filter(q => (q.topic || '기타') === t).length;
+                return `
+                    <button onclick="pickRandomQuestion('${t.replace(/'/g, "\\'")}')" class="w-full text-left bg-slate-50 hover:bg-fuchsia-50 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-between border border-slate-100">
+                        <span>${t}</span>
+                        <span class="text-xs text-slate-400">${count}개</span>
+                    </button>
+                `;
+            }).join('');
+
+            listBox.innerHTML = html;
+            document.getElementById('topic-picker-modal').classList.remove('hidden');
+        }
+        function closeTopicPickerModal() {
+            document.getElementById('topic-picker-modal').classList.add('hidden');
+        }
+
+        function pickRandomQuestion(topic) {
+            closeTopicPickerModal();
+            const pool = (topic === '__ALL__' || !topic)
+                ? customQuestions
+                : customQuestions.filter(q => (q.topic || '기타') === topic);
+
+            if (pool.length === 0) {
+                showToast("그 주제에 등록된 질문이 없어요!", "error");
+                return;
+            }
+            const randIdx = Math.floor(Math.random() * pool.length);
+            currentQuestionForAnswer = pool[randIdx];
             document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            const topicBadge = document.getElementById('question-topic-badge');
+            if (topicBadge) topicBadge.innerText = currentQuestionForAnswer.topic || '질문';
             document.getElementById('question-answer-input').value = '';
             document.getElementById('ai-feedback-result').classList.add('hidden');
             AudioFX.playPunch();
