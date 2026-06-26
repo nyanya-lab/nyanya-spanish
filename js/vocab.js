@@ -890,14 +890,7 @@ function togglePosFields() {
                         </div>
                         ` : ''}
 
-                        <!-- Example Sentences -->
-                        ${w.example ? `
-                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
-                            <span class="block text-[8px] font-black text-violet-500 uppercase">Ejemplo (예문)</span>
-                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
-                            <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
-                        </div>
-                        ` : ''}
+                        <!-- 관용구 먼저, 예문 나중 (순서 변경) -->
                         ${(() => {
                             const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                             if (idiomList.length === 0) return '';
@@ -908,12 +901,19 @@ function togglePosFields() {
                                 </div>
                             `).join('');
                             return `
-                        <div class="bg-slate-50 border-l-2 border-fuchsia-400 rounded-r-xl p-2.5 text-xs">
-                            <span class="block text-[8px] font-black text-fuchsia-500 uppercase mb-1">Expresión (관용구)</span>
+                        <div class="bg-slate-50 border-l-2 border-indigo-400 rounded-r-xl p-2.5 text-xs">
+                            <span class="block text-[8px] font-black text-indigo-500 uppercase mb-1">Expresión (관용구)</span>
                             ${rows}
                         </div>
                             `;
                         })()}
+                        ${w.example ? `
+                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
+                            <span class="block text-[8px] font-black text-violet-500 uppercase">Ejemplo (예문)</span>
+                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
+                            <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
+                        </div>
+                        ` : ''}
                     </div>
 
                     <!-- 핵심만 정리된 노트 -->
