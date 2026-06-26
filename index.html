@@ -434,40 +434,29 @@
 
                     <!-- MODE C: QUESTION & ANSWER PRACTICE -->
                     <div id="ai-pane-question" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div>
-                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full bg-fuchsia-600 animate-pulse"></span>
-                                <span>질문에 스페인어로 답하기</span>
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-1">내가 등록한 질문 중 하나가 랜덤으로 나와요. 스페인어로 답해보세요!</p>
-                        </div>
-
-                        <!-- 질문 관리 (등록/삭제) -->
-                        <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-600">내 질문 목록 관리</span>
-                                <button id="question-manage-toggle-btn" type="button" onclick="toggleQuestionManageBox()" class="w-6 h-6 rounded-full bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center transition-all">
-                                    <i id="question-manage-toggle-icon" class="fa-solid fa-plus text-xs"></i>
-                                </button>
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-fuchsia-600 animate-pulse"></span>
+                                    <span>질문에 스페인어로 답하기</span>
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">등록한 질문 중 하나가 랜덤으로 나와요. 스페인어로 답해보세요!</p>
                             </div>
-                            <div id="question-manage-box" class="hidden space-y-3">
-                                <div class="flex gap-2">
-                                    <input type="text" id="new-question-input" placeholder="예: ¿Qué tiempo hace hoy?" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500">
-                                    <button onclick="addCustomQuestion()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">추가</button>
-                                </div>
-                                <div id="question-list-box" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
-                            </div>
+                            <button onclick="openQuestionManageModal()" class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5">
+                                <i class="fa-solid fa-gear"></i>
+                                <span>질문 관리</span>
+                            </button>
                         </div>
 
                         <div class="bg-fuchsia-50 border border-fuchsia-100 p-5 rounded-2xl space-y-2">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs bg-fuchsia-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">질문 ✨</span>
-                                <button onclick="pickRandomQuestion()" class="bg-white hover:bg-fuchsia-100 text-fuchsia-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-fuchsia-200 transition-all active:scale-95 flex items-center gap-1">
+                                <span id="question-topic-badge" class="text-xs bg-fuchsia-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">질문 ✨</span>
+                                <button onclick="openTopicPickerModal()" class="bg-white hover:bg-fuchsia-100 text-fuchsia-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-fuchsia-200 transition-all active:scale-95 flex items-center gap-1">
                                     <i class="fa-solid fa-dice"></i>
                                     <span>랜덤 질문 뽑기</span>
                                 </button>
                             </div>
-                            <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! 위에서 질문을 등록하고 "랜덤 질문 뽑기"를 눌러보세요.</h3>
+                            <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! '질문 관리'에서 질문을 등록하고 '랜덤 질문 뽑기'를 눌러보세요.</h3>
                         </div>
 
                         <div class="space-y-2">
@@ -915,6 +904,55 @@
     </div>
 
     <!-- PRESET 4: BACKUP / TRANSFER TO OTHER DEVICE MODAL -->
+    <!-- 질문 관리 모달 -->
+    <div id="question-manage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">💬 질문 관리</h3>
+                <button onclick="closeQuestionManageModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5">
+                <!-- 질문 등록 -->
+                <div class="bg-fuchsia-50 border border-fuchsia-100 rounded-2xl p-4 space-y-3">
+                    <span class="text-xs font-bold text-fuchsia-700">새 질문 등록</span>
+                    <div class="space-y-2">
+                        <input type="text" id="new-question-topic-input" placeholder="주제 (예: 일상, 음식, 날씨...)" autocomplete="off" list="question-topics-datalist" class="w-full bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500">
+                        <datalist id="question-topics-datalist"></datalist>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-question-input" placeholder="질문 (예: ¿Qué tiempo hace hoy?)" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500">
+                            <button onclick="addCustomQuestion()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0">추가</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 검색 -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+                    <input type="text" id="question-search-input" oninput="renderCustomQuestionsList()" placeholder="질문/주제 검색..." autocomplete="off" class="w-full bg-slate-50 pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500">
+                </div>
+
+                <!-- 주제별 질문 목록 -->
+                <div id="question-list-box" class="space-y-3 max-h-72 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 랜덤 질문 주제 선택 모달 -->
+    <div id="topic-picker-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl max-h-[80vh] overflow-y-auto flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">🎲 어떤 주제로 뽑을까요?</h3>
+                <button onclick="closeTopicPickerModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="topic-picker-list" class="p-5 space-y-2"></div>
+        </div>
+    </div>
+
     <div id="backup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
