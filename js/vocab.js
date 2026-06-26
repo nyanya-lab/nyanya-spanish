@@ -900,13 +900,19 @@ function togglePosFields() {
                         ` : ''}
                         ${(() => {
                             const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                            return idiomList.map(item => `
-                        <div class="bg-slate-50 border-l-2 border-fuchsia-400 rounded-r-xl p-2.5 text-xs">
-                            <span class="block text-[8px] font-black text-fuchsia-500 uppercase">Expresión (관용구)</span>
-                            <p class="font-bold text-slate-800 mt-0.5 select-all">${item.idiom}</p>
-                            <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
-                        </div>
+                            if (idiomList.length === 0) return '';
+                            const rows = idiomList.map((item, idx) => `
+                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''}">
+                                    <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
+                                    <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
+                                </div>
                             `).join('');
+                            return `
+                        <div class="bg-slate-50 border-l-2 border-fuchsia-400 rounded-r-xl p-2.5 text-xs">
+                            <span class="block text-[8px] font-black text-fuchsia-500 uppercase mb-1">Expresión (관용구)</span>
+                            ${rows}
+                        </div>
+                            `;
                         })()}
                     </div>
 
