@@ -901,7 +901,7 @@ function togglePosFields() {
                                 </div>
                             `).join('');
                             return `
-                        <div class="bg-slate-50 border-l-2 border-indigo-400 rounded-r-xl p-2.5 text-xs">
+                        <div class="bg-indigo-50/60 border-l-2 border-indigo-400 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-indigo-500 uppercase mb-1">Expresión (관용구)</span>
                             ${rows}
                         </div>
