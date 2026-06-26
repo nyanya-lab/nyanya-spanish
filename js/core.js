@@ -373,6 +373,15 @@ let vocabulary = [];
         // ============================================================
         let currentRecordRange = '7d';
 
+        // [냐냐 PATCH] 학습기록 그래프 카드 접기/펼치기
+        function toggleChartCard(bodyId, btnEl) {
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            const chevron = btnEl ? btnEl.querySelector('i') : null;
+            const isHidden = body.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
         function setRecordRange(range) {
             currentRecordRange = range;
             document.querySelectorAll('.record-range-btn').forEach(btn => {
