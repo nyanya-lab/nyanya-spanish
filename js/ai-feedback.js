@@ -92,7 +92,7 @@ let currentAiMode = 'ko-es';
             }
             const randIdx = Math.floor(Math.random() * customQuestions.length);
             currentQuestionForAnswer = customQuestions[randIdx];
-            document.getElementById('question-display-text').innerText = `"${currentQuestionForAnswer.question}"`;
+            document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
             document.getElementById('question-answer-input').value = '';
             document.getElementById('ai-feedback-result').classList.add('hidden');
             AudioFX.playPunch();
@@ -351,7 +351,7 @@ let currentAiMode = 'ko-es';
 
                 aiCurrentWordForMission = targetWord;
                 aiCurrentKoreanSentence = candidateSentence;
-                missionHeading.innerText = `"${aiCurrentKoreanSentence}"`;
+                missionHeading.innerText = aiCurrentKoreanSentence;
                 AudioFX.playPunch();
             } catch (e) {
                 console.warn("AI 미션 생성 실패", e);
