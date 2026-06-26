@@ -576,9 +576,9 @@
                     <div>
                         <button onclick="toggleChartCard('summary-stats-body', this)" class="w-full flex items-center justify-between gap-2 mb-2">
                             <span class="text-xs font-bold text-slate-500">숫자 요약</span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
                         </button>
-                        <div id="summary-stats-body" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div id="summary-stats-body" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
                         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
                             <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
                             <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
