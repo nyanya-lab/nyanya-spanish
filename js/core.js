@@ -22,6 +22,12 @@ let vocabulary = [];
         // (실시간 입력 타이머는 더 이상 사용하지 않음 — AI 추천 버튼으로 대체됨)
 
         window.onload = async function() {
+            // [냐냐 PATCH-진단] dictionary-data.js가 누락되면(업로드 안 됨) 여기서 멈춰서
+            // 모든 버튼이 먹통처럼 보임 → 명확한 안내를 띄워서 원인을 알 수 있게 함
+            if (typeof OFFLINE_DICT_DB === 'undefined' || typeof DEFAULT_VOCABULARY === 'undefined') {
+                alert("필수 파일(dictionary-data.js)이 로드되지 않았어요!\n\nGitHub에 'js/dictionary-data.js' 파일이 업로드됐는지, 그리고 index.html에서 이 파일을 불러오는 줄이 있는지 확인해 주세요.");
+                return;
+            }
             await loadFromStorage();
             renderWordList();
             updateStats();
@@ -436,12 +442,26 @@ let vocabulary = [];
                 }
             }
 
+            let prevRegistered = null;
+            let prevMastered = null;
             const series = dateKeys.map(date => {
                 const log = nyanyaDiary[date];
                 if (log) {
                     if (log.registeredTotal !== undefined) lastRegistered = log.registeredTotal;
                     if (log.masteredTotal !== undefined) lastMastered = log.masteredTotal;
                 }
+                // [냐냐 PATCH] 신규 등록/마스터 수: 명시적 기록이 있으면 그걸 쓰고,
+                // 없으면(예전 데이터) '오늘 누적 - 어제 누적'으로 계산
+                let newWords = (log && log.newWordsCount) || 0;
+                let newMastered = (log && log.newMasteredCount) || 0;
+                if (newWords === 0 && prevRegistered !== null && lastRegistered > prevRegistered) {
+                    newWords = lastRegistered - prevRegistered;
+                }
+                if (newMastered === 0 && prevMastered !== null && lastMastered > prevMastered) {
+                    newMastered = lastMastered - prevMastered;
+                }
+                prevRegistered = lastRegistered;
+                prevMastered = lastMastered;
                 return {
                     date,
                     registeredTotal: lastRegistered,
@@ -449,8 +469,8 @@ let vocabulary = [];
                     quizTotal: (log && log.quizTotal) || 0,
                     quizCorrect: (log && log.quizCorrect) || 0,
                     aiSessions: (log && log.aiSessions) || 0,
-                    newWordsCount: (log && log.newWordsCount) || 0,
-                    newMasteredCount: (log && log.newMasteredCount) || 0
+                    newWordsCount: newWords,
+                    newMasteredCount: newMastered
                 };
             });
 
