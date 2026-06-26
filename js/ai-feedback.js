@@ -236,11 +236,42 @@ let currentAiMode = 'ko-es';
             const randIdx = Math.floor(Math.random() * pool.length);
             currentQuestionForAnswer = pool[randIdx];
             document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
             const topicBadge = document.getElementById('question-topic-badge');
-            if (topicBadge) topicBadge.innerText = currentQuestionForAnswer.topic || '질문';
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (topicBadge) topicBadge.innerText = '주제 보기';
+            if (revealBtn) {
+                revealBtn.classList.remove('bg-fuchsia-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-fuchsia-600');
+                const icon = revealBtn.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
             document.getElementById('question-answer-input').value = '';
             document.getElementById('ai-feedback-result').classList.add('hidden');
             AudioFX.playPunch();
+        }
+
+        // [냐냐 PATCH] 주제 보기/숨기기 토글
+        function toggleTopicReveal() {
+            const topicBadge = document.getElementById('question-topic-badge');
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (!topicBadge || !revealBtn || !currentQuestionForAnswer) {
+                if (!currentQuestionForAnswer) showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+                return;
+            }
+            const icon = revealBtn.querySelector('i');
+            const isHidden = topicBadge.innerText === '주제 보기';
+            if (isHidden) {
+                topicBadge.innerText = currentQuestionForAnswer.topic || '기타';
+                revealBtn.classList.remove('bg-white', 'text-fuchsia-600');
+                revealBtn.classList.add('bg-fuchsia-600', 'text-white');
+                if (icon) icon.className = 'fa-solid fa-eye-slash text-[10px]';
+            } else {
+                topicBadge.innerText = '주제 보기';
+                revealBtn.classList.remove('bg-fuchsia-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-fuchsia-600');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
         }
 
         async function submitQuestionAnswer() {
