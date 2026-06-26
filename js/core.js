@@ -13,6 +13,7 @@ let vocabulary = [];
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
         let customQuestions = [];
         let currentQuestionForAnswer = null;
+        let selectedQuestionTopics = []; // [] = 전체 주제. 랜덤 뽑기 주제 선택을 저장해서 유지
 
         // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
@@ -134,7 +135,8 @@ let vocabulary = [];
                 vocabulary: vocabulary,
                 nyanyaDiary: nyanyaDiary,
                 learnerProfile: learnerProfile,
-                customQuestions: customQuestions
+                customQuestions: customQuestions,
+                selectedQuestionTopics: selectedQuestionTopics
             };
             const json = JSON.stringify(payload);
 
@@ -236,11 +238,13 @@ let vocabulary = [];
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 customQuestions = payload.customQuestions || [];
+                selectedQuestionTopics = payload.selectedQuestionTopics || [];
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 customQuestions = [];
+                selectedQuestionTopics = [];
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
