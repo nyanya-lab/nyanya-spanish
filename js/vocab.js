@@ -774,13 +774,24 @@ function togglePosFields() {
 
             // [PATCH-20] 정렬 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
             const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
+
+            // [냐냐 PATCH] 정렬용으로만 맨 앞 정관사/부정관사를 떼어냄 (단수·복수 모두)
+            // 예: "el libro" → "libro", "las casas" → "casas". 화면에 보이는 단어는 그대로 유지됨.
+            const stripArticle = (w) => {
+                return (w || '')
+                    .toLowerCase()
+                    .trim()
+                    .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '')
+                    .trim();
+            };
+
             let filteredSorted = filtered;
             if (sortMode === 'oldest') {
                 filteredSorted = [...filtered].reverse();
             } else if (sortMode === 'alpha-asc') {
-                filteredSorted = [...filtered].sort((a, b) => a.word.localeCompare(b.word));
+                filteredSorted = [...filtered].sort((a, b) => stripArticle(a.word).localeCompare(stripArticle(b.word)));
             } else if (sortMode === 'alpha-desc') {
-                filteredSorted = [...filtered].sort((a, b) => b.word.localeCompare(a.word));
+                filteredSorted = [...filtered].sort((a, b) => stripArticle(b.word).localeCompare(stripArticle(a.word)));
             }
             // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
