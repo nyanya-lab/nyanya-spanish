@@ -409,25 +409,22 @@ let vocabulary = [];
                 <p class="text-[11px] text-slate-400 mb-3">총 ${totalAnswered}문제 풀이 (퀴즈 + AI 첨삭 합산)</p>
             `;
 
-            if (weakPos.length > 0) {
-                html += `<div class="mb-2">
-                    <span class="text-[11px] font-bold text-slate-500">자주 틀리는 품사</span>
-                    <div class="flex flex-wrap gap-1.5 mt-1">
-                        ${weakPos.map(([pos, cnt]) => `<span class="text-[11px] font-semibold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full border border-rose-100">${posNameKo[pos] || pos} ${cnt}회</span>`).join('')}
-                    </div>
-                </div>`;
-            }
-            if (weakGrammar.length > 0) {
-                html += `<div>
-                    <span class="text-[11px] font-bold text-slate-500">자유 작문에서 자주 틀리는 문법</span>
-                    <div class="flex flex-wrap gap-1.5 mt-1">
-                        ${weakGrammar.map(([t, cnt]) => `<span class="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">${t} ${cnt}회</span>`).join('')}
-                    </div>
-                </div>`;
-            }
-            if (weakPos.length === 0 && weakGrammar.length === 0) {
-                html += `<p class="text-[11px] text-emerald-600 font-semibold">아직 약점으로 잡힌 부분이 없어요. 잘하고 있어요! 🎉</p>`;
-            }
+            html += `<div class="mb-2">
+                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 품사 <span class="font-normal text-slate-400">(퀴즈 기준)</span></span>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                    ${weakPos.length > 0
+                        ? weakPos.map(([pos, cnt]) => `<span class="text-[11px] font-semibold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full border border-rose-100">${posNameKo[pos] || pos} ${cnt}회</span>`).join('')
+                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요</span>'}
+                </div>
+            </div>`;
+            html += `<div>
+                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 문법 <span class="font-normal text-slate-400">(자유 작문·질문답하기 기준)</span></span>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                    ${weakGrammar.length > 0
+                        ? weakGrammar.map(([t, cnt]) => `<span class="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">${t} ${cnt}회</span>`).join('')
+                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요 (자유 작문/질문답하기를 해보세요!)</span>'}
+                </div>
+            </div>`;
 
             box.innerHTML = html;
         }
