@@ -218,25 +218,25 @@
                                     </div>
                                 </div>
                                 <!-- Card Back -->
-                                <div class="absolute inset-0 bg-slate-950 text-white rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-violet-500/50">
+                                <div class="absolute inset-0 bg-gradient-to-br from-violet-50 to-indigo-50 text-slate-800 rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-violet-300">
                                     <div class="flex justify-between items-center">
-                                        <span id="card-back-pos" class="text-xs bg-violet-950/50 text-violet-300 border border-violet-900 px-2.5 py-0.5 rounded-full font-bold">POS</span>
-                                        <button id="card-back-speaker-btn" onclick="speakText(event, 'card-meaning')" class="hidden text-slate-400 hover:text-violet-300 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
-                                        <span id="card-back-label" class="text-xs text-slate-500 font-bold">번역 결과</span>
+                                        <span id="card-back-pos" class="text-xs bg-violet-100 text-violet-600 border border-violet-200 px-2.5 py-0.5 rounded-full font-bold">POS</span>
+                                        <button id="card-back-speaker-btn" onclick="speakText(event, 'card-meaning')" class="hidden text-slate-400 hover:text-violet-600 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
+                                        <span id="card-back-label" class="text-xs text-slate-400 font-bold">번역 결과</span>
                                     </div>
                                     <div class="text-center space-y-2 overflow-y-auto max-h-56">
-                                        <h3 id="card-meaning" class="text-2xl font-extrabold text-white">뜻</h3>
-                                        <p id="card-notes" class="text-xs text-slate-400 max-w-xs mx-auto whitespace-pre-wrap"></p>
-                                        <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-slate-900/60 p-2 rounded-xl border border-slate-800">
-                                            <div><span class="text-slate-500 block">yo</span><strong id="card-conj-yo" class="text-blue-400 font-extrabold"></strong></div>
-                                            <div><span class="text-slate-500 block">tú</span><strong id="card-conj-tu" class="text-white"></strong></div>
-                                            <div><span class="text-slate-500 block">él</span><strong id="card-conj-el" class="text-white"></strong></div>
-                                            <div><span class="text-slate-500 block">nos</span><strong id="card-conj-nos" class="text-white"></strong></div>
-                                            <div><span class="text-slate-500 block">vos</span><strong id="card-conj-vos" class="text-white"></strong></div>
-                                            <div><span class="text-slate-500 block">ellos</span><strong id="card-conj-ellos" class="text-white"></strong></div>
+                                        <h3 id="card-meaning" class="text-2xl font-extrabold text-slate-900">뜻</h3>
+                                        <p id="card-notes" class="text-xs text-slate-500 max-w-xs mx-auto whitespace-pre-wrap"></p>
+                                        <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-white/70 p-2 rounded-xl border border-violet-100">
+                                            <div><span class="text-slate-400 block">yo</span><strong id="card-conj-yo" class="text-blue-600 font-extrabold"></strong></div>
+                                            <div><span class="text-slate-400 block">tú</span><strong id="card-conj-tu" class="text-slate-700"></strong></div>
+                                            <div><span class="text-slate-400 block">él</span><strong id="card-conj-el" class="text-slate-700"></strong></div>
+                                            <div><span class="text-slate-400 block">nos</span><strong id="card-conj-nos" class="text-slate-700"></strong></div>
+                                            <div><span class="text-slate-400 block">vos</span><strong id="card-conj-vos" class="text-slate-700"></strong></div>
+                                            <div><span class="text-slate-400 block">ellos</span><strong id="card-conj-ellos" class="text-slate-700"></strong></div>
                                         </div>
                                     </div>
-                                    <div class="text-center text-[10px] text-slate-500 pt-2 border-t border-slate-800">
+                                    <div class="text-center text-[10px] text-slate-400 pt-2 border-t border-violet-100">
                                         클릭 시 다시 앞면으로 전환
                                     </div>
                                 </div>
