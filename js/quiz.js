@@ -33,9 +33,17 @@ let quizSession = null;
         }
 
         function startQuiz() {
-            // [냐냐 PATCH] 마스터한 단어는 출제 대상에서 제외 — 아직 안 외운 단어만 퀴즈로 나옴
-            const reviewablePool = vocabulary.filter(w => !w.mastered);
-            if (reviewablePool.length < 2) return;
+            // [냐냐 PATCH] 출제 범위 선택: 마스터 제외(복습)/전체/마스터만. 관용구 문제도 아래에서 섞어서 출제됨.
+            const scope = document.getElementById('quiz-scope-select') ? document.getElementById('quiz-scope-select').value : 'not-mastered';
+            let reviewablePool;
+            if (scope === 'all') reviewablePool = [...vocabulary];
+            else if (scope === 'mastered') reviewablePool = vocabulary.filter(w => w.mastered);
+            else reviewablePool = vocabulary.filter(w => !w.mastered);
+
+            if (reviewablePool.length < 2) {
+                showToast("출제할 단어가 2개 이상 있어야 해요! 출제 범위를 바꿔보세요.", "error");
+                return;
+            }
             // 단어 수가 적으면 같은 단어가 반복 출제될 수 있음 (최대 단어 수의 4배까지만 허용)
             const count = Math.min(selectedQuizCount, reviewablePool.length * 4);
             const questions = [];
@@ -44,8 +52,9 @@ let quizSession = null;
                 const isSubjective = Math.random() < 0.3; // 약 30%는 주관식(스페인어 작문)
                 const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
                 if (!isSubjective) {
+                    q.answer = w.meaning;
                     let choices = [w.meaning];
-                    // 오답 선택지는 마스터한 단어도 포함해서 더 다양하게 뽑음 (실제 출제 대상만 마스터 제외)
+                    // 오답 선택지는 전체 단어에서 뽑아 더 다양하게
                     let pool = vocabulary.filter(x => x.id !== w.id).map(x => x.meaning);
                     pool.sort(() => Math.random() - 0.5);
                     choices = choices.concat(pool.slice(0, 3));
@@ -55,7 +64,50 @@ let quizSession = null;
                 questions.push(q);
             }
 
-            quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [] };
+            // [냐냐 PATCH] 관용구 문제 섞기 — 관용구는 객관식만, 양방향(관용구→뜻 / 뜻→관용구) 섞어서
+            const allIdioms = [];
+            reviewablePool.forEach(w => {
+                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdioms.push({ ...it, word: w }); });
+            });
+            // 전체 관용구 풀(오답 선택지용)
+            const allIdiomsGlobal = [];
+            vocabulary.forEach(w => {
+                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdiomsGlobal.push(it); });
+            });
+
+            if (allIdioms.length >= 1 && allIdiomsGlobal.length >= 2) {
+                // 관용구 문제 수: 전체 문제의 약 25% 정도 (최소 1개, 보유 관용구 수 한도 내)
+                const idiomCount = Math.max(1, Math.min(Math.round(count * 0.25), allIdioms.length * 2));
+                for (let i = 0; i < idiomCount; i++) {
+                    const target = allIdioms[Math.floor(Math.random() * allIdioms.length)];
+                    const showIdiomAskMeaning = Math.random() < 0.5; // true: 관용구 보여주고 뜻, false: 뜻 보여주고 관용구
+                    let answer, distractorField, promptText;
+                    if (showIdiomAskMeaning) {
+                        answer = target.idiomMeaning;
+                        promptText = `관용구 "${target.idiom}"의 뜻은 무엇일까요?`;
+                        distractorField = 'idiomMeaning';
+                    } else {
+                        answer = target.idiom;
+                        promptText = `"${target.idiomMeaning}" — 이 뜻의 관용구는 무엇일까요?`;
+                        distractorField = 'idiom';
+                    }
+                    let choices = [answer];
+                    let pool = allIdiomsGlobal
+                        .map(it => it[distractorField])
+                        .filter(v => v && v !== answer);
+                    pool = [...new Set(pool)];
+                    pool.sort(() => Math.random() - 0.5);
+                    choices = choices.concat(pool.slice(0, 3));
+                    choices.sort(() => Math.random() - 0.5);
+                    questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText });
+                }
+                // 단어 문제 + 관용구 문제 전체를 한 번 더 섞음
+                questions.sort(() => Math.random() - 0.5);
+            }
+
+            quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
 
             document.getElementById('quiz-setup-screen').classList.add('hidden');
             document.getElementById('quiz-results-screen').classList.add('hidden');
@@ -78,9 +130,11 @@ let quizSession = null;
             const coach = document.getElementById('quiz-coach-character');
             coach.innerText = "🧑‍🏫";
 
-            if (q.type === 'mc') {
-                document.getElementById('quiz-question-label').innerText = 'QUESTION';
-                document.getElementById('quiz-question-text').innerText = `스페인어 "${q.word.word}"의 올바른 한국어 뜻은 무엇일까요?`;
+            if (q.type === 'mc' || q.type === 'idiom-mc') {
+                document.getElementById('quiz-question-label').innerText = q.type === 'idiom-mc' ? '관용구 QUESTION' : 'QUESTION';
+                document.getElementById('quiz-question-text').innerText = q.type === 'idiom-mc'
+                    ? q.promptText
+                    : `스페인어 "${q.word.word}"의 올바른 한국어 뜻은 무엇일까요?`;
                 document.getElementById('quiz-choices-box').classList.remove('hidden');
                 document.getElementById('quiz-subjective-box').classList.add('hidden');
 
@@ -96,7 +150,7 @@ let quizSession = null;
                 });
             } else {
                 document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
-                document.getElementById('quiz-question-text').innerText = `"${q.word.meaning}"를 스페인어로 써보세요!`;
+                document.getElementById('quiz-question-text').innerText = `${q.word.meaning} → 스페인어로 써보세요!`;
                 document.getElementById('quiz-choices-box').classList.add('hidden');
                 document.getElementById('quiz-subjective-box').classList.remove('hidden');
                 const input = document.getElementById('quiz-subjective-input');
@@ -115,7 +169,8 @@ let quizSession = null;
 
         function submitMcAnswer(choice, btnEl) {
             const q = quizSession.questions[quizSession.currentIndex];
-            const isCorrect = (choice === q.word.meaning);
+            const correctAnswer = q.answer !== undefined ? q.answer : q.word.meaning;
+            const isCorrect = (choice === correctAnswer);
 
             // [냐냐 PATCH-버그수정] 클릭한 선택지가 바로 시각적으로 표시되도록 함
             // (정답/오답 색 표시 + 다른 선택지들은 비활성화해서 중복 클릭 방지)
@@ -161,6 +216,9 @@ let quizSession = null;
             if (isCorrect) {
                 AudioFX.playSuccess();
                 quizSession.correctCount++;
+                // [냐냐 PATCH] 맞힌 단어 id 기록 (중복 제외) — 결과 화면에서 마스터 등록 선택용
+                if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
+                if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
                 coach.innerText = "✨😄";
                 showToast("🎯 정답입니다!", "success");
             } else {
@@ -176,11 +234,20 @@ let quizSession = null;
             verdict.innerText = isCorrect ? "🎯 정답입니다!" : "📝 다시 한 번 확인해 볼까요?";
             verdict.className = isCorrect ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-rose-600";
 
-            document.getElementById('quiz-review-word').innerText = q.word.word;
-            document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
+            if (q.type === 'idiom-mc') {
+                // 관용구 문제: 관용구 자체와 뜻을 보여줌 (어느 단어의 관용구인지도 함께)
+                const idiomText = q.choices.find(c => c === q.answer && /[a-záéíóúñ¿¡]/i.test(c)) || q.answer;
+                document.getElementById('quiz-review-word').innerText = `관용구 (${q.word.word})`;
+                document.getElementById('quiz-review-meaning').innerText = q.promptText.includes('뜻은 무엇')
+                    ? q.answer  // 관용구→뜻 문제면 정답이 뜻
+                    : q.answer; // 뜻→관용구 문제면 정답이 관용구
+            } else {
+                document.getElementById('quiz-review-word').innerText = q.word.word;
+                document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
+            }
 
             const notesBox = document.getElementById('quiz-review-notes-box');
-            if (q.word.notes) {
+            if (q.type !== 'idiom-mc' && q.word.notes) {
                 notesBox.classList.remove('hidden');
                 notesBox.innerText = q.word.notes;
             } else {
@@ -241,6 +308,63 @@ let quizSession = null;
                 });
                 wrongBox.innerHTML = html;
             }
+
+            // [냐냐 PATCH] 맞힌 단어 중 아직 마스터 안 된 것들을 골라 마스터 등록할 수 있게 표시
+            const masteryBox = document.getElementById('quiz-results-mastery-box');
+            const masteryList = document.getElementById('quiz-mastery-list');
+            const correctIds = quizSession.correctWordIds || [];
+            const masterCandidates = correctIds
+                .map(id => vocabulary.find(w => w.id === id))
+                .filter(w => w && !w.mastered);
+
+            if (masterCandidates.length === 0) {
+                masteryBox.classList.add('hidden');
+            } else {
+                masteryBox.classList.remove('hidden');
+                document.getElementById('quiz-mastery-all').checked = false;
+                masteryList.innerHTML = masterCandidates.map(w => `
+                    <label class="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-100 cursor-pointer">
+                        <input type="checkbox" data-master-id="${w.id}" class="w-4 h-4 accent-emerald-600">
+                        <span class="font-bold text-slate-800 text-sm">${w.word}</span>
+                        <span class="text-slate-400 text-xs ml-auto">${w.meaning}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        // [냐냐 PATCH] 마스터 등록 체크박스 - 전체 선택
+        function toggleAllMasteryChecks(checked) {
+            document.querySelectorAll('[data-master-id]').forEach(cb => { cb.checked = checked; });
+        }
+
+        // [냐냐 PATCH] 선택한 단어를 단어장에서 마스터로 등록 (연동)
+        function applyQuizMastery() {
+            const checked = [...document.querySelectorAll('[data-master-id]')].filter(cb => cb.checked);
+            if (checked.length === 0) {
+                showToast("마스터로 등록할 단어를 선택해 주세요!", "info");
+                return;
+            }
+            let count = 0;
+            checked.forEach(cb => {
+                const id = cb.getAttribute('data-master-id');
+                const w = vocabulary.find(x => x.id === id);
+                if (w && !w.mastered) {
+                    w.mastered = true;
+                    count++;
+                }
+            });
+            // 마스터 단어 수 변화를 학습일지에 반영
+            touchDiarySnapshot();
+            saveToStorage();
+            renderWordList();
+            updateStats();
+            renderDiary();
+            // 방금 등록한 단어들은 목록에서 사라지게 다시 렌더
+            const masteryBox = document.getElementById('quiz-results-mastery-box');
+            const remaining = [...document.querySelectorAll('[data-master-id]')].filter(cb => !cb.checked);
+            if (remaining.length === 0) masteryBox.classList.add('hidden');
+            else checked.forEach(cb => cb.closest('label').remove());
+            showToast(`${count}개 단어를 마스터로 등록했어요! 🎉`, "success");
         }
 
         function restartQuizSetup() {
