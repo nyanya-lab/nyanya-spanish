@@ -130,6 +130,10 @@
                             </button>
                         </div>
                         <div class="flex gap-2 w-full sm:w-auto shrink-0">
+                            <button id="expand-all-btn" onclick="toggleExpandAllBtn()" class="bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-up-right-and-down-left-from-center text-[10px]"></i>
+                                <span>전체 펼치기</span>
+                            </button>
                             <div class="relative">
                                 <button onclick="event.stopPropagation(); toggleFilterPanel()" class="w-full sm:w-auto h-full bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
                                     <i class="fa-solid fa-sliders"></i>
@@ -280,6 +284,14 @@
                             <button onclick="selectQuizCount(30, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all">30개</button>
                             <button onclick="selectQuizCount(50, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">50개</button>
                         </div>
+                        <div class="max-w-xs mx-auto text-left space-y-1">
+                            <label class="block text-xs font-bold text-slate-500">출제 범위</label>
+                            <select id="quiz-scope-select" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
+                                <option value="not-mastered">마스터 안 된 단어만 (복습)</option>
+                                <option value="all">전체 단어</option>
+                                <option value="mastered">마스터한 단어만</option>
+                            </select>
+                        </div>
                         <button id="quiz-start-btn" onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100">시작하기</button>
                     </div>
 
@@ -328,6 +340,18 @@
                             <p id="quiz-results-percent" class="text-sm text-slate-400 mt-1">정답률 80%</p>
                         </div>
                         <div id="quiz-results-wrong-list" class="text-left bg-slate-50 rounded-2xl p-4 space-y-2 max-h-64 overflow-y-auto"></div>
+
+                        <!-- 맞힌 단어 마스터 등록 -->
+                        <div id="quiz-results-mastery-box" class="hidden text-left bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-emerald-700">✅ 맞힌 단어를 마스터로 등록할까요?</span>
+                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 cursor-pointer">
+                                    <input type="checkbox" id="quiz-mastery-all" onchange="toggleAllMasteryChecks(this.checked)" class="w-4 h-4 accent-emerald-600"> 전체 선택
+                                </label>
+                            </div>
+                            <div id="quiz-mastery-list" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+                            <button onclick="applyQuizMastery()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">선택한 단어 마스터 등록</button>
+                        </div>
                         <div class="flex gap-2 justify-center">
                             <button onclick="restartQuizSetup()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다시 설정</button>
                             <button onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md">같은 개수로 또 풀기</button>
@@ -750,30 +774,6 @@
                                 <option value="feminine">F. 여성 명사 (la)</option>
                             </select>
                         </div>
-                        <!-- Dynamic Verb Type Section -->
-                        <div id="field-verb-type-details" class="hidden grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500">동사 구분</label>
-                                <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                    <option value="regular">규칙동사</option>
-                                    <option value="irregular">불규칙동사</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500">불규칙 형태</label>
-                                <select id="input-verb-irregular-type" class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium" disabled>
-                                    <option value="none">- 선택 -</option>
-                                    <option value="1인칭">1인칭</option>
-                                    <option value="e ➡️ ie">e ➡️ ie</option>
-                                    <option value="o ➡️ ue">o ➡️ ue</option>
-                                    <option value="e ➡️ i">e ➡️ i</option>
-                                    <option value="완전 불규칙">완전 불규칙</option>
-                                    <option value="1인칭 및 e ➡️ ie">1인칭 및 e ➡️ ie</option>
-                                    <option value="1인칭 및 o ➡️ ue">1인칭 및 o ➡️ ue</option>
-                                    <option value="기타 변형">기타 변형</option>
-                                </select>
-                            </div>
-                        </div>
                         <!-- Dynamic Adjective Section -->
                         <div id="field-adj-details" class="hidden space-y-1.5">
                             <label class="block text-xs font-bold text-slate-500">형용사 성·수 변화</label>
@@ -789,10 +789,29 @@
 
                 <!-- Dynamic Verb Conjugation Grid -->
                 <div id="field-verb-conjugations" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                    <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                        <i class="fa-solid fa-sliders"></i>
-                        <span>현재 시제 동사 변형 (Conjugación Presente)</span>
-                    </span>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
+                            <i class="fa-solid fa-sliders"></i>
+                            <span>현재 시제 동사 변형 (Presente)</span>
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
+                                <option value="regular">규칙</option>
+                                <option value="irregular">불규칙</option>
+                            </select>
+                            <select id="input-verb-irregular-type" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium" disabled>
+                                <option value="none">- 형태 -</option>
+                                <option value="1인칭">1인칭</option>
+                                <option value="e ➡️ ie">e ➡️ ie</option>
+                                <option value="o ➡️ ue">o ➡️ ue</option>
+                                <option value="e ➡️ i">e ➡️ i</option>
+                                <option value="완전 불규칙">완전 불규칙</option>
+                                <option value="1인칭 및 e ➡️ ie">1인칭 및 e ➡️ ie</option>
+                                <option value="1인칭 및 o ➡️ ue">1인칭 및 o ➡️ ue</option>
+                                <option value="기타 변형">기타 변형</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-3 gap-2">
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
@@ -821,17 +840,6 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
-                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
-                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                </div>
-
                 <div class="space-y-1.5">
                     <div class="flex items-center justify-between">
                         <label class="block text-xs font-bold text-slate-500">관용구 / 자주 쓰는 표현 (선택, 여러 개 가능)</label>
@@ -844,6 +852,17 @@
                         <button type="button" onclick="addIdiomRow()" class="w-full text-center text-xs font-bold text-violet-600 hover:text-violet-700 border border-dashed border-violet-200 rounded-xl py-2 transition-all">
                             <i class="fa-solid fa-plus text-[10px]"></i> 관용구 추가
                         </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
+                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
+                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                     </div>
                 </div>
 
