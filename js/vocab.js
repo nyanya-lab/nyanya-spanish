@@ -912,14 +912,14 @@ function togglePosFields() {
                                 </div>
                             `).join('');
                             return `
-                        <div class="bg-violet-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
+                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Expresión (관용구)</span>
                             ${rows}
                         </div>
                             `;
                         })()}
                         ${w.example ? `
-                        <div class="bg-teal-50 border-l-2 border-teal-400 rounded-r-xl p-2.5 text-xs">
+                        <div class="bg-teal-50/40 border-l-2 border-teal-400 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-teal-600 uppercase">Ejemplo (예문)</span>
                             <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
                             <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
