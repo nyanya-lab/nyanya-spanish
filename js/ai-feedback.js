@@ -111,13 +111,13 @@ let currentAiMode = 'ko-es';
             box.innerHTML = Object.entries(groups).map(([topic, qs]) => `
                 <div class="space-y-1.5">
                     <div class="flex items-center gap-2">
-                        <span class="text-[11px] font-extrabold text-fuchsia-600 bg-fuchsia-50 px-2 py-0.5 rounded-full">${topic}</span>
+                        <span class="text-[11px] font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">${topic}</span>
                         <span class="text-[10px] text-slate-400">${qs.length}개</span>
                     </div>
                     ${qs.map(q => `
                         <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1 gap-2">
                             <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
-                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-fuchsia-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-violet-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
                             <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
                     `).join('')}
@@ -170,18 +170,18 @@ let currentAiMode = 'ko-es';
             const allSelected = selectedQuestionTopics.length === 0;
 
             listBox.innerHTML = `
-                <label class="flex items-center gap-2 bg-fuchsia-50 px-4 py-3 rounded-xl cursor-pointer border border-fuchsia-100">
-                    <input type="checkbox" id="topic-check-all" onchange="toggleAllTopicChecks(this.checked)" ${allSelected ? 'checked' : ''} class="w-4 h-4 accent-fuchsia-600">
-                    <span class="text-sm font-bold text-fuchsia-700">전체 주제</span>
+                <label class="flex items-center gap-2 bg-violet-50 px-4 py-3 rounded-xl cursor-pointer border border-violet-100">
+                    <input type="checkbox" id="topic-check-all" onchange="toggleAllTopicChecks(this.checked)" ${allSelected ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                    <span class="text-sm font-bold text-violet-700">전체 주제</span>
                 </label>
                 <div class="h-px bg-slate-100 my-1"></div>
             ` + topics.map(t => {
                 const count = customQuestions.filter(q => (q.topic || '기타') === t).length;
                 const checked = allSelected || selectedQuestionTopics.includes(t);
                 return `
-                    <label class="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 rounded-xl cursor-pointer border border-slate-100 hover:bg-fuchsia-50 transition-colors">
+                    <label class="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 rounded-xl cursor-pointer border border-slate-100 hover:bg-violet-50 transition-colors">
                         <span class="flex items-center gap-2">
-                            <input type="checkbox" data-topic-check="${t.replace(/"/g, '&quot;')}" onchange="onTopicCheckChange()" ${checked ? 'checked' : ''} class="w-4 h-4 accent-fuchsia-600">
+                            <input type="checkbox" data-topic-check="${t.replace(/"/g, '&quot;')}" onchange="onTopicCheckChange()" ${checked ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
                             <span class="text-sm font-semibold text-slate-700">${t}</span>
                         </span>
                         <span class="text-xs text-slate-400">${count}개</span>
@@ -241,8 +241,8 @@ let currentAiMode = 'ko-es';
             const revealBtn = document.getElementById('question-topic-reveal-btn');
             if (topicBadge) topicBadge.innerText = '주제 보기';
             if (revealBtn) {
-                revealBtn.classList.remove('bg-fuchsia-600', 'text-white');
-                revealBtn.classList.add('bg-white', 'text-fuchsia-600');
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
                 const icon = revealBtn.querySelector('i');
                 if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
             }
@@ -263,13 +263,13 @@ let currentAiMode = 'ko-es';
             const isHidden = topicBadge.innerText === '주제 보기';
             if (isHidden) {
                 topicBadge.innerText = currentQuestionForAnswer.topic || '기타';
-                revealBtn.classList.remove('bg-white', 'text-fuchsia-600');
-                revealBtn.classList.add('bg-fuchsia-600', 'text-white');
+                revealBtn.classList.remove('bg-white', 'text-violet-600');
+                revealBtn.classList.add('bg-violet-600', 'text-white');
                 if (icon) icon.className = 'fa-solid fa-eye-slash text-[10px]';
             } else {
                 topicBadge.innerText = '주제 보기';
-                revealBtn.classList.remove('bg-fuchsia-600', 'text-white');
-                revealBtn.classList.add('bg-white', 'text-fuchsia-600');
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
                 if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
             }
         }
@@ -300,14 +300,17 @@ let currentAiMode = 'ko-es';
             const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
             Student's Spanish Answer: "${userAnswer}"
 
-            Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar). Wrap corrected words in correctedText inside '<span class="text-red-600 font-extrabold underline">corrected_word_here</span>' tags.
+            Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar).
+            For "correctedText": output the corrected sentence; wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags. Already-correct words stay plain.
+            For "originalMarked": output the student's ORIGINAL answer verbatim; wrap ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags. Correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐" answering a practice question in Spanish.
             Return feedback matching this JSON schema:
             {
                "isCorrect": true/false,
                "verdict": "e.g., 완벽한 답변이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
-               "correctedText": "The corrected/improved Spanish answer. Wrap corrected words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags.",
+               "correctedText": "The corrected Spanish answer. Wrap ONLY changed words in red span tags; leave correct words plain.",
+               "originalMarked": "The student ORIGINAL answer verbatim, with ONLY wrong words wrapped in line-through span tags; correct words stay plain.",
                "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
@@ -324,6 +327,7 @@ let currentAiMode = 'ko-es';
                     isCorrect: { type: "BOOLEAN" },
                     verdict: { type: "STRING" },
                     correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
                     message: { type: "STRING" },
                     breakdown: {
                         type: "ARRAY",
@@ -339,7 +343,7 @@ let currentAiMode = 'ko-es';
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip", "issueType"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
             };
 
             try {
@@ -366,7 +370,7 @@ let currentAiMode = 'ko-es';
                     coachIcon.innerText = "📝";
                     coachVerdict.className = "text-sm font-bold text-rose-600";
                     correctionBox.classList.remove('hidden');
-                    originalRender.innerText = userAnswer;
+                    originalRender.innerHTML = feedback.originalMarked || userAnswer;
                     correctedRender.innerHTML = feedback.correctedText;
                 }
 
@@ -574,7 +578,7 @@ let currentAiMode = 'ko-es';
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
             Student's Spanish Answer: "${userText}"
             
-            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately. Wrap any corrected words in correctedText inside '<span class="text-red-600 font-extrabold underline">corrected_word_here</span>' tags to highlight mistakes in RED.
+            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an encouraging and extremely precise professional Spanish tutor tutoring a passionate student named "냐냐".
@@ -582,7 +586,8 @@ let currentAiMode = 'ko-es';
             {
                "isCorrect": true/false,
                "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
-               "correctedText": "The perfect standard Spanish sentence. Wrap corrected/changed words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags to highlight mistakes in RED.",
+               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences max. Mention the student '냐냐님' and the key grammar point (어순/conjugation). No long essays.",
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
@@ -598,6 +603,7 @@ let currentAiMode = 'ko-es';
                     isCorrect: { type: "BOOLEAN" },
                     verdict: { type: "STRING" },
                     correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
                     message: { type: "STRING" },
                     breakdown: {
                         type: "ARRAY",
@@ -612,7 +618,7 @@ let currentAiMode = 'ko-es';
                     },
                     tip: { type: "STRING" }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
             };
 
             try {
@@ -640,7 +646,7 @@ let currentAiMode = 'ko-es';
                     coachIcon.innerText = "📝📝";
                     coachVerdict.className = "text-sm font-bold text-red-600";
                     correctionBox.classList.remove('hidden');
-                    originalRender.innerText = userText;
+                    originalRender.innerHTML = feedback.originalMarked || userText;
                     correctedRender.innerHTML = feedback.correctedText;
                 }
 
@@ -716,7 +722,7 @@ let currentAiMode = 'ko-es';
 
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
             
-            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. Wrap corrected parts in correctedText using '<span class="text-red-600 font-extrabold underline">corrected_text</span>' tags.
+            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
@@ -724,7 +730,8 @@ let currentAiMode = 'ko-es';
             {
                "isCorrect": true/false,
                "verdict": "e.g., 어순이 완벽해요! 🟢 or 어순을 다시 살펴봐요! 🟠",
-               "correctedText": "The corrected standard Spanish sentence. Wrap any corrected words in '<span class=\"text-red-600 font-extrabold underline\">...</span>' tags.",
+               "correctedText": "The corrected standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise grammatical analysis in Korean mentioning '냐냐님', 1-2 sentences max. No long essays.",
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
@@ -741,6 +748,7 @@ let currentAiMode = 'ko-es';
                     isCorrect: { type: "BOOLEAN" },
                     verdict: { type: "STRING" },
                     correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
                     message: { type: "STRING" },
                     breakdown: {
                         type: "ARRAY",
@@ -756,7 +764,7 @@ let currentAiMode = 'ko-es';
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "message", "breakdown", "tip", "issueType"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
             };
 
             try {
@@ -784,7 +792,7 @@ let currentAiMode = 'ko-es';
                     coachIcon.innerText = "📝🟠";
                     coachVerdict.className = "text-sm font-bold text-red-600";
                     correctionBox.classList.remove('hidden');
-                    originalRender.innerText = userEsText;
+                    originalRender.innerHTML = feedback.originalMarked || userEsText;
                     correctedRender.innerHTML = feedback.correctedText;
                 }
 
