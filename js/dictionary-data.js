@@ -353,7 +353,9 @@ const OFFLINE_DICT_DB = {
         const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
         const GEMINI_MODEL_FLASH_LITE = 'gemini-3.1-flash-lite';
 
-        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH) {
+        // [냐냐 PATCH] 기본 모델을 Flash → Flash-Lite로 변경 (더 빠름). 원복하려면 아래 model 기본값을
+        // GEMINI_MODEL_FLASH 로 다시 바꾸면 됨.
+        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
