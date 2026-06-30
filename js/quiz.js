@@ -46,15 +46,33 @@ let quizSession = null;
             }
             // 단어 수가 적으면 같은 단어가 반복 출제될 수 있음 (최대 단어 수의 4배까지만 허용)
             const count = Math.min(selectedQuizCount, reviewablePool.length * 4);
+
+            // [냐냐 PATCH] 관용구 문제 풀 준비 (관용구는 객관식만)
+            const allIdioms = [];
+            reviewablePool.forEach(w => {
+                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdioms.push({ ...it, word: w }); });
+            });
+            const allIdiomsGlobal = [];
+            vocabulary.forEach(w => {
+                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdiomsGlobal.push(it); });
+            });
+
+            // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 25%로 하되, 전체 개수는 선택한 수를 넘지 않음
+            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2;
+            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.25), allIdioms.length * 2) : 0;
+            const wordCount = count - idiomCount;
+
             const questions = [];
-            for (let i = 0; i < count; i++) {
+            // 단어 문제
+            for (let i = 0; i < wordCount; i++) {
                 const w = reviewablePool[Math.floor(Math.random() * reviewablePool.length)];
                 const isSubjective = Math.random() < 0.3; // 약 30%는 주관식(스페인어 작문)
                 const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
                 if (!isSubjective) {
                     q.answer = w.meaning;
                     let choices = [w.meaning];
-                    // 오답 선택지는 전체 단어에서 뽑아 더 다양하게
                     let pool = vocabulary.filter(x => x.id !== w.id).map(x => x.meaning);
                     pool.sort(() => Math.random() - 0.5);
                     choices = choices.concat(pool.slice(0, 3));
@@ -64,48 +82,31 @@ let quizSession = null;
                 questions.push(q);
             }
 
-            // [냐냐 PATCH] 관용구 문제 섞기 — 관용구는 객관식만, 양방향(관용구→뜻 / 뜻→관용구) 섞어서
-            const allIdioms = [];
-            reviewablePool.forEach(w => {
-                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdioms.push({ ...it, word: w }); });
-            });
-            // 전체 관용구 풀(오답 선택지용)
-            const allIdiomsGlobal = [];
-            vocabulary.forEach(w => {
-                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdiomsGlobal.push(it); });
-            });
-
-            if (allIdioms.length >= 1 && allIdiomsGlobal.length >= 2) {
-                // 관용구 문제 수: 전체 문제의 약 25% 정도 (최소 1개, 보유 관용구 수 한도 내)
-                const idiomCount = Math.max(1, Math.min(Math.round(count * 0.25), allIdioms.length * 2));
-                for (let i = 0; i < idiomCount; i++) {
-                    const target = allIdioms[Math.floor(Math.random() * allIdioms.length)];
-                    const showIdiomAskMeaning = Math.random() < 0.5; // true: 관용구 보여주고 뜻, false: 뜻 보여주고 관용구
-                    let answer, distractorField, promptText;
-                    if (showIdiomAskMeaning) {
-                        answer = target.idiomMeaning;
-                        promptText = `관용구 "${target.idiom}"의 뜻은 무엇일까요?`;
-                        distractorField = 'idiomMeaning';
-                    } else {
-                        answer = target.idiom;
-                        promptText = `"${target.idiomMeaning}" — 이 뜻의 관용구는 무엇일까요?`;
-                        distractorField = 'idiom';
-                    }
-                    let choices = [answer];
-                    let pool = allIdiomsGlobal
-                        .map(it => it[distractorField])
-                        .filter(v => v && v !== answer);
-                    pool = [...new Set(pool)];
-                    pool.sort(() => Math.random() - 0.5);
-                    choices = choices.concat(pool.slice(0, 3));
-                    choices.sort(() => Math.random() - 0.5);
-                    questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText });
+            // 관용구 문제 (양방향 섞어서)
+            for (let i = 0; i < idiomCount; i++) {
+                const target = allIdioms[Math.floor(Math.random() * allIdioms.length)];
+                const showIdiomAskMeaning = Math.random() < 0.5; // true: 관용구 보여주고 뜻, false: 뜻 보여주고 관용구
+                let answer, distractorField, promptText;
+                if (showIdiomAskMeaning) {
+                    answer = target.idiomMeaning;
+                    promptText = `관용구 "${target.idiom}"의 뜻은 무엇일까요?`;
+                    distractorField = 'idiomMeaning';
+                } else {
+                    answer = target.idiom;
+                    promptText = `"${target.idiomMeaning}" — 이 뜻의 관용구는 무엇일까요?`;
+                    distractorField = 'idiom';
                 }
-                // 단어 문제 + 관용구 문제 전체를 한 번 더 섞음
-                questions.sort(() => Math.random() - 0.5);
+                let choices = [answer];
+                let pool = allIdiomsGlobal.map(it => it[distractorField]).filter(v => v && v !== answer);
+                pool = [...new Set(pool)];
+                pool.sort(() => Math.random() - 0.5);
+                choices = choices.concat(pool.slice(0, 3));
+                choices.sort(() => Math.random() - 0.5);
+                questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText, idiomData: target });
             }
+
+            // 단어 문제 + 관용구 문제 전체를 섞음
+            questions.sort(() => Math.random() - 0.5);
 
             quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
 
@@ -235,23 +236,34 @@ let quizSession = null;
             verdict.className = isCorrect ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-rose-600";
 
             if (q.type === 'idiom-mc') {
-                // 관용구 문제: 관용구 자체와 뜻을 보여줌 (어느 단어의 관용구인지도 함께)
-                const idiomText = q.choices.find(c => c === q.answer && /[a-záéíóúñ¿¡]/i.test(c)) || q.answer;
-                document.getElementById('quiz-review-word').innerText = `관용구 (${q.word.word})`;
-                document.getElementById('quiz-review-meaning').innerText = q.promptText.includes('뜻은 무엇')
-                    ? q.answer  // 관용구→뜻 문제면 정답이 뜻
-                    : q.answer; // 뜻→관용구 문제면 정답이 관용구
+                // 관용구 문제: 관용구 자체 + 뜻 + 어느 단어의 관용구인지 표시
+                const it = q.idiomData || {};
+                document.getElementById('quiz-review-word').innerText = it.idiom || q.answer;
+                document.getElementById('quiz-review-meaning').innerText = it.idiomMeaning || '';
+                const notesBox = document.getElementById('quiz-review-notes-box');
+                notesBox.classList.remove('hidden');
+                notesBox.innerText = `📌 "${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`;
             } else {
                 document.getElementById('quiz-review-word').innerText = q.word.word;
                 document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
-            }
 
-            const notesBox = document.getElementById('quiz-review-notes-box');
-            if (q.type !== 'idiom-mc' && q.word.notes) {
-                notesBox.classList.remove('hidden');
-                notesBox.innerText = q.word.notes;
-            } else {
-                notesBox.classList.add('hidden');
+                // 단어 문제: 노트 + 관용구 + 예문을 함께 보여줌
+                const notesBox = document.getElementById('quiz-review-notes-box');
+                const extraParts = [];
+                if (q.word.notes) extraParts.push(`📝 ${q.word.notes}`);
+                const idiomList = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
+                if (idiomList.length > 0) {
+                    const idiomText = idiomList.map(it => `· ${it.idiom}${it.idiomMeaning ? ' — ' + it.idiomMeaning : ''}`).join('\n');
+                    extraParts.push(`💬 관용구\n${idiomText}`);
+                }
+                if (q.word.example) extraParts.push(`✍️ ${q.word.example}${q.word.exampleMeaning ? '\n   ' + q.word.exampleMeaning : ''}`);
+
+                if (extraParts.length > 0) {
+                    notesBox.classList.remove('hidden');
+                    notesBox.innerText = extraParts.join('\n\n');
+                } else {
+                    notesBox.classList.add('hidden');
+                }
             }
 
             document.getElementById('quiz-review-panel').classList.remove('hidden');
