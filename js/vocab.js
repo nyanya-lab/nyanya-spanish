@@ -1,28 +1,23 @@
 function togglePosFields() {
             const pos = document.getElementById('input-pos').value;
             const nounDetails = document.getElementById('field-noun-details');
-            const verbTypeDetails = document.getElementById('field-verb-type-details');
             const verbConjugations = document.getElementById('field-verb-conjugations');
             const adjDetails = document.getElementById('field-adj-details');
 
             if (pos === 'noun') {
                 nounDetails.classList.remove('hidden');
-                verbTypeDetails.classList.add('hidden');
                 verbConjugations.classList.add('hidden');
                 adjDetails.classList.add('hidden');
             } else if (pos === 'verb') {
                 nounDetails.classList.add('hidden');
-                verbTypeDetails.classList.remove('hidden');
                 verbConjugations.classList.remove('hidden');
                 adjDetails.classList.add('hidden');
             } else if (pos === 'adjective') {
                 nounDetails.classList.add('hidden');
-                verbTypeDetails.classList.add('hidden');
                 verbConjugations.classList.add('hidden');
                 adjDetails.classList.remove('hidden');
             } else {
                 nounDetails.classList.add('hidden');
-                verbTypeDetails.classList.add('hidden');
                 verbConjugations.classList.add('hidden');
                 adjDetails.classList.add('hidden');
             }
@@ -366,6 +361,14 @@ function togglePosFields() {
                 if (forceOverwrite || genderInput.value === 'none') {
                     genderInput.value = result.gender || 'none';
                 }
+                // [냐냐 PATCH] 명사에 정관사 자동으로 붙이기 (이미 관사가 있으면 그대로 둠)
+                const wordInput = document.getElementById('input-word');
+                const curWord = wordInput.value.trim();
+                const alreadyHasArticle = /^(el|la|los|las|un|una|unos|unas)\s+/i.test(curWord);
+                if (curWord && !alreadyHasArticle && result.gender) {
+                    const article = result.gender === 'masculine' ? 'el' : (result.gender === 'feminine' ? 'la' : '');
+                    if (article) wordInput.value = `${article} ${curWord}`;
+                }
             } else if (result.pos === 'adjective') {
                 const adjAgreementInput = document.getElementById('input-adj-agreement');
                 if (forceOverwrite || adjAgreementInput.value === 'full') {
@@ -610,9 +613,13 @@ function togglePosFields() {
             const meaningVal = document.getElementById('input-meaning').value.trim();
             const modalId = document.getElementById('modal-word-id').value;
             const pos = document.getElementById('input-pos').value;
-            
+
+            // [냐냐 PATCH] 새 등록은 항상 고유한 새 id를 부여 (중복 등록 시 원본과 id가 겹쳐
+            // 한쪽을 지우면 다른 쪽도 지워지던 문제 방지). 수정 모드일 때만 기존 id 유지.
+            const newId = 'word-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+
             let wordObj = {
-                id: modalId || 'word-' + Date.now(),
+                id: modalId || newId,
                 word: wordVal,
                 meaning: meaningVal,
                 pos: pos,
@@ -749,12 +756,16 @@ function togglePosFields() {
             renderWordList();
         }
 
+        let wordListExpandedAll = false; // [냐냐 PATCH] 단어 카드 전체 펼침 상태 (기본 접힘)
+
         function renderWordList() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
             const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
             const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
+            // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
+            const expandedAll = searchVal.length > 0 ? true : wordListExpandedAll;
             
             const filtered = vocabulary.filter(w => {
                 const queryInWord = w.word.toLowerCase().includes(searchVal);
@@ -853,14 +864,15 @@ function togglePosFields() {
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
-                            <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <button onclick="toggleWordCard('${w.id}')" class="flex items-center gap-2 flex-wrap min-w-0 text-left flex-1">
+                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0" data-card-chevron="${w.id}"></i>
                                 <h3 class="text-xl font-extrabold text-slate-900 tracking-tight break-all">
                                     ${w.word}
                                 </h3>
                                 ${badgeMarkup}
-                                <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
-                            </div>
+                            </button>
                             <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
                                 <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
                                     <i class="fa-solid fa-check text-xs"></i>
                                 </button>
@@ -873,6 +885,8 @@ function togglePosFields() {
                             </div>
                         </div>
 
+                        <!-- 접히는 본문 -->
+                        <div class="word-card-body space-y-4 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">
                         <!-- Meaning section -->
                         <div class="space-y-1">
                             <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
@@ -925,15 +939,48 @@ function togglePosFields() {
                             <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
                         </div>
                         ` : ''}
-                    </div>
 
-                    <!-- 핵심만 정리된 노트 -->
-                    ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium -mt-2"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        <!-- 핵심만 정리된 노트 -->
+                        ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        </div>
+                    </div>
                 </div>
                 `;
             });
 
             grid.innerHTML = html;
+            // 펼침 상태에 따라 chevron 회전 동기화
+            if (expandedAll) {
+                document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
+            }
+        }
+
+        // [냐냐 PATCH] 전체 접기/펼치기 버튼 토글
+        function toggleExpandAllBtn() {
+            const btn = document.getElementById('expand-all-btn');
+            const willExpand = !wordListExpandedAll;
+            setAllWordCards(willExpand);
+            if (btn) {
+                btn.querySelector('span').innerText = willExpand ? '전체 접기' : '전체 펼치기';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center text-[10px]' : 'fa-solid fa-up-right-and-down-left-from-center text-[10px]';
+            }
+        }
+
+        // [냐냐 PATCH] 단어 카드 하나 접기/펼치기
+        function toggleWordCard(id) {
+            const body = document.querySelector(`[data-card-body="${id}"]`);
+            const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
+            if (!body) return;
+            const nowHidden = body.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
+        }
+
+        // [냐냐 PATCH] 전체 접기/펼치기
+        function setAllWordCards(expand) {
+            wordListExpandedAll = expand;
+            document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
+            document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
         }
 
         // TAB 2: FLASHCARD PLAYGROUND LOGICS
