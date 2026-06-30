@@ -271,10 +271,10 @@ const OFFLINE_DICT_DB = {
             const badge = document.getElementById('api-key-status-badge');
             if (!badge) return;
             if (hasGeminiApiKey()) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> AI 연결됨`;
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> AI 연결됨</span>`;
                 badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
             } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> AI 키 미등록`;
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>`;
                 badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
             }
         }
@@ -383,9 +383,11 @@ const OFFLINE_DICT_DB = {
             }
             
             // [PATCH-에러분류] 401/403(키 오류), 429(요청 과다/한도초과)는 재시도해도 똑같이 실패하므로
-            // 즉시 정확한 원인을 담아 에러를 던짐. 그 외(네트워크 끊김, 5xx)만 짧게 한 번 재시도.
-            let delay = 300;
-            for (let i = 0; i < 2; i++) {
+            // 즉시 정확한 원인을 담아 에러를 던짐. 그 외(네트워크 끊김, 5xx)는 여러 번 재시도해서
+            // 일시적인 통신/서버 문제는 사용자가 다시 누르지 않아도 알아서 복구되게 함.
+            let delay = 500;
+            const MAX_ATTEMPTS = 4; // 최초 1회 + 재시도 3회
+            for (let i = 0; i < MAX_ATTEMPTS; i++) {
                 try {
                     const response = await fetch(apiUrl, {
                         method: 'POST',
@@ -409,10 +411,11 @@ const OFFLINE_DICT_DB = {
                     const result = await response.json();
                     return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
                 } catch (e) {
+                    // 키 오류/요청형식 오류/한도초과는 재시도해도 소용없으므로 즉시 중단
                     const permanent = e.status === 400 || e.status === 401 || e.status === 403 || e.status === 429;
-                    if (i === 1 || permanent) throw e;
+                    if (i === MAX_ATTEMPTS - 1 || permanent) throw e;
                     await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
+                    delay *= 2; // 0.5s → 1s → 2s 점진적으로 늘려가며 재시도
                 }
             }
         }
