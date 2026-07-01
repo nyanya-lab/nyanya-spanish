@@ -59,9 +59,9 @@ let quizSession = null;
                 list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdiomsGlobal.push(it); });
             });
 
-            // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 25%로 하되, 전체 개수는 선택한 수를 넘지 않음
+            // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 20%로 하되, 전체 개수는 선택한 수를 넘지 않음
             const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2;
-            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.25), allIdioms.length * 2) : 0;
+            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length * 2) : 0;
             const wordCount = count - idiomCount;
 
             const questions = [];
@@ -236,13 +236,23 @@ let quizSession = null;
             verdict.className = isCorrect ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-rose-600";
 
             if (q.type === 'idiom-mc') {
-                // 관용구 문제: 관용구 자체 + 뜻 + 어느 단어의 관용구인지 표시
+                // 관용구 문제: 관용구 자체 + 뜻 + 부모 단어의 전체 정보(노트/관용구/예문)
                 const it = q.idiomData || {};
                 document.getElementById('quiz-review-word').innerText = it.idiom || q.answer;
                 document.getElementById('quiz-review-meaning').innerText = it.idiomMeaning || '';
+
                 const notesBox = document.getElementById('quiz-review-notes-box');
+                const extraParts = [];
+                extraParts.push(`📌 "${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`);
+                if (q.word.notes) extraParts.push(`📝 ${q.word.notes}`);
+                const idiomList2 = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
+                if (idiomList2.length > 0) {
+                    const idiomText = idiomList2.map(x => `· ${x.idiom}${x.idiomMeaning ? ' — ' + x.idiomMeaning : ''}`).join('\n');
+                    extraParts.push(`💬 관용구\n${idiomText}`);
+                }
+                if (q.word.example) extraParts.push(`✍️ ${q.word.example}${q.word.exampleMeaning ? '\n   ' + q.word.exampleMeaning : ''}`);
                 notesBox.classList.remove('hidden');
-                notesBox.innerText = `📌 "${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`;
+                notesBox.innerText = extraParts.join('\n\n');
             } else {
                 document.getElementById('quiz-review-word').innerText = q.word.word;
                 document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
