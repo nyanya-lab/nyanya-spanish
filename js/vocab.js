@@ -258,6 +258,7 @@ function togglePosFields() {
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
+            - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
             - idioms는 이 단어가 들어간 진짜 흔한 관용구가 있을 때만 0~2개 배열로 작성, 없으면 빈 배열 []로 둘 것 (억지로 만들지 말 것).
             - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
 
@@ -267,6 +268,7 @@ function togglePosFields() {
                 type: "OBJECT",
                 properties: {
                     meaning: { type: "STRING", description: "핵심 한글 뜻" },
+                    correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
                     isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true, 단수형이면 false. 명사가 아니면 false. 예: casas/libros는 true, casa/libro는 false" },
@@ -311,10 +313,39 @@ function togglePosFields() {
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
 
-                applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
-                saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
-                AudioFX.playSuccess();
-                showToast("Gemini AI 분석 완료! 추천 정보를 적용했어요 ✨", "success");
+                // [냐냐 PATCH] 오타 감지: AI가 교정한 철자가 입력과 다르면 확인 팝업
+                const corrected = (result.correctedSpelling || '').trim();
+                const bareInput = rawWord.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').trim().toLowerCase();
+                const isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
+
+                if (isRealCorrection) {
+                    showConfirm(
+                        `혹시 "${corrected}"를 쓰려던 거였나요?`,
+                        `입력하신 "${rawWord}"에 오타가 있는 것 같아요. "${corrected}"(으)로 고쳐서 등록할까요? (아니오를 누르면 입력한 그대로 둡니다)`,
+                        () => {
+                            // 예: 교정된 철자로 단어칸 교체 후 적용
+                            document.getElementById('input-word').value = corrected;
+                            applyAutofillResult(result, true);
+                            saveAiWordCache(corrected, result);
+                            AudioFX.playSuccess();
+                            showToast(`"${corrected}"(으)로 고쳐서 적용했어요 ✨`, "success");
+                        }
+                    );
+                    // 아니오(취소)를 눌러도 원래 입력 기준으로 정보는 채워줌
+                    const cancelBtn = document.getElementById('confirm-cancel-btn');
+                    cancelBtn.onclick = () => {
+                        document.getElementById('confirm-modal').classList.add('hidden');
+                        cancelBtn.onclick = null;
+                        applyAutofillResult(result, true);
+                        saveAiWordCache(rawWord, result);
+                        showToast("입력한 철자 그대로 정보를 적용했어요", "info");
+                    };
+                } else {
+                    applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
+                    saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
+                    AudioFX.playSuccess();
+                    showToast("Gemini AI 분석 완료! 추천 정보를 적용했어요 ✨", "success");
+                }
             } catch (e) {
                 console.warn("AI API 통신 실패: 오프라인 추측으로 자동 전환", e);
                 showToast(`${describeGeminiError(e)} 오프라인 추측으로 대체합니다.`, "error");
