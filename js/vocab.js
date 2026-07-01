@@ -189,7 +189,7 @@ function togglePosFields() {
             hideAiLoadingOverlay();
         }
 
-        function showConfirm(title, desc, onOk) {
+        function showConfirm(title, desc, onOk, options = {}) {
             const modal = document.getElementById('confirm-modal');
             document.getElementById('confirm-modal-title').innerText = title;
             document.getElementById('confirm-modal-desc').innerText = desc;
@@ -197,6 +197,15 @@ function togglePosFields() {
 
             const btnOk = document.getElementById('confirm-ok-btn');
             const btnCancel = document.getElementById('confirm-cancel-btn');
+
+            // [냐냐 PATCH] 버튼 라벨/색상 커스터마이즈 (기본: 삭제 확정 - 빨강)
+            btnOk.innerText = options.okLabel || '삭제 확정';
+            btnCancel.innerText = options.cancelLabel || '취소';
+            if (options.okStyle === 'primary') {
+                btnOk.className = "flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100";
+            } else {
+                btnOk.className = "flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-red-100";
+            }
 
             const cleanup = () => {
                 modal.classList.add('hidden');
@@ -209,6 +218,7 @@ function togglePosFields() {
                 cleanup();
             };
             btnCancel.onclick = () => {
+                if (options.onCancel) options.onCancel();
                 cleanup();
             };
         }
@@ -226,23 +236,6 @@ function togglePosFields() {
                 showToast("Gemini API 키가 없어서 AI 추천 대신 오프라인 추측을 사용합니다. 우측 상단 배지에서 키를 등록하면 진짜 AI 추천을 받을 수 있어요!", "warning");
                 runOfflineAutofill(rawWord);
                 return;
-            }
-
-            // [PATCH-버그수정] 단어 '수정' 중일 때는 캐시를 건너뛰고 항상 새로 조회함.
-            // (이전 버그로 잘못 저장된 캐시를 고친 후에도 계속 그대로 불러오는 문제 방지 —
-            //  수정 화면에서 AI 추천을 다시 누르는 건 "예전 결과를 고치고 싶다"는 의도이므로)
-            const isEditingExisting = !!document.getElementById('modal-word-id').value;
-
-            // [PATCH-속도개선] 새 단어 등록 중이고 이미 조회했던 단어면 캐시에서 즉시 불러옴
-            if (!isEditingExisting) {
-                const cache = getAiWordCache();
-                const cached = cache[rawWord.toLowerCase().trim()];
-                if (cached) {
-                    applyAutofillResult(cached, true);
-                    AudioFX.playSuccess();
-                    showToast("이전에 조회했던 단어라 바로 적용했어요! ⚡", "success");
-                    return;
-                }
             }
 
             const btn = document.getElementById('ai-autofill-btn');
@@ -321,25 +314,27 @@ function togglePosFields() {
                 if (isRealCorrection) {
                     showConfirm(
                         `혹시 "${corrected}"를 쓰려던 거였나요?`,
-                        `입력하신 "${rawWord}"에 오타가 있는 것 같아요. "${corrected}"(으)로 고쳐서 등록할까요? (아니오를 누르면 입력한 그대로 둡니다)`,
+                        `입력하신 "${rawWord}"에 오타가 있는 것 같아요. "${corrected}"(으)로 고쳐서 등록할까요? (취소를 누르면 입력한 그대로 둡니다)`,
                         () => {
-                            // 예: 교정된 철자로 단어칸 교체 후 적용
+                            // 수정: 교정된 철자로 단어칸 교체 후 적용
                             document.getElementById('input-word').value = corrected;
                             applyAutofillResult(result, true);
                             saveAiWordCache(corrected, result);
                             AudioFX.playSuccess();
                             showToast(`"${corrected}"(으)로 고쳐서 적용했어요 ✨`, "success");
+                        },
+                        {
+                            okLabel: '수정',
+                            cancelLabel: '취소',
+                            okStyle: 'primary',
+                            onCancel: () => {
+                                // 취소: 입력한 철자 그대로 정보만 적용
+                                applyAutofillResult(result, true);
+                                saveAiWordCache(rawWord, result);
+                                showToast("입력한 철자 그대로 정보를 적용했어요", "info");
+                            }
                         }
                     );
-                    // 아니오(취소)를 눌러도 원래 입력 기준으로 정보는 채워줌
-                    const cancelBtn = document.getElementById('confirm-cancel-btn');
-                    cancelBtn.onclick = () => {
-                        document.getElementById('confirm-modal').classList.add('hidden');
-                        cancelBtn.onclick = null;
-                        applyAutofillResult(result, true);
-                        saveAiWordCache(rawWord, result);
-                        showToast("입력한 철자 그대로 정보를 적용했어요", "info");
-                    };
                 } else {
                     applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
                     saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
@@ -662,8 +657,14 @@ function togglePosFields() {
                 if (dup) {
                     showConfirm(
                         `"${dup.word}(${dup.meaning})" 단어가 이미 등록되어 있습니다.`,
-                        "그래도 새로 등록하시겠습니까? (같은 단어가 2개로 등록돼요)",
-                        () => performSaveWord()
+                        "그래도 중복으로 등록할까요? '등록취소'를 누르면 등록창이 그대로 열려있어요.",
+                        () => performSaveWord(),
+                        {
+                            okLabel: '중복등록',
+                            cancelLabel: '등록취소',
+                            okStyle: 'primary'
+                            // 취소 시 아무 동작 없음 → 확인창만 닫히고 단어 등록창은 그대로 유지됨
+                        }
                     );
                     return;
                 }
