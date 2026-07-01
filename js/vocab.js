@@ -255,6 +255,8 @@ function togglePosFields() {
             // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
+            - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
+            - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
             - idioms는 이 단어가 들어간 진짜 흔한 관용구가 있을 때만 0~2개 배열로 작성, 없으면 빈 배열 []로 둘 것 (억지로 만들지 말 것).
             - notes는 대화체로 쓰지 말고, 한 줄에 핵심 문법/품사 특징 하나, 다른 한 줄에 주의점 하나만 "· "로 시작하는 불릿 2줄로 짧게 작성 (각 줄 25자 이내, 줄바꿈은 \\n 하나로 구분). 인사말이나 이름 호칭 금지. 명사의 성별/관사(여성명사, 관사 la 등)와 형용사의 성·수 변화 여부는 이미 별도 항목으로 표시되므로 notes에 절대 반복하지 말 것. "~함", "~됨", "~임" 같은 서술형 어미 대신 명사형으로 간결하게 끝낼 것 (예: "의미함"이 아니라 "의미", "구별됨"이 아니라 "구별").`;
@@ -267,6 +269,8 @@ function togglePosFields() {
                     meaning: { type: "STRING", description: "핵심 한글 뜻" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
+                    isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true, 단수형이면 false. 명사가 아니면 false. 예: casas/libros는 true, casa/libro는 false" },
+                    usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성수 둘 다 변화(bueno/buena/buenos/buenas), no-gender=성 변화 없이 수만 변화(feliz/felices), no-number=수 변화 없이 성만 변화, invariable=완전 불변. 형용사가 아니면 'full'" },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
                     irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
@@ -341,6 +345,25 @@ function togglePosFields() {
         }
 
         // 결과값 UI 대입 처리부 (사용자가 입력 중인 값은 보존)
+        // [냐냐 PATCH] 강세 있는 a-/ha- 로 시작하는 단어인지 판별 (el agua 규칙용)
+        // á/há 로 시작하면 확실히 강세. a/ha 로 시작하면 스페인어 강세 규칙상 첫 음절에 강세가 오는
+        // 흔한 경우(자음+모음으로 끝나거나 s로 끝나는 단어)를 근사적으로 판단. 확실치 않은 애매한 경우는
+        // 흔히 el을 쓰는 단어들을 화이트리스트로 보정.
+        const EL_FEMININE_WORDS = new Set([
+            'agua','águila','alma','ala','área','arma','aula','hacha','hada','hambre','habla',
+            'ancla','ánfora','asa','aya','haba','ave','acta','ascua','asta'
+        ]);
+        function isStressedInitialA(word) {
+            if (!word) return false;
+            const w = word.trim().toLowerCase();
+            // á 또는 há 로 시작 → 무조건 강세
+            if (/^h?á/.test(w)) return true;
+            // 화이트리스트(흔히 el을 쓰는 강세 a- 여성명사)
+            const bare = w.replace(/^h/, '');
+            if (EL_FEMININE_WORDS.has(w) || EL_FEMININE_WORDS.has(word.trim().toLowerCase())) return true;
+            return false;
+        }
+
         function applyAutofillResult(result, forceOverwrite = false) {
             const wordVal = document.getElementById('input-word').value.trim();
             
@@ -361,12 +384,22 @@ function togglePosFields() {
                 if (forceOverwrite || genderInput.value === 'none') {
                     genderInput.value = result.gender || 'none';
                 }
-                // [냐냐 PATCH] 명사에 정관사 자동으로 붙이기 (이미 관사가 있으면 그대로 둠)
+                // [냐냐 PATCH] 명사에 정관사 자동으로 붙이기 (복수형이면 los/las, 이미 관사가 있으면 그대로 둠)
                 const wordInput = document.getElementById('input-word');
                 const curWord = wordInput.value.trim();
                 const alreadyHasArticle = /^(el|la|los|las|un|una|unos|unas)\s+/i.test(curWord);
                 if (curWord && !alreadyHasArticle && result.gender) {
-                    const article = result.gender === 'masculine' ? 'el' : (result.gender === 'feminine' ? 'la' : '');
+                    let article = '';
+                    if (result.gender === 'masculine') {
+                        article = result.isPlural ? 'los' : 'el';
+                    } else if (result.gender === 'feminine') {
+                        // 강세 있는 a-/ha- 로 시작하는 여성 단수 명사는 발음 때문에 el을 씀 (el agua, el águila, el alma).
+                        // 단, 복수는 다시 las로 돌아감 (las aguas). 형용사는 계속 여성으로 받으므로 gender는 feminine 유지.
+                        // AI 판단(usesElDespiteFeminine)을 우선 쓰되, 없으면 로컬 규칙으로 보정.
+                        const takesEl = (result.usesElDespiteFeminine === true) || isStressedInitialA(curWord);
+                        if (result.isPlural) article = 'las';
+                        else article = takesEl ? 'el' : 'la';
+                    }
                     if (article) wordInput.value = `${article} ${curWord}`;
                 }
             } else if (result.pos === 'adjective') {
@@ -745,6 +778,15 @@ function togglePosFields() {
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
+            // [냐냐 PATCH] 검색을 시작하면 필터를 전체로 초기화해서 모든 단어에서 검색되게 함
+            if (val.trim()) {
+                const posSel = document.getElementById('pos-filter-select');
+                const masterySel = document.getElementById('mastery-filter-select');
+                const sortSel = document.getElementById('sort-select');
+                if (posSel) posSel.value = 'all';
+                if (masterySel) masterySel.value = 'all';
+                if (sortSel) sortSel.value = 'recent';
+            }
             renderWordList();
         }
 
