@@ -315,7 +315,7 @@
 
                         <!-- 주관식 입력 (스페인어 작문) -->
                         <div id="quiz-subjective-box" class="hidden space-y-3">
-                            <input type="text" id="quiz-subjective-input" placeholder="스페인어로 입력해 보세요..." autocomplete="off" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
+                            <input type="text" id="quiz-subjective-input" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSubjectiveAnswer();}" placeholder="스페인어로 입력해 보세요..." autocomplete="off" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
                             <button id="quiz-subjective-submit-btn" onclick="submitSubjectiveAnswer()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">제출하기</button>
                         </div>
 
@@ -637,9 +637,9 @@
                                 <span class="text-sm">🎯</span>
                                 <span class="text-xs font-bold text-slate-700">내 학습 수준 <span class="font-normal text-slate-400">(AI가 문제·첨삭 난이도를 맞출 때 참고하는 데이터예요)</span></span>
                             </span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
                         </button>
-                        <div id="learner-profile-display" class="text-sm text-slate-600"></div>
+                        <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
                     </div>
 
                     <!-- 단어장 성장 그래프 -->
