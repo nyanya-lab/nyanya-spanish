@@ -373,7 +373,7 @@
                         </div>
                         
                         <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-3 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                        <div class="grid grid-cols-2 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
                             </button>
@@ -382,6 +382,9 @@
                             </button>
                             <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 💬 질문에 답하기
+                            </button>
+                            <button id="ai-mode-btn-example" onclick="switchAiMode('example')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
+                                📖 내 예문으로 연습
                             </button>
                         </div>
                     </div>
@@ -499,6 +502,45 @@
 
                         <div class="flex gap-2 justify-end">
                             <button id="question-submit-btn" onclick="submitQuestionAnswer()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span>답변 제출하기</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MODE D: MY EXAMPLE PRACTICE -->
+                    <div id="ai-pane-example" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
+                                    <span>내 예문으로 작문 연습</span>
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">등록한 단어의 예문을 활용해요. 그대로 번역하거나, 비슷한 새 문장이 나와요!</p>
+                            </div>
+                            <button id="ai-generate-example-btn" onclick="generateExampleMission()" class="shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                <span>✨ 문장 뽑기</span>
+                            </button>
+                        </div>
+
+                        <div id="ai-example-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
+
+                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span id="ai-example-mode-badge" class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">내 예문 연습 📖</span>
+                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-book-bookmark"></i> 등록 단어 기반</span>
+                            </div>
+                            <h3 id="ai-example-korean" class="text-lg font-bold text-slate-900 pt-1">'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.</h3>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
+                            <textarea id="ai-example-input" rows="3" placeholder="스페인어로 직접 작문한 후 적어보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button id="ai-example-submit-btn" onclick="submitExampleMission()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
                                 <i class="fa-solid fa-paper-plane"></i>
                                 <span>답변 제출하기</span>
                             </button>
