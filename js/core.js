@@ -879,6 +879,11 @@ let vocabulary = [];
                 if (statsBody) statsBody.classList.add('hidden');
                 const statsChevron = document.querySelector("button[onclick=\"toggleChartCard('summary-stats-body', this)\"] i");
                 if (statsChevron) statsChevron.style.transform = 'rotate(180deg)';
+                // '내 학습 수준'도 항상 접힌 상태로 시작
+                const profileBody = document.getElementById('learner-profile-display');
+                if (profileBody) profileBody.classList.add('hidden');
+                const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
+                if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
             }
         }
