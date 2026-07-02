@@ -344,14 +344,42 @@ let quizSession = null;
             } else {
                 masteryBox.classList.remove('hidden');
                 document.getElementById('quiz-mastery-all').checked = false;
-                masteryList.innerHTML = masterCandidates.map(w => `
-                    <label class="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-100 cursor-pointer">
-                        <input type="checkbox" data-master-id="${w.id}" class="w-4 h-4 accent-emerald-600">
-                        <span class="font-bold text-slate-800 text-sm">${w.word}</span>
-                        <span class="text-slate-400 text-xs ml-auto">${w.meaning}</span>
-                    </label>
-                `).join('');
+                masteryList.innerHTML = masterCandidates.map(w => {
+                    const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                    const detailParts = [];
+                    if (idiomList.length > 0) {
+                        const idiomText = idiomList.map(it => `· ${it.idiom}${it.idiomMeaning ? ' — ' + it.idiomMeaning : ''}`).join('<br>');
+                        detailParts.push(`<div class="text-teal-700"><span class="font-bold">💬 관용구</span><br>${idiomText}</div>`);
+                    }
+                    if (w.example) detailParts.push(`<div class="text-slate-600"><span class="font-bold">✍️ 예문</span><br>${w.example}${w.exampleMeaning ? '<br><span class="text-slate-400">' + w.exampleMeaning + '</span>' : ''}</div>`);
+                    if (w.notes) detailParts.push(`<div class="text-amber-700"><span class="font-bold">📝 노트</span><br>${w.notes.replace(/\n/g, '<br>')}</div>`);
+                    const detailHtml = detailParts.length > 0 ? detailParts.join('<div class="my-1"></div>') : '<span class="text-slate-400">추가 정보가 없어요</span>';
+                    return `
+                    <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                        <div class="flex items-center gap-2 px-3 py-2">
+                            <input type="checkbox" data-master-id="${w.id}" class="w-4 h-4 accent-emerald-600 shrink-0">
+                            <button type="button" onclick="toggleMasteryDetail('${w.id}')" class="flex items-center gap-2 flex-1 min-w-0 text-left">
+                                <i class="fa-solid fa-chevron-right text-slate-300 text-[10px] transition-transform shrink-0" data-mastery-chevron="${w.id}"></i>
+                                <span class="font-bold text-slate-800 text-sm truncate">${w.word}</span>
+                                <span class="text-slate-400 text-xs ml-auto shrink-0">${w.meaning}</span>
+                            </button>
+                        </div>
+                        <div class="hidden px-3 pb-2.5 pt-0.5 text-[11px] leading-relaxed border-t border-slate-50 bg-slate-50/50" data-mastery-detail="${w.id}">
+                            ${detailHtml}
+                        </div>
+                    </div>
+                `;
+                }).join('');
             }
+        }
+
+        // [냐냐 PATCH] 마스터 후보 단어 상세정보 펼치기/접기
+        function toggleMasteryDetail(id) {
+            const detail = document.querySelector(`[data-mastery-detail="${id}"]`);
+            const chevron = document.querySelector(`[data-mastery-chevron="${id}"]`);
+            if (!detail) return;
+            const nowHidden = detail.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
         }
 
         // [냐냐 PATCH] 마스터 등록 체크박스 - 전체 선택
@@ -385,7 +413,7 @@ let quizSession = null;
             const masteryBox = document.getElementById('quiz-results-mastery-box');
             const remaining = [...document.querySelectorAll('[data-master-id]')].filter(cb => !cb.checked);
             if (remaining.length === 0) masteryBox.classList.add('hidden');
-            else checked.forEach(cb => cb.closest('label').remove());
+            else checked.forEach(cb => { const card = cb.parentElement && cb.parentElement.parentElement; if (card) card.remove(); });
             showToast(`${count}개 단어를 마스터로 등록했어요! 🎉`, "success");
         }
 
