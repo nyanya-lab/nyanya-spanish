@@ -337,8 +337,10 @@ let vocabulary = [];
         function calcStreak() {
             const dates = Object.keys(nyanyaDiary || {}).filter(d => {
                 const log = nyanyaDiary[d];
-                // 실제 학습이 있었던 날만 (퀴즈/AI/새 단어 중 하나라도)
-                return log && ((log.quizTotal || 0) > 0 || (log.aiSessions || 0) > 0 || (log.newWordsCount || 0) > 0);
+                // 하루 총 활동(퀴즈 문제 + AI 첨삭 + 새 단어)이 5개 이상인 날만 "학습한 날"로 인정
+                if (!log) return false;
+                const total = (log.quizTotal || 0) + (log.aiSessions || 0) + (log.newWordsCount || 0);
+                return total >= 5;
             }).sort(); // 오름차순
             if (dates.length === 0) return 0;
 
@@ -364,8 +366,6 @@ let vocabulary = [];
         }
 
         function renderStreakBadge() {
-            const el = document.getElementById('streak-badge');
-            if (!el) return;
             const streak = calcStreak();
             // 최고 기록 갱신 (learnerProfile에 저장)
             if (typeof learnerProfile !== 'undefined' && learnerProfile) {
@@ -376,15 +376,28 @@ let vocabulary = [];
                 }
             }
             const best = (typeof learnerProfile !== 'undefined' && learnerProfile) ? (learnerProfile.bestStreak || 0) : 0;
-            if (streak >= 1) {
-                el.classList.remove('hidden');
-                el.innerHTML = `<i class="fa-solid fa-fire"></i> ${streak}일 연속${best > streak ? ` <span class="text-orange-400 font-bold ml-1">· 최고 ${best}일</span>` : (best === streak && best > 1 ? ` <span class="text-orange-500 font-bold ml-1">· 최고 기록! 🎉</span>` : '')}`;
-            } else if (best >= 1) {
-                // 지금은 끊겼지만 최고 기록은 보여주기
-                el.classList.remove('hidden');
-                el.innerHTML = `<i class="fa-regular fa-snowflake text-slate-400"></i> <span class="text-slate-500">최고 ${best}일 연속</span>`;
-            } else {
-                el.classList.add('hidden');
+
+            // 학습기록 탭의 연속 학습일 카드 갱신
+            const mainEl = document.getElementById('streak-main');
+            const bestEl = document.getElementById('streak-best');
+            const fireEl = document.getElementById('streak-fire');
+            if (mainEl && bestEl) {
+                if (streak >= 1) {
+                    mainEl.innerText = `${streak}일 연속`;
+                    mainEl.className = "text-2xl font-black text-orange-700 leading-tight";
+                    if (fireEl) fireEl.innerText = "🔥";
+                    if (best === streak && best > 1) {
+                        bestEl.innerText = `🎉 최고 기록 갱신 중! (${best}일)`;
+                    } else {
+                        bestEl.innerText = `최고 기록: ${best}일`;
+                    }
+                } else {
+                    // 연속 끊김
+                    mainEl.innerText = "0일 연속";
+                    mainEl.className = "text-2xl font-black text-slate-400 leading-tight";
+                    if (fireEl) fireEl.innerText = "❄️";
+                    bestEl.innerText = best >= 1 ? `최고 기록: ${best}일` : "아직 기록이 없어요";
+                }
             }
         }
 
@@ -1359,6 +1372,7 @@ let vocabulary = [];
                 const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
+                renderStreakBadge();
             } else if (tabId === 'grammar') {
                 renderGrammarTables();
             }
