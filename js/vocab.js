@@ -970,8 +970,8 @@ function togglePosFields() {
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
-                            <button onclick="toggleWordCard('${w.id}')" class="flex items-center gap-2 flex-wrap min-w-0 text-left flex-1">
-                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0" data-card-chevron="${w.id}"></i>
+                            <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 flex-wrap min-w-0 text-left flex-1">
+                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
                                 <h3 class="text-xl font-extrabold text-slate-900 tracking-tight break-all">
                                     ${w.word}
                                 </h3>
