@@ -1,4 +1,10 @@
-body {
+html {
+            /* [냐냐 PATCH] 탭마다 내용 길이가 달라 스크롤바가 생겼다 없어지면서
+               콘텐츠 너비가 변하는 문제 방지 — 스크롤바 자리를 항상 확보 */
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
+        body {
             font-family: 'Gowun Dodum', 'Inter', sans-serif;
             background-color: #f8fafc;
         }
