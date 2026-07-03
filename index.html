@@ -288,13 +288,32 @@
                             <button onclick="selectQuizCount(30, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all">30개</button>
                             <button onclick="selectQuizCount(50, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">50개</button>
                         </div>
-                        <div class="max-w-xs mx-auto text-left space-y-1">
-                            <label class="block text-xs font-bold text-slate-500">출제 범위</label>
-                            <select id="quiz-scope-select" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="not-mastered">마스터 안 된 단어만 (복습)</option>
-                                <option value="all">전체 단어</option>
-                                <option value="mastered">마스터한 단어만</option>
-                            </select>
+                        <div class="max-w-sm mx-auto text-left space-y-3">
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-slate-500">문제 유형</label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <button type="button" onclick="selectQuizFormat('mc', this)" id="quiz-format-mc" class="quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all">객관식만</button>
+                                    <button type="button" onclick="selectQuizFormat('subjective', this)" id="quiz-format-subjective" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">주관식만</button>
+                                    <button type="button" onclick="selectQuizFormat('mixed', this)" id="quiz-format-mixed" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">섞어서</button>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-slate-500">출제 범위 (여러 개 선택 가능)</label>
+                                <div class="space-y-2 bg-slate-50 rounded-xl p-3 border border-slate-200">
+                                    <label class="flex items-center gap-2.5 cursor-pointer">
+                                        <input type="checkbox" id="scope-not-mastered" checked class="w-4 h-4 accent-violet-600">
+                                        <span class="text-sm font-medium text-slate-700">📖 마스터 안 된 단어 (복습)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2.5 cursor-pointer">
+                                        <input type="checkbox" id="scope-mastered" class="w-4 h-4 accent-violet-600">
+                                        <span class="text-sm font-medium text-slate-700">✅ 마스터한 단어</span>
+                                    </label>
+                                    <label class="flex items-center gap-2.5 cursor-pointer">
+                                        <input type="checkbox" id="scope-weak" class="w-4 h-4 accent-amber-500">
+                                        <span class="text-sm font-medium text-slate-700">⭐ 약점 단어 (자주 틀림)</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                         <button id="quiz-start-btn" onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100">시작하기</button>
                     </div>
