@@ -41,6 +41,26 @@ let quizSession = null;
             btnEl.className = "quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all";
         }
 
+        // [냐냐 PATCH] 약점 집중 모드 — 퀴즈 탭으로 이동 후 약점 단어만으로 바로 시작
+        function startWeakFocusQuiz() {
+            const weakWords = vocabulary.filter(w => w.weak && !w.mastered);
+            if (weakWords.length < 2) {
+                showToast("약점 단어가 2개 이상 있어야 복습할 수 있어요!", "error");
+                return;
+            }
+            changeTab('quiz');
+            // 범위: 약점 단어만 체크
+            setTimeout(() => {
+                const notM = document.getElementById('scope-not-mastered');
+                const mas = document.getElementById('scope-mastered');
+                const weak = document.getElementById('scope-weak');
+                if (notM) notM.checked = false;
+                if (mas) mas.checked = false;
+                if (weak) weak.checked = true;
+                startQuiz();
+            }, 50);
+        }
+
         function startQuiz() {
             // [냐냐 PATCH] 출제 범위: 체크박스로 여러 개 선택 (마스터 제외/마스터/약점 단어)
             const wantNotMastered = document.getElementById('scope-not-mastered')?.checked;
@@ -241,16 +261,33 @@ let quizSession = null;
                 // [냐냐 PATCH] 맞힌 단어 id 기록 (중복 제외) — 결과 화면에서 마스터 등록 선택용
                 if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
                 if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
+                // [냐냐 PATCH] 정답 시 점수 차감 (대칭): 객관식 -2, 주관식 -1. 0 밑으로 내려가려 하면 마스터 추천
+                const vocabItemC = vocabulary.find(w => w.id === q.word.id);
+                if (vocabItemC) {
+                    const reward = (q.type === 'subjective') ? 1 : 2;
+                    const prevScore = vocabItemC.weakScore || 0;
+                    const newScore = prevScore - reward;
+                    if (newScore < 0 && !vocabItemC.mastered) {
+                        // 이미 점수가 바닥(0)인데 또 맞힘 = 확실히 아는 단어 → 마스터 추천 대상
+                        if (!quizSession.masterSuggestIds) quizSession.masterSuggestIds = [];
+                        if (!quizSession.masterSuggestIds.includes(vocabItemC.id)) quizSession.masterSuggestIds.push(vocabItemC.id);
+                    }
+                    vocabItemC.weakScore = Math.max(0, newScore);
+                    if (vocabItemC.weakScore < 5) vocabItemC.weak = false; // 5점 미만이면 약점 해제
+                }
                 coach.innerText = "✨😄";
                 showToast("🎯 정답입니다!", "success");
             } else {
                 AudioFX.playError();
                 quizSession.wrongList.push(q.word);
-                // [냐냐 PATCH] 틀린 횟수 누적 → 3번 이상 틀리면 약점 단어(weak)로 표시
+                // [냐냐 PATCH] 오답 점수 누적: 객관식 +2 (쉬운데 틀림), 주관식 +1. 5점↑ 약점 단어(⭐)
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
-                    vocabItem.wrongCount = (vocabItem.wrongCount || 0) + 1;
-                    if (vocabItem.wrongCount >= 3) vocabItem.weak = true;
+                    const penalty = (q.type === 'subjective') ? 1 : 2;
+                    vocabItem.weakScore = (vocabItem.weakScore || 0) + penalty;
+                    if (vocabItem.weakScore >= 5) vocabItem.weak = true;
+                    // 마스터한 단어를 틀리면 마스터 자동 해제 (수동/자동 구분 없이)
+                    if (vocabItem.mastered) vocabItem.mastered = false;
                 }
                 coach.innerText = "🤔💭";
                 showToast("아쉬워요, 정답을 확인하고 다시 기억해 봐요!", "error");
@@ -372,6 +409,8 @@ let quizSession = null;
                 masteryBox.classList.remove('hidden');
                 document.getElementById('quiz-mastery-all').checked = false;
                 masteryList.innerHTML = masterCandidates.map(w => {
+                    const isStrong = (quizSession.masterSuggestIds || []).includes(w.id);
+                    const strongBadge = isStrong ? '<span class="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full shrink-0">잘 아는 단어!</span>' : '';
                     const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                     const detailParts = [];
                     if (idiomList.length > 0) {
@@ -388,6 +427,7 @@ let quizSession = null;
                             <button type="button" onclick="toggleMasteryDetail('${w.id}')" class="flex items-center gap-2 flex-1 min-w-0 text-left">
                                 <i class="fa-solid fa-chevron-right text-slate-300 text-[10px] transition-transform shrink-0" data-mastery-chevron="${w.id}"></i>
                                 <span class="font-bold text-slate-800 text-sm truncate">${w.word}</span>
+                                ${strongBadge}
                                 <span class="text-slate-400 text-xs ml-auto shrink-0">${w.meaning}</span>
                             </button>
                         </div>
