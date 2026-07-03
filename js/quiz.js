@@ -32,13 +32,32 @@ let quizSession = null;
             btnEl.className = "quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all";
         }
 
+        let selectedQuizFormat = 'mc'; // 'mc' | 'subjective' | 'mixed'
+        function selectQuizFormat(fmt, btnEl) {
+            selectedQuizFormat = fmt;
+            document.querySelectorAll('.quiz-format-btn').forEach(btn => {
+                btn.className = "quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all";
+            });
+            btnEl.className = "quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all";
+        }
+
         function startQuiz() {
-            // [냐냐 PATCH] 출제 범위 선택: 마스터 제외(복습)/전체/마스터만. 관용구 문제도 아래에서 섞어서 출제됨.
-            const scope = document.getElementById('quiz-scope-select') ? document.getElementById('quiz-scope-select').value : 'not-mastered';
-            let reviewablePool;
-            if (scope === 'all') reviewablePool = [...vocabulary];
-            else if (scope === 'mastered') reviewablePool = vocabulary.filter(w => w.mastered);
-            else reviewablePool = vocabulary.filter(w => !w.mastered);
+            // [냐냐 PATCH] 출제 범위: 체크박스로 여러 개 선택 (마스터 제외/마스터/약점 단어)
+            const wantNotMastered = document.getElementById('scope-not-mastered')?.checked;
+            const wantMastered = document.getElementById('scope-mastered')?.checked;
+            const wantWeak = document.getElementById('scope-weak')?.checked;
+
+            if (!wantNotMastered && !wantMastered && !wantWeak) {
+                showToast("출제 범위를 최소 하나는 선택해 주세요!", "error");
+                return;
+            }
+
+            // 선택된 범위들의 합집합 (중복 제거)
+            const poolSet = new Map();
+            if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
+            if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
+            if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
+            let reviewablePool = [...poolSet.values()];
 
             if (reviewablePool.length < 2) {
                 showToast("출제할 단어가 2개 이상 있어야 해요! 출제 범위를 바꿔보세요.", "error");
@@ -60,7 +79,8 @@ let quizSession = null;
             });
 
             // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 20%로 하되, 전체 개수는 선택한 수를 넘지 않음
-            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2;
+            // 주관식만 모드에서는 관용구(객관식) 문제를 넣지 않음
+            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2 && selectedQuizFormat !== 'subjective';
             const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length * 2) : 0;
             const wordCount = count - idiomCount;
 
@@ -68,7 +88,11 @@ let quizSession = null;
             // 단어 문제
             for (let i = 0; i < wordCount; i++) {
                 const w = reviewablePool[Math.floor(Math.random() * reviewablePool.length)];
-                const isSubjective = Math.random() < 0.3; // 약 30%는 주관식(스페인어 작문)
+                // [냐냐 PATCH] 문제 유형: 객관식만 / 주관식만 / 섞어서(약 30% 주관식)
+                let isSubjective;
+                if (selectedQuizFormat === 'mc') isSubjective = false;
+                else if (selectedQuizFormat === 'subjective') isSubjective = true;
+                else isSubjective = Math.random() < 0.3;
                 const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
                 if (!isSubjective) {
                     q.answer = w.meaning;
@@ -188,13 +212,10 @@ let quizSession = null;
         function submitSubjectiveAnswer() {
             const q = quizSession.questions[quizSession.currentIndex];
             const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
-            if (!userAnswer) {
-                showToast("스페인어로 답을 입력해 주세요!", "error");
-                return;
-            }
+            // [냐냐 PATCH] 빈칸 제출 허용 — 모르는 단어는 빈칸으로 넘겨서 정답 확인 가능 (빈칸 = 오답 처리)
             document.getElementById('quiz-subjective-input').disabled = true;
             document.getElementById('quiz-subjective-submit-btn').disabled = true;
-            const isCorrect = normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.word.word);
+            const isCorrect = userAnswer ? (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.word.word)) : false;
             finishQuizQuestion(isCorrect, q);
         }
 
@@ -225,6 +246,12 @@ let quizSession = null;
             } else {
                 AudioFX.playError();
                 quizSession.wrongList.push(q.word);
+                // [냐냐 PATCH] 틀린 횟수 누적 → 3번 이상 틀리면 약점 단어(weak)로 표시
+                const vocabItem = vocabulary.find(w => w.id === q.word.id);
+                if (vocabItem) {
+                    vocabItem.wrongCount = (vocabItem.wrongCount || 0) + 1;
+                    if (vocabItem.wrongCount >= 3) vocabItem.weak = true;
+                }
                 coach.innerText = "🤔💭";
                 showToast("아쉬워요, 정답을 확인하고 다시 기억해 봐요!", "error");
             }
@@ -423,6 +450,3 @@ let quizSession = null;
             document.getElementById('quiz-question-screen').classList.add('hidden');
             document.getElementById('quiz-setup-screen').classList.remove('hidden');
         }
-
-
-        // TAB 4: LIVE AI TRANSLATION COACH
