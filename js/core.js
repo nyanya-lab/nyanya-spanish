@@ -14,6 +14,7 @@ let vocabulary = [];
         let customQuestions = [];
         let currentQuestionForAnswer = null;
         let selectedQuestionTopics = []; // [] = 전체 주제. 랜덤 뽑기 주제 선택을 저장해서 유지
+        let customGrammarTables = []; // [냐냐 PATCH] 사용자가 직접 만든 문법 표 (기본 표와 합쳐서 표시)
 
         // AI 꼬리대화 히스토리 및 힌트 상태 관리
         let aiChatHistory = [];
@@ -136,7 +137,8 @@ let vocabulary = [];
                 nyanyaDiary: nyanyaDiary,
                 learnerProfile: learnerProfile,
                 customQuestions: customQuestions,
-                selectedQuestionTopics: selectedQuestionTopics
+                selectedQuestionTopics: selectedQuestionTopics,
+                customGrammarTables: customGrammarTables
             };
             const json = JSON.stringify(payload);
 
@@ -239,12 +241,14 @@ let vocabulary = [];
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
+                customGrammarTables = payload.customGrammarTables || [];
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 customQuestions = [];
                 selectedQuestionTopics = [];
+                customGrammarTables = [];
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -840,7 +844,7 @@ let vocabulary = [];
         // ============================================================
         // [냐냐 PATCH] 문법 표 (참고용 표 모음)
         // ============================================================
-        let grammarTablesRendered = false;
+        let grammarOpenState = {}; // 표별 펼침 상태 기억
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -950,41 +954,83 @@ let vocabulary = [];
             },
         ];
 
+        function getAllGrammarTables() {
+            // 기본 표 + 사용자 표. 사용자가 기본 표를 수정하면 override로 대체.
+            const result = [];
+            GRAMMAR_TABLES.forEach(base => {
+                const override = customGrammarTables.find(c => c.id === base.id);
+                result.push(override ? { ...override, isCustom: !!override._edited } : base);
+            });
+            // 완전히 새로 만든 사용자 표 (기본 id와 겹치지 않는 것)
+            customGrammarTables.forEach(c => {
+                if (!GRAMMAR_TABLES.find(b => b.id === c.id)) result.push({ ...c, isCustom: true });
+            });
+            return result;
+        }
+
         function renderGrammarTables() {
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
-            container.innerHTML = GRAMMAR_TABLES.map((t, idx) => {
-                const headerRow = t.headers.map(h => `<th class="text-left px-3 py-2 text-[11px] font-black text-violet-700 bg-violet-50 border-b border-violet-100">${h}</th>`).join('');
-                const bodyRows = t.rows.map(r => {
+            const query = (document.getElementById('grammar-search')?.value || '').trim().toLowerCase();
+            document.getElementById('grammar-search-clear')?.classList.toggle('hidden', !query);
+
+            let tables = getAllGrammarTables();
+            if (query) {
+                tables = tables.filter(t => {
+                    const haystack = [t.title, t.desc, t.note, ...(t.headers || []), ...((t.rows || []).flat())].join(' ').toLowerCase();
+                    return haystack.includes(query);
+                });
+            }
+
+            document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
+
+            container.innerHTML = tables.map((t, idx) => {
+                const headerRow = (t.headers || []).map(h => `<th class="text-left px-3 py-2 text-[11px] font-black text-violet-700 bg-violet-50 border-b border-violet-100">${escapeHtml(h)}</th>`).join('');
+                const bodyRows = (t.rows || []).map(r => {
                     const cells = r.map((c, ci) => {
-                        // 첫 칸(뜻/숫자)은 슬쩍 회색, 스페인어 칸은 진하게
-                        const isSpanish = ci % 2 === 1 || (t.headers[ci] && /스페인어|명사 앞|목적격|단수|복수/.test(t.headers[ci]));
-                        return `<td class="px-3 py-2 text-sm ${isSpanish ? 'font-bold text-slate-800' : 'text-slate-500'} border-b border-slate-50">${c || ''}</td>`;
+                        // 첫 칸(뜻/한국어)은 제목 행처럼 연보라 배경 + 두꺼운 글씨
+                        if (ci === 0) {
+                            return `<td class="px-3 py-2 text-sm font-bold text-violet-700 bg-violet-50 border-b border-violet-100">${escapeHtml(c || '')}</td>`;
+                        }
+                        return `<td class="px-3 py-2 text-sm font-bold text-slate-800 border-b border-slate-50">${escapeHtml(c || '')}</td>`;
                     }).join('');
                     return `<tr class="hover:bg-slate-50/60">${cells}</tr>`;
                 }).join('');
+                // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
+                const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
+                const editBtns = `
+                    <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
+                        <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
+                        ${t.isCustom ? `<button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>` : `<button onclick="resetGrammarTable('${t.id}')" title="기본값으로 되돌리기" class="w-7 h-7 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><i class="fa-solid fa-rotate-left text-xs"></i></button>`}
+                    </span>`;
                 return `
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <button type="button" onclick="toggleGrammarTable('${t.id}')" class="w-full flex items-center justify-between gap-2 px-5 py-4 text-left">
-                            <span class="flex items-center gap-2.5 min-w-0">
-                                <span class="text-lg shrink-0">${t.icon}</span>
-                                <span class="font-extrabold text-slate-900 text-sm">${t.title}</span>
-                            </span>
-                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0" data-grammar-chevron="${t.id}" style="${idx === 0 ? 'transform:rotate(180deg);' : ''}"></i>
-                        </button>
-                        <div class="${idx === 0 ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            <p class="text-xs text-slate-500 leading-relaxed mb-3">${t.desc}</p>
+                        <div class="w-full flex items-center justify-between gap-2 px-5 py-4">
+                            <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
+                                <span class="text-lg shrink-0">${t.icon || '📋'}</span>
+                                <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</span>
+                                ${t.isCustom ? '<span class="text-[9px] font-black text-violet-500 bg-violet-100 px-1.5 py-0.5 rounded-full shrink-0">내 표</span>' : ''}
+                            </button>
+                            ${editBtns}
+                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
+                        </div>
+                        <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
+                            ${t.desc ? `<p class="text-xs text-slate-500 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
                             <div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
-                                    <thead><tr>${headerRow}</tr></thead>
+                                    ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<p class="text-[11px] text-slate-400 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${t.note}</p>` : ''}
+                            ${t.note ? `<p class="text-[11px] text-slate-400 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${escapeHtml(t.note)}</p>` : ''}
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function toggleGrammarTable(id) {
@@ -992,7 +1038,173 @@ let vocabulary = [];
             const chevron = document.querySelector(`[data-grammar-chevron="${id}"]`);
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
+            grammarOpenState[id] = !nowHidden;
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
+        function expandAllGrammar(open) {
+            getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
+            renderGrammarTables();
+        }
+
+        function clearGrammarSearch() {
+            const input = document.getElementById('grammar-search');
+            if (input) { input.value = ''; input.focus(); }
+            renderGrammarTables();
+        }
+
+        // ---- 문법 표 편집기 ----
+        let grammarEditorState = null; // { id, icon, title, desc, note, headers:[], rows:[[]] }
+
+        function openGrammarEditor(id) {
+            if (id) {
+                const existing = getAllGrammarTables().find(t => t.id === id);
+                // 깊은 복사
+                grammarEditorState = JSON.parse(JSON.stringify({
+                    id: existing.id,
+                    icon: existing.icon || '📋',
+                    title: existing.title || '',
+                    desc: existing.desc || '',
+                    note: existing.note || '',
+                    headers: existing.headers || ['', ''],
+                    rows: existing.rows || [['', '']],
+                    _isBaseId: !!GRAMMAR_TABLES.find(b => b.id === existing.id)
+                }));
+            } else {
+                grammarEditorState = {
+                    id: 'custom-' + Date.now(),
+                    icon: '📋',
+                    title: '',
+                    desc: '',
+                    note: '',
+                    headers: ['뜻', '스페인어'],
+                    rows: [['', ''], ['', '']],
+                    _isBaseId: false
+                };
+            }
+            document.getElementById('grammar-editor-modal').classList.remove('hidden');
+            document.getElementById('grammar-editor-title').innerText = id ? '표 수정' : '새 표 만들기';
+            renderGrammarEditorFields();
+        }
+
+        function closeGrammarEditor() {
+            document.getElementById('grammar-editor-modal').classList.add('hidden');
+            grammarEditorState = null;
+        }
+
+        function renderGrammarEditorFields() {
+            const s = grammarEditorState;
+            if (!s) return;
+            document.getElementById('ge-icon').value = s.icon;
+            document.getElementById('ge-title').value = s.title;
+            document.getElementById('ge-desc').value = s.desc;
+            document.getElementById('ge-note').value = s.note;
+
+            // 표 그리드 (헤더 행 + 데이터 행들)
+            const grid = document.getElementById('ge-grid');
+            const colCount = s.headers.length;
+            let html = '<table class="border-collapse w-full"><thead><tr>';
+            s.headers.forEach((h, ci) => {
+                html += `<th class="p-1"><input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-violet-50 border border-violet-200 rounded-lg px-2 py-1.5 text-xs font-bold text-violet-700 focus:outline-none focus:ring-1 focus:ring-violet-400"></th>`;
+            });
+            html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
+            s.rows.forEach((row, ri) => {
+                html += '<tr>';
+                for (let ci = 0; ci < colCount; ci++) {
+                    const val = row[ci] || '';
+                    html += `<td class="p-1"><input value="${escapeAttr(val)}" oninput="updateGeCell(${ri}, ${ci}, this.value)" class="w-full min-w-[90px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400"></td>`;
+                }
+                html += `<td class="p-1"><button onclick="removeGeRow(${ri})" title="행 삭제" class="text-slate-300 hover:text-red-500 px-1"><i class="fa-solid fa-circle-minus"></i></button></td>`;
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            grid.innerHTML = html;
+        }
+
+        function escapeAttr(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+        function updateGeHeader(ci, val) { grammarEditorState.headers[ci] = val; }
+        function updateGeCell(ri, ci, val) { grammarEditorState.rows[ri][ci] = val; }
+        function addGeRow() {
+            grammarEditorState.rows.push(new Array(grammarEditorState.headers.length).fill(''));
+            renderGrammarEditorFields();
+        }
+        function removeGeRow(ri) {
+            if (grammarEditorState.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
+            grammarEditorState.rows.splice(ri, 1);
+            renderGrammarEditorFields();
+        }
+        function addGeColumn() {
+            grammarEditorState.headers.push('');
+            grammarEditorState.rows.forEach(r => r.push(''));
+            renderGrammarEditorFields();
+        }
+        function removeGeColumn() {
+            if (grammarEditorState.headers.length <= 1) { showToast("최소 한 열은 있어야 해요", "error"); return; }
+            grammarEditorState.headers.pop();
+            grammarEditorState.rows.forEach(r => r.pop());
+            renderGrammarEditorFields();
+        }
+
+        async function saveGrammarEditor() {
+            const s = grammarEditorState;
+            s.icon = document.getElementById('ge-icon').value.trim() || '📋';
+            s.title = document.getElementById('ge-title').value.trim();
+            s.desc = document.getElementById('ge-desc').value.trim();
+            s.note = document.getElementById('ge-note').value.trim();
+            if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
+
+            // 빈 행 정리 (모든 칸이 비어있으면 제거)
+            s.rows = s.rows.filter(r => r.some(c => (c || '').trim()));
+            if (s.rows.length === 0) s.rows = [new Array(s.headers.length).fill('')];
+
+            const tableData = {
+                id: s.id, icon: s.icon, title: s.title, desc: s.desc, note: s.note,
+                headers: s.headers, rows: s.rows, _edited: true
+            };
+
+            // 기존 사용자 표면 교체, 아니면 추가
+            const existingIdx = customGrammarTables.findIndex(c => c.id === s.id);
+            if (existingIdx >= 0) customGrammarTables[existingIdx] = tableData;
+            else customGrammarTables.push(tableData);
+
+            closeGrammarEditor();
+            renderGrammarTables();
+            await saveToStorage();
+            showToast("문법 표가 저장됐어요! ✨", "success");
+        }
+
+        function deleteGrammarTable(id) {
+            const t = getAllGrammarTables().find(x => x.id === id);
+            showConfirm(
+                `"${t ? t.title : '이 표'}"를 삭제할까요?`,
+                "삭제한 표는 다시 꺼낼 수 없어요.",
+                async () => {
+                    customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    delete grammarOpenState[id];
+                    renderGrammarTables();
+                    await saveToStorage();
+                    showToast("표를 삭제했어요", "success");
+                }
+            );
+        }
+
+        function resetGrammarTable(id) {
+            // 기본 표를 수정했던 걸 원래대로 되돌림
+            const wasEdited = customGrammarTables.find(c => c.id === id);
+            if (!wasEdited) { showToast("이미 기본 상태예요", "info"); return; }
+            showConfirm(
+                "기본값으로 되돌릴까요?",
+                "수정한 내용이 사라지고 원래 기본 표로 돌아가요.",
+                async () => {
+                    customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    renderGrammarTables();
+                    await saveToStorage();
+                    showToast("기본 표로 되돌렸어요", "success");
+                },
+                { okLabel: '되돌리기', cancelLabel: '취소', okStyle: 'primary' }
+            );
         }
 
         function changeTab(tabId) {
