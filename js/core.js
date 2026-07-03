@@ -993,17 +993,17 @@ let vocabulary = [];
             container.innerHTML = tables.map((t, idx) => {
                 const hlCols = t.highlightCols || [0];
                 const headerRow = (t.headers || []).map((h, ci) => {
-                    return `<th class="text-center px-3 py-2.5 text-xs font-black text-teal-800 bg-teal-100 border border-teal-200">${escapeHtml(h)}</th>`;
+                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-slate-700 bg-slate-100 border border-slate-300">${escapeHtml(h)}</th>`;
                 }).join('');
                 const bodyRows = (t.rows || []).map((r, ri) => {
-                    // 행마다 번갈아 배경색 (줄무늬) — 가독성 ↑
-                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-teal-50/50';
+                    // 행마다 번갈아 배경색 (줄무늬) — 좀 더 진하게
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-slate-100';
                     const cells = r.map((c, ci) => {
-                        // 강조 열(뜻/한국어 등)은 배경 대신 글씨를 진하게/굵게로 구분 (줄무늬랑 안 겹침)
-                        const hl = hlCols.includes(ci) ? 'font-extrabold text-teal-900' : 'font-medium text-slate-700';
-                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 ${hl}">${escapeHtml(c || '')}</td>`;
+                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 글씨 색으로 구분 (틸)
+                        const hl = hlCols.includes(ci) ? 'text-teal-700' : 'text-slate-900';
+                        return `<td class="px-3 py-2 text-sm text-center border border-slate-300 font-bold ${hl}">${escapeHtml(c || '')}</td>`;
                     }).join('');
-                    return `<tr class="${rowBg} hover:bg-teal-100/50 transition-colors">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-teal-50 transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
@@ -1023,14 +1023,14 @@ let vocabulary = [];
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            ${t.desc ? `<p class="text-xs text-slate-500 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
+                            ${t.desc ? `<p class="text-xs text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
                             <div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
                                     ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<p class="text-[11px] text-slate-400 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${escapeHtml(t.note)}</p>` : ''}
+                            ${t.note ? `<p class="text-[11px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${escapeHtml(t.note)}</p>` : ''}
                         </div>
                     </div>
                 `;
