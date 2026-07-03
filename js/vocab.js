@@ -974,7 +974,7 @@ function togglePosFields() {
                                 <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
                                 <span class="min-w-0 leading-tight" style="word-break:break-word;">
                                     <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
-                                    <span class="inline-flex items-center gap-1.5 align-middle ml-2">${badgeMarkup}</span>
+                                    <span class="inline-flex items-center gap-1.5 align-middle ml-2" style="transform: translateY(1px);">${badgeMarkup}</span>
                                 </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
