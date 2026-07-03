@@ -100,6 +100,10 @@
                         <i class="fa-solid fa-chart-line text-base"></i>
                         <span>학습기록</span>
                     </button>
+                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                        <i class="fa-solid fa-table-list text-base"></i>
+                        <span>문법 표</span>
+                    </button>
                 </div>
 
 
@@ -741,6 +745,18 @@
                         <div id="chart-body-ai"><div id="record-ai-chart" class="w-full relative"></div></div>
                     </div>
                 </div>
+
+                <!-- TAB: 문법 표 -->
+                <div id="tab-grammar" class="hidden space-y-4">
+                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                        <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-violet-600"></i> 문법 표
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">자주 쓰는 스페인어 문법 표를 모아뒀어요. 제목을 눌러 펼쳐보세요.</p>
+                    </div>
+                    <div id="grammar-tables-container" class="space-y-3"></div>
+                </div>
+
             </section>
         </main>
     </div>
