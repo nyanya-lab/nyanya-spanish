@@ -182,7 +182,7 @@
                     </div>
 
                     <!-- Vocabulary Grid List -->
-                    <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Word Cards will be dynamically injected here -->
                     </div>
                     
@@ -1119,12 +1119,6 @@
                 <div class="space-y-2 pt-2 border-t border-slate-100">
                     <label class="block text-xs font-bold text-slate-500">② 다른 기기에서: 붙여넣고 가져오기</label>
                     <textarea id="backup-import-area" rows="4" placeholder="여기에 복사해 온 내용을 붙여넣으세요..." class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-                    <button onclick="importBackupData()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">가져오기 (현재 기기 데이터를 덮어씁니다)</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 
     <script src="js/dictionary-data.js"></script>
     <script src="js/core.js"></script>
@@ -1132,5 +1126,5 @@
     <script src="js/flashcards.js"></script>
     <script src="js/quiz.js"></script>
     <script src="js/ai-feedback.js"></script>
-</body>
-</html>
+                window.speechSynthesis.speak(utterance);
+            } else {
