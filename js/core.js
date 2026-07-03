@@ -1003,7 +1003,7 @@ let vocabulary = [];
                         const hl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
                         return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${hl}">${escapeHtml(c || '')}</td>`;
                     }).join('');
-                    return `<tr class="${rowBg} hover:bg-[#e7f1fb] transition-colors">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-[#fff3c4] transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
