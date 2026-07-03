@@ -7,7 +7,7 @@ let vocabulary = [];
         let nyanyaDiary = {}; 
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
-        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
@@ -329,6 +329,83 @@ let vocabulary = [];
 
             d.registeredTotal = vocabulary.length;
             d.masteredTotal = vocabulary.filter(w => w.mastered).length;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 연속 학습일(streak) 계산 — nyanyaDiary(날짜별 기록) 기반
+        // ============================================================
+        function calcStreak() {
+            const dates = Object.keys(nyanyaDiary || {}).filter(d => {
+                const log = nyanyaDiary[d];
+                // 실제 학습이 있었던 날만 (퀴즈/AI/새 단어 중 하나라도)
+                return log && ((log.quizTotal || 0) > 0 || (log.aiSessions || 0) > 0 || (log.newWordsCount || 0) > 0);
+            }).sort(); // 오름차순
+            if (dates.length === 0) return 0;
+
+            const toDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const oneDay = 86400000;
+
+            // 가장 최근 학습일이 오늘이거나 어제여야 streak 유효
+            const last = toDate(dates[dates.length - 1]);
+            const daysSinceLast = Math.round((today - last) / oneDay);
+            if (daysSinceLast > 1) return 0; // 이틀 이상 공백이면 streak 끊김
+
+            // 최근 학습일부터 거꾸로 연속된 날 세기
+            let streak = 1;
+            for (let i = dates.length - 1; i > 0; i--) {
+                const cur = toDate(dates[i]);
+                const prev = toDate(dates[i - 1]);
+                const gap = Math.round((cur - prev) / oneDay);
+                if (gap === 1) streak++;
+                else break;
+            }
+            return streak;
+        }
+
+        function renderStreakBadge() {
+            const el = document.getElementById('streak-badge');
+            if (!el) return;
+            const streak = calcStreak();
+            // 최고 기록 갱신 (learnerProfile에 저장)
+            if (typeof learnerProfile !== 'undefined' && learnerProfile) {
+                if (!learnerProfile.bestStreak) learnerProfile.bestStreak = 0;
+                if (streak > learnerProfile.bestStreak) {
+                    learnerProfile.bestStreak = streak;
+                    saveToStorage();
+                }
+            }
+            const best = (typeof learnerProfile !== 'undefined' && learnerProfile) ? (learnerProfile.bestStreak || 0) : 0;
+            if (streak >= 1) {
+                el.classList.remove('hidden');
+                el.innerHTML = `<i class="fa-solid fa-fire"></i> ${streak}일 연속${best > streak ? ` <span class="text-orange-400 font-bold ml-1">· 최고 ${best}일</span>` : (best === streak && best > 1 ? ` <span class="text-orange-500 font-bold ml-1">· 최고 기록! 🎉</span>` : '')}`;
+            } else if (best >= 1) {
+                // 지금은 끊겼지만 최고 기록은 보여주기
+                el.classList.remove('hidden');
+                el.innerHTML = `<i class="fa-regular fa-snowflake text-slate-400"></i> <span class="text-slate-500">최고 ${best}일 연속</span>`;
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+
+        // [냐냐 PATCH] 오늘 복습하면 좋은 단어 = 약점 점수(weakScore) 1점 이상. 점수 높은 순.
+        function getTodayReviewWords() {
+            return vocabulary
+                .filter(w => (w.weakScore || 0) >= 1 && !w.mastered)
+                .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+        }
+
+        function renderTodayReview() {
+            const box = document.getElementById('today-review-box');
+            if (!box) return;
+            const words = getTodayReviewWords();
+            const countEl = document.getElementById('today-review-count');
+            if (countEl) countEl.innerText = words.length;
+            if (words.length === 0) {
+                box.classList.add('hidden');
+            } else {
+                box.classList.remove('hidden');
+            }
         }
 
         function logAction(type, extra) {
