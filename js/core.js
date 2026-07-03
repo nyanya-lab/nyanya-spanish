@@ -837,6 +837,164 @@ let vocabulary = [];
             isMenuCollapsed = false;
         }
 
+        // ============================================================
+        // [냐냐 PATCH] 문법 표 (참고용 표 모음)
+        // ============================================================
+        let grammarTablesRendered = false;
+        const GRAMMAR_TABLES = [
+            {
+                id: 'possessive',
+                icon: '🫰',
+                title: '소유형용사 (mi, tu, su...)',
+                desc: '명사 앞에 붙어 "누구의"를 나타내요. 뒤에 오는 명사의 수(단·복수)에 맞춰 변해요. nuestro/vuestro만 성(남·여)도 변해요.',
+                headers: ['뜻', '단수 명사 앞', '복수 명사 앞'],
+                rows: [
+                    ['나의', 'mi', 'mis'],
+                    ['너의', 'tu', 'tus'],
+                    ['그/그녀/당신의', 'su', 'sus'],
+                    ['우리의', 'nuestro / nuestra', 'nuestros / nuestras'],
+                    ['너희의', 'vuestro / vuestra', 'vuestros / vuestras'],
+                    ['그들/당신들의', 'su', 'sus'],
+                ],
+                note: '예: mi libro (내 책), mis libros (내 책들), nuestra casa (우리 집)'
+            },
+            {
+                id: 'demonstrative',
+                icon: '👉',
+                title: '지시사 (이 · 그 · 저)',
+                desc: '거리에 따라 este(이·가까움) / ese(그·중간) / aquel(저·멀리)로 나뉘고, 각각 성·수에 맞춰 변해요.',
+                headers: ['뜻', '남성 단수', '여성 단수', '남성 복수', '여성 복수'],
+                rows: [
+                    ['이 (가까이)', 'este', 'esta', 'estos', 'estas'],
+                    ['그 (조금 멀리)', 'ese', 'esa', 'esos', 'esas'],
+                    ['저 (멀리)', 'aquel', 'aquella', 'aquellos', 'aquellas'],
+                ],
+                note: '중성 지시대명사 esto/eso/aquello는 "이것/그것/저것"처럼 특정 명사 없이 막연한 것을 가리킬 때 써요. 예: ¿Qué es esto? (이게 뭐야?)'
+            },
+            {
+                id: 'object-pronoun',
+                icon: '🎯',
+                title: '목적격 대명사 (me, te, lo, le...)',
+                desc: '직접목적격("~을/를")과 간접목적격("~에게")이 있어요. 보통 동사 앞에 와요.',
+                headers: ['뜻', '직접목적격 (~을/를)', '간접목적격 (~에게)'],
+                rows: [
+                    ['나', 'me', 'me'],
+                    ['너', 'te', 'te'],
+                    ['그/그것/당신(남)', 'lo', 'le'],
+                    ['그녀/그것/당신(여)', 'la', 'le'],
+                    ['우리', 'nos', 'nos'],
+                    ['너희', 'os', 'os'],
+                    ['그들/그것들/당신들(남)', 'los', 'les'],
+                    ['그녀들/그것들/당신들(여)', 'las', 'les'],
+                ],
+                note: '예: Te veo (너를 봐), Le doy un libro (그에게 책을 줘). 둘 다 쓸 땐 간접+직접 순서: Me lo da (나에게 그것을 줘).'
+            },
+            {
+                id: 'numbers',
+                icon: '🔢',
+                title: '숫자 (Números)',
+                desc: '기수(0~100 주요 숫자). 16~29는 한 단어로 붙여 써요(dieciséis, veintiuno...). 31부터는 y로 연결해요(treinta y uno).',
+                headers: ['숫자', '스페인어', '숫자', '스페인어'],
+                rows: [
+                    ['0', 'cero', '16', 'dieciséis'],
+                    ['1', 'uno', '17', 'diecisiete'],
+                    ['2', 'dos', '18', 'dieciocho'],
+                    ['3', 'tres', '19', 'diecinueve'],
+                    ['4', 'cuatro', '20', 'veinte'],
+                    ['5', 'cinco', '21', 'veintiuno'],
+                    ['6', 'seis', '30', 'treinta'],
+                    ['7', 'siete', '40', 'cuarenta'],
+                    ['8', 'ocho', '50', 'cincuenta'],
+                    ['9', 'nueve', '60', 'sesenta'],
+                    ['10', 'diez', '70', 'setenta'],
+                    ['11', 'once', '80', 'ochenta'],
+                    ['12', 'doce', '90', 'noventa'],
+                    ['13', 'trece', '100', 'cien'],
+                    ['14', 'catorce', '1000', 'mil'],
+                    ['15', 'quince', '', ''],
+                ],
+                note: '예: 31 = treinta y uno, 45 = cuarenta y cinco, 100 = cien (딱 100), 101 = ciento uno'
+            },
+            {
+                id: 'months',
+                icon: '📅',
+                title: '월 (Meses)',
+                desc: '스페인어에서 월 이름은 소문자로 써요. 관사도 안 붙여요.',
+                headers: ['한국어', '스페인어', '한국어', '스페인어'],
+                rows: [
+                    ['1월', 'enero', '7월', 'julio'],
+                    ['2월', 'febrero', '8월', 'agosto'],
+                    ['3월', 'marzo', '9월', 'septiembre'],
+                    ['4월', 'abril', '10월', 'octubre'],
+                    ['5월', 'mayo', '11월', 'noviembre'],
+                    ['6월', 'junio', '12월', 'diciembre'],
+                ],
+                note: '예: en enero (1월에), el 5 de mayo (5월 5일)'
+            },
+            {
+                id: 'weekdays',
+                icon: '🗓️',
+                title: '요일 (Días de la semana)',
+                desc: '요일도 소문자로 써요. 월요일부터 시작해요. 모두 남성명사예요.',
+                headers: ['한국어', '스페인어'],
+                rows: [
+                    ['월요일', 'lunes'],
+                    ['화요일', 'martes'],
+                    ['수요일', 'miércoles'],
+                    ['목요일', 'jueves'],
+                    ['금요일', 'viernes'],
+                    ['토요일', 'sábado'],
+                    ['일요일', 'domingo'],
+                ],
+                note: '예: el lunes (월요일에), los lunes (매주 월요일). lunes~viernes는 복수형이 단수와 같아요(el lunes → los lunes).'
+            },
+        ];
+
+        function renderGrammarTables() {
+            const container = document.getElementById('grammar-tables-container');
+            if (!container) return;
+            container.innerHTML = GRAMMAR_TABLES.map((t, idx) => {
+                const headerRow = t.headers.map(h => `<th class="text-left px-3 py-2 text-[11px] font-black text-violet-700 bg-violet-50 border-b border-violet-100">${h}</th>`).join('');
+                const bodyRows = t.rows.map(r => {
+                    const cells = r.map((c, ci) => {
+                        // 첫 칸(뜻/숫자)은 슬쩍 회색, 스페인어 칸은 진하게
+                        const isSpanish = ci % 2 === 1 || (t.headers[ci] && /스페인어|명사 앞|목적격|단수|복수/.test(t.headers[ci]));
+                        return `<td class="px-3 py-2 text-sm ${isSpanish ? 'font-bold text-slate-800' : 'text-slate-500'} border-b border-slate-50">${c || ''}</td>`;
+                    }).join('');
+                    return `<tr class="hover:bg-slate-50/60">${cells}</tr>`;
+                }).join('');
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <button type="button" onclick="toggleGrammarTable('${t.id}')" class="w-full flex items-center justify-between gap-2 px-5 py-4 text-left">
+                            <span class="flex items-center gap-2.5 min-w-0">
+                                <span class="text-lg shrink-0">${t.icon}</span>
+                                <span class="font-extrabold text-slate-900 text-sm">${t.title}</span>
+                            </span>
+                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0" data-grammar-chevron="${t.id}" style="${idx === 0 ? 'transform:rotate(180deg);' : ''}"></i>
+                        </button>
+                        <div class="${idx === 0 ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
+                            <p class="text-xs text-slate-500 leading-relaxed mb-3">${t.desc}</p>
+                            <div class="overflow-x-auto rounded-xl border border-slate-100">
+                                <table class="w-full border-collapse">
+                                    <thead><tr>${headerRow}</tr></thead>
+                                    <tbody>${bodyRows}</tbody>
+                                </table>
+                            </div>
+                            ${t.note ? `<p class="text-[11px] text-slate-400 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${t.note}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleGrammarTable(id) {
+            const body = document.querySelector(`[data-grammar-body="${id}"]`);
+            const chevron = document.querySelector(`[data-grammar-chevron="${id}"]`);
+            if (!body) return;
+            const nowHidden = body.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
         function changeTab(tabId) {
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
@@ -851,7 +1009,8 @@ let vocabulary = [];
                 'cards': 'nav-cards',
                 'quiz': 'nav-quiz',
                 'ai-feedback': 'nav-ai',
-                'records': 'nav-records'
+                'records': 'nav-records',
+                'grammar': 'nav-grammar'
             };
             
             Object.keys(btns).forEach(key => {
@@ -885,6 +1044,8 @@ let vocabulary = [];
                 const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
+            } else if (tabId === 'grammar') {
+                renderGrammarTables();
             }
         }
 
