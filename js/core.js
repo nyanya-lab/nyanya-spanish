@@ -985,16 +985,16 @@ let vocabulary = [];
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
             container.innerHTML = tables.map((t, idx) => {
-                const headerRow = (t.headers || []).map(h => `<th class="text-left px-3 py-2 text-[11px] font-black text-violet-700 bg-violet-50 border-b border-violet-100">${escapeHtml(h)}</th>`).join('');
-                const bodyRows = (t.rows || []).map(r => {
+                const headerRow = (t.headers || []).map(h => `<th class="text-center px-3 py-2.5 text-xs font-black text-violet-800 bg-violet-100 border border-violet-200">${escapeHtml(h)}</th>`).join('');
+                const bodyRows = (t.rows || []).map((r, ri) => {
+                    // 행마다 번갈아 배경색 (줄무늬) — 가독성 ↑
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-violet-50/40';
                     const cells = r.map((c, ci) => {
-                        // 첫 칸(뜻/한국어)은 제목 행처럼 연보라 배경 + 두꺼운 글씨
-                        if (ci === 0) {
-                            return `<td class="px-3 py-2 text-sm font-bold text-violet-700 bg-violet-50 border-b border-violet-100">${escapeHtml(c || '')}</td>`;
-                        }
-                        return `<td class="px-3 py-2 text-sm font-bold text-slate-800 border-b border-slate-50">${escapeHtml(c || '')}</td>`;
+                        // 모든 칸 동일한 크기·가운데 정렬·세로 구분선
+                        const firstCol = ci === 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700';
+                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 ${firstCol}">${escapeHtml(c || '')}</td>`;
                     }).join('');
-                    return `<tr class="hover:bg-slate-50/60">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-violet-100/40 transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
@@ -1009,7 +1009,6 @@ let vocabulary = [];
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-lg shrink-0">${t.icon || '📋'}</span>
                                 <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</span>
-                                ${t.isCustom ? '<span class="text-[9px] font-black text-violet-500 bg-violet-100 px-1.5 py-0.5 rounded-full shrink-0">내 표</span>' : ''}
                             </button>
                             ${editBtns}
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
