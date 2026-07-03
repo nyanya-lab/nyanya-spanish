@@ -990,9 +990,8 @@ let vocabulary = [];
                     // 행마다 번갈아 배경색 (줄무늬) — 가독성 ↑
                     const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-violet-50/40';
                     const cells = r.map((c, ci) => {
-                        // 모든 칸 동일한 크기·가운데 정렬·세로 구분선
-                        const firstCol = ci === 0 ? 'font-bold text-slate-900' : 'font-medium text-slate-700';
-                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 ${firstCol}">${escapeHtml(c || '')}</td>`;
+                        // 모든 칸 동일한 굵기·색상 (첫 칸이 유독 진해 보이던 문제 해결)
+                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 font-medium text-slate-700">${escapeHtml(c || '')}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-violet-100/40 transition-colors">${cells}</tr>`;
                 }).join('');
