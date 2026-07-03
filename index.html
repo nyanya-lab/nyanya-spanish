@@ -124,12 +124,8 @@
                 
                 <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-6">
-                    <!-- 연속 학습일 + 오늘의 복습 -->
+                    <!-- 오늘의 복습 -->
                     <div class="flex flex-col gap-3">
-                        <div class="flex items-center justify-between gap-2">
-                            <h2 class="text-lg font-extrabold text-slate-900">내 단어장</h2>
-                            <span id="streak-badge" class="hidden text-xs font-black text-orange-600 bg-orange-100 px-3 py-1.5 rounded-full flex items-center gap-1.5"><i class="fa-solid fa-fire"></i> 0일 연속</span>
-                        </div>
                         <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-3 min-w-0">
                                 <span class="text-2xl shrink-0">⭐</span>
@@ -681,6 +677,18 @@
                             <button id="range-btn-1y" onclick="setRecordRange('1y')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">1년</button>
                             <button id="range-btn-custom" onclick="setRecordRange('custom')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">기간설정</button>
                         </div>
+                    </div>
+
+                    <!-- 연속 학습일 -->
+                    <div id="streak-card" class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-3xl p-5 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="text-4xl shrink-0" id="streak-fire">🔥</div>
+                            <div class="min-w-0">
+                                <p class="text-2xl font-black text-orange-700 leading-tight" id="streak-main">0일 연속</p>
+                                <p class="text-xs font-bold text-orange-500 mt-0.5" id="streak-best">최고 기록: 0일</p>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-orange-400 text-right shrink-0 max-w-[130px] leading-relaxed">하루에 5개 이상 학습하면 연속일이 쌓여요!</p>
                     </div>
 
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
