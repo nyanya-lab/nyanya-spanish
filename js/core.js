@@ -852,6 +852,7 @@ let vocabulary = [];
                 title: '소유형용사 (mi, tu, su...)',
                 desc: '명사 앞에 붙어 "누구의"를 나타내요. 뒤에 오는 명사의 수(단·복수)에 맞춰 변해요. nuestro/vuestro만 성(남·여)도 변해요.',
                 headers: ['뜻', '단수 명사 앞', '복수 명사 앞'],
+                highlightCols: [0],
                 rows: [
                     ['나의', 'mi', 'mis'],
                     ['너의', 'tu', 'tus'],
@@ -868,6 +869,7 @@ let vocabulary = [];
                 title: '지시사 (이 · 그 · 저)',
                 desc: '거리에 따라 este(이·가까움) / ese(그·중간) / aquel(저·멀리)로 나뉘고, 각각 성·수에 맞춰 변해요.',
                 headers: ['뜻', '남성 단수', '여성 단수', '남성 복수', '여성 복수'],
+                highlightCols: [0],
                 rows: [
                     ['이 (가까이)', 'este', 'esta', 'estos', 'estas'],
                     ['그 (조금 멀리)', 'ese', 'esa', 'esos', 'esas'],
@@ -881,6 +883,7 @@ let vocabulary = [];
                 title: '목적격 대명사 (me, te, lo, le...)',
                 desc: '직접목적격("~을/를")과 간접목적격("~에게")이 있어요. 보통 동사 앞에 와요.',
                 headers: ['뜻', '직접목적격 (~을/를)', '간접목적격 (~에게)'],
+                highlightCols: [0],
                 rows: [
                     ['나', 'me', 'me'],
                     ['너', 'te', 'te'],
@@ -899,6 +902,7 @@ let vocabulary = [];
                 title: '숫자 (Números)',
                 desc: '기수(0~100 주요 숫자). 16~29는 한 단어로 붙여 써요(dieciséis, veintiuno...). 31부터는 y로 연결해요(treinta y uno).',
                 headers: ['숫자', '스페인어', '숫자', '스페인어'],
+                highlightCols: [0, 2],
                 rows: [
                     ['0', 'cero', '16', 'dieciséis'],
                     ['1', 'uno', '17', 'diecisiete'],
@@ -925,6 +929,7 @@ let vocabulary = [];
                 title: '월 (Meses)',
                 desc: '스페인어에서 월 이름은 소문자로 써요. 관사도 안 붙여요.',
                 headers: ['한국어', '스페인어', '한국어', '스페인어'],
+                highlightCols: [0, 2],
                 rows: [
                     ['1월', 'enero', '7월', 'julio'],
                     ['2월', 'febrero', '8월', 'agosto'],
@@ -941,6 +946,7 @@ let vocabulary = [];
                 title: '요일 (Días de la semana)',
                 desc: '요일도 소문자로 써요. 월요일부터 시작해요. 모두 남성명사예요.',
                 headers: ['한국어', '스페인어'],
+                highlightCols: [0],
                 rows: [
                     ['월요일', 'lunes'],
                     ['화요일', 'martes'],
@@ -985,13 +991,18 @@ let vocabulary = [];
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
             container.innerHTML = tables.map((t, idx) => {
-                const headerRow = (t.headers || []).map(h => `<th class="text-center px-3 py-2.5 text-xs font-black text-violet-800 bg-violet-100 border border-violet-200">${escapeHtml(h)}</th>`).join('');
+                const hlCols = t.highlightCols || [0];
+                const headerRow = (t.headers || []).map((h, ci) => {
+                    const hl = hlCols.includes(ci) ? 'bg-violet-100' : 'bg-violet-50';
+                    return `<th class="text-center px-3 py-2.5 text-xs font-black text-violet-800 ${hl} border border-violet-200">${escapeHtml(h)}</th>`;
+                }).join('');
                 const bodyRows = (t.rows || []).map((r, ri) => {
                     // 행마다 번갈아 배경색 (줄무늬) — 가독성 ↑
                     const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-violet-50/40';
                     const cells = r.map((c, ci) => {
-                        // 모든 칸 동일한 굵기·색상 (진한 검정으로 가독성 ↑)
-                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 font-semibold text-slate-900">${escapeHtml(c || '')}</td>`;
+                        // 강조 열(뜻/한국어 등)은 연한 배경으로 구분
+                        const hl = hlCols.includes(ci) ? 'bg-violet-50/70' : '';
+                        return `<td class="px-3 py-2 text-sm text-center border border-slate-200 font-semibold text-slate-900 ${hl}">${escapeHtml(c || '')}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-violet-100/40 transition-colors">${cells}</tr>`;
                 }).join('');
@@ -1066,6 +1077,7 @@ let vocabulary = [];
                     note: existing.note || '',
                     headers: existing.headers || ['', ''],
                     rows: existing.rows || [['', '']],
+                    highlightCols: existing.highlightCols || [0],
                     _isBaseId: !!GRAMMAR_TABLES.find(b => b.id === existing.id)
                 }));
             } else {
@@ -1077,6 +1089,7 @@ let vocabulary = [];
                     note: '',
                     headers: ['뜻', '스페인어'],
                     rows: [['', ''], ['', '']],
+                    highlightCols: [0],
                     _isBaseId: false
                 };
             }
@@ -1103,7 +1116,11 @@ let vocabulary = [];
             const colCount = s.headers.length;
             let html = '<table class="border-collapse w-full"><thead><tr>';
             s.headers.forEach((h, ci) => {
-                html += `<th class="p-1"><input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-violet-50 border border-violet-200 rounded-lg px-2 py-1.5 text-xs font-bold text-violet-700 focus:outline-none focus:ring-1 focus:ring-violet-400"></th>`;
+                const isHl = (s.highlightCols || []).includes(ci);
+                html += `<th class="p-1 align-top">
+                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-violet-50 border border-violet-200 rounded-lg px-2 py-1.5 text-xs font-bold text-violet-700 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
+                </th>`;
             });
             html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
             s.rows.forEach((row, ri) => {
@@ -1123,6 +1140,13 @@ let vocabulary = [];
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
         function updateGeHeader(ci, val) { grammarEditorState.headers[ci] = val; }
+        function toggleGeHighlight(ci) {
+            if (!grammarEditorState.highlightCols) grammarEditorState.highlightCols = [];
+            const idx = grammarEditorState.highlightCols.indexOf(ci);
+            if (idx >= 0) grammarEditorState.highlightCols.splice(idx, 1);
+            else grammarEditorState.highlightCols.push(ci);
+            renderGrammarEditorFields();
+        }
         function updateGeCell(ri, ci, val) { grammarEditorState.rows[ri][ci] = val; }
         function addGeRow() {
             grammarEditorState.rows.push(new Array(grammarEditorState.headers.length).fill(''));
@@ -1140,8 +1164,13 @@ let vocabulary = [];
         }
         function removeGeColumn() {
             if (grammarEditorState.headers.length <= 1) { showToast("최소 한 열은 있어야 해요", "error"); return; }
+            const lastIdx = grammarEditorState.headers.length - 1;
             grammarEditorState.headers.pop();
             grammarEditorState.rows.forEach(r => r.pop());
+            // 강조 목록에서 삭제된 열 제거
+            if (grammarEditorState.highlightCols) {
+                grammarEditorState.highlightCols = grammarEditorState.highlightCols.filter(ci => ci !== lastIdx);
+            }
             renderGrammarEditorFields();
         }
 
@@ -1159,7 +1188,7 @@ let vocabulary = [];
 
             const tableData = {
                 id: s.id, icon: s.icon, title: s.title, desc: s.desc, note: s.note,
-                headers: s.headers, rows: s.rows, _edited: true
+                headers: s.headers, rows: s.rows, highlightCols: s.highlightCols || [0], _edited: true
             };
 
             // 기존 사용자 표면 교체, 아니면 추가
