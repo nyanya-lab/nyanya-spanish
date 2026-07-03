@@ -993,17 +993,17 @@ let vocabulary = [];
             container.innerHTML = tables.map((t, idx) => {
                 const hlCols = t.highlightCols || [0];
                 const headerRow = (t.headers || []).map((h, ci) => {
-                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-slate-100 bg-[#5b7c99] border border-[#4a6980]">${escapeHtml(h)}</th>`;
+                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#4a7ba6] border border-[#3d6890]">${escapeHtml(h)}</th>`;
                 }).join('');
                 const bodyRows = (t.rows || []).map((r, ri) => {
-                    // 행마다 번갈아 배경색 (줄무늬) — 더스티 블루 톤
-                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#eef3f7]';
+                    // 행마다 번갈아 배경색 (줄무늬) — 부드러운 파스텔 블루
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f0f6fb]';
                     const cells = r.map((c, ci) => {
-                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 진한 더스티 블루 글씨로 구분
-                        const hl = hlCols.includes(ci) ? 'text-[#3d5a73]' : 'text-slate-800';
-                        return `<td class="px-3 py-2 text-sm text-center border border-[#c9d6e0] font-bold ${hl}">${escapeHtml(c || '')}</td>`;
+                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 진한 블루 글씨로 구분
+                        const hl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
+                        return `<td class="px-3 py-2 text-sm text-center border border-[#cfdeeb] ${hl}">${escapeHtml(c || '')}</td>`;
                     }).join('');
-                    return `<tr class="${rowBg} hover:bg-[#dde7ef] transition-colors">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-[#e2eef7] transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
@@ -1117,8 +1117,8 @@ let vocabulary = [];
             s.headers.forEach((h, ci) => {
                 const isHl = (s.highlightCols || []).includes(ci);
                 html += `<th class="p-1 align-top">
-                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#eef3f7] border border-[#c9d6e0] rounded-lg px-2 py-1.5 text-xs font-bold text-[#3d5a73] focus:outline-none focus:ring-1 focus:ring-[#5b7c99]">
-                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-[#5b7c99] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
+                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#f0f6fb] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#4a7ba6]">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-[#4a7ba6] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
                 </th>`;
             });
             html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
