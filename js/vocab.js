@@ -1,1092 +1,1198 @@
-function togglePosFields() {
-            const pos = document.getElementById('input-pos').value;
-            const nounDetails = document.getElementById('field-noun-details');
-            const verbConjugations = document.getElementById('field-verb-conjugations');
-            const adjDetails = document.getElementById('field-adj-details');
+let currentAiMode = 'ko-es';
+        let aiCurrentWordForMission = null;
+        let aiCurrentKoreanSentence = "";
 
-            if (pos === 'noun') {
-                nounDetails.classList.remove('hidden');
-                verbConjugations.classList.add('hidden');
-                adjDetails.classList.add('hidden');
-            } else if (pos === 'verb') {
-                nounDetails.classList.add('hidden');
-                verbConjugations.classList.remove('hidden');
-                adjDetails.classList.add('hidden');
-            } else if (pos === 'adjective') {
-                nounDetails.classList.add('hidden');
-                verbConjugations.classList.add('hidden');
-                adjDetails.classList.remove('hidden');
-            } else {
-                nounDetails.classList.add('hidden');
-                verbConjugations.classList.add('hidden');
-                adjDetails.classList.add('hidden');
+        function switchAiMode(mode) {
+            currentAiMode = mode;
+            const btnKoEs = document.getElementById('ai-mode-btn-ko-es');
+            const btnEsKo = document.getElementById('ai-mode-btn-es-ko');
+            const btnQuestion = document.getElementById('ai-mode-btn-question');
+            const btnExample = document.getElementById('ai-mode-btn-example');
+            const paneKoEs = document.getElementById('ai-pane-ko-es');
+            const paneEsKo = document.getElementById('ai-pane-es-ko');
+            const paneQuestion = document.getElementById('ai-pane-question');
+            const paneExample = document.getElementById('ai-pane-example');
+            const resultBox = document.getElementById('ai-feedback-result');
+
+            resultBox.classList.add('hidden');
+
+            const activeClass = "py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+            const inactiveClass = "py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
+            btnKoEs.className = mode === 'ko-es' ? activeClass : inactiveClass;
+            btnEsKo.className = mode === 'es-ko' ? activeClass : inactiveClass;
+            btnQuestion.className = mode === 'question' ? activeClass : inactiveClass;
+            if (btnExample) btnExample.className = mode === 'example' ? activeClass : inactiveClass;
+            paneKoEs.classList.toggle('hidden', mode !== 'ko-es');
+            paneEsKo.classList.toggle('hidden', mode !== 'es-ko');
+            paneQuestion.classList.toggle('hidden', mode !== 'question');
+            if (paneExample) paneExample.classList.toggle('hidden', mode !== 'example');
+
+            if (mode === 'ko-es') {
+                resetKoEsMissionState();
+            } else if (mode === 'es-ko') {
+                document.getElementById('ai-free-input-es').value = '';
+            } else if (mode === 'question') {
+                // 질문 목록은 '질문 관리' 모달에서 보여주므로 여기선 별도 처리 불필요
+            } else if (mode === 'example') {
+                resetExampleMissionState();
             }
         }
 
-        function toggleVerbTypeDetails() {
-            const verbClass = document.getElementById('input-verb-class').value;
-            const irrSelect = document.getElementById('input-verb-irregular-type');
-            if (verbClass === 'irregular') {
-                irrSelect.disabled = false;
-                irrSelect.value = "1인칭";
-            } else {
-                irrSelect.disabled = true;
-                irrSelect.value = "none";
+        // [PATCH] 스->한 자유 작문 모드: 첨삭 후 다음 문장을 쓸 수 있도록 입력칸/결과창을 초기화
+        function resetEsKoPane() {
+            document.getElementById('ai-free-input-es').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+            document.getElementById('ai-free-input-es').focus();
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 질문에 답하기 코너
+        // ============================================================
+        // ── 질문 관리 모달 ──
+        function openQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.remove('hidden');
+            document.getElementById('question-search-input').value = '';
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+        }
+        function closeQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.add('hidden');
+        }
+
+        // 등록된 주제들을 모아서 입력창 자동완성(datalist)에 채움
+        function refreshTopicsDatalist() {
+            const datalist = document.getElementById('question-topics-datalist');
+            if (!datalist) return;
+            const topics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
+            datalist.innerHTML = topics.map(t => `<option value="${t.replace(/"/g, '&quot;')}">`).join('');
+        }
+
+        function addCustomQuestion() {
+            const input = document.getElementById('new-question-input');
+            const topicInput = document.getElementById('new-question-topic-input');
+            const text = input.value.trim();
+            const topic = topicInput.value.trim() || '기타';
+            if (!text) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
             }
+            customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
+            input.value = '';
+            // 주제는 연속 등록 편하게 유지
+            saveToStorage();
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+            showToast(`'${topic}' 주제에 질문을 등록했어요! 📝`, "success");
         }
 
-        function openWordModal(wordId = null) {
-            document.getElementById('word-modal').classList.remove('hidden');
-            document.getElementById('word-suggestions').classList.add('hidden');
-            
-            if (wordId) {
-                const w = vocabulary.find(item => item.id === wordId);
-                if (!w) return;
-                
-                document.getElementById('modal-title').innerHTML = `✏️ 단어 수정하기: <span class="text-indigo-600 font-extrabold">${w.word}</span>`;
-                document.getElementById('modal-word-id').value = w.id;
-                document.getElementById('input-word').value = w.word;
-                document.getElementById('input-meaning').value = w.meaning;
-                document.getElementById('input-pos').value = w.pos || 'noun';
-                
-                document.getElementById('input-gender').value = w.gender || 'none';
-                document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
-                document.getElementById('input-verb-class').value = w.verbClass || 'regular';
-                const irrSelect = document.getElementById('input-verb-irregular-type');
-                irrSelect.value = w.irregularType || 'none';
-                irrSelect.disabled = (w.verbClass !== 'irregular');
+        function deleteCustomQuestion(id) {
+            customQuestions = customQuestions.filter(q => q.id !== id);
+            saveToStorage();
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+        }
 
-                if (w.conjugations) {
-                    document.getElementById('conj-yo').value = w.conjugations.yo || '';
-                    document.getElementById('conj-tu').value = w.conjugations.tu || '';
-                    document.getElementById('conj-el').value = w.conjugations.el || '';
-                    document.getElementById('conj-nos').value = w.conjugations.nos || '';
-                    document.getElementById('conj-vos').value = w.conjugations.vos || '';
-                    document.getElementById('conj-ellos').value = w.conjugations.ellos || '';
-                } else {
-                    clearConjugationFields();
-                }
+        // 주제별로 묶어서 보여주기 (+ 검색 필터 + 수정 버튼)
+        function renderCustomQuestionsList() {
+            const box = document.getElementById('question-list-box');
+            if (!box) return;
+            const searchVal = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
 
-                document.getElementById('input-example').value = w.example || '';
-                document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
+            const filtered = customQuestions.filter(q =>
+                !searchVal || q.question.toLowerCase().includes(searchVal) || (q.topic || '').toLowerCase().includes(searchVal)
+            );
 
-                // [냐냐 PATCH] 관용구 여러 개 지원 — 예전 단일 idiom/idiomMeaning 데이터도 자동 변환
-                clearIdiomRows();
-                const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                const idiomBox = document.getElementById('idiom-fields-box');
-                const idiomIcon = document.getElementById('idiom-toggle-icon');
-                if (idiomList.length > 0) {
-                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
-                    if (idiomBox) idiomBox.classList.remove('hidden');
-                    if (idiomIcon) idiomIcon.className = "fa-solid fa-minus text-xs";
-                } else {
-                    if (idiomBox) idiomBox.classList.add('hidden');
-                    if (idiomIcon) idiomIcon.className = "fa-solid fa-plus text-xs";
-                }
-                document.getElementById('input-notes').value = w.notes || '';
-            } else {
-                document.getElementById('modal-title').innerHTML = `✨ 새로운 단어 등록`;
-                document.getElementById('modal-word-id').value = '';
-                document.getElementById('input-word').value = '';
-                document.getElementById('input-meaning').value = '';
-                document.getElementById('input-pos').value = 'noun';
-                document.getElementById('input-gender').value = 'none';
-                document.getElementById('input-adj-agreement').value = 'full';
-                document.getElementById('input-verb-class').value = 'regular';
-                document.getElementById('input-verb-irregular-type').value = 'none';
-                document.getElementById('input-verb-irregular-type').disabled = true;
-                
-                clearConjugationFields();
-                
-                document.getElementById('input-example').value = '';
-                document.getElementById('input-example-meaning').value = '';
-                clearIdiomRows();
-                const idiomBoxNew = document.getElementById('idiom-fields-box');
-                const idiomIconNew = document.getElementById('idiom-toggle-icon');
-                if (idiomBoxNew) idiomBoxNew.classList.add('hidden');
-                if (idiomIconNew) idiomIconNew.className = "fa-solid fa-plus text-xs";
-                document.getElementById('input-notes').value = '· ';
+            if (filtered.length === 0) {
+                box.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">${customQuestions.length === 0 ? '등록된 질문이 없어요. 위에서 추가해 보세요!' : '검색 결과가 없어요.'}</p>`;
+                return;
             }
-            togglePosFields();
-            toggleNotesClearBtn();
-        }
 
-        // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
-        function handleNotesEnterKey(event) {
-            if (event.key !== 'Enter') return;
-            event.preventDefault();
-            const textarea = event.target;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const value = textarea.value;
-            const insertion = '\n· ';
-            textarea.value = value.slice(0, start) + insertion + value.slice(end);
-            const newPos = start + insertion.length;
-            textarea.selectionStart = textarea.selectionEnd = newPos;
-            toggleNotesClearBtn();
-        }
-
-        // [냐냐 PATCH] 노트 전체 지우기 X 버튼
-        function clearNotes() {
-            const ta = document.getElementById('input-notes');
-            if (!ta) return;
-            ta.value = '';
-            toggleNotesClearBtn();
-            ta.focus();
-        }
-        function toggleNotesClearBtn() {
-            const ta = document.getElementById('input-notes');
-            const btn = document.getElementById('notes-clear-btn');
-            if (!ta || !btn) return;
-            btn.classList.toggle('hidden', !ta.value.trim());
-        }
-
-        // [냐냐 PATCH] 관용구 입력칸 펼치기/접기
-        function toggleIdiomSection() {
-            const box = document.getElementById('idiom-fields-box');
-            const icon = document.getElementById('idiom-toggle-icon');
-            if (!box || !icon) return;
-            const isHidden = box.classList.contains('hidden');
-            box.classList.toggle('hidden');
-            icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
-            // 처음 펼칠 때 입력칸이 하나도 없으면 자동으로 1개 추가
-            const entriesBox = document.getElementById('idiom-entries-box');
-            if (isHidden && entriesBox && entriesBox.children.length === 0) {
-                addIdiomRow();
-            }
-        }
-
-        // [냐냐 PATCH] 관용구를 여러 개 등록할 수 있도록 행(row) 추가/삭제
-        let idiomRowCounter = 0;
-        function addIdiomRow(idiomText = '', meaningText = '') {
-            const entriesBox = document.getElementById('idiom-entries-box');
-            if (!entriesBox) { console.warn('idiom-entries-box 엘리먼트를 찾을 수 없음 — index.html이 최신 버전이 아닐 수 있어요'); return; }
-            const rowId = 'idiom-row-' + (idiomRowCounter++);
-            const row = document.createElement('div');
-            row.id = rowId;
-            row.className = 'flex gap-2 items-start';
-            row.innerHTML = `
-                <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-9 h-9 shrink-0 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
-            `;
-            entriesBox.appendChild(row);
-        }
-
-        function clearIdiomRows() {
-            const box = document.getElementById('idiom-entries-box');
-            if (box) box.innerHTML = '';
-        }
-
-        function getIdiomRowsData() {
-            const rows = document.querySelectorAll('#idiom-entries-box > div');
-            const result = [];
-            rows.forEach(row => {
-                const idiomInput = row.querySelector('[data-idiom-field="idiom"]');
-                const meaningInput = row.querySelector('[data-idiom-field="meaning"]');
-                const idiomVal = idiomInput ? idiomInput.value.trim() : '';
-                if (idiomVal) {
-                    result.push({ idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' });
-                }
+            const groups = {};
+            filtered.forEach(q => {
+                const t = q.topic || '기타';
+                if (!groups[t]) groups[t] = [];
+                groups[t].push(q);
             });
-            return result;
+
+            box.innerHTML = Object.entries(groups).map(([topic, qs]) => `
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">${topic}</span>
+                        <span class="text-[10px] text-slate-400">${qs.length}개</span>
+                    </div>
+                    ${qs.map(q => `
+                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1 gap-2">
+                            <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
+                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-violet-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
         }
 
-        function clearConjugationFields() {
-            document.getElementById('conj-yo').value = '';
-            document.getElementById('conj-tu').value = '';
-            document.getElementById('conj-el').value = '';
-            document.getElementById('conj-nos').value = '';
-            document.getElementById('conj-vos').value = '';
-            document.getElementById('conj-ellos').value = '';
+        // ── 질문 수정 ──
+        function openQuestionEditModal(id) {
+            const q = customQuestions.find(item => item.id === id);
+            if (!q) return;
+            document.getElementById('edit-question-id').value = q.id;
+            document.getElementById('edit-question-topic-input').value = q.topic || '기타';
+            document.getElementById('edit-question-input').value = q.question;
+            document.getElementById('question-edit-modal').classList.remove('hidden');
+        }
+        function closeQuestionEditModal() {
+            document.getElementById('question-edit-modal').classList.add('hidden');
+        }
+        function saveEditedQuestion() {
+            const id = document.getElementById('edit-question-id').value;
+            const newText = document.getElementById('edit-question-input').value.trim();
+            const newTopic = document.getElementById('edit-question-topic-input').value.trim() || '기타';
+            if (!newText) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
+            }
+            const q = customQuestions.find(item => item.id === id);
+            if (q) {
+                q.question = newText;
+                q.topic = newTopic;
+                saveToStorage();
+                renderCustomQuestionsList();
+                refreshTopicsDatalist();
+                closeQuestionEditModal();
+                showToast("질문을 수정했어요! ✏️", "success");
+            }
         }
 
-        function closeWordModal() {
-            document.getElementById('word-modal').classList.add('hidden');
-            hideAiLoadingOverlay();
+        // ── 랜덤 질문 주제 설정 모달 (체크박스 다중선택, 설정 저장) ──
+        function openTopicPickerModal() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
+                return;
+            }
+            const listBox = document.getElementById('topic-picker-list');
+            const topics = [...new Set(customQuestions.map(q => q.topic || '기타'))];
+
+            // 저장된 선택이 비어있으면(=전체) 모두 체크된 상태로 보여줌
+            const allSelected = selectedQuestionTopics.length === 0;
+
+            listBox.innerHTML = `
+                <label class="flex items-center gap-2 bg-violet-50 px-4 py-3 rounded-xl cursor-pointer border border-violet-100">
+                    <input type="checkbox" id="topic-check-all" onchange="toggleAllTopicChecks(this.checked)" ${allSelected ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                    <span class="text-sm font-bold text-violet-700">전체 주제</span>
+                </label>
+                <div class="h-px bg-slate-100 my-1"></div>
+            ` + topics.map(t => {
+                const count = customQuestions.filter(q => (q.topic || '기타') === t).length;
+                const checked = allSelected || selectedQuestionTopics.includes(t);
+                return `
+                    <label class="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 rounded-xl cursor-pointer border border-slate-100 hover:bg-violet-50 transition-colors">
+                        <span class="flex items-center gap-2">
+                            <input type="checkbox" data-topic-check="${t.replace(/"/g, '&quot;')}" onchange="onTopicCheckChange()" ${checked ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                            <span class="text-sm font-semibold text-slate-700">${t}</span>
+                        </span>
+                        <span class="text-xs text-slate-400">${count}개</span>
+                    </label>
+                `;
+            }).join('');
+
+            document.getElementById('topic-picker-modal').classList.remove('hidden');
+        }
+        function closeTopicPickerModal() {
+            document.getElementById('topic-picker-modal').classList.add('hidden');
+        }
+        function toggleAllTopicChecks(checked) {
+            document.querySelectorAll('[data-topic-check]').forEach(cb => { cb.checked = checked; });
+        }
+        function onTopicCheckChange() {
+            // 개별 체크가 모두 켜졌는지 보고 '전체' 체크 상태 동기화
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const allChecked = all.length > 0 && all.every(cb => cb.checked);
+            const allBox = document.getElementById('topic-check-all');
+            if (allBox) allBox.checked = allChecked;
+        }
+        function saveTopicSelection() {
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const checkedTopics = all.filter(cb => cb.checked).map(cb => cb.getAttribute('data-topic-check'));
+            if (checkedTopics.length === 0) {
+                showToast("최소 한 개 주제는 선택해 주세요!", "error");
+                return;
+            }
+            // 전부 선택이면 빈 배열로 저장(= 전체)해서 새 주제가 생겨도 자동 포함되게 함
+            selectedQuestionTopics = (checkedTopics.length === all.length) ? [] : checkedTopics;
+            saveToStorage();
+            closeTopicPickerModal();
+            const label = selectedQuestionTopics.length === 0 ? '전체 주제' : selectedQuestionTopics.join(', ');
+            showToast(`랜덤 뽑기 주제를 '${label}'(으)로 설정했어요! 🎯`, "success");
         }
 
-        function showConfirm(title, desc, onOk, options = {}) {
-            const modal = document.getElementById('confirm-modal');
-            document.getElementById('confirm-modal-title').innerText = title;
-            document.getElementById('confirm-modal-desc').innerText = desc;
-            modal.classList.remove('hidden');
+        function pickRandomQuestion() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
+                return;
+            }
+            // 저장된 주제 설정에 따라 후보군 결정 (빈 배열이면 전체)
+            const pool = selectedQuestionTopics.length === 0
+                ? customQuestions
+                : customQuestions.filter(q => selectedQuestionTopics.includes(q.topic || '기타'));
 
-            const btnOk = document.getElementById('confirm-ok-btn');
-            const btnCancel = document.getElementById('confirm-cancel-btn');
+            if (pool.length === 0) {
+                showToast("설정한 주제에 질문이 없어요. '주제 설정'에서 다시 골라주세요!", "error");
+                return;
+            }
+            const randIdx = Math.floor(Math.random() * pool.length);
+            currentQuestionForAnswer = pool[randIdx];
+            document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
+            const topicBadge = document.getElementById('question-topic-badge');
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (topicBadge) topicBadge.innerText = '주제 보기';
+            if (revealBtn) {
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
+                const icon = revealBtn.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
+            document.getElementById('question-answer-input').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+            AudioFX.playPunch();
+        }
 
-            // [냐냐 PATCH] 버튼 라벨/색상 커스터마이즈 (기본: 삭제 확정 - 빨강)
-            btnOk.innerText = options.okLabel || '삭제 확정';
-            btnCancel.innerText = options.cancelLabel || '취소';
-            if (options.okStyle === 'primary') {
-                btnOk.className = "flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100";
+        // [냐냐 PATCH] 주제 보기/숨기기 토글
+        function toggleTopicReveal() {
+            const topicBadge = document.getElementById('question-topic-badge');
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (!topicBadge || !revealBtn || !currentQuestionForAnswer) {
+                if (!currentQuestionForAnswer) showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+                return;
+            }
+            const icon = revealBtn.querySelector('i');
+            const isHidden = topicBadge.innerText === '주제 보기';
+            if (isHidden) {
+                topicBadge.innerText = currentQuestionForAnswer.topic || '기타';
+                revealBtn.classList.remove('bg-white', 'text-violet-600');
+                revealBtn.classList.add('bg-violet-600', 'text-white');
+                if (icon) icon.className = 'fa-solid fa-eye-slash text-[10px]';
             } else {
-                btnOk.className = "flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-red-100";
+                topicBadge.innerText = '주제 보기';
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
             }
-
-            const cleanup = () => {
-                modal.classList.add('hidden');
-                btnOk.onclick = null;
-                btnCancel.onclick = null;
-            };
-
-            btnOk.onclick = () => {
-                onOk();
-                cleanup();
-            };
-            btnCancel.onclick = () => {
-                if (options.onCancel) options.onCancel();
-                cleanup();
-            };
         }
 
-        // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
-        async function triggerAiAutofill() {
-            const rawWord = document.getElementById('input-word').value.trim();
-            if (!rawWord) {
-                showToast("단어 입력창에 스페인어 단어를 먼저 적어주세요!", "error");
+        async function submitQuestionAnswer() {
+            if (!currentQuestionForAnswer) {
+                showToast("먼저 '랜덤 질문 뽑기'를 눌러서 질문을 받아주세요!", "error");
                 return;
             }
-
-            // [PATCH] API 키가 없으면 굳이 실패할 호출을 시도하지 않고 바로 안내
+            const userAnswer = document.getElementById('question-answer-input').value.trim();
+            if (!userAnswer) {
+                showToast("스페인어로 답변을 입력해 주세요!", "error");
+                return;
+            }
             if (!hasGeminiApiKey()) {
-                showToast("Gemini API 키가 없어서 AI 추천 대신 오프라인 추측을 사용합니다. 우측 상단 배지에서 키를 등록하면 진짜 AI 추천을 받을 수 있어요!", "warning");
-                runOfflineAutofill(rawWord);
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
                 return;
             }
 
-            const btn = document.getElementById('ai-autofill-btn');
-            const originalHtml = btn.innerHTML;
-            
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
-            showAiLoadingOverlay();
+            const submitBtn = document.getElementById('question-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`;
+            showToast("Gemini AI가 답변을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
 
-            // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
-            const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
-            - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
-            - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
-            - estudiante, artista, cantante처럼 남녀 형태가 같고 관사만 바뀌는 사람 명사는 isCommonGender=true, gender='none'으로 (앱이 el/la로 표시함).
-            - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
-            - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
-            - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
-            - idioms에는 (1) 진짜 흔한 관용구/숙어뿐 아니라 (2) 이 단어의 "핵심 문형/구문 패턴"도 넣을 것.
-              구문 패턴 예시:
-                · 특정 전치사와 자주 쓰이면: idiom "enfadado con [사람]", idiomMeaning "~에게 화가 난" 처럼 패턴+뜻으로.
-                · gustar류 동사(gustar, encantar, importar 등)면 문형을 보여줄 것: idiom "[간접목적대명사] encanta [주어]", idiomMeaning "[주어]가 (나는) 너무 좋다" 처럼.
-              대괄호 [ ]로 자리(주어/사람/사물 등)를 표시. 진짜 유용한 것만 0~3개, 없으면 빈 배열 []. 억지로 만들지 말 것.
-            - notes는 "정말 알아두면 도움되는 특이사항"이 있을 때만 작성. 없으면 빈 문자열 ""로 둘 것 (억지로 채우지 말 것).
-              쓸 만한 내용 예: 흔한 혼동 단어와의 차이, 불규칙한 부분, ser/estar 구분, 문화적/구어적 뉘앙스, 예외적 용법.
-              절대 쓰지 말 것: "사람의 성품/상태/감정을 나타내는 형용사", "~를 뜻하는 명사", "일상에서 자주 쓰는 동사" 같이 뻔한 분류 설명. 형용사의 성·수 변화 여부(성변화 없음, 수변화 없음 등)도 이미 별도 항목이라 절대 쓰지 말 것. 남녀 공통 명사/성 구분 없는 명사라는 설명도 관사(el/la)로 이미 표시되므로 쓰지 말 것. 특정 전치사와 함께 쓰인다는 내용은 notes가 아니라 idioms(구문 패턴)에 넣을 것. 뻔한 말만 나올 거면 빈 문자열로 둘 것.
-              형식: "· "로 시작하는 불릿, 최대 2줄, 각 줄 25자 이내, 줄바꿈은 \\n 하나. 인사말/이름 호칭 금지. "~함/~됨/~임" 서술형 대신 명사형으로 끝낼 것.`;
+            const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
+            Student's Spanish Answer: "${userAnswer}"
 
-            const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
-            
+            Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar).
+            For "correctedText": output the corrected sentence; wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags. Already-correct words stay plain.
+            For "originalMarked": output the student's ORIGINAL answer verbatim; wrap ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags. Correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            const system = `You are an expert Spanish tutor evaluating a student named "냐냐" answering a practice question in Spanish.
+            Return feedback matching this JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 답변이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The corrected Spanish answer. Wrap ONLY changed words in red span tags; leave correct words plain.",
+               "originalMarked": "The student ORIGINAL answer verbatim, with ONLY wrong words wrapped in line-through span tags; correct words stay plain.",
+               "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "tip": "One short, useful grammar or conversational tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
+            }
+            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            Do not wrap JSON in markdown blockticks.`;
+
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    meaning: { type: "STRING", description: "핵심 한글 뜻" },
-                    correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
-                    pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
-                    gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
-                    isCommonGender: { type: "BOOLEAN", description: "사람을 가리키는 명사인데 형태가 남녀 공통이라 관사만 바뀌는 경우 true (el/la estudiante, el/la artista, el/la cantante). 이 경우 gender는 'none'으로. 성별이 고정된 명사(libro=남, casa=여)는 false" },
-                    isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true, 단수형이면 false. 명사가 아니면 false. 예: casas/libros는 true, casa/libro는 false" },
-                    usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
-                    adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
-                    verbClass: { type: "STRING", enum: ["regular", "irregular"] },
-                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
-                    conjugations: {
-                        type: "OBJECT",
-                        description: "현재시제 6인칭 변형. 반드시 표준 스페인(카스티야) 스페인어 기준으로 작성할 것 — 'vos' 키는 아르헨티나식 단수 'vos'가 아니라 스페인의 2인칭 복수 'vosotros'를 의미함 (예: tener→vos:'tenéis', llevar→vos:'lleváis'). 절대 -ás/-és 같은 아르헨티나식 voseo 어미를 쓰지 말 것.",
-                        properties: {
-                            yo: { type: "STRING", description: "yo (1인칭 단수)" },
-                            tu: { type: "STRING", description: "tú (2인칭 단수)" },
-                            el: { type: "STRING", description: "él/ella (3인칭 단수)" },
-                            nos: { type: "STRING", description: "nosotros (1인칭 복수)" },
-                            vos: { type: "STRING", description: "vosotros — 스페인식 2인칭 복수 '너희'. 아르헨티나 voseo 아님. -áis/-éis/-ís 어미 사용" },
-                            ellos: { type: "STRING", description: "ellos/ellas (3인칭 복수)" }
-                        }
-                    },
-                    example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
-                    idioms: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
                         type: "ARRAY",
-                        description: "이 단어의 관용구/숙어 + 핵심 문형·구문 패턴. (1)흔한 관용구, (2)전치사 콜로케이션(예: idiom 'enfadado con [사람]', mean '~에게 화가 난'), (3)gustar류 문형(예: idiom '[간접목적대명사] encanta [주어]', mean '[주어]가 너무 좋다'). 대괄호로 자리 표시. 유용한 것만 0~3개, 없으면 []. 억지로 만들지 말 것",
                         items: {
                             type: "OBJECT",
                             properties: {
-                                idiom: { type: "STRING", description: "관용구/숙어 또는 구문 패턴 (스페인어). 자리는 [주어]/[사람]/[사물] 같이 대괄호로. 예: ¿Qué tiempo hace?, enfadado con [사람]" },
-                                idiomMeaning: { type: "STRING", description: "관용구/패턴의 한국어 뜻" }
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
                             },
-                            required: ["idiom", "idiomMeaning"]
+                            required: ["word", "mean"]
                         }
                     },
-                    exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
-                    notes: { type: "STRING", description: "정말 도움되는 특이사항(혼동 단어 차이, 불규칙, ser/estar 구분, 뉘앙스, 예외 용법)만 · 불릿 2줄 이내로. 없으면 빈 문자열. 금지: 뻔한 품사/뜻 분류('사람의 성품 묘사' 등), 형용사 성·수 변화 여부, 성별/관사, 전치사 콜로케이션(이건 idioms로). 명사형으로 끝낼 것" }
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] }
                 },
-                required: ["meaning", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
             };
 
             try {
-                // 실시간 API 호출 시도 (thinkingLevel: minimal → 단순 사전 조회라 깊은 추론 불필요, 가장 빠름)
-                const responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
-                // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
-                const result = extractAndParseJson(responseText);
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const feedback = extractAndParseJson(responseText);
 
-                // [냐냐 PATCH] 오타 감지: AI가 교정한 철자가 입력과 다르면 확인 팝업
-                const corrected = (result.correctedSpelling || '').trim();
-                const bareInput = rawWord.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').trim().toLowerCase();
-                const isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
 
-                if (isRealCorrection) {
-                    showConfirm(
-                        `혹시 "${corrected}"를 쓰려던 거였나요?`,
-                        `입력하신 "${rawWord}"에 오타가 있는 것 같아요. "${corrected}"(으)로 고쳐서 등록할까요? (취소를 누르면 입력한 그대로 둡니다)`,
-                        () => {
-                            // 수정: 교정된 철자로 단어칸 교체 후 적용
-                            document.getElementById('input-word').value = corrected;
-                            applyAutofillResult(result, true);
-                            saveAiWordCache(corrected, result);
-                            AudioFX.playSuccess();
-                            showToast(`"${corrected}"(으)로 고쳐서 적용했어요 ✨`, "success");
-                        },
-                        {
-                            okLabel: '수정',
-                            cancelLabel: '취소',
-                            okStyle: 'primary',
-                            onCancel: () => {
-                                // 취소: 입력한 철자 그대로 정보만 적용
-                                applyAutofillResult(result, true);
-                                saveAiWordCache(rawWord, result);
-                                showToast("입력한 철자 그대로 정보를 적용했어요", "info");
-                            }
-                        }
-                    );
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🎉";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
                 } else {
-                    applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
-                    saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
-                    AudioFX.playSuccess();
-                    showToast("Gemini AI 분석 완료! 추천 정보를 적용했어요 ✨", "success");
+                    coachIcon.innerText = "📝";
+                    coachVerdict.className = "text-sm font-bold text-rose-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userAnswer;
+                    correctedRender.innerHTML = feedback.correctedText;
                 }
-            } catch (e) {
-                console.warn("AI API 통신 실패: 오프라인 추측으로 자동 전환", e);
-                showToast(`${describeGeminiError(e)} 오프라인 추측으로 대체합니다.`, "error");
-                runOfflineAutofill(rawWord);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-                hideAiLoadingOverlay();
-            }
-        }
 
-        // [PATCH-속도개선] 로딩 스켈레톤 + 경과시간 표시 (순수 UI 효과라 실제 응답 속도에는 영향 없음)
-        let aiLoadingTimerHandle = null;
-        function showAiLoadingOverlay() {
-            const overlay = document.getElementById('ai-loading-overlay');
-            const timerText = document.getElementById('ai-loading-timer-text');
-            overlay.classList.remove('hidden');
-            const startedAt = Date.now();
-            clearInterval(aiLoadingTimerHandle);
-            aiLoadingTimerHandle = setInterval(() => {
-                const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-                timerText.innerText = `보통 3~5초 정도 걸려요 (${elapsed}초)`;
-            }, 100);
-        }
-        function hideAiLoadingOverlay() {
-            clearInterval(aiLoadingTimerHandle);
-            document.getElementById('ai-loading-overlay').classList.add('hidden');
-        }
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
 
-        // 결과값 UI 대입 처리부 (사용자가 입력 중인 값은 보존)
-        // [냐냐 PATCH] 강세 있는 a-/ha- 로 시작하는 단어인지 판별 (el agua 규칙용)
-        // á/há 로 시작하면 확실히 강세. a/ha 로 시작하면 스페인어 강세 규칙상 첫 음절에 강세가 오는
-        // 흔한 경우(자음+모음으로 끝나거나 s로 끝나는 단어)를 근사적으로 판단. 확실치 않은 애매한 경우는
-        // 흔히 el을 쓰는 단어들을 화이트리스트로 보정.
-        const EL_FEMININE_WORDS = new Set([
-            'agua','águila','alma','ala','área','arma','aula','hacha','hada','hambre','habla',
-            'ancla','ánfora','asa','aya','haba','ave','acta','ascua','asta'
-        ]);
-        function isStressedInitialA(word) {
-            if (!word) return false;
-            const w = word.trim().toLowerCase();
-            // á 또는 há 로 시작 → 무조건 강세
-            if (/^h?á/.test(w)) return true;
-            // 화이트리스트(흔히 el을 쓰는 강세 a- 여성명사)
-            const bare = w.replace(/^h/, '');
-            if (EL_FEMININE_WORDS.has(w) || EL_FEMININE_WORDS.has(word.trim().toLowerCase())) return true;
-            return false;
-        }
-
-        function applyAutofillResult(result, forceOverwrite = false) {
-            const wordVal = document.getElementById('input-word').value.trim();
-            
-            const meaningInput = document.getElementById('input-meaning');
-            // 사용자가 이미 뭔가를 적었다면, 강제 덮어쓰기 모드(추천 클릭)가 아닐 경우 지우지 않고 유지
-            if (forceOverwrite || !meaningInput.value.trim()) {
-                meaningInput.value = result.meaning || '';
-            }
-
-            const posInput = document.getElementById('input-pos');
-            if (forceOverwrite || posInput.value === 'noun') {
-                posInput.value = result.pos || 'noun';
-            }
-            togglePosFields();
-
-            if (result.pos === 'noun') {
-                const genderInput = document.getElementById('input-gender');
-                // 남녀 공통 명사(estudiante 등)는 성별 없음으로 저장
-                const effectiveGender = result.isCommonGender ? 'none' : (result.gender || 'none');
-                if (forceOverwrite || genderInput.value === 'none') {
-                    genderInput.value = effectiveGender;
-                }
-                // [냐냐 PATCH] 명사에 정관사 자동으로 붙이기 (복수형이면 los/las, 남녀공통이면 el/la, 이미 관사가 있으면 그대로 둠)
-                const wordInput = document.getElementById('input-word');
-                const curWord = wordInput.value.trim();
-                const alreadyHasArticle = /^(el|la|los|las|un|una|unos|unas|el\/la|los\/las)\s+/i.test(curWord);
-                if (curWord && !alreadyHasArticle) {
-                    let article = '';
-                    if (result.isCommonGender) {
-                        // 남녀 공통 명사: el/la 로 표시 (복수면 los/las)
-                        article = result.isPlural ? 'los/las' : 'el/la';
-                    } else if (result.gender === 'masculine') {
-                        article = result.isPlural ? 'los' : 'el';
-                    } else if (result.gender === 'feminine') {
-                        // 강세 있는 a-/ha- 로 시작하는 여성 단수 명사는 발음 때문에 el을 씀 (el agua, el águila, el alma).
-                        // 단, 복수는 다시 las로 돌아감 (las aguas). 형용사는 계속 여성으로 받으므로 gender는 feminine 유지.
-                        // AI 판단(usesElDespiteFeminine)을 우선 쓰되, 없으면 로컬 규칙으로 보정.
-                        const takesEl = (result.usesElDespiteFeminine === true) || isStressedInitialA(curWord);
-                        if (result.isPlural) article = 'las';
-                        else article = takesEl ? 'el' : 'la';
-                    }
-                    if (article) wordInput.value = `${article} ${curWord}`;
-                }
-            } else if (result.pos === 'adjective') {
-                const adjAgreementInput = document.getElementById('input-adj-agreement');
-                if (forceOverwrite || adjAgreementInput.value === 'full') {
-                    adjAgreementInput.value = result.adjAgreement || 'full';
-                }
-            } else if (result.pos === 'verb') {
-                const verbClassInput = document.getElementById('input-verb-class');
-                if (forceOverwrite || verbClassInput.value === 'regular') {
-                    verbClassInput.value = result.verbClass || 'regular';
-                }
-                toggleVerbTypeDetails();
-                
-                if (result.verbClass === 'irregular') {
-                    const irrTypeInput = document.getElementById('input-verb-irregular-type');
-                    if (forceOverwrite || irrTypeInput.value === 'none') {
-                        irrTypeInput.value = result.irregularType || "1인칭";
-                    }
-                }
-                
-                if (result.conjugations) {
-                    const conjKeys = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
-                    conjKeys.forEach(key => {
-                        const conjInput = document.getElementById(`conj-${key}`);
-                        if (forceOverwrite || !conjInput.value.trim()) {
-                            conjInput.value = result.conjugations[key] || '';
-                        }
-                    });
-                }
-            }
-
-            const exampleInput = document.getElementById('input-example');
-            // 기본 형태의 유치한 예문인 경우에만 좋은 예문으로 자동 교체
-            if (forceOverwrite || !exampleInput.value.trim() || exampleInput.value.startsWith('Quiero ') || exampleInput.value.startsWith('Me gusta ')) {
-                exampleInput.value = result.example || '';
-            }
-
-            const exampleMeaningInput = document.getElementById('input-example-meaning');
-            if (forceOverwrite || !exampleMeaningInput.value.trim()) {
-                exampleMeaningInput.value = result.exampleMeaning || '';
-            }
-
-            // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
-            if (result.idioms && result.idioms.length > 0) {
-                clearIdiomRows();
-                result.idioms.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
-                const idiomBoxAi = document.getElementById('idiom-fields-box');
-                const idiomIconAi = document.getElementById('idiom-toggle-icon');
-                if (idiomBoxAi) idiomBoxAi.classList.remove('hidden');
-                if (idiomIconAi) idiomIconAi.className = "fa-solid fa-minus text-xs";
-            }
-
-            const notesInput = document.getElementById('input-notes');
-            if (forceOverwrite || !notesInput.value.trim() || notesInput.value.includes('확인 필요') || notesInput.value.includes('직접 입력 필요')) {
-                notesInput.value = result.notes || '';
-            }
-            toggleNotesClearBtn();
-        }
-
-        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
-        function runOfflineAutofill(rawWord) {
-            const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
-            
-            // 1차: 완전히 일치하는 DB 매핑이 있는지 확인
-            let match = OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
-            
-            // 2차: 규칙 기반 스마트 유추 가동
-            if (!match) {
-                // 동사형 규칙성 판별 (-ar, -er, -ir, 그리고 강세가 있는 -ír도 포함: oír, reír 등)
-                if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir") || cleanWord.endsWith("ír")) {
-                    const ending = cleanWord.slice(-2);
-                    const stem = cleanWord.slice(0, -2);
-                    let conj = {};
-                    
-                    if (ending === "ar") {
-                        conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
-                    } else if (ending === "er") {
-                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
-                    } else { // -ir 또는 -ír
-                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
-                    }
-                    
-                    match = {
-                        meaning: "", 
-                        pos: "verb",
-                        verbClass: "regular",
-                        irregularType: "none",
-                        conjugations: conj,
-                        example: `Quiero ${rawWord} hoy.`,
-                        exampleMeaning: `나는 오늘 ${rawWord}하고 싶어.`, 
-                        notes: "· 어미 규칙으로 현재시제 자동 계산\n· 뜻과 예문은 직접 입력 필요"
-                    };
-                } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
-                    match = {
-                        meaning: "",
-                        pos: "preposition",
-                        example: `Voy a ir ${rawWord} mi amigo.`,
-                        exampleMeaning: `나는 내 친구${rawWord} 같이 갈 거야.`,
-                        notes: "· 자주 쓰이는 전치사\n· 뒤에 오는 명사와의 결합에 주의"
-                    };
-                } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
-                    match = {
-                        meaning: "",
-                        pos: "conjunction",
-                        example: `No voy ${rawWord} no quiero.`,
-                        exampleMeaning: `나는 가고 싶지 않기 ${rawWord} 안 가.`,
-                        notes: "· 문장을 이어주는 접속사"
-                    };
-                } else {
-                    // 명사형 남/여성 기본 유추 및 관사 일치 처리 (Me gusta pelo 해소)
-                    const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
-                    const article = isFeminine ? "la" : "el";
-                    match = {
-                        meaning: "", 
-                        pos: "noun",
-                        gender: isFeminine ? "feminine" : "masculine",
-                        example: `Me gusta ${article} ${cleanWord}.`,
-                        exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${cleanWord})를 좋아해.`, 
-                        notes: "· 어미로 품사·성별 추정 (확인 필요)\n· 뜻은 직접 입력 필요"
-                    };
-                }
-            }
-
-            // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
-            applyAutofillResult(match, true);
-            AudioFX.playSuccess();
-
-            // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
-            if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
-                showToast(`지능형 오프라인 사전에서 "${rawWord}" 정보를 완벽하게 찾아 적용했습니다! ⚡`, "success");
-            } else {
-                showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
-            }
-        }
-
-        // REAL-TIME SMART AUTOFILL ENGINE (실시간 어순 분석)
-        function handleWordInput(value) {
-            const suggestionsContainer = document.getElementById('word-suggestions');
-            
-            if (!value.trim()) {
-                suggestionsContainer.classList.add('hidden');
-                return;
-            }
-
-            // [PATCH] 어차피 'AI 추천' 버튼으로 정확하게 채우므로, 타이핑만으로 추측해서
-            // 자동으로 채우던 기능은 제거함. 아래는 자동완성 후보 목록만 보여줌.
-            showSuggestions(value.trim());
-        }
-
-        function showSuggestions(query) {
-            const container = document.getElementById('word-suggestions');
-            const cleanQuery = query.toLowerCase().trim();
-            const results = [];
-            const seenKeys = new Set();
-
-            // [PATCH-16] 오프라인 사전뿐 아니라 내가 이미 등록한 단어장 전체에서도 검색
-            vocabulary.forEach(item => {
-                if (item.word.toLowerCase().includes(cleanQuery)) {
-                    seenKeys.add(item.word.toLowerCase());
-                    results.push({ key: item.word, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: item.id });
-                }
-            });
-            Object.keys(OFFLINE_DICT_DB).forEach(key => {
-                if (key.toLowerCase().includes(cleanQuery) && !seenKeys.has(key.toLowerCase())) {
-                    const item = OFFLINE_DICT_DB[key];
-                    results.push({ key: key, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: null });
-                }
-            });
-
-            if (results.length === 0) {
-                container.classList.add('hidden');
-                return;
-            }
-
-            container.classList.remove('hidden');
-            let html = '';
-            results.slice(0, 6).forEach(r => {
-                const safeKey = r.key.replace(/'/g, "\\'");
-                html += `
-                    <div onclick="selectSuggestion('${safeKey}', ${r.registeredId ? `'${r.registeredId}'` : 'null'})" class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors gap-2">
-                        <div class="flex flex-col min-w-0">
-                            <span class="font-bold text-slate-800 truncate">${r.key}</span>
-                            <span class="text-slate-400 text-[10px] truncate">${r.meaning}</span>
+                breakdownGrid.innerHTML = '';
+                const seenWordsQ = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWordsQ.has(w)) return;
+                    seenWordsQ.add(w);
+                    breakdownGrid.innerHTML += `
+                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                            <span class="text-slate-500 text-right">${m}</span>
                         </div>
-                        <span class="flex items-center gap-1 shrink-0">
-                            ${r.registeredId ? '<span class="text-[9px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">등록됨</span>' : ''}
-                            <span class="text-[9px] bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full font-bold uppercase">${getPosAbbreviation(r.pos, r.gender)}</span>
-                        </span>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
+                    `;
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 질문-답변 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>질문:</b> ${currentQuestionForAnswer.question}<br><b>냐냐님 답변:</b> ${userAnswer}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 답변:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("채점이 끝났어요! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
         }
 
-        function selectSuggestion(word, registeredId) {
-            document.getElementById('word-suggestions').classList.add('hidden');
+        function toggleAiHint() {
+            const hintBox = document.getElementById('ai-mission-hint-box');
+            if (isAiHintVisible) {
+                hintBox.classList.add('hidden');
+                isAiHintVisible = false;
+            } else {
+                if (!aiCurrentWordForMission) {
+                    hintBox.innerText = "아직 미션 문장이 없어요. 먼저 '✨ 랜덤 문장 생성'을 눌러주세요!";
+                } else {
+                    let hintHtml = `💡 <b>학습 단어 힌트:</b> ${aiCurrentWordForMission.word} (${aiCurrentWordForMission.meaning}) <br>`;
+                    if (aiCurrentWordForMission.pos === 'verb') {
+                        hintHtml += `👉 <b>V. (동사) 힌트:</b> 현재 1인칭 변형은 <b>'${aiCurrentWordForMission.conjugations?.yo || '비정형'}'</b> 입니다. 어순에 신경써 보세요!`;
+                    } else if (aiCurrentWordForMission.pos === 'noun') {
+                        const genderKorean = aiCurrentWordForMission.gender === 'masculine' ? '남성명사(정관사 el)' : aiCurrentWordForMission.gender === 'feminine' ? '여성명사(정관사 la)' : '성별 지정 없음';
+                        hintHtml += `👉 <b>명사 성별 힌트:</b> 이 명사는 <b>${genderKorean}</b> 입니다. 관사 및 형용사 어미 일치에 주의하세요!`;
+                    } else {
+                        hintHtml += `👉 문맥 속에서 단어가 매끄럽게 연결되도록 문법 어순을 천천히 조립해 보세요!`;
+                    }
+                    hintBox.innerHTML = hintHtml;
+                }
+                hintBox.classList.remove('hidden');
+                isAiHintVisible = true;
+                AudioFX.playPunch();
+            }
+        }
 
-            if (registeredId) {
-                // 이미 등록된 단어 → 중복 등록 대신 수정 모드로 열기
-                openWordModal(registeredId);
-                showToast("이미 등록된 단어예요! 수정 모드로 열었어요 ✏️", "info");
+        // [PATCH] 한->스 모드는 이제 기본적으로 빈 상태로 시작 (자동 생성 없음)
+        function resetKoEsMissionState() {
+            const missionHeading = document.getElementById('ai-mission-korean');
+            const resultBox = document.getElementById('ai-feedback-result');
+            const hintBox = document.getElementById('ai-mission-hint-box');
+
+            resultBox.classList.add('hidden');
+            hintBox.classList.add('hidden');
+            isAiHintVisible = false;
+            document.getElementById('ai-user-input').value = '';
+            aiCurrentWordForMission = null;
+            aiCurrentKoreanSentence = "";
+
+            if (vocabulary.length === 0) {
+                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
+            } else {
+                missionHeading.innerText = "아직 생성된 문장이 없어요! 위의 '✨ 랜덤 문장 생성'을 눌러서 시작해보세요.";
+            }
+        }
+
+        // [PATCH] AI 호출이 실패했을 때만 쓰는 안전한 대체 문장 (기존 curated/rule 로직 재사용)
+        // [PATCH] 내 단어장 기반으로 AI가 실시간으로 자연스러운 한국어 미션 문장을 생성
+        // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
+        //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
+        async function generateAiMission() {
+            const missionHeading = document.getElementById('ai-mission-korean');
+            const resultBox = document.getElementById('ai-feedback-result');
+            const hintBox = document.getElementById('ai-mission-hint-box');
+            const genBtn = document.getElementById('ai-generate-mission-btn');
+
+            resultBox.classList.add('hidden');
+            hintBox.classList.add('hidden');
+            isAiHintVisible = false;
+            document.getElementById('ai-user-input').value = '';
+
+            if (vocabulary.length === 0) {
+                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
                 return;
             }
 
-            document.getElementById('input-word').value = word;
-            const match = OFFLINE_DICT_DB[word];
-            if (match) {
-                applyAutofillResult(match, true); // 리스트 클릭 시 확실한 선택이므로 덮어쓰기 허용 (true)
-                showToast("오프라인 사전에 매칭되어 적용했어요! ⚡", "success");
-                AudioFX.playSuccess();
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어서 AI 문장 생성을 사용할 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                missionHeading.innerText = "API 키가 없어서 문장을 생성할 수 없어요.";
+                openApiKeyModal();
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+                return;
+            }
+
+            const randIdx = Math.floor(Math.random() * vocabulary.length);
+            const targetWord = vocabulary[randIdx];
+
+            const originalBtnHtml = genBtn.innerHTML;
+            genBtn.disabled = true;
+            genBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
+            missionHeading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
+
+            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
+            매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 단어를 한국어 문장 안에 그대로 노출하면 절대 안 됩니다. 의미는 한국어 뜻("${targetWord.meaning}")으로만 표현하세요.
+            ${buildLearnerProfileSummary()}`;
+            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개. 스페인어 단어나 알파벳 절대 포함 금지" }
+                },
+                required: ["sentence"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
+                const result = extractAndParseJson(responseText);
+                const candidateSentence = (result.sentence || '').trim();
+
+                // [PATCH-안전장치] 그래도 스페인어/알파벳이 섞여 나오면(정답 노출) 실패로 처리
+                if (/[a-zA-Z]/.test(candidateSentence)) {
+                    throw new Error("SENTENCE_CONTAINS_SPANISH");
+                }
+
+                aiCurrentWordForMission = targetWord;
+                aiCurrentKoreanSentence = candidateSentence;
+                missionHeading.innerText = aiCurrentKoreanSentence;
+                AudioFX.playPunch();
+            } catch (e) {
+                console.warn("AI 미션 생성 실패", e);
+                if (String(e.message || '').includes('SENTENCE_CONTAINS_SPANISH')) {
+                    showToast("생성된 문장에 스페인어가 섞여 있어서 다시 시도해 주세요!", "error");
+                } else {
+                    showToast(describeGeminiError(e), "error");
+                }
+                missionHeading.innerText = "문장 생성에 실패했어요. '✨ 랜덤 문장 생성'을 다시 눌러주세요.";
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+            } finally {
+                genBtn.disabled = false;
+                genBtn.innerHTML = originalBtnHtml;
             }
         }
 
-        // Save Word Action
-        function saveWord() {
-            const wordVal = document.getElementById('input-word').value.trim();
-            const meaningVal = document.getElementById('input-meaning').value.trim();
+        async function submitAiTranslationKoEs() {
+            if (!aiCurrentWordForMission) {
+                showToast("먼저 '✨ 랜덤 문장 생성'을 눌러서 미션을 받아주세요!", "error");
+                return;
+            }
+            const userText = document.getElementById('ai-user-input').value.trim();
+            if (!userText) {
+                showToast("스페인어 답변을 입력해 주세요!", "error");
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('ai-ko-es-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
             
-            if (!wordVal || !meaningVal) {
-                showToast("단어 이름과 뜻은 필수입니다!", "error");
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            showToast("Gemini AI가 냐냐님의 답변을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
+            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
+            Student's Spanish Answer: "${userText}"
+            
+            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
+            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            
+            const system = `You are an encouraging and extremely precise professional Spanish tutor tutoring a passionate student named "냐냐".
+            Evaluate the student's translation. Accept ANY grammatically correct sentence that conveys the intended meaning as correct — there is never only one right translation. Return feedback matching this exact JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise evaluation in Korean, 1-2 sentences max. Mention the student '냐냐님' and the key grammar point (어순/conjugation). No long essays.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "tip": "One short, useful grammatical tip in Korean, 1 sentence."
+            }
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    tip: { type: "STRING" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                // 안전 파서 작동
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🏆🏅";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝📝";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+                
+                breakdownGrid.innerHTML = '';
+                const seenWords = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWords.has(w)) return; // 중복/빈 항목 제거
+                    seenWords.add(w);
+                    breakdownGrid.innerHTML += `
+                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                            <span class="text-slate-500 text-right">${m}</span>
+                        </div>
+                    `;
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (aiCurrentWordForMission) {
+                    const pos = aiCurrentWordForMission.pos || 'etc';
+                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("AI 첨삭이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 내 예문으로 연습 모드
+        // ============================================================
+        let exampleMissionMode = 'translate'; // 'translate'(예문 그대로 번역) | 'similar'(비슷한 새 문장)
+
+        function resetExampleMissionState() {
+            aiCurrentWordForMission = null;
+            aiCurrentKoreanSentence = "";
+            const box = document.getElementById('ai-example-korean');
+            if (box) box.innerText = "'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.";
+            const input = document.getElementById('ai-example-input');
+            if (input) input.value = '';
+            const hint = document.getElementById('ai-example-hint-box');
+            if (hint) hint.classList.add('hidden');
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+        }
+
+        async function generateExampleMission() {
+            // 예문이 있는 단어만 대상으로
+            const withExample = vocabulary.filter(w => w.example && w.example.trim() && w.exampleMeaning && w.exampleMeaning.trim());
+            if (withExample.length === 0) {
+                showToast("예문이 등록된 단어가 없어요! 단어에 예문을 추가한 뒤 이용해 주세요.", "error");
                 return;
             }
 
-            const modalId = document.getElementById('modal-word-id').value;
+            const target = withExample[Math.floor(Math.random() * withExample.length)];
+            aiCurrentWordForMission = target;
 
-            // [냐냐 PATCH] 새 단어 등록 시 이미 같은 철자의 단어가 있으면 확인창 표시
-            if (!modalId) {
-                const dup = vocabulary.find(item => item.word.toLowerCase().trim() === wordVal.toLowerCase());
-                if (dup) {
-                    showConfirm(
-                        `"${dup.word}(${dup.meaning})" 단어가 이미 등록되어 있습니다.`,
-                        "그래도 중복으로 등록할까요? '등록취소'를 누르면 등록창이 그대로 열려있어요.",
-                        () => performSaveWord(),
-                        {
-                            okLabel: '중복등록',
-                            cancelLabel: '등록취소',
-                            okStyle: 'primary'
-                            // 취소 시 아무 동작 없음 → 확인창만 닫히고 단어 등록창은 그대로 유지됨
-                        }
-                    );
+            // 절반은 예문 그대로 번역, 절반은 비슷한 새 문장 만들기
+            exampleMissionMode = Math.random() < 0.5 ? 'translate' : 'similar';
+            const badge = document.getElementById('ai-example-mode-badge');
+            const koreanBox = document.getElementById('ai-example-korean');
+            document.getElementById('ai-example-input').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+
+            if (exampleMissionMode === 'translate') {
+                // 예문의 한국어 뜻을 미션으로 → 학생이 스페인어로 (원래 예문이 정답)
+                if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                aiCurrentKoreanSentence = target.exampleMeaning;
+                koreanBox.innerText = target.exampleMeaning;
+            } else {
+                // AI가 예문을 참고해 비슷한 새 한국어 문장을 만들어 미션으로
+                if (badge) badge.innerText = '비슷한 새 문장 🎲';
+                if (!hasGeminiApiKey()) {
+                    // 키 없으면 그냥 번역 모드로 대체
+                    exampleMissionMode = 'translate';
+                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                    aiCurrentKoreanSentence = target.exampleMeaning;
+                    koreanBox.innerText = target.exampleMeaning;
                     return;
                 }
-            }
-
-            performSaveWord();
-        }
-
-        function performSaveWord() {
-            const wordVal = document.getElementById('input-word').value.trim();
-            const meaningVal = document.getElementById('input-meaning').value.trim();
-            const modalId = document.getElementById('modal-word-id').value;
-            const pos = document.getElementById('input-pos').value;
-
-            // [냐냐 PATCH] 새 등록은 항상 고유한 새 id를 부여 (중복 등록 시 원본과 id가 겹쳐
-            // 한쪽을 지우면 다른 쪽도 지워지던 문제 방지). 수정 모드일 때만 기존 id 유지.
-            const newId = 'word-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-
-            let wordObj = {
-                id: modalId || newId,
-                word: wordVal,
-                meaning: meaningVal,
-                pos: pos,
-                example: document.getElementById('input-example').value.trim(),
-                exampleMeaning: document.getElementById('input-example-meaning').value.trim(),
-                idioms: getIdiomRowsData(),
-                notes: document.getElementById('input-notes').value.replace(/\s+$/, ''), // [냐냐 PATCH] 맨 앞 들여쓰기 공백은 보존, 끝쪽 공백만 정리
-                mastered: false
-            };
-
-            if (pos === 'noun') {
-                wordObj.gender = document.getElementById('input-gender').value;
-            } else if (pos === 'adjective') {
-                wordObj.adjAgreement = document.getElementById('input-adj-agreement').value;
-            } else if (pos === 'verb') {
-                const verbClass = document.getElementById('input-verb-class').value;
-                wordObj.verbClass = verbClass;
-                wordObj.irregularType = (verbClass === 'irregular') ? document.getElementById('input-verb-irregular-type').value : 'none';
-                wordObj.conjugations = {
-                    yo: document.getElementById('conj-yo').value.trim(),
-                    tu: document.getElementById('conj-tu').value.trim(),
-                    el: document.getElementById('conj-el').value.trim(),
-                    nos: document.getElementById('conj-nos').value.trim(),
-                    vos: document.getElementById('conj-vos').value.trim(),
-                    ellos: document.getElementById('conj-ellos').value.trim()
-                };
-            }
-
-            if (modalId) {
-                const index = vocabulary.findIndex(item => item.id === modalId);
-                if (index !== -1) {
-                    wordObj.mastered = vocabulary[index].mastered || false; // 수정 시 마스터 상태 보존 (기존엔 초기화되던 버그)
-                    vocabulary[index] = wordObj;
-                    showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
-                }
-                logAction('snapshot');
-            } else {
-                vocabulary.unshift(wordObj);
-                showToast("새 단어가 등록되었습니다! 📚", "success");
-                logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
-            }
-
-            closeWordModal();
-            renderWordList();
-            updateStats();
-        }
-
-        function deleteWord(wordId, event) {
-            if (event) event.stopPropagation();
-            const w = vocabulary.find(item => item.id === wordId);
-            if (!w) return;
-
-            showConfirm(
-                `"${w.word}" 단어를 삭제할까요?`,
-                "삭제한 데이터는 다시 꺼낼 수 없습니다.",
-                () => {
-                    vocabulary = vocabulary.filter(item => item.id !== wordId);
-                    logAction('snapshot');
-                    renderWordList();
-                    updateStats();
-                    showToast("단어를 삭제했습니다. 🗑️", "success");
-                    AudioFX.playError();
-                }
-            );
-        }
-
-        function toggleMasterWord(wordId, event) {
-            if (event) event.stopPropagation();
-            const w = vocabulary.find(item => item.id === wordId);
-            if (w) {
-                w.mastered = !w.mastered;
-                if (w.mastered) {
-                    AudioFX.playBell();
-                    showToast(`"${w.word}" 단어 마스터 완료! 🏆`, "success");
-                    logAction('new-mastered'); // [냐냐 PATCH] 오늘 새로 마스터한 단어 수 추적
-                } else {
-                    logAction('snapshot');
-                }
-                renderWordList();
-                updateStats();
-            }
-        }
-
-        // 현재시제 변형의 셀에서 불규칙 인칭만 파란색 글씨로 동적으로 골라내는 헬퍼
-        function getConjugationCellMarkup(person, val, verbClass, irregularType) {
-            if (!val) return `<div class="bg-white p-1 rounded-md border border-slate-100"><span class="text-slate-400 block">${person}</span><strong class="text-slate-800">-</strong></div>`;
-            
-            let isIrregular = false;
-            if (verbClass === 'irregular') {
-                const irr = irregularType || '';
-                if (irr.includes('1인칭') && person === 'yo') {
-                    isIrregular = true;
-                }
-                if (irr.includes('e ➡️ ie') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
-                    isIrregular = true;
-                }
-                if (irr.includes('o ➡️ ue') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
-                    isIrregular = true;
-                }
-                if (irr.includes('e ➡️ i') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
-                    isIrregular = true;
-                }
-                if (irr.includes('완전 불규칙')) {
-                    isIrregular = true;
+                koreanBox.innerText = "AI가 비슷한 문장을 만들고 있어요...";
+                const btn = document.getElementById('ai-generate-example-btn');
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
+                try {
+                    const prompt = `단어 "${target.word}" (뜻: ${target.meaning})의 예문: "${target.example}" (${target.exampleMeaning}).
+                    이 예문과 같은 단어를 쓰되, 상황/주어/목적어를 조금 바꾼 자연스러운 새 스페인어 문장 1개와 그 한국어 번역을 만들어줘. 너무 어렵지 않게, 원래 예문과 난이도 비슷하게.`;
+                    const system = `You are a Spanish tutor. Create ONE new natural Spanish sentence using the same target word, similar in difficulty to the given example. Return JSON only.`;
+                    const schema = {
+                        type: "OBJECT",
+                        properties: {
+                            spanish: { type: "STRING", description: "새 스페인어 문장" },
+                            korean: { type: "STRING", description: "그 문장의 자연스러운 한국어 번역" }
+                        },
+                        required: ["spanish", "korean"]
+                    };
+                    const responseText = await callGemini(prompt, system, schema, 'low');
+                    const res = extractAndParseJson(responseText);
+                    aiCurrentKoreanSentence = res.korean || target.exampleMeaning;
+                    koreanBox.innerText = aiCurrentKoreanSentence;
+                } catch (e) {
+                    console.error(e);
+                    // 실패 시 예문 그대로 번역으로 대체
+                    exampleMissionMode = 'translate';
+                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                    aiCurrentKoreanSentence = target.exampleMeaning;
+                    koreanBox.innerText = target.exampleMeaning;
+                    showToast("새 문장 생성에 실패해서 예문 번역으로 대체했어요", "info");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
                 }
             }
-
-            const colorClass = isIrregular ? 'text-blue-600 font-black' : 'text-slate-700 font-semibold';
-            return `
-                <div class="bg-white p-1 rounded-md border border-slate-100">
-                    <span class="text-slate-400 block">${person}</span>
-                    <strong class="${colorClass}">${val}</strong>
-                </div>
-            `;
         }
 
-        // Render Vocabulary Tab List
-        // [냐냐 PATCH] 필터/정렬 패널 펼치기/접기
-        function toggleFilterPanel() {
-            document.getElementById('filter-panel').classList.toggle('hidden');
+        // 예문 연습 힌트 (단어 정보)
+        function toggleExampleHint() {
+            const box = document.getElementById('ai-example-hint-box');
+            if (!box) return;
+            box.classList.toggle('hidden');
         }
 
-        function handleSearchInput() {
-            const val = document.getElementById('search-bar').value;
-            document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
-            // [냐냐 PATCH] 검색을 시작하면 필터를 전체로 초기화해서 모든 단어에서 검색되게 함
-            if (val.trim()) {
-                const posSel = document.getElementById('pos-filter-select');
-                const masterySel = document.getElementById('mastery-filter-select');
-                const sortSel = document.getElementById('sort-select');
-                if (posSel) posSel.value = 'all';
-                if (masterySel) masterySel.value = 'all';
-                if (sortSel) sortSel.value = 'recent';
-            }
-            renderWordList();
-        }
-
-        function clearSearch() {
-            const bar = document.getElementById('search-bar');
-            bar.value = '';
-            document.getElementById('search-clear-btn').classList.add('hidden');
-            bar.focus();
-            renderWordList();
-        }
-
-        let wordListExpandedAll = false; // [냐냐 PATCH] 단어 카드 전체 펼침 상태 (기본 접힘)
-
-        function renderWordList() {
-            const grid = document.getElementById('vocabulary-grid');
-            const emptyState = document.getElementById('vocab-empty-state');
-            const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
-            const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
-            const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
-            // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
-            const expandedAll = searchVal.length > 0 ? true : wordListExpandedAll;
-            
-            const filtered = vocabulary.filter(w => {
-                const queryInWord = w.word.toLowerCase().includes(searchVal);
-                const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
-                const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
-                const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
-                const matchesPos = posFilter === 'all' || w.pos === posFilter;
-                const matchesMastery = masteryFilter === 'all' || (masteryFilter === 'mastered' && w.mastered) || (masteryFilter === 'not-mastered' && !w.mastered);
-                return matchesSearch && matchesPos && matchesMastery;
-            });
-
-            // [냐냐 PATCH] 기본값이 아닌 필터/정렬이 하나라도 켜져 있으면 버튼에 표시점 보여줌
-            const sortModeForBadge = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
-            const hasActiveFilter = posFilter !== 'all' || masteryFilter !== 'all' || sortModeForBadge !== 'recent';
-            const badge = document.getElementById('filter-active-badge');
-            if (badge) badge.classList.toggle('hidden', !hasActiveFilter);
-
-            // [PATCH-20] 정렬 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
-            const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
-
-            // [냐냐 PATCH] 정렬용으로만 맨 앞 정관사/부정관사를 떼어냄 (단수·복수 모두)
-            // 예: "el libro" → "libro", "las casas" → "casas". 화면에 보이는 단어는 그대로 유지됨.
-            const stripArticle = (w) => {
-                return (w || '')
-                    .toLowerCase()
-                    .trim()
-                    .replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '')
-                    .trim();
-            };
-
-            let filteredSorted = filtered;
-            if (sortMode === 'oldest') {
-                filteredSorted = [...filtered].reverse();
-            } else if (sortMode === 'alpha-asc') {
-                filteredSorted = [...filtered].sort((a, b) => stripArticle(a.word).localeCompare(stripArticle(b.word)));
-            } else if (sortMode === 'alpha-desc') {
-                filteredSorted = [...filtered].sort((a, b) => stripArticle(b.word).localeCompare(stripArticle(a.word)));
-            }
-            // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
-
-            if (filteredSorted.length === 0) {
-                grid.innerHTML = '';
-                emptyState.classList.remove('hidden');
+        // 예문 연습 답변 제출 — 기존 한->스 채점 로직을 재사용 (aiCurrentWordForMission/aiCurrentKoreanSentence 세팅됨)
+        async function submitExampleMission() {
+            if (!aiCurrentWordForMission) {
+                showToast("먼저 '✨ 문장 뽑기'를 눌러서 미션을 받아주세요!", "error");
                 return;
             }
-            emptyState.classList.add('hidden');
+            const userText = document.getElementById('ai-example-input').value.trim();
+            if (!userText) {
+                showToast("스페인어 답변을 입력해 주세요!", "error");
+                return;
+            }
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
 
-            let html = '';
-            filteredSorted.forEach(w => {
-                const isVerb = w.pos === 'verb';
+            const submitBtn = document.getElementById('ai-example-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            AudioFX.playPunch();
+
+            const refExample = aiCurrentWordForMission.example || '';
+            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
+            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
+            Reference example sentence (for context): "${refExample}"
+            Student's Spanish Answer: "${userText}"
+
+            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+
+            const system = `You are an encouraging and precise Spanish tutor tutoring a student named "냐냐".
+            Return feedback matching this exact JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
+               "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
+               "tip": "One short useful tip in Korean."
+            }
+            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle" },
+                                mean: { type: "STRING", description: "Korean meaning, 1-4 words, never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    tip: { type: "STRING" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🏆🏅";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝📝";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+
+                breakdownGrid.innerHTML = '';
+                const seenWords = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWords.has(w)) return;
+                    seenWords.add(w);
+                    breakdownGrid.innerHTML += `
+                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                            <span class="text-slate-500 text-right">${m}</span>
+                        </div>
+                    `;
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // 학습 프로필 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (aiCurrentWordForMission) {
+                    const pos = aiCurrentWordForMission.pos || 'etc';
+                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 추가 질문에 친근하게 한국어로 답해주세요." },
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>제출 답안:</b> ${userText}<br><b>총평:</b> ${feedback.message}<br><b>정석:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("AI 첨삭이 끝났습니다! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        async function submitAiTranslationEsKo() {
+            const userEsText = document.getElementById('ai-free-input-es').value.trim();
+            if (!userEsText) {
+                showToast("검사받을 스페인어 문장을 적어주세요!", "error");
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('ai-es-ko-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            showToast("Gemini AI가 자유 문장의 문법을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Student's Free Spanish Sentence: "${userEsText}"
+            
+            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            
+            const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
+            Return feedback matching this JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 어순이 완벽해요! 🟢 or 어순을 다시 살펴봐요! 🟠",
+               "correctedText": "The corrected standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise grammatical analysis in Korean mentioning '냐냐님', 1-2 sentences max. No long essays.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "tip": "One short, useful grammar tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
+            }
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                // 안전 파서 작동
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "⭐🟢";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝🟠";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userEsText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
                 
-                // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
-                let badgeMarkup = '';
-                if (w.pos === 'noun') {
-                    if (w.gender === 'masculine') {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-blue-100 text-blue-600 shadow-sm">M.</span>`;
-                    } else if (w.gender === 'feminine') {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-rose-100 text-rose-600 shadow-sm">F.</span>`;
-                    } else {
-                        badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-100 text-slate-600 shadow-sm">N.</span>`;
-                    }
-                } else if (w.pos === 'verb') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-orange-100 text-orange-600 shadow-sm">V.</span>`;
-                } else if (w.pos === 'adjective') {
-                    let adjSubLabel = '';
-                    if (w.adjAgreement === 'no-gender') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">성 변화 X</span>';
-                    else if (w.adjAgreement === 'no-number') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">수 변화 X</span>';
-                    else if (w.adjAgreement === 'invariable') adjSubLabel = ' <span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">변화 X</span>';
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-amber-100 text-amber-700 shadow-sm">Adj.</span>${adjSubLabel}`;
-                } else if (w.pos === 'adverb') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-emerald-100 text-emerald-700 shadow-sm">Adv.</span>`;
-                } else if (w.pos === 'preposition') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-teal-100 text-teal-700 shadow-sm">Prep.</span>`;
-                } else if (w.pos === 'conjunction') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-cyan-100 text-cyan-700 shadow-sm">Conj.</span>`;
-                } else if (w.pos === 'pronoun') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
-                } else if (w.pos === 'phrase') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
+                breakdownGrid.innerHTML = '';
+                const seenWordsEs = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWordsEs.has(w)) return; // 중복/빈 항목 제거
+                    seenWordsEs.add(w);
+                    breakdownGrid.innerHTML += `
+                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                            <span class="text-slate-500 text-right">${m}</span>
+                        </div>
+                    `;
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
+                // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
                 }
 
-                const cardStyle = w.mastered 
-                    ? 'border border-emerald-100 bg-emerald-50/40 shadow-xs' 
-                    : 'border border-slate-200 shadow-xs bg-white';
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 자유 작문 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
 
-                let verbClassText = '';
-                if (isVerb) {
-                    if (w.verbClass === 'regular') {
-                        verbClassText = '규칙';
-                    } else {
-                        verbClassText = `불규칙(${w.irregularType || '기타'})`;
-                    }
-                }
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("자유 문장 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
 
-                html += `
-                <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
-                    <div class="space-y-4">
-                        <div class="flex items-start justify-between gap-2">
-                            <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
-                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
-                                <span class="min-w-0 leading-tight" style="word-break:break-word;">
-                                    <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
-                                    <span class="inline-flex items-center gap-1.5 align-middle ml-2" style="transform: translateY(1px);">${badgeMarkup}</span>
-                                </span>
-                            </button>
-                            <div class="flex items-center gap-1 shrink-0">
-                                <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
-                                <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
-                                    <i class="fa-solid fa-check text-xs"></i>
-                                </button>
-                                <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
-                                    <i class="fa-solid fa-pen text-xs"></i>
-                                </button>
-                                <button onclick="deleteWord('${w.id}', event)" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-slate-400 flex items-center justify-center transition-all">
-                                    <i class="fa-solid fa-trash-can text-xs"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 접히는 본문 -->
-                        <div class="word-card-body space-y-4 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">
-                        <!-- Meaning section -->
-                        <div class="space-y-1">
-                            <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
-                                <span class="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
-                                <span>뜻:</span>
-                                <strong class="text-slate-800 font-bold">${w.meaning}</strong>
-                            </p>
-                        </div>
-
-                        <!-- 동사 변형표 개편 -->
-                        ${isVerb && w.conjugations && Object.values(w.conjugations).some(v => v) ? `
-                        <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <span class="block text-[9px] font-bold text-indigo-500 tracking-wider uppercase">
-                                    현재시제 <span class="text-indigo-600 font-extrabold ml-1">(${verbClassText})</span>
-                                </span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
-                                ${getConjugationCellMarkup('yo', w.conjugations.yo, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('tú', w.conjugations.tu, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('él', w.conjugations.el, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('nos', w.conjugations.nos, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('vos', w.conjugations.vos, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('ellos', w.conjugations.ellos, w.verbClass, w.irregularType)}
-                            </div>
-                        </div>
-                        ` : ''}
-
-                        <!-- 관용구 먼저, 예문 나중 (순서 변경) -->
-                        ${(() => {
-                            const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                            if (idiomList.length === 0) return '';
-                            const rows = idiomList.map((item, idx) => `
-                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''}">
-                                    <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
-                                    <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
-                                </div>
-                            `).join('');
-                            return `
-                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
-                            <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Expresión (관용구)</span>
-                            ${rows}
-                        </div>
-                            `;
-                        })()}
-                        ${w.example ? `
-                        <div class="bg-teal-50/40 border-l-2 border-teal-400 rounded-r-xl p-2.5 text-xs">
-                            <span class="block text-[8px] font-black text-teal-600 uppercase">Ejemplo (예문)</span>
-                            <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
-                            <p class="text-slate-400 italic">${w.exampleMeaning || ''}</p>
-                        </div>
-                        ` : ''}
-
-                        <!-- 핵심만 정리된 노트 -->
-                        ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
-                        </div>
+        function renderChatThread() {
+            const threadEl = document.getElementById('ai-chat-thread');
+            threadEl.innerHTML = '';
+            
+            if (aiChatHistory.length <= 2) {
+                threadEl.innerHTML = `
+                    <div class="text-center text-slate-400 py-4 font-semibold">
+                        🤖 AI에게 실시간으로 추가 질문을 해보세요!<br>
+                        "왜 이 전치사가 들어가죠?", "성별 일치는 어떻게 되나요?" 등을 아래에 편하게 타이핑해 물어보세요.
                     </div>
-                </div>
                 `;
+                return;
+            }
+
+            for (let i = 2; i < aiChatHistory.length; i++) {
+                const msg = aiChatHistory[i];
+                if (msg.role === 'user') {
+                    threadEl.innerHTML += `
+                        <div class="flex justify-end">
+                            <div class="bg-indigo-600 text-white rounded-2xl px-3.5 py-2 max-w-[85%] font-semibold shadow-xs">
+                                ${msg.content}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    threadEl.innerHTML += `
+                        <div class="flex justify-start gap-2 items-start">
+                            <div class="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-sm">🤖</div>
+                            <div class="bg-slate-100 text-slate-800 rounded-2xl px-3.5 py-2 max-w-[85%] font-medium shadow-2xs leading-relaxed">
+                                ${msg.content}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            setTimeout(() => {
+                threadEl.scrollTop = threadEl.scrollHeight;
+            }, 50);
+        }
+
+        async function sendFollowupQuestion() {
+            const inputEl = document.getElementById('ai-followup-input');
+            const question = inputEl.value.trim();
+            if (!question) return;
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI와의 대화를 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            const originalHtml = sendBtn.innerHTML;
+
+            aiChatHistory.push({ role: "user", content: question });
+            renderChatThread();
+            inputEl.value = '';
+
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i>`;
+            AudioFX.playPunch();
+
+            let contextPrompt = `이전 대화 맥락:\n`;
+            aiChatHistory.slice(0, -1).forEach(m => {
+                contextPrompt += `${m.role === 'user' ? '학생(냐냐)' : '선생님'}: ${m.content}\n`;
             });
+            contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 선생님으로서 상냥하고 정확하게 답변해 주세요.`;
 
-            grid.innerHTML = html;
-            // 펼침 상태에 따라 chevron 회전 동기화
-            if (expandedAll) {
-                document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
+            try {
+                const response = await callGemini(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely.", null, 'low');
+                aiChatHistory.push({ role: "assistant", content: response.trim() });
+                AudioFX.playSuccess();
+                renderChatThread();
+            } catch (e) {
+                console.error(e);
+                aiChatHistory.push({ role: "assistant", content: `앗, 냐냐님! ${describeGeminiError(e)}` });
+                renderChatThread();
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = originalHtml;
             }
         }
 
-        // [냐냐 PATCH] 전체 접기/펼치기 버튼 토글
-        function toggleExpandAllBtn() {
-            const btn = document.getElementById('expand-all-btn');
-            const willExpand = !wordListExpandedAll;
-            setAllWordCards(willExpand);
-            if (btn) {
-                btn.querySelector('span').innerText = willExpand ? '전체 접기' : '전체 펼치기';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center text-[10px]' : 'fa-solid fa-up-right-and-down-left-from-center text-[10px]';
+        function speakText(event, textIdOrWord) {
+            if (event) event.stopPropagation();
+            
+            let utteranceText = textIdOrWord;
+            const targetEl = document.getElementById(textIdOrWord);
+            if (targetEl) {
+                utteranceText = targetEl.innerText;
+            }
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(utteranceText);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                showToast("죄송합니다. 현재 브라우저가 원어민 음성 합성을 지원하지 않습니다.", "error");
             }
         }
-
-        // [냐냐 PATCH] 단어 카드 하나 접기/펼치기
-        function toggleWordCard(id) {
-            const body = document.querySelector(`[data-card-body="${id}"]`);
-            const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
-            if (!body) return;
-            const nowHidden = body.classList.toggle('hidden');
-            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
-        }
-
-        // [냐냐 PATCH] 전체 접기/펼치기
-        function setAllWordCards(expand) {
-            wordListExpandedAll = expand;
-            document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
-            document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
-        }
-
-        // TAB 2: FLASHCARD PLAYGROUND LOGICS
