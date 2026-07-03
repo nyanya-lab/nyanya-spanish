@@ -7,7 +7,7 @@ let vocabulary = [];
         let nyanyaDiary = {}; 
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
-        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
@@ -993,17 +993,17 @@ let vocabulary = [];
             container.innerHTML = tables.map((t, idx) => {
                 const hlCols = t.highlightCols || [0];
                 const headerRow = (t.headers || []).map((h, ci) => {
-                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-slate-700 bg-slate-100 border border-slate-300">${escapeHtml(h)}</th>`;
+                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-slate-100 bg-[#5b7c99] border border-[#4a6980]">${escapeHtml(h)}</th>`;
                 }).join('');
                 const bodyRows = (t.rows || []).map((r, ri) => {
-                    // 행마다 번갈아 배경색 (줄무늬) — 좀 더 진하게
-                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-slate-100';
+                    // 행마다 번갈아 배경색 (줄무늬) — 더스티 블루 톤
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#eef3f7]';
                     const cells = r.map((c, ci) => {
-                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 글씨 색으로 구분 (틸)
-                        const hl = hlCols.includes(ci) ? 'text-teal-700' : 'text-slate-900';
-                        return `<td class="px-3 py-2 text-sm text-center border border-slate-300 font-bold ${hl}">${escapeHtml(c || '')}</td>`;
+                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 진한 더스티 블루 글씨로 구분
+                        const hl = hlCols.includes(ci) ? 'text-[#3d5a73]' : 'text-slate-800';
+                        return `<td class="px-3 py-2 text-sm text-center border border-[#c9d6e0] font-bold ${hl}">${escapeHtml(c || '')}</td>`;
                     }).join('');
-                    return `<tr class="${rowBg} hover:bg-teal-50 transition-colors">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-[#dde7ef] transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
@@ -1023,14 +1023,14 @@ let vocabulary = [];
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            ${t.desc ? `<p class="text-xs text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
+                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
                             <div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
                                     ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<p class="text-[11px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">💡 ${escapeHtml(t.note)}</p>` : ''}
+                            ${t.note ? `<p class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">💡 ${escapeHtml(t.note)}</p>` : ''}
                         </div>
                     </div>
                 `;
@@ -1117,8 +1117,8 @@ let vocabulary = [];
             s.headers.forEach((h, ci) => {
                 const isHl = (s.highlightCols || []).includes(ci);
                 html += `<th class="p-1 align-top">
-                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5 text-xs font-bold text-teal-700 focus:outline-none focus:ring-1 focus:ring-teal-400">
-                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
+                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#eef3f7] border border-[#c9d6e0] rounded-lg px-2 py-1.5 text-xs font-bold text-[#3d5a73] focus:outline-none focus:ring-1 focus:ring-[#5b7c99]">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-[#5b7c99] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
                 </th>`;
             });
             html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
