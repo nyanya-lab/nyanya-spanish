@@ -970,12 +970,12 @@ function togglePosFields() {
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
-                            <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 flex-wrap min-w-0 text-left flex-1">
-                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
-                                <h3 class="text-xl font-extrabold text-slate-900 tracking-tight break-all">
-                                    ${w.word}
-                                </h3>
-                                ${badgeMarkup}
+                            <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
+                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-2" data-card-chevron="${w.id}"></i>
+                                <span class="flex items-baseline gap-2 flex-wrap min-w-0">
+                                    <span class="text-xl font-extrabold text-slate-900 tracking-tight break-all leading-snug">${w.word}</span>
+                                    ${badgeMarkup}
+                                </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
