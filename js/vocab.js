@@ -863,7 +863,7 @@ function togglePosFields() {
         }
 
         // [냐냐 버전확인용] 콘솔에 이 메시지가 뜨면 최신 vocab.js가 로드된 거예요
-        console.log('%c냐냐의 스페인어 공부방 vocab.js v3 로드됨 ✨', 'color:#8b5cf6; font-weight:bold;');
+        console.log('%c냐냐의 스페인어 공부방 vocab.js v4 로드됨 ✨', 'color:#8b5cf6; font-weight:bold;');
 
         let wordListExpandedAll = false; // [냐냐 PATCH] 단어 카드 전체 펼침 상태 (기본 접힘)
 
@@ -975,9 +975,9 @@ function togglePosFields() {
                         <div class="flex items-start justify-between gap-2">
                             <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
                                 <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
-                                <span class="flex items-center gap-x-2 gap-y-1 flex-wrap min-w-0">
-                                    <span class="text-xl font-extrabold text-slate-900 tracking-tight break-all leading-tight">${w.word}</span>
-                                    ${badgeMarkup}
+                                <span class="min-w-0 leading-tight" style="word-break:break-word;">
+                                    <span class="text-xl font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
+                                    <span class="inline-flex items-center gap-1.5 align-middle ml-2">${badgeMarkup}</span>
                                 </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
