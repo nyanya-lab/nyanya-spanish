@@ -783,6 +783,25 @@ function togglePosFields() {
             );
         }
 
+        // [냐냐 PATCH] 약점 단어(별표) 수동 토글
+        function toggleWeakWord(wordId, event) {
+            if (event) event.stopPropagation();
+            const w = vocabulary.find(item => item.id === wordId);
+            if (w) {
+                w.weak = !w.weak;
+                if (w.weak) {
+                    if (!w.weakScore || w.weakScore < 6) w.weakScore = 6; // 수동 표시 시 6점 (한 번 맞혀도 안 풀리게)
+                    showToast(`"${w.word}" 약점 단어로 표시했어요 ⭐`, "success");
+                } else {
+                    w.weakScore = 0; // 해제하면 점수도 리셋 (다시 쌓이게)
+                    showToast(`"${w.word}" 약점 표시를 해제했어요`, "info");
+                }
+                logAction('snapshot');
+                renderWordList();
+                saveToStorage();
+            }
+        }
+
         function toggleMasterWord(wordId, event) {
             if (event) event.stopPropagation();
             const w = vocabulary.find(item => item.id === wordId);
@@ -865,6 +884,8 @@ function togglePosFields() {
         let wordListExpandedAll = false; // [냐냐 PATCH] 단어 카드 전체 펼침 상태 (기본 접힘)
 
         function renderWordList() {
+            renderStreakBadge();
+            renderTodayReview();
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
@@ -879,7 +900,11 @@ function togglePosFields() {
                 const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
                 const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
                 const matchesPos = posFilter === 'all' || w.pos === posFilter;
-                const matchesMastery = masteryFilter === 'all' || (masteryFilter === 'mastered' && w.mastered) || (masteryFilter === 'not-mastered' && !w.mastered);
+                const matchesMastery = masteryFilter === 'all'
+                    || (masteryFilter === 'mastered' && w.mastered)
+                    || (masteryFilter === 'not-mastered' && !w.mastered)
+                    || (masteryFilter === 'weak' && w.weak)
+                    || (masteryFilter === 'not-weak' && !w.weak);
                 return matchesSearch && matchesPos && matchesMastery;
             });
 
@@ -909,6 +934,9 @@ function togglePosFields() {
                 filteredSorted = [...filtered].sort((a, b) => stripArticle(a.word).localeCompare(stripArticle(b.word)));
             } else if (sortMode === 'alpha-desc') {
                 filteredSorted = [...filtered].sort((a, b) => stripArticle(b.word).localeCompare(stripArticle(a.word)));
+            } else if (sortMode === 'weak-score') {
+                // 약점 점수 높은순 (점수 같으면 최근 추가순 유지)
+                filteredSorted = [...filtered].sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
             }
             // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
@@ -955,7 +983,11 @@ function togglePosFields() {
 
                 const cardStyle = w.mastered 
                     ? 'border border-emerald-100 bg-emerald-50/40 shadow-xs' 
-                    : 'border border-slate-200 shadow-xs bg-white';
+                    : ((w.weak && (w.weakScore || 0) >= 10)
+                        ? 'border-2 border-red-300 bg-red-50/60 shadow-xs'
+                        : (w.weak
+                            ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
+                            : 'border border-slate-200 shadow-xs bg-white'));
 
                 let verbClassText = '';
                 if (isVerb) {
@@ -979,6 +1011,9 @@ function togglePosFields() {
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.weak ? ((w.weakScore || 0) >= 10 ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm') : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                    <i class="fa-solid fa-star text-xs"></i>
+                                </button>
                                 <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
                                     <i class="fa-solid fa-check text-xs"></i>
                                 </button>
