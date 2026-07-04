@@ -439,23 +439,26 @@ let vocabulary = [];
 
         // [냐냐 PATCH] 오늘 복습하면 좋은 단어 = 약점 점수(weakScore) 1점 이상. 점수 높은 순.
         function getTodayReviewWords() {
+            const today = getLocalDateString();
+            // [냐냐 PATCH] 오늘 틀린 단어만 (아직 마스터 안 된 것)
             return vocabulary
-                .filter(w => (w.weakScore || 0) >= 1 && !w.mastered)
+                .filter(w => w.lastWrongDate === today && !w.mastered)
                 .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
         }
 
-        // [냐냐 PATCH] 약점 단어만 단어장에 필터링해서 보여주기 (퀴즈로 바로 안 가고 먼저 훑어보게)
-        function showWeakWordsInList() {
+        // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
+        let todayWrongFilterActive = false;
+        function showTodayWrongInList() {
+            todayWrongFilterActive = true;
+            // 다른 필터는 초기화
             const filter = document.getElementById('mastery-filter-select');
-            if (filter) filter.value = 'weak';
-            // 약점 점수 높은 순으로 정렬해서 제일 취약한 게 위로
+            if (filter) filter.value = 'all';
             const sortSel = document.getElementById('sort-select');
             if (sortSel) sortSel.value = 'weak-score';
             renderWordList();
-            // 단어장 목록으로 스크롤
             const grid = document.getElementById('vocabulary-grid');
             if (grid) setTimeout(() => grid.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-            showToast("약점 단어만 모아서 보여드려요! 하나씩 훑어보세요 📖", "info");
+            showToast("오늘 틀린 단어만 모아서 보여드려요! 📖", "info");
         }
 
         function renderTodayReview() {
