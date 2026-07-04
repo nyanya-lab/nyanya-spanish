@@ -3,6 +3,29 @@
         let aiCurrentWordForMission = null;
         let aiCurrentKoreanSentence = "";
 
+        // [냐냐 PATCH] B-2 첨삭: '바뀐 부분' 설명 리스트 렌더링 (어순/관사 변경도 표시)
+        function renderAiChanges(feedback) {
+            const box = document.getElementById('ai-changes-box');
+            const list = document.getElementById('ai-changes-list');
+            if (!box || !list) return;
+            const changes = Array.isArray(feedback.changes) ? feedback.changes.filter(c => c && (c.from || c.to)) : [];
+            if (changes.length === 0) {
+                box.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            box.classList.remove('hidden');
+            list.innerHTML = changes.map(c => {
+                const from = (c.from || '').trim();
+                const to = (c.to || '').trim();
+                const why = (c.why || '').trim();
+                return `<li class="flex flex-col gap-0.5">
+                    <span><span class="text-slate-400 line-through">${from}</span> <span class="text-slate-300">→</span> <span class="text-red-600 font-bold">${to}</span></span>
+                    ${why ? `<span class="text-[11px] text-slate-500 pl-1">· ${why}</span>` : ''}
+                </li>`;
+            }).join('');
+        }
+
         function switchAiMode(mode) {
             currentAiMode = mode;
             const btnKoEs = document.getElementById('ai-mode-btn-ko-es');
@@ -390,6 +413,9 @@
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
+               "changes": [
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+               ],
                "tip": "One short, useful grammar or conversational tip in Korean, 1 sentence.",
                "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
             }
@@ -413,6 +439,18 @@
                                 mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
                             },
                             required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING" },
+                                to: { type: "STRING" },
+                                why: { type: "STRING" }
+                            },
+                            required: ["from", "to", "why"]
                         }
                     },
                     tip: { type: "STRING" },
@@ -447,6 +485,7 @@
                     correctionBox.classList.remove('hidden');
                     originalRender.innerHTML = feedback.originalMarked || userAnswer;
                     correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
                 }
 
                 coachVerdict.innerText = feedback.verdict;
@@ -672,8 +711,12 @@
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
+               "changes": [
+                  { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "Short Korean reason WHY it changed, e.g. '스페인어는 형용사가 명사 뒤에 와요' or '관사가 더 자연스러워요'. 1 sentence." }
+               ],
                "tip": "One short, useful grammatical tip in Korean, 1 sentence."
             }
+            IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
             Do not wrap JSON in markdown blockticks.`;
 
@@ -694,6 +737,18 @@
                                 mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
                             },
                             required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING", description: "Original wrong part (word or phrase)" },
+                                to: { type: "STRING", description: "Corrected part" },
+                                why: { type: "STRING", description: "Short Korean reason for the change" }
+                            },
+                            required: ["from", "to", "why"]
                         }
                     },
                     tip: { type: "STRING" }
@@ -728,6 +783,7 @@
                     correctionBox.classList.remove('hidden');
                     originalRender.innerHTML = feedback.originalMarked || userText;
                     correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
                 }
 
                 coachVerdict.innerText = feedback.verdict;
@@ -969,6 +1025,7 @@
                     correctionBox.classList.remove('hidden');
                     originalRender.innerHTML = feedback.originalMarked || userText;
                     correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
                 }
 
                 coachVerdict.innerText = feedback.verdict;
@@ -1057,6 +1114,9 @@
                "breakdown": [
                   { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
+               "changes": [
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+               ],
                "tip": "One short, useful grammar tip in Korean, 1 sentence.",
                "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
             }
@@ -1080,6 +1140,18 @@
                                 mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
                             },
                             required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING" },
+                                to: { type: "STRING" },
+                                why: { type: "STRING" }
+                            },
+                            required: ["from", "to", "why"]
                         }
                     },
                     tip: { type: "STRING" },
@@ -1115,6 +1187,7 @@
                     correctionBox.classList.remove('hidden');
                     originalRender.innerHTML = feedback.originalMarked || userEsText;
                     correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
                 }
 
                 coachVerdict.innerText = feedback.verdict;
