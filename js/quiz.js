@@ -213,6 +213,8 @@ let quizSession = null;
                 const input = document.getElementById('quiz-subjective-input');
                 input.value = '';
                 input.disabled = false;
+                const synHint = document.getElementById('quiz-synonym-hint');
+                if (synHint) synHint.classList.add('hidden'); // 새 문제면 동의어 힌트 숨김
                 document.getElementById('quiz-subjective-submit-btn').disabled = false;
                 setTimeout(() => input.focus(), 50);
             }
@@ -324,11 +326,29 @@ let quizSession = null;
         function submitSubjectiveAnswer() {
             const q = quizSession.questions[quizSession.currentIndex];
             const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
-            // [냐냐 PATCH] 빈칸 제출 허용 — 모르는 단어는 빈칸으로 넘겨서 정답 확인 가능 (빈칸 = 오답 처리)
-            document.getElementById('quiz-subjective-input').disabled = true;
-            document.getElementById('quiz-subjective-submit-btn').disabled = true;
             // [냐냐 PATCH] 스마트 분석 (동의어 힌트 / 성수틀림 / 등록추천)
             const analysis = analyzeSubjectiveAnswer(userAnswer, q);
+
+            // [냐냐 PATCH] 동의어를 입력한 경우: 오답 처리하지 않고 힌트를 보여준 뒤 다시 입력받음
+            // (동의어는 '틀린 답'이 아니라 '정답으로 가는 길목'이라는 관점)
+            if (analysis.isSynonym) {
+                const synHintBox = document.getElementById('quiz-synonym-hint');
+                if (synHintBox) {
+                    synHintBox.classList.remove('hidden');
+                    synHintBox.innerHTML = analysis.hint;
+                }
+                // 입력칸 비우고 다시 활성화 (재입력)
+                const input = document.getElementById('quiz-subjective-input');
+                input.value = '';
+                input.focus();
+                return; // 채점 보류, 다음 문제로 안 넘어감
+            }
+
+            // 동의어가 아니면 정상 채점
+            document.getElementById('quiz-subjective-input').disabled = true;
+            document.getElementById('quiz-subjective-submit-btn').disabled = true;
+            const synHintBox = document.getElementById('quiz-synonym-hint');
+            if (synHintBox) synHintBox.classList.add('hidden');
             q._subjectiveHint = analysis.hint || '';
             q._userAnswer = userAnswer;
             if (analysis.unknownWord) q._unknownWord = analysis.unknownWord;
