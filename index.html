@@ -361,11 +361,11 @@
                         <!-- 정답 확인 + 복습 패널 -->
                         <div id="quiz-review-panel" class="hidden bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                             <div id="quiz-review-verdict" class="text-sm font-bold"></div>
-                            <div class="bg-white rounded-xl p-3 border border-slate-100 flex items-baseline justify-between gap-3">
-                                <span class="font-bold text-slate-800" id="quiz-review-word"></span>
-                                <span class="text-slate-500 text-sm text-right" id="quiz-review-meaning"></span>
+                            <div class="bg-white rounded-xl p-3 border border-slate-100 flex items-center justify-between gap-3">
+                                <span class="font-black text-slate-900 text-base" id="quiz-review-word"></span>
+                                <span class="text-slate-700 text-sm font-bold text-right" id="quiz-review-meaning"></span>
                             </div>
-                            <div id="quiz-review-notes-box" class="hidden bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-900 whitespace-pre-wrap leading-snug"></div>
+                            <div id="quiz-review-notes-box" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-sm text-amber-900 font-semibold whitespace-pre-wrap leading-relaxed"></div>
                             <button id="quiz-next-btn" onclick="nextQuizQuestion()" disabled class="w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed">다음 문제</button>
                         </div>
                     </div>
