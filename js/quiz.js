@@ -117,8 +117,18 @@ let quizSession = null;
                 if (!isSubjective) {
                     q.answer = w.meaning;
                     let choices = [w.meaning];
-                    let pool = vocabulary.filter(x => x.id !== w.id).map(x => x.meaning);
+                    // [냐냐 PATCH] 보기(오답)는 정답 단어와 같은 품사에서 우선 뽑기
+                    const samePos = vocabulary.filter(x => x.id !== w.id && x.pos === w.pos).map(x => x.meaning);
+                    const otherPos = vocabulary.filter(x => x.id !== w.id && x.pos !== w.pos).map(x => x.meaning);
+                    let pool = [...new Set(samePos)]; // 같은 품사 우선, 중복 제거
                     pool.sort(() => Math.random() - 0.5);
+                    // 같은 품사가 3개 미만이면 다른 품사로 채움
+                    if (pool.length < 3) {
+                        const filler = [...new Set(otherPos)].sort(() => Math.random() - 0.5);
+                        pool = pool.concat(filler);
+                    }
+                    // 정답과 같은 뜻은 제외
+                    pool = pool.filter(m => m !== w.meaning);
                     choices = choices.concat(pool.slice(0, 3));
                     choices.sort(() => Math.random() - 0.5);
                     q.choices = choices;
@@ -195,7 +205,9 @@ let quizSession = null;
                 });
             } else {
                 document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
-                document.getElementById('quiz-question-text').innerText = `${q.word.meaning} → 스페인어로 써보세요!`;
+                // [냐냐 PATCH] 형용사는 남성형(사전형)으로 통일해서 물어봄 — 답이 하나로 명확해짐
+                const genderHint = (q.word.pos === 'adjective') ? ' <span class="text-violet-500">(남성형)</span>' : '';
+                document.getElementById('quiz-question-text').innerHTML = `${q.word.meaning} → 스페인어로 써보세요!${genderHint}`;
                 document.getElementById('quiz-choices-box').classList.add('hidden');
                 document.getElementById('quiz-subjective-box').classList.remove('hidden');
                 const input = document.getElementById('quiz-subjective-input');
@@ -204,6 +216,70 @@ let quizSession = null;
                 document.getElementById('quiz-subjective-submit-btn').disabled = false;
                 setTimeout(() => input.focus(), 50);
             }
+        }
+
+        // [냐냐 PATCH] 서술형 답 분석 — 오답일 때 힌트 생성 (동의어/성수틀림/철자근접)
+        // AI 없이 문자열 비교로 처리 (빠름). 반환: {isCorrect, hint}
+        function analyzeSubjectiveAnswer(userRaw, q) {
+            const correct = q.word.word;
+            const correctNorm = normalizeSpanishAnswer(correct);
+            const userNorm = normalizeSpanishAnswer(userRaw);
+
+            // 1) 정답 (악센트/관사 관용 처리 후 일치)
+            if (userNorm === correctNorm) return { isCorrect: true, hint: '' };
+
+            // 빈칸이면 힌트 없이 오답
+            if (!userRaw.trim()) return { isCorrect: false, hint: '' };
+
+            // 2) 성/수 틀림 감지 (형용사) — 어근이 같은데 어미만 다름
+            //    corto vs corta, egoísta vs egoísto 등
+            const stem = (s) => s.replace(/(o|a|os|as|e|es)$/,'');
+            if (q.word.pos === 'adjective' && stem(userNorm) === stem(correctNorm) && stem(correctNorm).length >= 2) {
+                return {
+                    isCorrect: false,
+                    hint: `✏️ 어근은 맞아요! 어미(성·수)를 확인해 보세요. 남성형은 <b>${correct}</b> 예요.`
+                };
+            }
+
+            // 3) 동의어 감지 — 사용자가 입력한 단어가 단어장에 있고, 뜻이 같으면 동의어
+            const userWordInVocab = vocabulary.find(w => normalizeSpanishAnswer(w.word) === userNorm);
+            const sameMeaning = userWordInVocab && meaningsOverlap(userWordInVocab.meaning, q.word.meaning);
+            if (sameMeaning) {
+                // 앞글자 힌트: 정답과 사용자 답이 공유하는 접두사 + 다음 한 글자
+                const sharedLen = sharedPrefixLen(userNorm, correctNorm);
+                const hintPrefix = correct.slice(0, sharedLen + 1);
+                return {
+                    isCorrect: false,
+                    hint: `💡 그것도 같은 뜻이에요! 다른 동의어를 생각해 볼까요? <b>${hintPrefix}</b>로 시작하는 단어예요.`,
+                    isSynonym: true
+                };
+            }
+
+            // 4) 입력한 단어가 단어장에 없음 → 등록 추천 표시 (오답)
+            if (!userWordInVocab && userRaw.trim().length >= 2) {
+                return {
+                    isCorrect: false,
+                    hint: `❌ 정답은 <b>${correct}</b> 예요.`,
+                    unknownWord: userRaw.trim()
+                };
+            }
+
+            // 5) 그 외 (단어장엔 있지만 뜻이 다른 경우 등) → 일반 오답
+            return { isCorrect: false, hint: `❌ 정답은 <b>${correct}</b> 예요.` };
+        }
+
+        // 두 뜻 문자열이 겹치는지 (동의어 판정용) — 쉼표/슬래시로 나눠 하나라도 겹치면 true
+        function meaningsOverlap(m1, m2) {
+            const split = (m) => m.toLowerCase().replace(/\(.*?\)/g,'').split(/[,;/·]/).map(s => s.trim()).filter(Boolean);
+            const a = split(m1), b = split(m2);
+            return a.some(x => b.some(y => x === y || x.includes(y) || y.includes(x)));
+        }
+
+        // 두 문자열의 공통 접두사 길이
+        function sharedPrefixLen(a, b) {
+            let i = 0;
+            while (i < a.length && i < b.length && a[i] === b[i]) i++;
+            return i;
         }
 
         function normalizeSpanishAnswer(s) {
@@ -229,14 +305,34 @@ let quizSession = null;
             finishQuizQuestion(isCorrect, q);
         }
 
+        // [냐냐 PATCH] 퀴즈에서 입력한 미등록 단어를 단어장에 등록
+        function registerUnknownFromQuiz() {
+            const word = quizSession && quizSession._pendingRegisterWord;
+            if (!word) return;
+            changeTab('list');
+            setTimeout(() => {
+                openWordModal();
+                const input = document.getElementById('input-word');
+                if (input) {
+                    input.value = word;
+                    handleWordInput(word);
+                }
+                showToast(`"${word}" 등록 화면을 열었어요. AI 자동완성을 눌러보세요!`, "info");
+            }, 100);
+        }
+
         function submitSubjectiveAnswer() {
             const q = quizSession.questions[quizSession.currentIndex];
             const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
             // [냐냐 PATCH] 빈칸 제출 허용 — 모르는 단어는 빈칸으로 넘겨서 정답 확인 가능 (빈칸 = 오답 처리)
             document.getElementById('quiz-subjective-input').disabled = true;
             document.getElementById('quiz-subjective-submit-btn').disabled = true;
-            const isCorrect = userAnswer ? (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.word.word)) : false;
-            finishQuizQuestion(isCorrect, q);
+            // [냐냐 PATCH] 스마트 분석 (동의어 힌트 / 성수틀림 / 등록추천)
+            const analysis = analyzeSubjectiveAnswer(userAnswer, q);
+            q._subjectiveHint = analysis.hint || '';
+            q._userAnswer = userAnswer;
+            if (analysis.unknownWord) q._unknownWord = analysis.unknownWord;
+            finishQuizQuestion(analysis.isCorrect, q);
         }
 
         function finishQuizQuestion(isCorrect, q) {
@@ -298,6 +394,27 @@ let quizSession = null;
             const verdict = document.getElementById('quiz-review-verdict');
             verdict.innerText = isCorrect ? "🎯 정답입니다!" : "📝 다시 한 번 확인해 볼까요?";
             verdict.className = isCorrect ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-rose-600";
+
+            // [냐냐 PATCH] 스마트 힌트 박스 (동의어/성수틀림/등록추천)
+            const hintBox = document.getElementById('quiz-review-hint-box');
+            const registerBox = document.getElementById('quiz-review-register-box');
+            if (hintBox) {
+                if (!isCorrect && q._subjectiveHint) {
+                    hintBox.classList.remove('hidden');
+                    hintBox.innerHTML = q._subjectiveHint;
+                } else {
+                    hintBox.classList.add('hidden');
+                }
+            }
+            if (registerBox) {
+                if (!isCorrect && q._unknownWord) {
+                    registerBox.classList.remove('hidden');
+                    document.getElementById('quiz-review-register-box').querySelector('span').innerText = `"${q._unknownWord}"를 단어장에 등록할까요?`;
+                    quizSession._pendingRegisterWord = q._unknownWord;
+                } else {
+                    registerBox.classList.add('hidden');
+                }
+            }
 
             if (q.type === 'idiom-mc') {
                 // 관용구 문제: 관용구 자체 + 뜻 + 부모 단어의 전체 정보(노트/관용구/예문)
