@@ -42,6 +42,42 @@
             return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct);
         }
 
+        // [냐냐 PATCH] 게임 결과를 단어의 마스터/약점 점수에 반영 (퀴즈 객관식과 동일한 강도)
+        function applyGameScore(wordId, isCorrect) {
+            const w = vocabulary.find(v => v.id === wordId);
+            if (!w) return;
+            if (isCorrect) {
+                // 정답: 약점 점수 -2, 마스터 점수 +1 (상한 8)
+                w.weakScore = Math.max(0, (w.weakScore || 0) - 2);
+                if (w.weakScore < 5) w.weak = false;
+                w.masterScore = Math.min(8, (w.masterScore || 0) + 1);
+                // 게임은 객관식 성격이라 자동 마스터의 '주관식 통과' 조건은 못 채움 (subjectivePassed 안 건드림)
+                if (!w.mastered && w.masterScore >= 5 && w.subjectivePassed) {
+                    w.mastered = true;
+                }
+            } else {
+                // 오답: 약점 점수 +2, 마스터 점수 -3
+                w.weakScore = (w.weakScore || 0) + 2;
+                if (w.weakScore >= 5) w.weak = true;
+                w.masterScore = Math.max(0, (w.masterScore || 0) - 3);
+                if (w.mastered && w.masterScore < 5) w.mastered = false;
+            }
+        }
+
+        // [냐냐 PATCH] 게임 최고기록 (localStorage에 게임별 저장)
+        function getGameHighScore(gameType) {
+            try { return parseInt(localStorage.getItem('nyanya_game_hs_' + gameType) || '0', 10) || 0; }
+            catch (e) { return 0; }
+        }
+        function setGameHighScore(gameType, score) {
+            const prev = getGameHighScore(gameType);
+            if (score > prev) {
+                try { localStorage.setItem('nyanya_game_hs_' + gameType, String(score)); } catch (e) {}
+                return true; // 신기록!
+            }
+            return false;
+        }
+
         // ============================================================
         // 게임 1: 속사포 퀴즈 (제한 시간 60초, 콤보)
         // ============================================================
@@ -120,9 +156,10 @@
             const input = document.getElementById('rf-input');
             const fb = document.getElementById('rf-feedback');
             const userAnswer = input.value.trim();
-            if (!userAnswer) return;
+            // [냐냐 PATCH] 빈칸으로 엔터쳐도 넘어감 (오답 처리)
 
-            const isCorrect = gameCheckAnswer(userAnswer, gameState.current.word);
+            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
+            applyGameScore(gameState.current.id, isCorrect); // 마스터/약점 점수 반영
             if (isCorrect) {
                 gameState.combo++;
                 gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
@@ -154,11 +191,16 @@
             stopCurrentGame();
             // 학습일지에 게임도 학습 활동으로 기록 (퀴즈처럼)
             try { if (typeof logAction === 'function') logAction('snapshot'); } catch (e) {}
+            // 마스터/약점 점수 변경사항 저장 + 최고기록 갱신
+            const isNewRecord = setGameHighScore('rapidfire', finalScore);
+            const highScore = getGameHighScore('rapidfire');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
             showGamePlayArea(`
                 <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
                     <div class="text-6xl">⚡</div>
                     <h3 class="text-xl font-black text-slate-900">시간 종료!</h3>
                     <p class="text-4xl font-black text-rose-600">${finalScore}점</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
                     <div class="flex justify-center gap-6 text-sm">
                         <span class="text-slate-500">정답 <b class="text-emerald-600">${correct}</b></span>
                         <span class="text-slate-500">오답 <b class="text-rose-500">${wrong}</b></span>
@@ -176,8 +218,289 @@
         // 게임 2, 3 자리 (다음 배치에서 구현)
         // ============================================================
         function startFlashMemory() {
-            showToast("깜빡이 기억 게임은 곧 추가돼요! ⏳", "info");
+            const pool = getGameWordPool();
+            if (pool.length < 4) {
+                showToast("게임하려면 단어가 4개 이상 있어야 해요!", "error");
+                return;
+            }
+            stopCurrentGame();
+            gameState = {
+                type: 'flash',
+                pool: pool,
+                round: 0,
+                score: 0,
+                correct: 0,
+                wrong: 0,
+                lives: 3,
+                current: null,
+                flashMs: 2000, // 처음엔 2초, 점점 짧아짐
+                flashTimeout: null
+            };
+            flashMemoryNextRound();
+        }
+
+        function flashMemoryNextRound() {
+            if (!gameState) return;
+            gameState.round++;
+            gameState.current = gameState.pool[Math.floor(Math.random() * gameState.pool.length)];
+            // 라운드가 올라갈수록 보여주는 시간 감소 (최소 0.8초)
+            const showMs = Math.max(800, gameState.flashMs - (gameState.round - 1) * 100);
+
+            // 1단계: 단어를 잠깐 보여줌
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-slate-500">라운드 <span class="text-indigo-600 text-base">${gameState.round}</span></span>
+                            <span class="text-xs font-bold text-slate-500">점수 <span class="text-indigo-600 text-base">${gameState.score}</span></span>
+                            <span class="text-xs font-bold text-rose-400">${'❤️'.repeat(gameState.lives)}</span>
+                        </div>
+                    </div>
+                    <div class="text-center py-10">
+                        <p class="text-xs font-bold text-indigo-400 mb-3">👁️ 잘 기억하세요!</p>
+                        <p id="flash-word" class="text-4xl font-black text-slate-900 transition-opacity duration-300">${gameState.current.word}</p>
+                        <p class="text-sm text-slate-400 mt-2">${gameState.current.meaning}</p>
+                    </div>
+                </div>
+            `);
+
+            // 2단계: showMs 후에 단어를 숨기고 입력 받기
+            gameState.flashTimeout = setTimeout(() => {
+                if (!gameState) return;
+                flashMemoryAskInput();
+            }, showMs);
+        }
+
+        function flashMemoryAskInput() {
+            if (!gameState) return;
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-slate-500">라운드 <span class="text-indigo-600 text-base">${gameState.round}</span></span>
+                            <span class="text-xs font-bold text-slate-500">점수 <span class="text-indigo-600 text-base">${gameState.score}</span></span>
+                            <span class="text-xs font-bold text-rose-400">${'❤️'.repeat(gameState.lives)}</span>
+                        </div>
+                    </div>
+                    <div class="text-center py-6">
+                        <p class="text-xs font-bold text-slate-400 mb-1">방금 본 단어를 입력하세요!</p>
+                        <p class="text-lg font-bold text-indigo-600">${gameState.current.meaning}</p>
+                        <p id="flash-feedback" class="text-sm font-bold mt-2 h-5"></p>
+                    </div>
+                    <input type="text" id="flash-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <button onclick="flashMemorySubmit()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
+                </div>
+            `);
+            const input = document.getElementById('flash-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); flashMemorySubmit(); }
+            });
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function flashMemorySubmit() {
+            if (!gameState || !gameState.current) return;
+            const input = document.getElementById('flash-input');
+            const userAnswer = input.value.trim();
+            input.disabled = true;
+
+            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
+            applyGameScore(gameState.current.id, isCorrect); // 마스터/약점 점수 반영
+            const fb = document.getElementById('flash-feedback');
+            if (isCorrect) {
+                gameState.correct++;
+                gameState.score += 10 + gameState.round; // 라운드 보너스
+                if (fb) { fb.innerText = "✓ 정답!"; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                gameState.wrong++;
+                gameState.lives--;
+                if (fb) { fb.innerText = `✗ 정답: ${gameState.current.word}`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+            // 다음 라운드 또는 게임 종료
+            setTimeout(() => {
+                if (!gameState) return;
+                if (gameState.lives <= 0) {
+                    flashMemoryEnd();
+                } else {
+                    flashMemoryNextRound();
+                }
+            }, 1200);
+        }
+
+        function flashMemoryEnd() {
+            if (!gameState) return;
+            const score = gameState.score;
+            const round = gameState.round;
+            const correct = gameState.correct;
+            stopCurrentGame();
+            try { if (typeof logAction === 'function') logAction('snapshot'); } catch (e) {}
+            const isNewRecord = setGameHighScore('flash', score);
+            const highScore = getGameHighScore('flash');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">👁️</div>
+                    <h3 class="text-xl font-black text-slate-900">게임 종료!</h3>
+                    <p class="text-4xl font-black text-indigo-600">${score}점</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
+                    <div class="flex justify-center gap-6 text-sm">
+                        <span class="text-slate-500">도달 라운드 <b class="text-indigo-600">${round}</b></span>
+                        <span class="text-slate-500">맞힌 단어 <b class="text-emerald-600">${correct}</b></span>
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="startFlashMemory()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
+                    </div>
+                </div>
+            `);
         }
         function startFallingWords() {
-            showToast("떨어지는 단어 게임은 곧 추가돼요! ⏳", "info");
+            const pool = getGameWordPool();
+            if (pool.length < 4) {
+                showToast("게임하려면 단어가 4개 이상 있어야 해요!", "error");
+                return;
+            }
+            stopCurrentGame();
+            gameState = {
+                type: 'falling',
+                pool: pool,
+                score: 0,
+                correct: 0,
+                lives: 5,
+                fallingItems: [], // {id, word, meaning, x, y, el}
+                speed: 0.15, // % per frame
+                spawnInterval: null,
+                rafId: null,
+                lastSpawn: 0
+            };
+
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-slate-500">점수 <span id="fall-score" class="text-emerald-600 text-base">0</span></span>
+                            <span id="fall-lives" class="text-sm">${'❤️'.repeat(5)}</span>
+                        </div>
+                    </div>
+                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: 340px;">
+                        <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-300"></div>
+                    </div>
+                    <input type="text" id="fall-input" autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                </div>
+            `);
+
+            const input = document.getElementById('fall-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); fallingWordsSubmit(); }
+            });
+            setTimeout(() => input.focus(), 50);
+
+            // 첫 단어 스폰 + 주기적 스폰
+            fallingWordsSpawn();
+            gameState.spawnInterval = setInterval(() => {
+                if (gameState) fallingWordsSpawn();
+            }, 2600);
+            // 애니메이션 루프
+            gameState.rafId = requestAnimationFrame(fallingWordsLoop);
+        }
+
+        function fallingWordsSpawn() {
+            if (!gameState) return;
+            const area = document.getElementById('fall-area');
+            if (!area) return;
+            const w = gameState.pool[Math.floor(Math.random() * gameState.pool.length)];
+            const x = 5 + Math.random() * 80; // 좌우 위치 %
+            const el = document.createElement('div');
+            el.className = 'absolute px-3 py-1.5 bg-white rounded-xl shadow-sm border border-slate-200 text-sm font-bold text-slate-800 whitespace-nowrap';
+            el.style.left = x + '%';
+            el.style.top = '0%';
+            el.innerText = w.meaning;
+            area.appendChild(el);
+            gameState.fallingItems.push({ id: w.id, word: w.word, meaning: w.meaning, x, y: 0, el });
+        }
+
+        function fallingWordsLoop() {
+            if (!gameState) return;
+            const area = document.getElementById('fall-area');
+            if (!area) return;
+            const items = gameState.fallingItems;
+            for (let i = items.length - 1; i >= 0; i--) {
+                const it = items[i];
+                it.y += gameState.speed;
+                it.el.style.top = it.y + '%';
+                // 바닥(약 92%)에 닿으면 생명 -1
+                if (it.y >= 92) {
+                    it.el.remove();
+                    items.splice(i, 1);
+                    gameState.lives--;
+                    const livesEl = document.getElementById('fall-lives');
+                    if (livesEl) livesEl.innerText = '❤️'.repeat(Math.max(0, gameState.lives)) + '🖤'.repeat(Math.max(0, 5 - gameState.lives));
+                    AudioFX.playError();
+                    if (gameState.lives <= 0) { fallingWordsEnd(); return; }
+                }
+            }
+            // 점점 빨라짐
+            gameState.speed = Math.min(0.4, gameState.speed + 0.00003);
+            gameState.rafId = requestAnimationFrame(fallingWordsLoop);
+        }
+
+        function fallingWordsSubmit() {
+            if (!gameState) return;
+            const input = document.getElementById('fall-input');
+            const userAnswer = input.value.trim();
+            input.value = '';
+            if (!userAnswer) return; // 빈칸은 무시 (생명 안 깎음)
+
+            // 떨어지는 단어 중 일치하는 것 찾기 (가장 아래 것 우선)
+            const items = gameState.fallingItems;
+            let matchIdx = -1;
+            let lowestY = -1;
+            for (let i = 0; i < items.length; i++) {
+                if (gameCheckAnswer(userAnswer, items[i].word) && items[i].y > lowestY) {
+                    matchIdx = i; lowestY = items[i].y;
+                }
+            }
+            if (matchIdx >= 0) {
+                const it = items[matchIdx];
+                applyGameScore(it.id, true); // 맞힌 단어 점수 반영
+                gameState.score += 10;
+                gameState.correct++;
+                it.el.remove();
+                items.splice(matchIdx, 1);
+                const scoreEl = document.getElementById('fall-score');
+                if (scoreEl) scoreEl.innerText = gameState.score;
+                AudioFX.playSuccess();
+            } else {
+                // 틀린 입력 — 페널티는 없지만 효과음
+                AudioFX.playError();
+            }
+        }
+
+        function fallingWordsEnd() {
+            if (!gameState) return;
+            const score = gameState.score;
+            const correct = gameState.correct;
+            stopCurrentGame();
+            try { if (typeof logAction === 'function') logAction('snapshot'); } catch (e) {}
+            const isNewRecord = setGameHighScore('falling', score);
+            const highScore = getGameHighScore('falling');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">🌧️</div>
+                    <h3 class="text-xl font-black text-slate-900">게임 종료!</h3>
+                    <p class="text-4xl font-black text-emerald-600">${score}점</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
+                    <p class="text-sm text-slate-500">맞힌 단어 <b class="text-emerald-600">${correct}</b>개</p>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="startFallingWords()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
+                    </div>
+                </div>
+            `);
         }
