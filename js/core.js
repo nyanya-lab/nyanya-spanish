@@ -37,6 +37,20 @@ let vocabulary = [];
             resetKoEsMissionState();
             updateApiKeyBadge();
 
+            // [냐냐 PATCH] 주관식 퀴즈: 제출 후 정답 확인 화면에서 엔터 한 번 더 치면 다음 문제로
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Enter') return;
+                const quizTab = document.getElementById('tab-quiz');
+                if (!quizTab || quizTab.classList.contains('hidden')) return; // 퀴즈 탭일 때만
+                const reviewPanel = document.getElementById('quiz-review-panel');
+                const nextBtn = document.getElementById('quiz-next-btn');
+                // 정답 확인 패널이 열려있고(제출됨) 다음 버튼이 활성화됐을 때만
+                if (reviewPanel && !reviewPanel.classList.contains('hidden') && nextBtn && !nextBtn.disabled) {
+                    e.preventDefault();
+                    nextQuizQuestion();
+                }
+            });
+
             if (!hasGeminiApiKey()) {
                 setTimeout(() => {
                     showToast("AI 추천을 쓰려면 우측 상단 'AI 키 미등록' 배지를 눌러 Gemini API 키를 등록해 주세요!", "warning");
@@ -402,6 +416,23 @@ let vocabulary = [];
                     bestEl.innerText = best >= 1 ? `최고 기록: ${best}일` : "아직 기록이 없어요";
                 }
             }
+
+            // 사이드바 일일 학습일지의 연속 학습일 줄 갱신
+            const diaryLine = document.getElementById('diary-streak-line');
+            const diaryDays = document.getElementById('diary-streak-days');
+            const diaryBest = document.getElementById('diary-streak-best');
+            const diaryFire = document.getElementById('diary-streak-fire');
+            if (diaryLine && diaryDays && diaryBest) {
+                if (streak >= 1 || best >= 1) {
+                    diaryLine.classList.remove('hidden');
+                    diaryDays.innerText = `${streak}일 연속`;
+                    diaryBest.innerText = `최고 ${best}일`;
+                    if (diaryFire) diaryFire.innerText = streak >= 1 ? "🔥" : "❄️";
+                    diaryDays.className = streak >= 1 ? "text-orange-700" : "text-slate-400";
+                } else {
+                    diaryLine.classList.add('hidden');
+                }
+            }
         }
 
         // [냐냐 PATCH] 오늘 복습하면 좋은 단어 = 약점 점수(weakScore) 1점 이상. 점수 높은 순.
@@ -446,6 +477,7 @@ let vocabulary = [];
 
         // 학습 일지 렌더링
         function renderDiary() {
+            renderStreakBadge();
             const container = document.getElementById('nyanya-diary-list');
             const today = getLocalDateString();
             const log = nyanyaDiary[today];
