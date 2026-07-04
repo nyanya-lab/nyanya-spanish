@@ -280,6 +280,7 @@
             document.getElementById('question-answer-input').disabled = false;
             document.getElementById('ai-feedback-result').classList.add('hidden');
             document.getElementById('question-followup-btn')?.classList.add('hidden');
+            document.getElementById('question-translation-text')?.classList.add('hidden'); // 해석 숨김
             AudioFX.playPunch();
         }
 
@@ -303,6 +304,46 @@
                 revealBtn.classList.remove('bg-violet-600', 'text-white');
                 revealBtn.classList.add('bg-white', 'text-violet-600');
                 if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
+        }
+
+        // [냐냐 PATCH] 질문 해석 보기/숨기기 (AI로 한국어 번역, 결과 캐시) — item 6
+        async function toggleQuestionTranslation() {
+            const transEl = document.getElementById('question-translation-text');
+            const btn = document.getElementById('question-translate-btn');
+            if (!transEl || !currentQuestionForAnswer) {
+                if (!currentQuestionForAnswer) showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+                return;
+            }
+            // 이미 보이면 숨김
+            if (!transEl.classList.contains('hidden')) {
+                transEl.classList.add('hidden');
+                return;
+            }
+            // 이미 번역해둔 게 있으면 바로 표시
+            if (currentQuestionForAnswer._koreanTranslation) {
+                transEl.innerText = '💬 ' + currentQuestionForAnswer._koreanTranslation;
+                transEl.classList.remove('hidden');
+                return;
+            }
+            // AI로 번역
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 필요해요. 우측 상단 배지에서 등록해 주세요!", "error");
+                return;
+            }
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i> 번역 중';
+            try {
+                const prompt = `다음 스페인어 질문을 자연스러운 한국어로 번역해줘. 번역문만 출력(따옴표 없이): "${currentQuestionForAnswer.question}"`;
+                const responseText = await callGemini(prompt, "당신은 스페인어-한국어 번역가입니다. 번역문만 간결하게 출력하세요.", null, 'low');
+                const ko = (responseText || '').trim().replace(/^["']|["']$/g, '');
+                currentQuestionForAnswer._koreanTranslation = ko;
+                transEl.innerText = '💬 ' + ko;
+                transEl.classList.remove('hidden');
+            } catch (e) {
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                btn.innerHTML = originalHtml;
             }
         }
 
@@ -363,12 +404,27 @@
                 document.getElementById('question-followup-btn')?.classList.add('hidden');
                 showToast("이어지는 질문이 생성됐어요! 대화를 계속해 보세요 💬", "success");
                 document.getElementById('question-display-text').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => answerInput.focus(), 300); // 바로 답변 입력 가능하게
             } catch (e) {
                 console.error(e);
                 showToast(describeGeminiError(e), "error");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
+            }
+        }
+
+        // [냐냐 PATCH] 답변창 엔터 처리: 제출 전이면 제출, 제출 후(연관질문 버튼 보이면)면 연관질문 생성
+        function handleQuestionAnswerKeydown(e) {
+            if (e.key !== 'Enter' || e.shiftKey) return; // Shift+Enter는 줄바꿈
+            e.preventDefault();
+            const submitBtn = document.getElementById('question-submit-btn');
+            const followupBtn = document.getElementById('question-followup-btn');
+            // 연관 질문 버튼이 보이면(=이미 답변 제출됨) → 엔터로 연관 질문 생성
+            if (followupBtn && !followupBtn.classList.contains('hidden')) {
+                generateFollowupQuestion();
+            } else if (submitBtn && !submitBtn.disabled) {
+                submitQuestionAnswer();
             }
         }
 
@@ -407,6 +463,7 @@
             {
                "isCorrect": true/false,
                "verdict": "e.g., 완벽한 답변이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "userTranslation": "냐냐님이 실제로 쓴 스페인어 문장을 있는 그대로 한국어로 직역한 것 (의도와 다를 수 있으니 실제 쓴 대로). 1문장.",
                "correctedText": "The corrected Spanish answer. Wrap ONLY changed words in red span tags; leave correct words plain.",
                "originalMarked": "The student ORIGINAL answer verbatim, with ONLY wrong words wrapped in line-through span tags; correct words stay plain.",
                "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
@@ -427,6 +484,7 @@
                 properties: {
                     isCorrect: { type: "BOOLEAN" },
                     verdict: { type: "STRING" },
+                    userTranslation: { type: "STRING", description: "Korean translation of what the student ACTUALLY wrote (literal meaning, may differ from intent)" },
                     correctedText: { type: "STRING" },
                     originalMarked: { type: "STRING" },
                     message: { type: "STRING" },
@@ -486,6 +544,16 @@
                     originalRender.innerHTML = feedback.originalMarked || userAnswer;
                     correctedRender.innerHTML = feedback.correctedText;
                     renderAiChanges(feedback);
+                    // [냐냐 PATCH] 냐냐님이 쓴 스페인어의 실제 한국어 뜻 표시 (의도와 다를 수 있음) — item 5
+                    const utEl = document.getElementById('ai-user-translation');
+                    if (utEl) {
+                        if (feedback.userTranslation) {
+                            utEl.innerHTML = `<span class="text-[11px] text-slate-400">냐냐님이 쓴 문장의 실제 뜻</span><br>💬 ${feedback.userTranslation}`;
+                            utEl.classList.remove('hidden');
+                        } else {
+                            utEl.classList.add('hidden');
+                        }
+                    }
                 }
 
                 coachVerdict.innerText = feedback.verdict;
@@ -498,12 +566,7 @@
                     const m = (item.mean || item.meaning || '').trim();
                     if (!w || seenWordsQ.has(w)) return;
                     seenWordsQ.add(w);
-                    breakdownGrid.innerHTML += `
-                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
-                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
-                            <span class="text-slate-500 text-right">${m}</span>
-                        </div>
-                    `;
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
                 coachTip.innerText = feedback.tip;
@@ -796,12 +859,7 @@
                     const m = (item.mean || item.meaning || '').trim();
                     if (!w || seenWords.has(w)) return; // 중복/빈 항목 제거
                     seenWords.add(w);
-                    breakdownGrid.innerHTML += `
-                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
-                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
-                            <span class="text-slate-500 text-right">${m}</span>
-                        </div>
-                    `;
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
                 coachTip.innerText = feedback.tip;
@@ -1038,12 +1096,7 @@
                     const m = (item.mean || item.meaning || '').trim();
                     if (!w || seenWords.has(w)) return;
                     seenWords.add(w);
-                    breakdownGrid.innerHTML += `
-                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
-                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
-                            <span class="text-slate-500 text-right">${m}</span>
-                        </div>
-                    `;
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
                 coachTip.innerText = feedback.tip;
@@ -1200,12 +1253,7 @@
                     const m = (item.mean || item.meaning || '').trim();
                     if (!w || seenWordsEs.has(w)) return; // 중복/빈 항목 제거
                     seenWordsEs.add(w);
-                    breakdownGrid.innerHTML += `
-                        <div class="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
-                            <span class="font-bold text-slate-800 shrink-0">${w}</span>
-                            <span class="text-slate-500 text-right">${m}</span>
-                        </div>
-                    `;
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
                 coachTip.innerText = feedback.tip;
@@ -1239,6 +1287,56 @@
             }
         }
 
+        // [냐냐 PATCH] AI 답변의 마크다운(**굵게**, ### 제목, * 목록, 줄바꿈)을 HTML로 변환 + 가독성
+        function formatAiText(text) {
+            if (!text) return '';
+            let html = text;
+            // 이미 <b>, <br> 등 HTML이 섞여 있을 수 있으니 마크다운만 변환
+            // 코드/별표 이스케이프 최소화
+            html = html
+                .replace(/^###\s*(.+)$/gm, '<div class="font-black text-slate-900 mt-2 mb-1">$1</div>') // ### 제목
+                .replace(/^##\s*(.+)$/gm, '<div class="font-black text-slate-900 mt-2 mb-1">$1</div>')
+                .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') // **굵게**
+                .replace(/`(.+?)`/g, '<code class="bg-slate-200 px-1 rounded text-[0.9em]">$1</code>') // `코드`
+                .replace(/^\s*[\*\-]\s+(.+)$/gm, '<div class="flex gap-1.5 my-0.5"><span class="text-indigo-400">•</span><span>$1</span></div>') // * 목록
+                .replace(/---+/g, '<hr class="my-2 border-slate-200">') // 구분선
+                .replace(/\n/g, '<br>'); // 줄바꿈
+            return html;
+        }
+
+        // [냐냐 PATCH] 핵심 분석 한 줄 — 단어장에 없는 단어면 등록 버튼 추가 (item 4)
+        function buildBreakdownRow(word, mean) {
+            const w = (word || '').trim();
+            const m = (mean || '').trim();
+            if (!w) return '';
+            // 단어장에 이미 있는지 확인 (악센트/대소문자 무시)
+            const exists = vocabulary.some(v => normalizeSpanishAnswer(v.word) === normalizeSpanishAnswer(w));
+            const registerBtn = exists
+                ? '<span class="text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>'
+                : `<button onclick="registerWordFromBreakdown('${w.replace(/'/g, "\\'")}', '${m.replace(/'/g, "\\'")}')" class="text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all">+ 등록</button>`;
+            return `
+                <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                    <span class="text-slate-500 text-right flex-1 truncate">${m}</span>
+                    ${registerBtn}
+                </div>
+            `;
+        }
+
+        // 핵심 분석에서 단어 바로 등록
+        function registerWordFromBreakdown(word, mean) {
+            changeTab('list');
+            setTimeout(() => {
+                openWordModal();
+                const wordInput = document.getElementById('input-word');
+                const meanInput = document.getElementById('input-meaning');
+                if (wordInput) wordInput.value = word;
+                if (meanInput) meanInput.value = mean;
+                if (wordInput) handleWordInput(word);
+                showToast(`"${word}" 등록 화면을 열었어요!`, "info");
+            }, 100);
+        }
+
         function renderChatThread() {
             const threadEl = document.getElementById('ai-chat-thread');
             threadEl.innerHTML = '';
@@ -1258,17 +1356,17 @@
                 if (msg.role === 'user') {
                     threadEl.innerHTML += `
                         <div class="flex justify-end">
-                            <div class="bg-indigo-600 text-white rounded-2xl px-3.5 py-2 max-w-[85%] font-semibold shadow-xs">
-                                ${msg.content}
+                            <div class="bg-indigo-600 text-white rounded-2xl px-4 py-2.5 max-w-[85%] text-sm font-semibold shadow-xs">
+                                ${formatAiText(msg.content)}
                             </div>
                         </div>
                     `;
                 } else {
                     threadEl.innerHTML += `
                         <div class="flex justify-start gap-2 items-start">
-                            <div class="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-sm">🤖</div>
-                            <div class="bg-slate-100 text-slate-800 rounded-2xl px-3.5 py-2 max-w-[85%] font-medium shadow-2xs leading-relaxed">
-                                ${msg.content}
+                            <div class="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-sm shrink-0">🤖</div>
+                            <div class="bg-slate-100 text-slate-800 rounded-2xl px-4 py-3 max-w-[85%] text-sm font-medium shadow-2xs leading-relaxed">
+                                ${formatAiText(msg.content)}
                             </div>
                         </div>
                     `;
