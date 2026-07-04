@@ -1390,6 +1390,7 @@ let vocabulary = [];
                 'list': 'nav-list',
                 'cards': 'nav-cards',
                 'quiz': 'nav-quiz',
+                'games': 'nav-games',
                 'ai-feedback': 'nav-ai',
                 'records': 'nav-records',
                 'grammar': 'nav-grammar'
@@ -1412,6 +1413,9 @@ let vocabulary = [];
                 renderFlashcard();
             } else if (tabId === 'quiz') {
                 initQuizTab();
+            } else if (tabId === 'games') {
+                // 게임 탭 열면 메뉴로 초기화
+                if (typeof resetGamesMenu === 'function') resetGamesMenu();
             } else if (tabId === 'ai-feedback') {
                 resetKoEsMissionState();
             } else if (tabId === 'records') {
