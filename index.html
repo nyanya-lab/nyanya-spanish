@@ -572,10 +572,16 @@
 
                         <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
                             <div class="flex items-center justify-between gap-2">
-                                <button id="question-topic-reveal-btn" onclick="toggleTopicReveal()" class="text-xs bg-white text-violet-600 px-2.5 py-0.5 rounded-full font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-eye text-[10px]"></i>
-                                    <span id="question-topic-badge">주제 보기</span>
-                                </button>
+                                <div class="flex gap-1.5">
+                                    <button id="question-topic-reveal-btn" onclick="toggleTopicReveal()" class="text-xs bg-white text-violet-600 px-2.5 py-0.5 rounded-full font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
+                                        <i class="fa-solid fa-eye text-[10px]"></i>
+                                        <span id="question-topic-badge">주제 보기</span>
+                                    </button>
+                                    <button id="question-translate-btn" onclick="toggleQuestionTranslation()" class="text-xs bg-white text-teal-600 px-2.5 py-0.5 rounded-full font-bold border border-teal-200 transition-all active:scale-95 flex items-center gap-1">
+                                        <i class="fa-solid fa-language text-[10px]"></i>
+                                        <span>해석 보기</span>
+                                    </button>
+                                </div>
                                 <div class="flex gap-2">
                                     <button onclick="openTopicPickerModal()" class="bg-white hover:bg-violet-100 text-violet-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
                                         <i class="fa-solid fa-list-check"></i>
@@ -588,11 +594,12 @@
                                 </div>
                             </div>
                             <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! '질문 관리'에서 질문을 등록하고 '랜덤 질문 뽑기'를 눌러보세요.</h3>
+                            <p id="question-translation-text" class="hidden text-sm text-teal-700 bg-teal-50 rounded-xl px-3 py-2 font-semibold"></p>
                         </div>
 
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변</label>
-                            <textarea id="question-answer-input" rows="3" placeholder="스페인어로 답을 작성해보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
+                            <textarea id="question-answer-input" rows="3" onkeydown="handleQuestionAnswerKeydown(event)" placeholder="스페인어로 답을 작성해보세요... (Enter로 제출, Shift+Enter 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
                         </div>
 
                         <div class="flex gap-2 justify-end flex-wrap">
@@ -679,6 +686,7 @@
                                 <span class="block text-[11px] text-slate-500 mb-1.5 font-bold">💡 바뀐 부분</span>
                                 <ul id="ai-changes-list" class="space-y-1 text-xs text-slate-600 leading-relaxed"></ul>
                             </div>
+                            <div id="ai-user-translation" class="hidden border-t border-red-100 pt-2.5 text-sm text-slate-600 font-semibold"></div>
                         </div>
 
                         <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
