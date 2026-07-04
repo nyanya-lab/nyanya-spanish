@@ -444,6 +444,20 @@ let vocabulary = [];
                 .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
         }
 
+        // [냐냐 PATCH] 약점 단어만 단어장에 필터링해서 보여주기 (퀴즈로 바로 안 가고 먼저 훑어보게)
+        function showWeakWordsInList() {
+            const filter = document.getElementById('mastery-filter-select');
+            if (filter) filter.value = 'weak';
+            // 약점 점수 높은 순으로 정렬해서 제일 취약한 게 위로
+            const sortSel = document.getElementById('sort-select');
+            if (sortSel) sortSel.value = 'weak-score';
+            renderWordList();
+            // 단어장 목록으로 스크롤
+            const grid = document.getElementById('vocabulary-grid');
+            if (grid) setTimeout(() => grid.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+            showToast("약점 단어만 모아서 보여드려요! 하나씩 훑어보세요 📖", "info");
+        }
+
         function renderTodayReview() {
             const box = document.getElementById('today-review-box');
             if (!box) return;
