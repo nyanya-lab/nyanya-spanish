@@ -808,10 +808,14 @@ function togglePosFields() {
             if (w) {
                 w.mastered = !w.mastered;
                 if (w.mastered) {
+                    w.masterScore = 8; // 수동 마스터는 만점으로 (한 번 틀려도 안 풀리게)
+                    w.subjectivePassed = true; // 수동 마스터는 주관식 조건도 충족 처리
+                    w.weak = false; w.weakScore = 0; // 마스터되면 약점 해제
                     AudioFX.playBell();
                     showToast(`"${w.word}" 단어 마스터 완료! 🏆`, "success");
                     logAction('new-mastered'); // [냐냐 PATCH] 오늘 새로 마스터한 단어 수 추적
                 } else {
+                    w.masterScore = 0; // 수동 해제하면 점수도 0
                     logAction('snapshot');
                 }
                 renderWordList();
