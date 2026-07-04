@@ -46,6 +46,8 @@ let vocabulary = [];
                 const nextBtn = document.getElementById('quiz-next-btn');
                 // 정답 확인 패널이 열려있고(제출됨) 다음 버튼이 활성화됐을 때만
                 if (reviewPanel && !reviewPanel.classList.contains('hidden') && nextBtn && !nextBtn.disabled) {
+                    // 방금 제출한 엔터가 곧바로 다음 문제로 넘어가지 않도록 0.6초 가드
+                    if (window._quizReviewShownAt && (Date.now() - window._quizReviewShownAt) < 600) return;
                     e.preventDefault();
                     nextQuizQuestion();
                 }
