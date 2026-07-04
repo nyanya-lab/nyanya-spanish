@@ -132,17 +132,17 @@
                 
                 <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-6">
-                    <!-- 오늘의 복습 -->
+                    <!-- 약점 단어 복습 -->
                     <div class="flex flex-col gap-3">
                         <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-3 min-w-0">
                                 <span class="text-2xl shrink-0">⭐</span>
                                 <div class="min-w-0">
-                                    <p class="text-sm font-extrabold text-amber-900">오늘의 복습 단어 <span id="today-review-count">0</span>개</p>
-                                    <p class="text-xs text-amber-700">약점 단어를 집중적으로 복습해 보세요!</p>
+                                    <p class="text-sm font-extrabold text-amber-900">약점 단어 <span id="today-review-count">0</span>개</p>
+                                    <p class="text-xs text-amber-700">자주 틀리는 단어예요. 먼저 훑어보고 익혀보세요!</p>
                                 </div>
                             </div>
-                            <button onclick="startWeakFocusQuiz()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">복습 시작</button>
+                            <button onclick="showWeakWordsInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">약점 단어 보기</button>
                         </div>
                     </div>
                     <!-- Search & Action Bar -->
@@ -437,16 +437,19 @@
                             <div class="text-3xl">⚡</div>
                             <h3 class="text-sm font-black text-slate-900">속사포 퀴즈</h3>
                             <p class="text-xs text-slate-500 leading-relaxed">제한 시간 안에 최대한 많이 맞혀요! 콤보를 쌓아 고득점에 도전하세요.</p>
+                            <div id="hs-rapidfire" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
                         </button>
                         <button onclick="startFlashMemory()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-indigo-300 hover:shadow-md transition-all active:scale-95 space-y-2">
                             <div class="text-3xl">👁️</div>
                             <h3 class="text-sm font-black text-slate-900">깜빡이 기억</h3>
                             <p class="text-xs text-slate-500 leading-relaxed">단어가 잠깐 나타났다 사라져요. 기억해서 스페인어로 입력하세요!</p>
+                            <div id="hs-flash" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
                         </button>
                         <button onclick="startFallingWords()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95 space-y-2">
                             <div class="text-3xl">🌧️</div>
                             <h3 class="text-sm font-black text-slate-900">떨어지는 단어</h3>
                             <p class="text-xs text-slate-500 leading-relaxed">한글 뜻이 떨어져요. 바닥에 닿기 전에 스페인어를 입력하세요!</p>
+                            <div id="hs-falling" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
                         </button>
                     </div>
 
