@@ -1396,6 +1396,8 @@ let vocabulary = [];
                 setRecordRange('7d');
                 renderStreakBadge();
             } else if (tabId === 'grammar') {
+                // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
+                grammarOpenState = {};
                 renderGrammarTables();
             }
         }
