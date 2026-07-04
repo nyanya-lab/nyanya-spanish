@@ -203,13 +203,27 @@ let quizSession = null;
                 // [냐냐 PATCH] 섞어서/주관식 모드에서 30% 확률로 '뜻 해석 주관식' 문제 (AI가 유연하게 채점)
                 const canSubjective = selectedQuizFormat === 'subjective' || (selectedQuizFormat === 'mixed' && Math.random() < 0.3);
                 if (canSubjective) {
-                    questions.push({
-                        type: 'idiom-subjective',
-                        word: target.word,
-                        answer: target.idiomMeaning,
-                        idiomData: target,
-                        promptText: `관용구 "${target.idiom}"의 뜻을 한국어로 써보세요.`
-                    });
+                    // 방향 랜덤: 스→한(뜻 쓰기) 또는 한→스(관용구 쓰기)
+                    const askSpanish = Math.random() < 0.5;
+                    if (askSpanish) {
+                        questions.push({
+                            type: 'idiom-subjective',
+                            subDir: 'ko-es', // 한국어 뜻 → 스페인어 관용구 입력
+                            word: target.word,
+                            answer: target.idiom,
+                            idiomData: target,
+                            promptText: `"${target.idiomMeaning}" 를 뜻하는 스페인어 관용구를 써보세요.`
+                        });
+                    } else {
+                        questions.push({
+                            type: 'idiom-subjective',
+                            subDir: 'es-ko', // 스페인어 관용구 → 한국어 뜻 입력
+                            word: target.word,
+                            answer: target.idiomMeaning,
+                            idiomData: target,
+                            promptText: `관용구 "${target.idiom}"의 뜻을 한국어로 써보세요.`
+                        });
+                    }
                     continue;
                 }
                 const showIdiomAskMeaning = Math.random() < 0.5; // true: 관용구 보여주고 뜻, false: 뜻 보여주고 관용구
@@ -285,7 +299,11 @@ let quizSession = null;
                     document.getElementById('quiz-question-text').innerHTML = `<b class="text-violet-600">${q.word.meaning}</b>의 ${tenseName} <b>${q.conjLabel}</b>은?`;
                 } else if (q.type === 'idiom-subjective') {
                     document.getElementById('quiz-question-label').innerText = '관용구 뜻풀이';
-                    document.getElementById('quiz-question-text').innerHTML = `관용구 <b class="text-violet-600">${q.idiomData.idiom}</b>의 뜻을 한국어로 써보세요.`;
+                    if (q.subDir === 'ko-es') {
+                        document.getElementById('quiz-question-text').innerHTML = `<b class="text-violet-600">${q.idiomData.idiomMeaning}</b> 를 뜻하는 스페인어 관용구를 써보세요.`;
+                    } else {
+                        document.getElementById('quiz-question-text').innerHTML = `관용구 <b class="text-violet-600">${q.idiomData.idiom}</b>의 뜻을 한국어로 써보세요.`;
+                    }
                 } else {
                     document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
                     // [냐냐 PATCH] 형용사는 남성형(사전형)으로 통일해서 물어봄 — 답이 하나로 명확해짐
@@ -532,13 +550,26 @@ let quizSession = null;
             // 3) 애매하면 AI에게 유연 채점 요청
             submitBtn.innerText = '채점 중...';
             try {
-                const prompt = `스페인어 관용구 채점.
+                let prompt, system;
+                if (q.subDir === 'ko-es') {
+                    // 한국어 뜻 → 스페인어 관용구 입력
+                    prompt = `스페인어 관용구 채점 (한국어 뜻을 보고 스페인어 관용구를 쓰는 문제).
+정답 관용구: "${q.idiomData.idiom}"
+관용구 뜻: "${q.idiomData.idiomMeaning}"
+학생이 쓴 스페인어: "${userAnswer}"
+
+학생이 쓴 스페인어가 정답 관용구와 같거나, 같은 뜻의 올바른 스페인어 관용구면 정답이에요. 사소한 철자/악센트 차이는 정답으로 인정하세요. JSON만: {"correct": true/false, "comment": "짧은 한국어 코멘트 1문장"}`;
+                    system = "당신은 관대하고 친절한 스페인어 선생님입니다. 학생이 올바른 관용구를 떠올렸으면 사소한 철자 차이는 정답으로 인정합니다.";
+                } else {
+                    // 스페인어 관용구 → 한국어 뜻 입력
+                    prompt = `스페인어 관용구 채점.
 관용구: "${q.idiomData.idiom}"
 정확한 뜻: "${correctMeaning}"
 학생이 쓴 뜻: "${userAnswer}"
 
 학생의 답이 관용구의 뜻을 올바르게 이해했으면 정답이에요. 표현이 정확히 같지 않아도, 의미가 통하면 정답으로 인정하세요. JSON만 출력: {"correct": true/false, "comment": "짧은 한국어 코멘트 1문장"}`;
-                const system = "당신은 관대하고 친절한 스페인어 선생님입니다. 학생이 관용구의 핵심 의미를 파악했으면 표현이 조금 달라도 정답으로 인정합니다.";
+                    system = "당신은 관대하고 친절한 스페인어 선생님입니다. 학생이 관용구의 핵심 의미를 파악했으면 표현이 조금 달라도 정답으로 인정합니다.";
+                }
                 const responseText = await callGemini(prompt, system, null, 'low');
                 const parsed = extractAndParseJson(responseText);
                 const isCorrect = !!(parsed && parsed.correct);
@@ -734,6 +765,7 @@ let quizSession = null;
             renderQuizConjugation(q.word);
 
             document.getElementById('quiz-review-panel').classList.remove('hidden');
+            window._quizReviewShownAt = Date.now(); // 엔터 가드용 (방금 제출한 엔터로 바로 안 넘어가게)
             const nextBtn = document.getElementById('quiz-next-btn');
             nextBtn.disabled = false;
             nextBtn.className = "w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95";
