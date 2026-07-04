@@ -946,7 +946,7 @@
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
                             <i class="fa-solid fa-sliders"></i>
-                            <span>현재 시제 동사 변형 (Presente)</span>
+                            <span>동사 변형</span>
                         </span>
                         <div class="flex items-center gap-1.5">
                             <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
@@ -965,6 +965,26 @@
                                 <option value="기타 변형">기타 변형</option>
                             </select>
                         </div>
+                    </div>
+                    <!-- [냐냐 PATCH] 시제 선택 (기본은 현재시제만, 버튼으로 다른 시제 펼침) -->
+                    <div class="flex items-center justify-between gap-2">
+                        <span id="conj-tense-label" class="text-[11px] font-bold text-indigo-600">직설법 현재 (presente)</span>
+                        <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
+                            <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
+                        </button>
+                    </div>
+                    <div id="conj-tense-selector-box" class="hidden flex items-center gap-2">
+                        <span class="text-[10px] font-bold text-slate-400 shrink-0">시제</span>
+                        <select id="input-verb-tense" onchange="switchConjTense()" class="flex-1 bg-white px-2 py-1.5 rounded-lg border border-indigo-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700">
+                            <option value="presente">직설법 현재 (presente)</option>
+                            <option value="indefinido">직설법 부정과거 (pretérito indefinido)</option>
+                            <option value="imperfecto">직설법 불완료과거 (imperfecto)</option>
+                            <option value="futuro">직설법 미래 (futuro)</option>
+                            <option value="condicional">조건법 (condicional)</option>
+                            <option value="subjPresente">접속법 현재 (subjuntivo presente)</option>
+                            <option value="subjImperfecto">접속법 불완료과거 (subj. imperfecto)</option>
+                            <option value="imperativo">명령법 (imperativo)</option>
+                        </select>
                     </div>
                     <div class="grid grid-cols-3 gap-2">
                         <div class="space-y-1">
