@@ -369,6 +369,11 @@
                                 <span class="font-black text-slate-900 text-base" id="quiz-review-word"></span>
                                 <span class="text-slate-600 text-sm font-bold" id="quiz-review-meaning"></span>
                             </div>
+                            <div id="quiz-review-hint-box" class="hidden bg-violet-50 border border-violet-200 rounded-xl p-3.5 text-sm text-violet-900 font-semibold leading-relaxed"></div>
+                            <div id="quiz-review-register-box" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2">
+                                <span class="text-xs font-bold text-blue-800">입력한 단어를 단어장에 등록할까요?</span>
+                                <button id="quiz-review-register-btn" onclick="registerUnknownFromQuiz()" class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">등록</button>
+                            </div>
                             <div id="quiz-review-notes-box" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-sm text-amber-900 font-semibold whitespace-pre-wrap leading-relaxed"></div>
                             <button id="quiz-next-btn" onclick="nextQuizQuestion()" disabled class="w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed">다음 문제</button>
                         </div>
