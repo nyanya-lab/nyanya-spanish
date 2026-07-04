@@ -10,6 +10,15 @@
             const playArea = document.getElementById('game-play-area');
             if (menu) menu.classList.remove('hidden');
             if (playArea) { playArea.classList.add('hidden'); playArea.innerHTML = ''; }
+            // 각 게임 최고기록 표시 (이번 주 / 역대)
+            ['rapidfire', 'flash', 'falling'].forEach(g => {
+                const el = document.getElementById('hs-' + g);
+                if (el) {
+                    const week = getGameWeekHighScore(g);
+                    const all = getGameHighScore(g);
+                    el.innerHTML = `이번 주 <b class="text-slate-600">${week}</b> · 역대 <b class="text-amber-500">${all}</b>`;
+                }
+            });
         }
 
         // 진행 중인 게임의 타이머/애니메이션 정리
@@ -42,6 +51,14 @@
             return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct);
         }
 
+        // [냐냐 PATCH] 동의어 방지용 시작 글자 힌트 (앞 2글자) — 게임 item 2
+        function gameStartHint(word) {
+            if (!word) return '';
+            const clean = word.trim();
+            const n = Math.min(2, clean.length);
+            return clean.slice(0, n);
+        }
+
         // [냐냐 PATCH] 게임 결과를 단어의 마스터/약점 점수에 반영 (퀴즈 객관식과 동일한 강도)
         function applyGameScore(wordId, isCorrect) {
             const w = vocabulary.find(v => v.id === wordId);
@@ -64,18 +81,42 @@
             }
         }
 
-        // [냐냐 PATCH] 게임 최고기록 (localStorage에 게임별 저장)
+        // [냐냐 PATCH] 게임 최고기록 — 역대 + 이번 주 (localStorage)
+        function getWeekKey() {
+            // 이번 주 월요일 날짜를 키로 사용 (YYYY-MM-DD)
+            const d = new Date();
+            const day = (d.getDay() + 6) % 7; // 월=0
+            d.setDate(d.getDate() - day);
+            d.setHours(0,0,0,0);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
         function getGameHighScore(gameType) {
             try { return parseInt(localStorage.getItem('nyanya_game_hs_' + gameType) || '0', 10) || 0; }
             catch (e) { return 0; }
         }
+        function getGameWeekHighScore(gameType) {
+            try {
+                const raw = localStorage.getItem('nyanya_game_whs_' + gameType);
+                if (!raw) return 0;
+                const obj = JSON.parse(raw);
+                if (obj.week !== getWeekKey()) return 0; // 지난 주 기록이면 0
+                return obj.score || 0;
+            } catch (e) { return 0; }
+        }
         function setGameHighScore(gameType, score) {
+            let isNewAllTime = false;
+            // 역대 최고
             const prev = getGameHighScore(gameType);
             if (score > prev) {
                 try { localStorage.setItem('nyanya_game_hs_' + gameType, String(score)); } catch (e) {}
-                return true; // 신기록!
+                isNewAllTime = true;
             }
-            return false;
+            // 이번 주 최고
+            const weekPrev = getGameWeekHighScore(gameType);
+            if (score > weekPrev) {
+                try { localStorage.setItem('nyanya_game_whs_' + gameType, JSON.stringify({ week: getWeekKey(), score })); } catch (e) {}
+            }
+            return isNewAllTime; // 역대 신기록 여부
         }
 
         // ============================================================
@@ -146,7 +187,7 @@
             const pool = gameState.pool;
             gameState.current = pool[Math.floor(Math.random() * pool.length)];
             const qEl = document.getElementById('rf-question');
-            if (qEl) qEl.innerText = gameState.current.meaning;
+            if (qEl) qEl.innerHTML = `${gameState.current.meaning} <span class="text-base text-rose-400 font-bold">(${gameStartHint(gameState.current.word)}…)</span>`;
             const input = document.getElementById('rf-input');
             if (input) { input.value = ''; input.focus(); }
         }
@@ -419,7 +460,7 @@
             el.className = 'absolute px-3 py-1.5 bg-white rounded-xl shadow-sm border border-slate-200 text-sm font-bold text-slate-800 whitespace-nowrap';
             el.style.left = x + '%';
             el.style.top = '0%';
-            el.innerText = w.meaning;
+            el.innerHTML = `${w.meaning} <span class="text-emerald-500 text-xs">(${gameStartHint(w.word)}…)</span>`;
             area.appendChild(el);
             gameState.fallingItems.push({ id: w.id, word: w.word, meaning: w.meaning, x, y: 0, el });
         }
