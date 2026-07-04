@@ -368,6 +368,76 @@ let quizSession = null;
             }, 100);
         }
 
+        // [냐냐 PATCH] 형용사 성·수 변화 설명 텍스트 생성
+        function adjAgreementText(word) {
+            if (word.pos !== 'adjective') return '';
+            const base = word.word;
+            const stem = base.replace(/(o|a|os|as|e|es)$/, '');
+            switch (word.adjAgreement) {
+                case 'full': // corto/corta
+                    return `남성: ${stem}o · 여성: ${stem}a (복수는 -s)`;
+                case 'no-gender': // egoísta
+                    return `성별 변화 없음 (남녀 모두 ${base}) · 복수는 -s`;
+                case 'no-number':
+                    return `수 변화 없음 (단수·복수 모두 ${base})`;
+                case 'invariable':
+                    return `성·수 변화 없음 (항상 ${base})`;
+                default:
+                    return '';
+            }
+        }
+
+        // [냐냐 PATCH] 노트/관용구/예문/성수를 색 구분된 HTML로 (제목색 ≠ 내용색)
+        function buildNotesHtml(word, opts) {
+            opts = opts || {};
+            const sections = [];
+            // 관용구 안내 (관용구 문제일 때만)
+            if (opts.idiomIntro) {
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-rose-500 mb-0.5">📌 관용구 안내</span>
+                        <span class="block text-sm text-slate-700">"${word.word}" (${word.meaning}) 단어의 관용구예요.</span>
+                    </div>`);
+            }
+            // 성·수 변화 (형용사)
+            const agr = adjAgreementText(word);
+            if (agr) {
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-fuchsia-500 mb-0.5">🔤 성·수 변화</span>
+                        <span class="block text-sm text-slate-700">${agr}</span>
+                    </div>`);
+            }
+            // 노트
+            if (word.notes) {
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-amber-600 mb-0.5">📝 노트</span>
+                        <span class="block text-sm text-slate-700">${escapeHtml(word.notes)}</span>
+                    </div>`);
+            }
+            // 관용구
+            const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
+            if (idiomList.length > 0) {
+                const items = idiomList.map(x => `<span class="block text-sm text-slate-700">· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>`).join('');
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-emerald-600 mb-0.5">💬 관용구</span>
+                        ${items}
+                    </div>`);
+            }
+            // 예문
+            if (word.example) {
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-sky-600 mb-0.5">✍️ 예문</span>
+                        <span class="block text-sm text-slate-700 italic">${escapeHtml(word.example)}</span>
+                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500">${escapeHtml(word.exampleMeaning)}</span>` : ''}
+                    </div>`);
+            }
+            return sections.join('<div class="border-t border-slate-100 my-2"></div>');
+        }
+
         // [냐냐 PATCH] 퀴즈 정답 확인 화면에 동사 현재시제 활용표 표시
         function renderQuizConjugation(word) {
             const box = document.getElementById('quiz-review-conj-box');
@@ -384,17 +454,17 @@ let quizSession = null;
                 ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]
             ];
             const cells = rows.map(([label, val]) => `
-                <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 last:border-0">
-                    <span class="text-xs text-slate-500 font-medium">${label}</span>
+                <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center">
+                    <span class="text-[11px] text-slate-400 font-medium">${label}</span>
                     <span class="text-sm font-bold text-slate-800">${val || '-'}</span>
                 </div>`).join('');
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center gap-1.5">
+                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center justify-center gap-1.5">
                         <span>🔀</span> 현재시제 활용 ${word.verbClass === 'irregular' ? '<span class="text-rose-500 ml-1">(불규칙)</span>' : ''}
                     </div>
-                    <div class="grid grid-cols-2">${cells}</div>
+                    <div class="grid grid-cols-3">${cells}</div>
                 </div>`;
         }
 
@@ -542,35 +612,18 @@ let quizSession = null;
                 document.getElementById('quiz-review-meaning').innerText = it.idiomMeaning || '';
 
                 const notesBox = document.getElementById('quiz-review-notes-box');
-                const extraParts = [];
-                extraParts.push(`📌 관용구 안내\n"${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`);
-                if (q.word.notes) extraParts.push(`📝 노트\n${q.word.notes}`);
-                const idiomList2 = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
-                if (idiomList2.length > 0) {
-                    const idiomText = idiomList2.map(x => `· ${x.idiom}${x.idiomMeaning ? ' — ' + x.idiomMeaning : ''}`).join('\n');
-                    extraParts.push(`💬 관용구\n${idiomText}`);
-                }
-                if (q.word.example) extraParts.push(`✍️ 예문\n${q.word.example}${q.word.exampleMeaning ? '\n' + q.word.exampleMeaning : ''}`);
                 notesBox.classList.remove('hidden');
-                notesBox.innerText = extraParts.join('\n\n');
+                notesBox.innerHTML = buildNotesHtml(q.word, { idiomIntro: true });
             } else {
                 document.getElementById('quiz-review-word').innerText = q.word.word;
                 document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
 
-                // 단어 문제: 노트 + 관용구 + 예문을 함께 보여줌
+                // 단어 문제: 성수변화 + 노트 + 관용구 + 예문 (색 구분 HTML)
                 const notesBox = document.getElementById('quiz-review-notes-box');
-                const extraParts = [];
-                if (q.word.notes) extraParts.push(`📝 노트\n${q.word.notes}`);
-                const idiomList = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
-                if (idiomList.length > 0) {
-                    const idiomText = idiomList.map(it => `· ${it.idiom}${it.idiomMeaning ? ' — ' + it.idiomMeaning : ''}`).join('\n');
-                    extraParts.push(`💬 관용구\n${idiomText}`);
-                }
-                if (q.word.example) extraParts.push(`✍️ 예문\n${q.word.example}${q.word.exampleMeaning ? '\n' + q.word.exampleMeaning : ''}`);
-
-                if (extraParts.length > 0) {
+                const html = buildNotesHtml(q.word, {});
+                if (html.trim()) {
                     notesBox.classList.remove('hidden');
-                    notesBox.innerText = extraParts.join('\n\n');
+                    notesBox.innerHTML = html;
                 } else {
                     notesBox.classList.add('hidden');
                 }
