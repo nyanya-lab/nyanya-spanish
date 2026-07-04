@@ -323,6 +323,36 @@ let quizSession = null;
             }, 100);
         }
 
+        // [냐냐 PATCH] 퀴즈 정답 확인 화면에 동사 현재시제 활용표 표시
+        function renderQuizConjugation(word) {
+            const box = document.getElementById('quiz-review-conj-box');
+            if (!box) return;
+            const c = word.conjugations;
+            const hasConj = word.pos === 'verb' && c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos);
+            if (!hasConj) {
+                box.classList.add('hidden');
+                box.innerHTML = '';
+                return;
+            }
+            const rows = [
+                ['yo', c.yo], ['tú', c.tu], ['él/ella', c.el],
+                ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]
+            ];
+            const cells = rows.map(([label, val]) => `
+                <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 last:border-0">
+                    <span class="text-xs text-slate-500 font-medium">${label}</span>
+                    <span class="text-sm font-bold text-slate-800">${val || '-'}</span>
+                </div>`).join('');
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center gap-1.5">
+                        <span>🔀</span> 현재시제 활용 ${word.verbClass === 'irregular' ? '<span class="text-rose-500 ml-1">(불규칙)</span>' : ''}
+                    </div>
+                    <div class="grid grid-cols-2">${cells}</div>
+                </div>`;
+        }
+
         function submitSubjectiveAnswer() {
             const q = quizSession.questions[quizSession.currentIndex];
             const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
@@ -377,33 +407,45 @@ let quizSession = null;
                 // [냐냐 PATCH] 맞힌 단어 id 기록 (중복 제외) — 결과 화면에서 마스터 등록 선택용
                 if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
                 if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
-                // [냐냐 PATCH] 정답 시 점수 차감 (대칭): 객관식 -2, 주관식 -1. 0 밑으로 내려가려 하면 마스터 추천
+                // [냐냐 PATCH] 정답 처리: 약점 점수↓ + 마스터 점수↑ (동시에, 모순 방지)
                 const vocabItemC = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItemC) {
-                    const reward = (q.type === 'subjective') ? 1 : 2;
-                    const prevScore = vocabItemC.weakScore || 0;
-                    const newScore = prevScore - reward;
-                    if (newScore < 0 && !vocabItemC.mastered) {
-                        // 이미 점수가 바닥(0)인데 또 맞힘 = 확실히 아는 단어 → 마스터 추천 대상
-                        if (!quizSession.masterSuggestIds) quizSession.masterSuggestIds = [];
-                        if (!quizSession.masterSuggestIds.includes(vocabItemC.id)) quizSession.masterSuggestIds.push(vocabItemC.id);
+                    // (1) 약점 점수 내리기: 객관식 -2, 주관식 -1
+                    const weakReward = (q.type === 'subjective') ? 1 : 2;
+                    vocabItemC.weakScore = Math.max(0, (vocabItemC.weakScore || 0) - weakReward);
+                    if (vocabItemC.weakScore < 5) vocabItemC.weak = false;
+
+                    // (2) 마스터 점수 올리기: 객관식 +1, 주관식 +2 (상한 8점)
+                    const masterGain = (q.type === 'subjective') ? 2 : 1;
+                    vocabItemC.masterScore = Math.min(8, (vocabItemC.masterScore || 0) + masterGain);
+                    // 주관식으로 맞힌 적 있으면 기록 (자동 마스터 필수 조건)
+                    if (q.type === 'subjective') vocabItemC.subjectivePassed = true;
+
+                    // (3) 자동 마스터: 5점 이상 + 주관식 정답 경험 있음
+                    if (!vocabItemC.mastered && vocabItemC.masterScore >= 5 && vocabItemC.subjectivePassed) {
+                        vocabItemC.mastered = true;
+                        if (!quizSession.autoMasteredIds) quizSession.autoMasteredIds = [];
+                        quizSession.autoMasteredIds.push(vocabItemC.id);
                     }
-                    vocabItemC.weakScore = Math.max(0, newScore);
-                    if (vocabItemC.weakScore < 5) vocabItemC.weak = false; // 5점 미만이면 약점 해제
                 }
                 coach.innerText = "✨😄";
                 showToast("🎯 정답입니다!", "success");
             } else {
                 AudioFX.playError();
                 quizSession.wrongList.push(q.word);
-                // [냐냐 PATCH] 오답 점수 누적: 객관식 +2 (쉬운데 틀림), 주관식 +1. 5점↑ 약점 단어(⭐)
+                // [냐냐 PATCH] 오답 처리: 약점 점수↑ + 마스터 점수↓ (동시에)
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
+                    // (1) 약점 점수 올리기: 객관식 +2, 주관식 +1
                     const penalty = (q.type === 'subjective') ? 1 : 2;
                     vocabItem.weakScore = (vocabItem.weakScore || 0) + penalty;
                     if (vocabItem.weakScore >= 5) vocabItem.weak = true;
-                    // 마스터한 단어를 틀리면 마스터 자동 해제 (수동/자동 구분 없이)
-                    if (vocabItem.mastered) vocabItem.mastered = false;
+
+                    // (2) 마스터 점수 내리기: -3점. 5점 밑으로 떨어지면 마스터 해제
+                    vocabItem.masterScore = Math.max(0, (vocabItem.masterScore || 0) - 3);
+                    if (vocabItem.mastered && vocabItem.masterScore < 5) {
+                        vocabItem.mastered = false;
+                    }
                 }
                 coach.innerText = "🤔💭";
                 showToast("아쉬워요, 정답을 확인하고 다시 기억해 봐요!", "error");
@@ -477,6 +519,9 @@ let quizSession = null;
                 }
             }
 
+            // [냐냐 PATCH] 동사 문제면 현재시제 활용표를 보여줌
+            renderQuizConjugation(q.word);
+
             document.getElementById('quiz-review-panel').classList.remove('hidden');
             const nextBtn = document.getElementById('quiz-next-btn');
             nextBtn.disabled = false;
@@ -506,6 +551,15 @@ let quizSession = null;
             document.getElementById('quiz-question-screen').classList.add('hidden');
             document.getElementById('quiz-results-screen').classList.remove('hidden');
             document.getElementById('quiz-combo-box').classList.add('hidden');
+
+            // [냐냐 PATCH] 이번 퀴즈에서 자동 마스터된 단어 알림
+            const autoMastered = quizSession.autoMasteredIds || [];
+            if (autoMastered.length > 0) {
+                const names = autoMastered.map(id => { const w = vocabulary.find(v => v.id === id); return w ? w.word : ''; }).filter(Boolean);
+                setTimeout(() => {
+                    showToast(`🏆 자동 마스터! ${names.join(', ')} (${names.length}개)`, "success");
+                }, 600);
+            }
 
             const total = quizSession.questions.length;
             const correct = quizSession.correctCount;
