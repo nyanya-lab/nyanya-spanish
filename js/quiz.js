@@ -307,14 +307,14 @@ let quizSession = null;
 
                 const notesBox = document.getElementById('quiz-review-notes-box');
                 const extraParts = [];
-                extraParts.push(`📌 "${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`);
-                if (q.word.notes) extraParts.push(`📝 ${q.word.notes}`);
+                extraParts.push(`📌 관용구 안내\n"${q.word.word}" (${q.word.meaning}) 단어의 관용구예요.`);
+                if (q.word.notes) extraParts.push(`📝 노트\n${q.word.notes}`);
                 const idiomList2 = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
                 if (idiomList2.length > 0) {
                     const idiomText = idiomList2.map(x => `· ${x.idiom}${x.idiomMeaning ? ' — ' + x.idiomMeaning : ''}`).join('\n');
                     extraParts.push(`💬 관용구\n${idiomText}`);
                 }
-                if (q.word.example) extraParts.push(`✍️ ${q.word.example}${q.word.exampleMeaning ? '\n   ' + q.word.exampleMeaning : ''}`);
+                if (q.word.example) extraParts.push(`✍️ 예문\n${q.word.example}${q.word.exampleMeaning ? '\n' + q.word.exampleMeaning : ''}`);
                 notesBox.classList.remove('hidden');
                 notesBox.innerText = extraParts.join('\n\n');
             } else {
@@ -324,13 +324,13 @@ let quizSession = null;
                 // 단어 문제: 노트 + 관용구 + 예문을 함께 보여줌
                 const notesBox = document.getElementById('quiz-review-notes-box');
                 const extraParts = [];
-                if (q.word.notes) extraParts.push(`📝 ${q.word.notes}`);
+                if (q.word.notes) extraParts.push(`📝 노트\n${q.word.notes}`);
                 const idiomList = (q.word.idioms && q.word.idioms.length > 0) ? q.word.idioms : (q.word.idiom ? [{ idiom: q.word.idiom, idiomMeaning: q.word.idiomMeaning || '' }] : []);
                 if (idiomList.length > 0) {
                     const idiomText = idiomList.map(it => `· ${it.idiom}${it.idiomMeaning ? ' — ' + it.idiomMeaning : ''}`).join('\n');
                     extraParts.push(`💬 관용구\n${idiomText}`);
                 }
-                if (q.word.example) extraParts.push(`✍️ ${q.word.example}${q.word.exampleMeaning ? '\n   ' + q.word.exampleMeaning : ''}`);
+                if (q.word.example) extraParts.push(`✍️ 예문\n${q.word.example}${q.word.exampleMeaning ? '\n' + q.word.exampleMeaning : ''}`);
 
                 if (extraParts.length > 0) {
                     notesBox.classList.remove('hidden');
