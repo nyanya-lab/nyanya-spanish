@@ -54,21 +54,32 @@ let quizSession = null;
                 const notM = document.getElementById('scope-not-mastered');
                 const mas = document.getElementById('scope-mastered');
                 const weak = document.getElementById('scope-weak');
+                const promo = document.getElementById('scope-promotion');
                 if (notM) notM.checked = false;
                 if (mas) mas.checked = false;
                 if (weak) weak.checked = true;
+                if (promo) promo.checked = false;
                 startQuiz();
             }, 50);
         }
 
         function startQuiz() {
-            // [냐냐 PATCH] 출제 범위: 체크박스로 여러 개 선택 (마스터 제외/마스터/약점 단어)
+            // [냐냐 PATCH] 출제 범위: 체크박스로 여러 개 선택 (마스터 제외/마스터/약점 단어/승급 대기)
             const wantNotMastered = document.getElementById('scope-not-mastered')?.checked;
             const wantMastered = document.getElementById('scope-mastered')?.checked;
             const wantWeak = document.getElementById('scope-weak')?.checked;
+            const wantPromotion = document.getElementById('scope-promotion')?.checked;
 
-            if (!wantNotMastered && !wantMastered && !wantWeak) {
+            if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion) {
                 showToast("출제 범위를 최소 하나는 선택해 주세요!", "error");
+                return;
+            }
+
+            // 승급 대기 단어 = 마스터 점수 3점 이상 + 아직 마스터 안 됨
+            const promotionWords = vocabulary.filter(w => !w.mastered && (w.masterScore || 0) >= 3);
+            // 승급 대기 퀴즈는 5개 이상 있어야 열림
+            if (wantPromotion && promotionWords.length < 5) {
+                showToast(`아직 승급할 단어가 5개 미만이에요! (현재 ${promotionWords.length}개) 퀴즈를 더 풀어서 마스터 점수를 쌓아보세요.`, "info");
                 return;
             }
 
@@ -77,6 +88,7 @@ let quizSession = null;
             if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
             if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
             if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
+            if (wantPromotion) promotionWords.forEach(w => poolSet.set(w.id, w));
             let reviewablePool = [...poolSet.values()];
 
             if (reviewablePool.length < 2) {
