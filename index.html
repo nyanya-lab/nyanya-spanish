@@ -96,6 +96,10 @@
                         <i class="fa-solid fa-bullseye text-base"></i>
                         <span>단어 복습 퀴즈</span>
                     </button>
+                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                        <i class="fa-solid fa-gamepad text-base"></i>
+                        <span>미니 게임</span>
+                    </button>
                     <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-robot text-base"></i>
                         <span>AI 1:1 번역 첨삭</span>
@@ -413,6 +417,41 @@
                             <button onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md">같은 개수로 또 풀기</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- TAB: 미니 게임 -->
+                <div id="tab-games" class="hidden space-y-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-pink-100">
+                            <i class="fa-solid fa-gamepad"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-slate-900">미니 게임</h2>
+                            <p class="text-xs text-slate-400">재미있게 단어를 복습해 보세요!</p>
+                        </div>
+                    </div>
+
+                    <!-- 게임 선택 화면 -->
+                    <div id="games-menu" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <button onclick="startRapidFire()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-rose-300 hover:shadow-md transition-all active:scale-95 space-y-2">
+                            <div class="text-3xl">⚡</div>
+                            <h3 class="text-sm font-black text-slate-900">속사포 퀴즈</h3>
+                            <p class="text-xs text-slate-500 leading-relaxed">제한 시간 안에 최대한 많이 맞혀요! 콤보를 쌓아 고득점에 도전하세요.</p>
+                        </button>
+                        <button onclick="startFlashMemory()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-indigo-300 hover:shadow-md transition-all active:scale-95 space-y-2">
+                            <div class="text-3xl">👁️</div>
+                            <h3 class="text-sm font-black text-slate-900">깜빡이 기억</h3>
+                            <p class="text-xs text-slate-500 leading-relaxed">단어가 잠깐 나타났다 사라져요. 기억해서 스페인어로 입력하세요!</p>
+                        </button>
+                        <button onclick="startFallingWords()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95 space-y-2">
+                            <div class="text-3xl">🌧️</div>
+                            <h3 class="text-sm font-black text-slate-900">떨어지는 단어</h3>
+                            <p class="text-xs text-slate-500 leading-relaxed">한글 뜻이 떨어져요. 바닥에 닿기 전에 스페인어를 입력하세요!</p>
+                        </button>
+                    </div>
+
+                    <!-- 게임 진행 화면 (공통 컨테이너) -->
+                    <div id="game-play-area" class="hidden"></div>
                 </div>
 
                 <!-- TAB 4: AI 1:1 TRANSLATION RING -->
@@ -1307,6 +1346,7 @@
     <script src="js/vocab.js"></script>
     <script src="js/flashcards.js"></script>
     <script src="js/quiz.js"></script>
+    <script src="js/games.js"></script>
     <script src="js/ai-feedback.js"></script>
 </body>
 </html>
