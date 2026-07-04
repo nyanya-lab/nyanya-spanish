@@ -138,7 +138,8 @@ let vocabulary = [];
                 learnerProfile: learnerProfile,
                 customQuestions: customQuestions,
                 selectedQuestionTopics: selectedQuestionTopics,
-                customGrammarTables: customGrammarTables
+                customGrammarTables: customGrammarTables,
+                pinnedGrammar: pinnedGrammar
             };
             const json = JSON.stringify(payload);
 
@@ -242,6 +243,7 @@ let vocabulary = [];
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
+                pinnedGrammar = payload.pinnedGrammar || {};
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -249,6 +251,7 @@ let vocabulary = [];
                 customQuestions = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
+                pinnedGrammar = {};
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -935,6 +938,7 @@ let vocabulary = [];
         // [냐냐 PATCH] 문법 표 (참고용 표 모음)
         // ============================================================
         let grammarOpenState = {}; // 표별 펼침 상태 기억
+        let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -1080,6 +1084,9 @@ let vocabulary = [];
 
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
+            // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 원래 순서 유지)
+            tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
+
             container.innerHTML = tables.map((t, idx) => {
                 const hlCols = t.highlightCols || [0];
                 const headerRow = (t.headers || []).map((h, ci) => {
@@ -1096,9 +1103,10 @@ let vocabulary = [];
                     return `<tr class="${rowBg} hover:bg-[#fff3c4] transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
-                const isOpen = query ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : idx === 0);
+                const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
+                        <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
                         ${t.isCustom ? `<button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>` : `<button onclick="resetGrammarTable('${t.id}')" title="기본값으로 되돌리기" class="w-7 h-7 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><i class="fa-solid fa-rotate-left text-xs"></i></button>`}
                     </span>`;
@@ -1143,6 +1151,20 @@ let vocabulary = [];
         function expandAllGrammar(open) {
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
             renderGrammarTables();
+        }
+
+        // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
+        function togglePinGrammar(id) {
+            if (pinnedGrammar[id]) {
+                delete pinnedGrammar[id];
+                showToast("고정을 해제했어요", "info");
+            } else {
+                pinnedGrammar[id] = true;
+                grammarOpenState[id] = true; // 고정하면 열어둠
+                showToast("표를 위에 고정했어요 📌", "success");
+            }
+            renderGrammarTables();
+            saveToStorage();
         }
 
         function clearGrammarSearch() {
