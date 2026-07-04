@@ -132,17 +132,17 @@
                 
                 <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-6">
-                    <!-- 약점 단어 복습 -->
+                    <!-- 오늘 틀린 단어 복습 -->
                     <div class="flex flex-col gap-3">
                         <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-3 min-w-0">
-                                <span class="text-2xl shrink-0">⭐</span>
+                                <span class="text-2xl shrink-0">📌</span>
                                 <div class="min-w-0">
-                                    <p class="text-sm font-extrabold text-amber-900">약점 단어 <span id="today-review-count">0</span>개</p>
-                                    <p class="text-xs text-amber-700">자주 틀리는 단어예요. 먼저 훑어보고 익혀보세요!</p>
+                                    <p class="text-sm font-extrabold text-amber-900">오늘 틀린 단어 <span id="today-review-count">0</span>개</p>
+                                    <p class="text-xs text-amber-700">오늘 틀린 단어예요. 다시 한번 훑어보고 익혀보세요!</p>
                                 </div>
                             </div>
-                            <button onclick="showWeakWordsInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">약점 단어 보기</button>
+                            <button onclick="showTodayWrongInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">오늘 틀린 단어 보기</button>
                         </div>
                     </div>
                     <!-- Search & Action Bar -->
@@ -168,7 +168,7 @@
                                 <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-3 w-64">
                                     <div class="space-y-1">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사</label>
-                                        <select id="pos-filter-select" onchange="renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
+                                        <select id="pos-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
                                             <option value="all">All</option>
                                             <option value="noun">N.</option>
                                             <option value="verb">V.</option>
@@ -182,7 +182,7 @@
                                     </div>
                                     <div class="space-y-1">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">마스터 상태</label>
-                                        <select id="mastery-filter-select" onchange="renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
+                                        <select id="mastery-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
                                             <option value="all">전체 단어</option>
                                             <option value="mastered">마스터 단어만</option>
                                             <option value="not-mastered">안 된 단어만</option>
