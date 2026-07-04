@@ -126,6 +126,33 @@ let quizSession = null;
                 else if (selectedQuizFormat === 'subjective') isSubjective = true;
                 else isSubjective = Math.random() < 0.3;
                 const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
+
+                // [냐냐 PATCH] 동사이고 활용 정보가 있으면 30% 확률로 '활용형 문제' 출제
+                //   예: "ver의 3인칭 단수형(él/ella)은?" → 주관식으로 활용형 입력
+                const conj = w.conjugations;
+                const hasConj = w.pos === 'verb' && conj && (conj.yo || conj.tu || conj.el || conj.nos || conj.vos || conj.ellos);
+                if (hasConj && selectedQuizFormat !== 'mc' && Math.random() < 0.3) {
+                    const forms = [
+                        { key: 'yo', label: '1인칭 단수 (yo)' },
+                        { key: 'tu', label: '2인칭 단수 (tú)' },
+                        { key: 'el', label: '3인칭 단수 (él/ella)' },
+                        { key: 'nos', label: '1인칭 복수 (nosotros)' },
+                        { key: 'vos', label: '2인칭 복수 (vosotros)' },
+                        { key: 'ellos', label: '3인칭 복수 (ellos/ellas)' },
+                    ].filter(f => conj[f.key]); // 값이 있는 형태만
+                    if (forms.length > 0) {
+                        const pick = forms[Math.floor(Math.random() * forms.length)];
+                        questions.push({
+                            word: w,
+                            type: 'conjugation',
+                            conjKey: pick.key,
+                            conjLabel: pick.label,
+                            answer: conj[pick.key]
+                        });
+                        continue; // 이 문제는 활용형으로 대체
+                    }
+                }
+
                 if (!isSubjective) {
                     q.answer = w.meaning;
                     let choices = [w.meaning];
@@ -216,10 +243,16 @@ let quizSession = null;
                     `;
                 });
             } else {
-                document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
-                // [냐냐 PATCH] 형용사는 남성형(사전형)으로 통일해서 물어봄 — 답이 하나로 명확해짐
-                const genderHint = (q.word.pos === 'adjective') ? ' <span class="text-violet-500">(남성형)</span>' : '';
-                document.getElementById('quiz-question-text').innerHTML = `${q.word.meaning} → 스페인어로 써보세요!${genderHint}`;
+                // 주관식 또는 활용형 문제
+                if (q.type === 'conjugation') {
+                    document.getElementById('quiz-question-label').innerText = '동사 활용';
+                    document.getElementById('quiz-question-text').innerHTML = `<span class="text-violet-600">${q.word.word}</span> (${q.word.meaning})의 <b>${q.conjLabel}</b> 현재형은?`;
+                } else {
+                    document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
+                    // [냐냐 PATCH] 형용사는 남성형(사전형)으로 통일해서 물어봄 — 답이 하나로 명확해짐
+                    const genderHint = (q.word.pos === 'adjective') ? ' <span class="text-violet-500">(남성형)</span>' : '';
+                    document.getElementById('quiz-question-text').innerHTML = `${q.word.meaning} → 스페인어로 써보세요!${genderHint}`;
+                }
                 document.getElementById('quiz-choices-box').classList.add('hidden');
                 document.getElementById('quiz-subjective-box').classList.remove('hidden');
                 const input = document.getElementById('quiz-subjective-input');
@@ -368,6 +401,17 @@ let quizSession = null;
         function submitSubjectiveAnswer() {
             const q = quizSession.questions[quizSession.currentIndex];
             const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
+
+            // [냐냐 PATCH] 활용형 문제는 정답(활용형)과 직접 비교
+            if (q.type === 'conjugation') {
+                document.getElementById('quiz-subjective-input').disabled = true;
+                document.getElementById('quiz-subjective-submit-btn').disabled = true;
+                const isCorrect = userAnswer && (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer));
+                q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word}의 ${q.conjLabel})`;
+                finishQuizQuestion(isCorrect, q);
+                return;
+            }
+
             // [냐냐 PATCH] 스마트 분석 (동의어 힌트 / 성수틀림 / 등록추천)
             const analysis = analyzeSubjectiveAnswer(userAnswer, q);
 
@@ -423,12 +467,13 @@ let quizSession = null;
                 const vocabItemC = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItemC) {
                     // (1) 약점 점수 내리기: 객관식 -2, 주관식 -1
-                    const weakReward = (q.type === 'subjective') ? 1 : 2;
+                    const isProduction = (q.type === 'subjective' || q.type === 'conjugation');
+                    const weakReward = isProduction ? 1 : 2;
                     vocabItemC.weakScore = Math.max(0, (vocabItemC.weakScore || 0) - weakReward);
                     if (vocabItemC.weakScore < 5) vocabItemC.weak = false;
 
                     // (2) 마스터 점수 올리기: 객관식 +1, 주관식 +2 (상한 8점)
-                    const masterGain = (q.type === 'subjective') ? 2 : 1;
+                    const masterGain = isProduction ? 2 : 1;
                     vocabItemC.masterScore = Math.min(8, (vocabItemC.masterScore || 0) + masterGain);
                     // 주관식으로 맞힌 적 있으면 기록 (자동 마스터 필수 조건)
                     if (q.type === 'subjective') vocabItemC.subjectivePassed = true;
@@ -449,7 +494,7 @@ let quizSession = null;
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
                     // (1) 약점 점수 올리기: 객관식 +2, 주관식 +1
-                    const penalty = (q.type === 'subjective') ? 1 : 2;
+                    const penalty = (q.type === 'subjective' || q.type === 'conjugation') ? 1 : 2;
                     vocabItem.weakScore = (vocabItem.weakScore || 0) + penalty;
                     if (vocabItem.weakScore >= 5) vocabItem.weak = true;
 
