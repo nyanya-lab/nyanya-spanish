@@ -69,6 +69,8 @@
             const w = vocabulary.find(v => v.id === wordId);
             if (!w) return;
             if (isCorrect) {
+                // [냐냐 PATCH] 정답률용 카운터
+                w.correctTotal = (w.correctTotal || 0) + 1;
                 // 정답: 약점 점수 -2, 마스터 점수 +1 (상한 8)
                 w.weakScore = Math.max(0, (w.weakScore || 0) - 2);
                 if (w.weakScore < 5) w.weak = false;
@@ -78,6 +80,8 @@
                     w.mastered = true;
                 }
             } else {
+                // [냐냐 PATCH] 정답률용 카운터
+                w.wrongTotal = (w.wrongTotal || 0) + 1;
                 // 오답: 게임은 시간에 쫓겨 못 맞추기도 하니 약하게 감점 (약점 +1, 마스터 -1)
                 w.weakScore = (w.weakScore || 0) + 1;
                 w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
