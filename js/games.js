@@ -556,7 +556,7 @@
         // ============================================================
         // 게임 4: 듣기 받아쓰기 (예문 듣고 따라 쓰기, 점수 없음)
         // ============================================================
-        function speakSpanish(text) {
+        function speakSpanish(text, rate) {
             if (!('speechSynthesis' in window)) {
                 showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
                 return;
@@ -564,8 +564,28 @@
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'es-ES';
-            u.rate = 0.9;
+            u.rate = rate || 0.9;
             window.speechSynthesis.speak(u);
+        }
+
+        // [냐냐 PATCH] 듣기 퀴즈 재생 속도 (기본 0.9)
+        let listeningRate = 0.9;
+        function setListeningRate(rate) {
+            listeningRate = rate;
+            // 버튼 하이라이트 갱신
+            document.querySelectorAll('.listen-speed-btn').forEach(b => {
+                const r = parseFloat(b.dataset.rate);
+                if (Math.abs(r - rate) < 0.001) {
+                    b.classList.add('bg-sky-500', 'text-white');
+                    b.classList.remove('bg-sky-50', 'text-sky-600');
+                } else {
+                    b.classList.remove('bg-sky-500', 'text-white');
+                    b.classList.add('bg-sky-50', 'text-sky-600');
+                }
+            });
+        }
+        function speakListening() {
+            if (gameState && gameState.current) speakSpanish(gameState.current.example, listeningRate);
         }
 
         function startListeningQuiz() {
@@ -592,18 +612,29 @@
                     </div>
                     <div class="text-center py-6 space-y-4">
                         <p class="text-xs font-bold text-sky-400">🎧 예문을 듣고 똑같이 써보세요!</p>
-                        <button onclick="speakSpanish(gameState.current.example)" class="bg-sky-500 hover:bg-sky-600 text-white w-16 h-16 rounded-full text-2xl shadow-lg shadow-sky-100 transition-all active:scale-90">
+                        <button onclick="speakListening()" class="bg-sky-500 hover:bg-sky-600 text-white w-16 h-16 rounded-full text-2xl shadow-lg shadow-sky-100 transition-all active:scale-90">
                             <i class="fa-solid fa-volume-high"></i>
                         </button>
-                        <p class="text-xs text-slate-400">다시 들으려면 스피커를 눌러요</p>
+                        <div class="flex items-center justify-center gap-1.5">
+                            <span class="text-[10px] font-bold text-slate-400 mr-1">속도</span>
+                            <button onclick="setListeningRate(0.5)" data-rate="0.5" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">0.5x</button>
+                            <button onclick="setListeningRate(0.75)" data-rate="0.75" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">0.75x</button>
+                            <button onclick="setListeningRate(0.9)" data-rate="0.9" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">보통</button>
+                            <button onclick="setListeningRate(1.1)" data-rate="1.1" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">1.1x</button>
+                        </div>
+                        <p class="text-xs text-slate-400">속도를 바꾸고 스피커를 다시 눌러요</p>
                         <p id="listen-feedback" class="text-sm font-bold h-5"></p>
                     </div>
                     <textarea id="listen-input" rows="2" placeholder="들은 문장을 입력하세요..." class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-semibold focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
                     <button onclick="listeningSubmit()" class="w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
                 </div>
             `);
-            // 자동으로 한 번 읽어주기
-            setTimeout(() => { speakSpanish(gameState.current.example); document.getElementById('listen-input')?.focus(); }, 300);
+            // 자동으로 한 번 읽어주기 (선택된 속도로)
+            setTimeout(() => {
+                setListeningRate(listeningRate); // 버튼 하이라이트
+                speakListening();
+                document.getElementById('listen-input')?.focus();
+            }, 300);
         }
 
         function listeningSubmit() {
