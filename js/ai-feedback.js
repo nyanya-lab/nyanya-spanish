@@ -402,6 +402,8 @@
                 // 이전 채점 결과 숨기기
                 document.getElementById('ai-feedback-result')?.classList.add('hidden');
                 document.getElementById('question-followup-btn')?.classList.add('hidden');
+                // [냐냐 PATCH] 이전 질문의 해석(번역) 숨기기 — 새 질문엔 안 맞으니까
+                document.getElementById('question-translation-text')?.classList.add('hidden');
                 showToast("이어지는 질문이 생성됐어요! 대화를 계속해 보세요 💬", "success");
                 document.getElementById('question-display-text').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 setTimeout(() => answerInput.focus(), 300); // 바로 답변 입력 가능하게
@@ -1333,6 +1335,22 @@
                         return true;
                     }
                 }
+                // 4) 명사: 단수형 등록됐으면 복수형도 같은 단어로 취급 (그 반대도)
+                if (v.pos === 'noun') {
+                    // 관사 뗀 형태로 비교
+                    const stripArt = (s) => s.replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '');
+                    const vn = stripArt(normalizeSpanishAnswer(v.word));
+                    const tn = stripArt(target);
+                    if (vn === tn) return true;
+                    // 스페인어 복수 규칙: +s / +es / z→ces
+                    const plurals = (s) => {
+                        const arr = [s + 's', s + 'es'];
+                        if (s.endsWith('z')) arr.push(s.slice(0, -1) + 'ces');
+                        return arr;
+                    };
+                    // 단수→복수 또는 복수→단수 매칭
+                    if (plurals(vn).includes(tn) || plurals(tn).includes(vn)) return true;
+                }
             }
             return false;
         }
@@ -1343,16 +1361,31 @@
             if (!w) return '';
             // 단어장에 이미 있는지 확인 (동사 변형·형용사 성수변화까지 고려)
             const exists = wordExistsInVocab(w);
+            const wEsc = w.replace(/'/g, "\\'");
+            const mEsc = m.replace(/'/g, "\\'");
             const registerBtn = exists
-                ? '<span class="text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>'
-                : `<button onclick="registerWordFromBreakdown('${w.replace(/'/g, "\\'")}', '${m.replace(/'/g, "\\'")}')" class="text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all">+ 등록</button>`;
+                ? '<span class="breakdown-reg text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>'
+                : `<button class="breakdown-reg text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all" onclick="registerWordFromBreakdown('${wEsc}', '${mEsc}')">+ 등록</button>`;
             return `
-                <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm" data-breakdown-word="${w.replace(/"/g, '&quot;')}">
                     <span class="font-bold text-slate-800 shrink-0">${w}</span>
                     <span class="text-slate-500 text-right flex-1 truncate">${m}</span>
                     ${registerBtn}
                 </div>
             `;
+        }
+
+        // [냐냐 PATCH] 단어 등록 후 핵심분석의 등록 버튼을 '✓ 등록됨'으로 갱신 (AI item 1)
+        function refreshBreakdownRegisterButtons() {
+            document.querySelectorAll('[data-breakdown-word]').forEach(row => {
+                const w = row.getAttribute('data-breakdown-word');
+                if (w && wordExistsInVocab(w)) {
+                    const regEl = row.querySelector('.breakdown-reg');
+                    if (regEl && regEl.tagName === 'BUTTON') {
+                        regEl.outerHTML = '<span class="breakdown-reg text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>';
+                    }
+                }
+            });
         }
 
         // 핵심 분석에서 단어 바로 등록
