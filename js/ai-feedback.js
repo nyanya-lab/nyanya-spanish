@@ -1,1368 +1,1473 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>냐냐의 스페인어 공부방 📖</title>
-    
-    <!-- Premium App Icon (Favicon & Apple Touch Icon) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%238b5cf6;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23a855f7;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23c026d3;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>📖</text></svg>">
-    <link class="apple-touch-icon" rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%238b5cf6;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23a855f7;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23c026d3;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>📖</text></svg>">
+// TAB 4: LIVE AI TRANSLATION COACH
+        let currentAiMode = 'ko-es';
+        let aiCurrentWordForMission = null;
+        let aiCurrentKoreanSentence = "";
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Premium Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Gowun+Dodum:wght@400;700&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="text-slate-800 min-h-screen flex flex-col antialiased">
+        // [냐냐 PATCH] B-2 첨삭: '바뀐 부분' 설명 리스트 렌더링 (어순/관사 변경도 표시)
+        function renderAiChanges(feedback) {
+            const box = document.getElementById('ai-changes-box');
+            const list = document.getElementById('ai-changes-list');
+            if (!box || !list) return;
+            const changes = Array.isArray(feedback.changes) ? feedback.changes.filter(c => c && (c.from || c.to)) : [];
+            if (changes.length === 0) {
+                box.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            box.classList.remove('hidden');
+            list.innerHTML = changes.map(c => {
+                const from = (c.from || '').trim();
+                const to = (c.to || '').trim();
+                const why = (c.why || '').trim();
+                return `<li class="flex flex-col gap-0.5">
+                    <span><span class="text-slate-400 line-through">${from}</span> <span class="text-slate-300">→</span> <span class="text-red-600 font-bold">${to}</span></span>
+                    ${why ? `<span class="text-[11px] text-slate-500 pl-1">· ${why}</span>` : ''}
+                </li>`;
+            }).join('');
+        }
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+        function switchAiMode(mode) {
+            currentAiMode = mode;
+            const btnKoEs = document.getElementById('ai-mode-btn-ko-es');
+            const btnEsKo = document.getElementById('ai-mode-btn-es-ko');
+            const btnQuestion = document.getElementById('ai-mode-btn-question');
+            const btnExample = document.getElementById('ai-mode-btn-example');
+            const paneKoEs = document.getElementById('ai-pane-ko-es');
+            const paneEsKo = document.getElementById('ai-pane-es-ko');
+            const paneQuestion = document.getElementById('ai-pane-question');
+            const paneExample = document.getElementById('ai-pane-example');
+            const resultBox = document.getElementById('ai-feedback-result');
 
-    <div id="app" class="flex-1 flex flex-col pb-16">
-        <!-- Top Sticky Premium Header -->
-        <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div id="header-logo" class="w-11 h-11 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-xl flex items-center justify-center text-2xl shadow-md shadow-violet-100 cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95" onclick="triggerPunchLogo()">
-                        📖
+            resultBox.classList.add('hidden');
+
+            const activeClass = "py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+            const inactiveClass = "py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
+            btnKoEs.className = mode === 'ko-es' ? activeClass : inactiveClass;
+            btnEsKo.className = mode === 'es-ko' ? activeClass : inactiveClass;
+            btnQuestion.className = mode === 'question' ? activeClass : inactiveClass;
+            if (btnExample) btnExample.className = mode === 'example' ? activeClass : inactiveClass;
+            paneKoEs.classList.toggle('hidden', mode !== 'ko-es');
+            paneEsKo.classList.toggle('hidden', mode !== 'es-ko');
+            paneQuestion.classList.toggle('hidden', mode !== 'question');
+            if (paneExample) paneExample.classList.toggle('hidden', mode !== 'example');
+
+            if (mode === 'ko-es') {
+                resetKoEsMissionState();
+            } else if (mode === 'es-ko') {
+                document.getElementById('ai-free-input-es').value = '';
+            } else if (mode === 'question') {
+                // 질문 목록은 '질문 관리' 모달에서 보여주므로 여기선 별도 처리 불필요
+            } else if (mode === 'example') {
+                resetExampleMissionState();
+            }
+        }
+
+        // [PATCH] 스->한 자유 작문 모드: 첨삭 후 다음 문장을 쓸 수 있도록 입력칸/결과창을 초기화
+        function resetEsKoPane() {
+            document.getElementById('ai-free-input-es').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+            document.getElementById('ai-free-input-es').focus();
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 질문에 답하기 코너
+        // ============================================================
+        // ── 질문 관리 모달 ──
+        function openQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.remove('hidden');
+            document.getElementById('question-search-input').value = '';
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+        }
+        function closeQuestionManageModal() {
+            document.getElementById('question-manage-modal').classList.add('hidden');
+        }
+
+        // 등록된 주제들을 모아서 입력창 자동완성(datalist)에 채움
+        function refreshTopicsDatalist() {
+            const datalist = document.getElementById('question-topics-datalist');
+            if (!datalist) return;
+            const topics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
+            datalist.innerHTML = topics.map(t => `<option value="${t.replace(/"/g, '&quot;')}">`).join('');
+        }
+
+        function addCustomQuestion() {
+            const input = document.getElementById('new-question-input');
+            const topicInput = document.getElementById('new-question-topic-input');
+            const text = input.value.trim();
+            const topic = topicInput.value.trim() || '기타';
+            if (!text) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
+            }
+            customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
+            input.value = '';
+            // 주제는 연속 등록 편하게 유지
+            saveToStorage();
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+            showToast(`'${topic}' 주제에 질문을 등록했어요! 📝`, "success");
+        }
+
+        function deleteCustomQuestion(id) {
+            customQuestions = customQuestions.filter(q => q.id !== id);
+            saveToStorage();
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+        }
+
+        // 주제별로 묶어서 보여주기 (+ 검색 필터 + 수정 버튼)
+        function renderCustomQuestionsList() {
+            const box = document.getElementById('question-list-box');
+            if (!box) return;
+            const searchVal = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
+
+            const filtered = customQuestions.filter(q =>
+                !searchVal || q.question.toLowerCase().includes(searchVal) || (q.topic || '').toLowerCase().includes(searchVal)
+            );
+
+            if (filtered.length === 0) {
+                box.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">${customQuestions.length === 0 ? '등록된 질문이 없어요. 위에서 추가해 보세요!' : '검색 결과가 없어요.'}</p>`;
+                return;
+            }
+
+            const groups = {};
+            filtered.forEach(q => {
+                const t = q.topic || '기타';
+                if (!groups[t]) groups[t] = [];
+                groups[t].push(q);
+            });
+
+            box.innerHTML = Object.entries(groups).map(([topic, qs]) => `
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">${topic}</span>
+                        <span class="text-[10px] text-slate-400">${qs.length}개</span>
                     </div>
-                    <div>
-                        <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            냐냐의 스페인어 공부방
-                        </h1>
-                    </div>
+                    ${qs.map(q => `
+                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1 gap-2">
+                            <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
+                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-violet-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    `).join('')}
                 </div>
-                
-                <!-- Right Stats -->
-                <div class="flex items-center gap-2">
-                    <div class="hidden sm:flex items-center gap-4 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-200">
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">오늘</span>
-                            <span id="header-today-date" class="text-sm font-bold text-violet-600">-</span>
-                        </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">보유 단어</span>
-                            <span id="header-total-vocab" class="text-sm font-bold text-slate-800">0개</span>
-                        </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">마스터함</span>
-                            <span id="header-mastered-vocab" class="text-sm font-bold text-emerald-600">0개</span>
-                        </div>
-                    </div>
-                    
-                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>
-                    </button>
-
-                    <button id="sync-status-badge" onclick="openSyncPasswordModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 확인 중...</span>
-                    </button>
-
-                    <button onclick="openBackupModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <i class="fa-solid fa-box-archive"></i><span class="hidden sm:inline"> 백업</span>
-                    </button>
-
-                    <button onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
-                        <i id="menu-toggle-icon" class="fa-solid fa-chevron-up text-sm"></i>
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <main class="max-w-7xl mx-auto w-full px-4 mt-6 flex-1 flex flex-col md:flex-row gap-6">
-            <!-- Sidebar Drawer / Column -->
-            <aside id="sidebar-menu" class="md:w-56 flex-shrink-0 flex flex-col gap-4 transition-all duration-300">
-                <div class="space-y-1 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100">
-                        <i class="fa-solid fa-book-bookmark text-base"></i>
-                        <span>내 단어장</span>
-                    </button>
-                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-table-list text-base"></i>
-                        <span>문법 표</span>
-                    </button>
-                    <button onclick="changeTab('cards')" id="nav-cards" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-clone text-base"></i>
-                        <span>플래시 카드 복습</span>
-                    </button>
-                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-bullseye text-base"></i>
-                        <span>단어 복습 퀴즈</span>
-                    </button>
-                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-gamepad text-base"></i>
-                        <span>미니 게임</span>
-                    </button>
-                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-robot text-base"></i>
-                        <span>AI 1:1 번역 첨삭</span>
-                    </button>
-                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-chart-line text-base"></i>
-                        <span>학습기록</span>
-                    </button>
-                </div>
-
-
-                <!-- 일일 학습 일지 현황판 -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="flex items-center gap-2 text-slate-700 text-xs font-bold border-b border-slate-100 pb-2">
-                        <i class="fa-solid fa-calendar-check text-rose-500"></i>
-                        <span>냐냐의 일일 학습 일지</span>
-                    </div>
-                    <div id="diary-streak-line" class="hidden bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
-                        <span class="flex items-center gap-1.5 text-sm font-black text-orange-700"><span id="diary-streak-fire">🔥</span> <span id="diary-streak-days">0일 연속</span></span>
-                        <span id="diary-streak-best" class="text-[10px] font-bold text-orange-400">최고 0일</span>
-                    </div>
-                    <div id="nyanya-diary-list" class="space-y-2 max-h-48 overflow-y-auto text-xs text-slate-600">
-                        <p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Main Content Area -->
-            <section class="flex-1 min-w-0">
-                
-                <!-- TAB 1: WORD LIST & MANAGEMENT -->
-                <div id="tab-list" class="space-y-6">
-                    <!-- 오늘 틀린 단어 복습 -->
-                    <div class="flex flex-col gap-3">
-                        <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <span class="text-2xl shrink-0">📌</span>
-                                <div class="min-w-0">
-                                    <p class="text-sm font-extrabold text-amber-900">오늘 틀린 단어 <span id="today-review-count">0</span>개</p>
-                                    <p class="text-xs text-amber-700">오늘 틀린 단어예요. 다시 한번 훑어보고 익혀보세요!</p>
-                                </div>
-                            </div>
-                            <button onclick="showTodayWrongInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">오늘 틀린 단어 보기</button>
-                        </div>
-                    </div>
-                    <!-- Search & Action Bar -->
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
-                        <div class="relative w-full sm:flex-1">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" id="search-bar" oninput="handleSearchInput()" placeholder="단어, 뜻, 메모 검색..." autocomplete="off" class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button id="search-clear-btn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                                <i class="fa-solid fa-circle-xmark"></i>
-                            </button>
-                        </div>
-                        <div class="flex gap-2 w-full sm:w-auto shrink-0">
-                            <button id="expand-all-btn" onclick="toggleExpandAllBtn()" class="bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-up-right-and-down-left-from-center text-[10px]"></i>
-                                <span>전체 펼치기</span>
-                            </button>
-                            <div class="relative">
-                                <button onclick="event.stopPropagation(); toggleFilterPanel()" class="w-full sm:w-auto h-full bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
-                                    <i class="fa-solid fa-sliders"></i>
-                                    <span>필터 & 정렬</span>
-                                    <span id="filter-active-badge" class="hidden w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-                                </button>
-                                <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-3 w-64">
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사</label>
-                                        <select id="pos-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">All</option>
-                                            <option value="noun">N.</option>
-                                            <option value="verb">V.</option>
-                                            <option value="adjective">Adj.</option>
-                                            <option value="adverb">Adv.</option>
-                                            <option value="preposition">Prep.</option>
-                                            <option value="conjunction">Conj.</option>
-                                            <option value="pronoun">Pron.</option>
-                                            <option value="phrase">Phr.</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">마스터 상태</label>
-                                        <select id="mastery-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">전체 단어</option>
-                                            <option value="mastered">마스터 단어만</option>
-                                            <option value="not-mastered">안 된 단어만</option>
-                                            <option value="weak">⭐ 약점 단어만</option>
-                                            <option value="not-weak">약점 단어 제외</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준</label>
-                                        <select id="sort-select" onchange="renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="recent">최근 추가순</option>
-                                            <option value="oldest">오래된 순</option>
-                                            <option value="weak-score">⭐ 약점 점수 높은순</option>
-                                            <option value="alpha-asc">알파벳 오름차순 (A→Z)</option>
-                                            <option value="alpha-desc">알파벳 내림차순 (Z→A)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <button onclick="openWordModal()" class="flex-1 sm:flex-initial bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>새로운 단어 등록</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Vocabulary Grid List -->
-                    <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Word Cards will be dynamically injected here -->
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div id="vocab-empty-state" class="hidden text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <span class="text-5xl block mb-4">📖</span>
-                        <h3 class="text-lg font-bold text-slate-700">등록된 단어가 아직 없어요!</h3>
-                        <p class="text-sm text-slate-400 mt-1 max-w-sm mx-auto">새로운 단어를 등록하고 스페인어 학습을 시작해보세요!</p>
-                        <button onclick="openWordModal()" class="mt-5 inline-flex items-center gap-2 bg-violet-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md">
-                            첫 단어 등록하기
-                        </button>
-                    </div>
-                </div>
-
-                <!-- TAB 2: FLASHCARD PLAYGROUND -->
-                <div id="tab-cards" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
-                        <h2 class="text-base font-bold text-slate-900">플래시 카드로 복습하기</h2>
-                        <p class="text-xs text-slate-400 mt-1">카드를 터치하면 뒤집혀요! 뜻과 동사 변형을 소리 내어 말해 보세요.</p>
-                    </div>
-
-                    <div class="flex flex-col items-center justify-center gap-6 py-6">
-                        <div id="flashcard-container" onclick="flipFlashcard()" class="w-full max-w-md h-80 perspective-1000 cursor-pointer">
-                            <div id="flashcard-inner" class="w-full h-full transform-style-3d transition-transform duration-500 relative">
-                                <!-- Card Front -->
-                                <div class="absolute inset-0 bg-gradient-to-br from-white to-slate-50 border-2 border-slate-200 rounded-3xl p-8 flex flex-col justify-between backface-hidden shadow-md">
-                                    <div class="flex justify-between items-center">
-                                        <span id="card-front-pos" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">POS</span>
-                                        <button id="card-front-speaker-btn" onclick="speakText(event, 'card-word')" class="text-slate-400 hover:text-violet-500 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
-                                    </div>
-                                    <div class="text-center">
-                                        <h2 id="card-word" class="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">Word</h2>
-                                        <p id="card-front-irregular" class="text-xs text-amber-600 font-bold mt-2 h-4"></p>
-                                    </div>
-                                    <div class="text-center text-xs text-slate-400 flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-rotate"></i> 카드를 터치하면 뒤집어집니다
-                                    </div>
-                                </div>
-                                <!-- Card Back -->
-                                <div class="absolute inset-0 bg-gradient-to-br from-violet-50 to-indigo-50 text-slate-800 rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-violet-300">
-                                    <div class="flex justify-between items-center">
-                                        <span id="card-back-pos" class="text-xs bg-violet-100 text-violet-600 border border-violet-200 px-2.5 py-0.5 rounded-full font-bold">POS</span>
-                                        <button id="card-back-speaker-btn" onclick="speakText(event, 'card-meaning')" class="hidden text-slate-400 hover:text-violet-600 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
-                                        <span id="card-back-label" class="text-xs text-slate-400 font-bold">번역 결과</span>
-                                    </div>
-                                    <div class="text-center space-y-2 overflow-y-auto max-h-56">
-                                        <h3 id="card-meaning" class="text-2xl font-extrabold text-slate-900">뜻</h3>
-                                        <p id="card-notes" class="text-xs text-slate-500 max-w-xs mx-auto whitespace-pre-wrap"></p>
-                                        <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-white/70 p-2 rounded-xl border border-violet-100">
-                                            <div><span class="text-slate-400 block">yo</span><strong id="card-conj-yo" class="text-blue-600 font-extrabold"></strong></div>
-                                            <div><span class="text-slate-400 block">tú</span><strong id="card-conj-tu" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">él</span><strong id="card-conj-el" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">nos</span><strong id="card-conj-nos" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">vos</span><strong id="card-conj-vos" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">ellos</span><strong id="card-conj-ellos" class="text-slate-700"></strong></div>
-                                        </div>
-                                    </div>
-                                    <div class="text-center text-[10px] text-slate-400 pt-2 border-t border-violet-100">
-                                        클릭 시 다시 앞면으로 전환
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Card Navigation Controls -->
-                        <div class="flex items-center gap-6">
-                            <button onclick="prevFlashcard()" class="w-12 h-12 bg-white hover:bg-slate-50 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 transition-all shadow-sm active:scale-95"><i class="fa-solid fa-arrow-left"></i></button>
-                            <span id="card-progress" class="text-sm font-semibold text-slate-500">0 / 0</span>
-                            <button onclick="nextFlashcard()" class="w-12 h-12 bg-white hover:bg-slate-50 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 transition-all shadow-sm active:scale-95"><i class="fa-solid fa-arrow-right"></i></button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 3: VOCAB QUIZ -->
-                <div id="tab-quiz" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900">단어 복습 퀴즈</h2>
-                                <p class="text-xs text-slate-400 mt-0.5">객관식과 주관식(스페인어 작문)이 섞여서 나와요!</p>
-                            </div>
-                        </div>
-                        <div id="quiz-combo-box" class="hidden items-center gap-2 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-                            <span class="text-xs font-bold text-slate-500">진행:</span>
-                            <span id="quiz-progress-text" class="text-lg font-black text-violet-600">0/0</span>
-                        </div>
-                    </div>
-
-                    <!-- 설정 화면 -->
-                    <div id="quiz-setup-screen" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-6">
-                        <div class="text-5xl">🎯</div>
-                        <div>
-                            <h3 class="text-lg font-bold text-slate-900">몇 문제 풀어볼까요?</h3>
-                            <p id="quiz-setup-sub" class="text-xs text-slate-400 mt-1">단어가 2개 이상 있어야 퀴즈를 시작할 수 있어요!</p>
-                        </div>
-                        <div class="flex justify-center gap-3">
-                            <button onclick="selectQuizCount(10, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">10개</button>
-                            <button onclick="selectQuizCount(30, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all">30개</button>
-                            <button onclick="selectQuizCount(50, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">50개</button>
-                        </div>
-                        <div class="max-w-sm mx-auto text-left space-y-3">
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">문제 유형</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button type="button" onclick="selectQuizFormat('mc', this)" id="quiz-format-mc" class="quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all">객관식만</button>
-                                    <button type="button" onclick="selectQuizFormat('subjective', this)" id="quiz-format-subjective" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">주관식만</button>
-                                    <button type="button" onclick="selectQuizFormat('mixed', this)" id="quiz-format-mixed" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">섞어서</button>
-                                </div>
-                            </div>
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">출제 범위 (여러 개 선택 가능)</label>
-                                <div class="space-y-2 bg-slate-50 rounded-xl p-3 border border-slate-200">
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-not-mastered" checked class="w-4 h-4 accent-violet-600">
-                                        <span class="text-sm font-medium text-slate-700">📖 마스터 안 된 단어 (복습)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-mastered" class="w-4 h-4 accent-violet-600">
-                                        <span class="text-sm font-medium text-slate-700">✅ 마스터한 단어</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-weak" class="w-4 h-4 accent-amber-500">
-                                        <span class="text-sm font-medium text-slate-700">⭐ 약점 단어 (자주 틀림)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-promotion" class="w-4 h-4 accent-emerald-600">
-                                        <span class="text-sm font-medium text-slate-700">🏆 승급 대기 단어 (마스터 직전)</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <button id="quiz-start-btn" onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100">시작하기</button>
-                    </div>
-
-                    <!-- 문제 화면 -->
-                    <div id="quiz-question-screen" class="hidden bg-white rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-sm border border-slate-200 space-y-5">
-                        <div class="flex justify-between items-center text-xs text-slate-400">
-                            <span id="quiz-question-counter">1 / 10</span>
-                            <span id="arena-score" class="font-bold text-violet-600">정답 0개</span>
-                        </div>
-                        
-                        <div class="text-center py-4 space-y-3">
-                            <div id="quiz-coach-character" class="text-5xl select-none transition-transform duration-150">🧑‍🏫</div>
-                            <div class="inline-block bg-violet-50 px-4 py-2.5 rounded-2xl border border-violet-100 max-w-full">
-                                <span class="text-xs text-violet-500 font-bold block" id="quiz-question-label">QUESTION</span>
-                                <h3 id="quiz-question-text" class="text-lg md:text-xl font-bold text-slate-900 mt-1">다음 스페인어의 올바른 한국어 뜻은?</h3>
-                            </div>
-                        </div>
-
-                        <!-- 객관식 선택지 -->
-                        <div id="quiz-choices-box" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-
-                        <!-- 주관식 입력 (스페인어 작문) -->
-                        <div id="quiz-subjective-box" class="hidden space-y-3">
-                            <div id="quiz-synonym-hint" class="hidden bg-violet-50 border border-violet-200 rounded-xl p-3 text-sm text-violet-900 font-semibold leading-relaxed text-center"></div>
-                            <input type="text" id="quiz-subjective-input" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSubjectiveAnswer();}" placeholder="스페인어로 입력해 보세요..." autocomplete="off" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button id="quiz-subjective-submit-btn" onclick="submitSubjectiveAnswer()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">제출하기</button>
-                        </div>
-
-                        <!-- 정답 확인 + 복습 패널 -->
-                        <div id="quiz-review-panel" class="hidden bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                            <div id="quiz-review-verdict" class="text-sm font-bold"></div>
-                            <div class="bg-white rounded-xl p-3 border border-slate-100 flex items-center gap-3 flex-wrap">
-                                <span class="font-black text-slate-900 text-base" id="quiz-review-word"></span>
-                                <span class="text-slate-600 text-sm font-bold" id="quiz-review-meaning"></span>
-                            </div>
-                            <div id="quiz-review-hint-box" class="hidden bg-violet-50 border border-violet-200 rounded-xl p-3.5 text-sm text-violet-900 font-semibold leading-relaxed"></div>
-                            <div id="quiz-review-register-box" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2">
-                                <span class="text-xs font-bold text-blue-800">입력한 단어를 단어장에 등록할까요?</span>
-                                <button id="quiz-review-register-btn" onclick="registerUnknownFromQuiz()" class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">등록</button>
-                            </div>
-                            <div id="quiz-review-notes-box" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 leading-relaxed"></div>
-                            <div id="quiz-review-conj-box" class="hidden"></div>
-                            <button id="quiz-next-btn" onclick="nextQuizQuestion()" disabled class="w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed">다음 문제</button>
-                        </div>
-                    </div>
-
-                    <!-- 결과 화면 -->
-                    <div id="quiz-results-screen" class="hidden bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
-                        <div class="text-6xl">🎉</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-slate-900">퀴즈 완료!</h3>
-                            <p id="quiz-results-score" class="text-3xl font-black text-violet-600 mt-2">8 / 10</p>
-                            <p id="quiz-results-percent" class="text-sm text-slate-400 mt-1">정답률 80%</p>
-                        </div>
-                        <div id="quiz-results-changes-box" class="hidden text-left space-y-2"></div>
-
-                        <div id="quiz-results-wrong-list" class="text-left bg-slate-50 rounded-2xl p-4 space-y-2 max-h-64 overflow-y-auto"></div>
-
-                        <!-- 맞힌 단어 마스터 등록 -->
-                        <div id="quiz-results-mastery-box" class="hidden text-left bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-emerald-700">✅ 맞힌 단어를 마스터로 등록할까요?</span>
-                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 cursor-pointer">
-                                    <input type="checkbox" id="quiz-mastery-all" onchange="toggleAllMasteryChecks(this.checked)" class="w-4 h-4 accent-emerald-600"> 전체 선택
-                                </label>
-                            </div>
-                            <div id="quiz-mastery-list" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
-                            <button onclick="applyQuizMastery()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">선택한 단어 마스터 등록</button>
-                        </div>
-                        <div class="flex gap-2 justify-center">
-                            <button onclick="restartQuizSetup()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다시 설정</button>
-                            <button onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md">같은 개수로 또 풀기</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB: 미니 게임 -->
-                <div id="tab-games" class="hidden space-y-6">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-pink-100">
-                            <i class="fa-solid fa-gamepad"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-base font-bold text-slate-900">미니 게임</h2>
-                            <p class="text-xs text-slate-400">재미있게 단어를 복습해 보세요!</p>
-                        </div>
-                    </div>
-
-                    <!-- 게임 선택 화면 -->
-                    <div id="games-menu" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onclick="startRapidFire()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-rose-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">⚡</div>
-                            <h3 class="text-sm font-black text-slate-900">속사포 퀴즈</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">제한 시간 안에 최대한 많이 맞혀요! 콤보를 쌓아 고득점에 도전하세요.</p>
-                            <div id="hs-rapidfire" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
-                        </button>
-                        <button onclick="startFlashMemory()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-indigo-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">👁️</div>
-                            <h3 class="text-sm font-black text-slate-900">깜빡이 기억</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">단어가 잠깐 나타났다 사라져요. 기억해서 스페인어로 입력하세요!</p>
-                            <div id="hs-flash" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
-                        </button>
-                        <button onclick="startFallingWords()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">🌧️</div>
-                            <h3 class="text-sm font-black text-slate-900">떨어지는 단어</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">한글 뜻이 떨어져요. 바닥에 닿기 전에 스페인어를 입력하세요!</p>
-                            <div id="hs-falling" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
-                        </button>
-                        <button onclick="startListeningQuiz()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-sky-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">🎧</div>
-                            <h3 class="text-sm font-black text-slate-900">듣기 받아쓰기</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">예문을 듣고 똑같이 따라 써보세요! 듣기 연습용이라 점수엔 안 들어가요.</p>
-                        </button>
-                    </div>
-
-                    <!-- 게임 진행 화면 (공통 컨테이너) -->
-                    <div id="game-play-area" class="hidden"></div>
-                </div>
-
-                <!-- TAB 4: AI 1:1 TRANSLATION RING -->
-                <div id="tab-ai-feedback" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-md shadow-violet-100">🤖</div>
-                                <div>
-                                    <h2 class="text-base font-bold text-slate-900">AI 실시간 1:1 양방향 첨삭</h2>
-                                    <p class="text-xs text-slate-500 mt-0.5">Gemini AI가 실시간으로 어순을 분석하고 피드백을 제공합니다!</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-2 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                            <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
-                                🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
-                            </button>
-                            <button id="ai-mode-btn-es-ko" onclick="switchAiMode('es-ko')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                🇪🇸 스 ➡️ 🇰🇷 한 (자유 작문 첨삭)
-                            </button>
-                            <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                💬 질문에 답하기
-                            </button>
-                            <button id="ai-mode-btn-example" onclick="switchAiMode('example')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                📖 내 예문으로 연습
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE A: KOREAN TO SPANISH PLAYGROUND -->
-                    <div id="ai-pane-ko-es" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                <span>한국어 ➡️ 스페인어 번역 연습</span>
-                            </h3>
-                            <div class="flex gap-2">
-                                <button onclick="toggleAiHint()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-xs font-bold border border-amber-200 transition-all flex items-center gap-1">
-                                    <i class="fa-solid fa-lightbulb"></i>
-                                    <span>💡 힌트 보기</span>
-                                </button>
-                                <button id="ai-generate-mission-btn" onclick="generateAiMission()" class="bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                    <span>✨ 랜덤 문장 생성</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 힌트 노출 영역 -->
-                        <div id="ai-mission-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">오늘의 랜덤 미션 ✨</span>
-                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-bell"></i> 실전 구어체 챌린지!</span>
-                            </div>
-                            <h3 id="ai-mission-korean" class="text-lg font-bold text-slate-900 pt-1">여기에 한국어 번역 미션이 무작위로 출제됩니다.</h3>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
-                            <textarea id="ai-user-input" rows="3" placeholder="스페인어로 직접 머릿속으로 작문한 후 정답을 적어보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button id="ai-ko-es-submit-btn" onclick="submitAiTranslationKoEs()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE B: SPANISH TO KOREAN PLAYGROUND -->
-                    <div id="ai-pane-es-ko" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div>
-                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                                <span>스페인어 ➡️ 한국어 자유 작문 첨삭</span>
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-1">냐냐님이 스페인어로 아무 문장이나 자유롭게 작성해 보세요! 실시간으로 어순과 성수 일치를 정교하게 쪼개서 채점해 드립니다.</p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">스페인어 문장 자유 입력</label>
-                            <textarea id="ai-free-input-es" rows="3" placeholder="예: No tengo los libros ahora. 혹은 기입하고 싶은 임의의 스페인어 문장..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button onclick="resetEsKoPane()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <i class="fa-solid fa-rotate-right"></i>
-                                <span>새 문장 쓰기</span>
-                            </button>
-                            <button id="ai-es-ko-submit-btn" onclick="submitAiTranslationEsKo()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-spell-check"></i>
-                                <span>첨삭 받기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE C: QUESTION & ANSWER PRACTICE -->
-                    <div id="ai-pane-question" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                    <span>질문에 스페인어로 답하기</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">등록한 질문 중 하나가 랜덤으로 나와요. 스페인어로 답해보세요!</p>
-                            </div>
-                            <button onclick="openQuestionManageModal()" class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5">
-                                <i class="fa-solid fa-gear"></i>
-                                <span>질문 관리</span>
-                            </button>
-                        </div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex gap-1.5">
-                                    <button id="question-topic-reveal-btn" onclick="toggleTopicReveal()" class="text-xs bg-white text-violet-600 px-2.5 py-0.5 rounded-full font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-eye text-[10px]"></i>
-                                        <span id="question-topic-badge">주제 보기</span>
-                                    </button>
-                                    <button id="question-translate-btn" onclick="toggleQuestionTranslation()" class="text-xs bg-white text-teal-600 px-2.5 py-0.5 rounded-full font-bold border border-teal-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-language text-[10px]"></i>
-                                        <span>해석 보기</span>
-                                    </button>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="openTopicPickerModal()" class="bg-white hover:bg-violet-100 text-violet-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-list-check"></i>
-                                        <span>주제 설정</span>
-                                    </button>
-                                    <button onclick="pickRandomQuestion()" class="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-dice"></i>
-                                        <span>랜덤 질문 뽑기</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! '질문 관리'에서 질문을 등록하고 '랜덤 질문 뽑기'를 눌러보세요.</h3>
-                            <p id="question-translation-text" class="hidden text-sm text-teal-700 bg-teal-50 rounded-xl px-3 py-2 font-semibold"></p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변</label>
-                            <textarea id="question-answer-input" rows="3" onkeydown="handleQuestionAnswerKeydown(event)" placeholder="스페인어로 답을 작성해보세요... (Enter로 제출, Shift+Enter 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end flex-wrap">
-                            <button id="question-followup-btn" onclick="generateFollowupQuestion()" class="hidden bg-teal-50 hover:bg-teal-100 text-teal-600 px-4 py-3 rounded-xl text-sm font-bold border border-teal-200 flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <i class="fa-solid fa-comments"></i>
-                                <span>연관 질문 생성하기</span>
-                            </button>
-                            <button id="question-submit-btn" onclick="submitQuestionAnswer()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE D: MY EXAMPLE PRACTICE -->
-                    <div id="ai-pane-example" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                    <span>내 예문으로 작문 연습</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">등록한 단어의 예문을 활용해요. 그대로 번역하거나, 비슷한 새 문장이 나와요!</p>
-                            </div>
-                            <button id="ai-generate-example-btn" onclick="generateExampleMission()" class="shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>✨ 문장 뽑기</span>
-                            </button>
-                        </div>
-
-                        <div id="ai-example-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span id="ai-example-mode-badge" class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">내 예문 연습 📖</span>
-                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-book-bookmark"></i> 등록 단어 기반</span>
-                            </div>
-                            <h3 id="ai-example-korean" class="text-lg font-bold text-slate-900 pt-1">'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.</h3>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
-                            <textarea id="ai-example-input" rows="3" placeholder="스페인어로 직접 작문한 후 적어보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button id="ai-example-submit-btn" onclick="submitExampleMission()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- AI Feedback Result Panel -->
-                    <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
-                        <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
-                            <div id="ai-coach-icon" class="text-3xl">🤖</div>
-                            <div>
-                                <h4 class="font-bold text-slate-900">AI 첨삭 결과</h4>
-                                <p id="ai-coach-verdict" class="text-xs font-semibold text-slate-500">분석 완료!</p>
-                            </div>
-                        </div>
-
-                        <!-- Correction Zone -->
-                        <div id="ai-coach-correction-box" class="hidden bg-red-50 border border-red-100 p-4 rounded-2xl space-y-3">
-                            <div class="flex items-center gap-1.5 text-red-800 text-xs font-bold">
-                                <i class="fa-solid fa-shield-halved"></i>
-                                <span>수정이 필요한 부분</span>
-                            </div>
-                            <div class="text-sm font-semibold space-y-2">
-                                <div class="bg-white/70 rounded-xl p-3">
-                                    <span class="block text-[11px] text-slate-400 mb-1">냐냐님이 쓴 문장</span>
-                                    <span id="ai-original-render" class="block break-words leading-relaxed text-slate-500"></span>
-                                </div>
-                                <div class="flex justify-center text-slate-300">
-                                    <i class="fa-solid fa-arrow-down text-xs"></i>
-                                </div>
-                                <div class="bg-white rounded-xl p-3 border border-red-100">
-                                    <span class="block text-[11px] text-red-400 mb-1">고친 문장</span>
-                                    <span id="ai-corrected-render" class="block break-words leading-relaxed text-slate-800"></span>
-                                </div>
-                            </div>
-                            <div id="ai-changes-box" class="hidden border-t border-red-100 pt-2.5">
-                                <span class="block text-[11px] text-slate-500 mb-1.5 font-bold">💡 바뀐 부분</span>
-                                <ul id="ai-changes-list" class="space-y-1 text-xs text-slate-600 leading-relaxed"></ul>
-                            </div>
-                            <div id="ai-user-translation" class="hidden border-t border-red-100 pt-2.5 text-sm text-slate-600 font-semibold"></div>
-                        </div>
-
-                        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">AI 코멘트</span>
-                            <p id="ai-coach-message" class="text-base font-medium leading-relaxed text-slate-800"></p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">단어 하나하나 쪼개서 핵심 분석 🔍</span>
-                            <div id="ai-word-breakdown" class="flex flex-col bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden"></div>
-                        </div>
-
-                        <div class="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
-                            <div class="flex items-center gap-2 text-amber-800 text-xs font-bold mb-1">
-                                <i class="fa-solid fa-lightbulb"></i>
-                                <span>냐냐를 위한 오늘의 학습 팁</span>
-                            </div>
-                            <p id="ai-coach-tip" class="text-sm text-amber-900/80 leading-relaxed font-medium"></p>
-                        </div>
-
-                        <!-- AI 첨삭 Q&A -->
-                        <div class="border-t border-slate-200 pt-5 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-comments text-indigo-500"></i>
-                                    <span>AI에게 추가 질문하기 (무제한)</span>
-                                </span>
-                                <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">1:1 Q&A</span>
-                            </div>
-                            
-                            <div id="ai-chat-thread" class="space-y-3 max-h-96 overflow-y-auto p-3 bg-white rounded-2xl border border-slate-150 text-xs">
-                                <div class="text-center text-slate-400 py-2">첨삭 받은 후, 아래 입력창을 통해 분석 결과에 대해 궁금한 점을 끝까지 질문해 보세요!</div>
-                            </div>
-
-                            <div class="flex gap-2">
-                                <input type="text" id="ai-followup-input" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" autocomplete="off" class="flex-1 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <button onclick="sendFollowupQuestion()" id="ai-chat-send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-paper-plane"></i>
-                                    <span>전송</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 5: STUDY RECORDS -->
-                <div id="tab-records" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">📊</div>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900">학습기록</h2>
-                                <p class="text-xs text-slate-400 mt-0.5">등록 단어, 마스터 단어, 퀴즈, AI 첨삭 기록을 한눈에 봐요</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-                            <button id="range-btn-7d" onclick="setRecordRange('7d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">1주일</button>
-                            <button id="range-btn-30d" onclick="setRecordRange('30d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">한달</button>
-                            <button id="range-btn-1y" onclick="setRecordRange('1y')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">1년</button>
-                            <button id="range-btn-custom" onclick="setRecordRange('custom')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">기간설정</button>
-                        </div>
-                    </div>
-
-                    <!-- 연속 학습일 -->
-                    <div id="streak-card" class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-3xl p-5 flex items-center justify-between gap-4">
-                        <div class="flex items-center gap-4 min-w-0">
-                            <div class="text-4xl shrink-0" id="streak-fire">🔥</div>
-                            <div class="min-w-0">
-                                <p class="text-2xl font-black text-orange-700 leading-tight" id="streak-main">0일 연속</p>
-                                <p class="text-xs font-bold text-orange-500 mt-0.5" id="streak-best">최고 기록: 0일</p>
-                            </div>
-                        </div>
-                        <p class="text-[11px] text-orange-400 text-right shrink-0 max-w-[130px] leading-relaxed">하루에 5개 이상 학습하면 연속일이 쌓여요!</p>
-                    </div>
-
-                    <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
-                        <label class="text-xs font-bold text-slate-500">시작일</label>
-                        <input type="date" id="record-custom-start" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-                        <label class="text-xs font-bold text-slate-500">종료일</label>
-                        <input type="date" id="record-custom-end" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-                        <button onclick="applyCustomRecordRange()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95">적용</button>
-                    </div>
-
-                    <!-- 요약 스탯 -->
-                    <div>
-                        <button onclick="toggleChartCard('summary-stats-body', this)" class="w-full flex items-center justify-between gap-2 mb-2">
-                            <span class="text-xs font-bold text-slate-500">숫자 요약</span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="summary-stats-body" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
-                            <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 등록</span>
-                            <span id="record-stat-new-words" class="text-xl font-black text-violet-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">풀이 퀴즈</span>
-                            <span id="record-stat-quiz" class="text-xl font-black text-amber-600">0/0</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 마스터 단어</span>
-                            <span id="record-stat-mastered" class="text-xl font-black text-emerald-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 마스터</span>
-                            <span id="record-stat-new-mastered" class="text-xl font-black text-emerald-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">AI 첨삭</span>
-                            <span id="record-stat-ai" class="text-xl font-black text-indigo-600">0회</span>
-                        </div>
-                        </div>
-                    </div>
-
-                    <!-- 내 학습 수준 (AI 맞춤용 데이터) -->
-                    <div class="bg-gradient-to-br from-violet-50 to-violet-50 p-5 rounded-3xl border border-violet-100 shadow-sm">
-                        <button onclick="toggleChartCard('learner-profile-display', this)" class="w-full flex items-center justify-between gap-2 mb-3">
-                            <span class="flex items-center gap-2 text-left">
-                                <span class="text-sm">🎯</span>
-                                <span class="text-xs font-bold text-slate-700">내 학습 수준 <span class="font-normal text-slate-400">(AI가 문제·첨삭 난이도를 맞출 때 참고하는 데이터예요)</span></span>
-                            </span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
-                    </div>
-
-                    <!-- 단어장 성장 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-growth', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">단어장 성장</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>등록 단어(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>마스터 비율(%)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-growth"><div id="record-line-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- 일별 신규 등록/마스터 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-daily', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">일별 신규 등록 / 마스터</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-violet-500"></span>신규 등록(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-emerald-500 inline-block" style="border-top: 2px dashed #10b981; background:none;"></span>신규 마스터(개)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-daily"><div id="record-growth-daily-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- 퀴즈 풀이 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-quiz', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">퀴즈 풀이</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>전체 풀이 갯수</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-rose-400"></span>오답률(%)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-quiz"><div id="record-quiz-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- AI 첨삭 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-ai', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">AI 첨삭</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-indigo-500"></span>첨삭 횟수</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-ai"><div id="record-ai-chart" class="w-full relative"></div></div>
-                    </div>
-                </div>
-
-                <!-- TAB: 문법 표 -->
-                <div id="tab-grammar" class="hidden space-y-4">
-                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <div class="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                                <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                                    <i class="fa-solid fa-table-list text-violet-600"></i> 문법 표
-                                </h2>
-                                <p class="text-xs text-slate-400 mt-1">자주 쓰는 스페인어 문법 표를 모아뒀어요. 직접 표를 만들거나 수정할 수도 있어요!</p>
-                            </div>
-                            <button onclick="openGrammarEditor()" class="shrink-0 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-violet-100">
-                                <i class="fa-solid fa-plus"></i> 새 표 만들기
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-2 mt-4 flex-wrap">
-                            <div class="relative flex-1 min-w-[180px]">
-                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="grammar-search" oninput="renderGrammarTables()" placeholder="표 제목·내용 검색..." class="w-full bg-slate-50 pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                <button type="button" id="grammar-search-clear" onclick="clearGrammarSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-circle-xmark"></i></button>
-                            </div>
-                            <button onclick="expandAllGrammar(true)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-down mr-1"></i>전체 펼치기</button>
-                            <button onclick="expandAllGrammar(false)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-up mr-1"></i>전체 접기</button>
-                        </div>
-                    </div>
-                    <div id="grammar-tables-container" class="space-y-3"></div>
-                    <div id="grammar-empty-msg" class="hidden text-center text-sm text-slate-400 py-10">검색 결과가 없어요.</div>
-                </div>
-
-            </section>
-        </main>
-    </div>
-
-    <!-- PRESET 1: ADD & EDIT WORD MODAL (Improved with Real-time Predict and Dropdown) -->
-    <div id="word-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 id="modal-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <span>📝 단어 정보 입력</span>
-                </h3>
-                <button onclick="closeWordModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-5 flex-1 relative">
-                <!-- AI 추천 로딩 오버레이 (스켈레톤 + 예상 대기시간 안내) -->
-                <div id="ai-loading-overlay" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3 rounded-2xl">
-                    <div class="flex gap-1.5">
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
-                    </div>
-                    <p class="text-sm font-bold text-slate-700">Gemini AI가 분석하고 있어요...</p>
-                    <p id="ai-loading-timer-text" class="text-xs text-slate-400">보통 3~5초 정도 걸려요 (0.0초)</p>
-                    <div class="w-48 space-y-1.5 mt-1">
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse"></div>
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse w-3/4"></div>
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse w-5/6"></div>
-                    </div>
-                </div>
-
-                <input type="hidden" id="modal-word-id">
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5 relative">
-                        <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-violet-400">*</span></label>
-                        <div class="flex gap-2">
-                            <div class="relative flex-1">
-                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('word-suggestions').classList.add('hidden'); triggerAiAutofill();}" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
-                                <!-- Real-time Suggestions Dropdown -->
-                                <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
-                            </div>
-                            <!-- Live AI Auto Recommendation Button -->
-                            <button id="ai-autofill-btn" onclick="triggerAiAutofill()" type="button" class="bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-600 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 shrink-0">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>AI 추천</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-violet-400">*</span></label>
-                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">품사 구분 (POS)</label>
-                        <select id="input-pos" onchange="togglePosFields()" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                            <option value="noun">Noun (N.)</option>
-                            <option value="verb">Verb (V.)</option>
-                            <option value="adjective">Adjective (Adj.)</option>
-                            <option value="adverb">Adverb (Adv.)</option>
-                            <option value="preposition">Preposition (Prep.)</option>
-                            <option value="conjunction">Conjunction (Conj.)</option>
-                            <option value="pronoun">Pronoun (Pron.)</option>
-                            <option value="phrase">Phrase (Phr.)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1.5">
-                        <!-- Dynamic Noun Section -->
-                        <div id="field-noun-details" class="space-y-1.5">
-                            <label class="block text-xs font-bold text-slate-500">명사 성별</label>
-                            <select id="input-gender" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="none">없음 (성별 없음)</option>
-                                <option value="masculine">M. 남성 명사 (el)</option>
-                                <option value="feminine">F. 여성 명사 (la)</option>
-                            </select>
-                        </div>
-                        <!-- Dynamic Adjective Section -->
-                        <div id="field-adj-details" class="hidden space-y-1.5">
-                            <label class="block text-xs font-bold text-slate-500">형용사 성·수 변화</label>
-                            <select id="input-adj-agreement" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="full">성수 변화</option>
-                                <option value="no-gender">성 변화 X</option>
-                                <option value="no-number">수 변화 X</option>
-                                <option value="invariable">변화 X</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dynamic Verb Conjugation Grid -->
-                <div id="field-verb-conjugations" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                            <i class="fa-solid fa-sliders"></i>
-                            <span>동사 변형</span>
+            `).join('');
+        }
+
+        // ── 질문 수정 ──
+        function openQuestionEditModal(id) {
+            const q = customQuestions.find(item => item.id === id);
+            if (!q) return;
+            document.getElementById('edit-question-id').value = q.id;
+            document.getElementById('edit-question-topic-input').value = q.topic || '기타';
+            document.getElementById('edit-question-input').value = q.question;
+            document.getElementById('question-edit-modal').classList.remove('hidden');
+        }
+        function closeQuestionEditModal() {
+            document.getElementById('question-edit-modal').classList.add('hidden');
+        }
+        function saveEditedQuestion() {
+            const id = document.getElementById('edit-question-id').value;
+            const newText = document.getElementById('edit-question-input').value.trim();
+            const newTopic = document.getElementById('edit-question-topic-input').value.trim() || '기타';
+            if (!newText) {
+                showToast("질문 내용을 입력해 주세요!", "error");
+                return;
+            }
+            const q = customQuestions.find(item => item.id === id);
+            if (q) {
+                q.question = newText;
+                q.topic = newTopic;
+                saveToStorage();
+                renderCustomQuestionsList();
+                refreshTopicsDatalist();
+                closeQuestionEditModal();
+                showToast("질문을 수정했어요! ✏️", "success");
+            }
+        }
+
+        // ── 랜덤 질문 주제 설정 모달 (체크박스 다중선택, 설정 저장) ──
+        function openTopicPickerModal() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
+                return;
+            }
+            const listBox = document.getElementById('topic-picker-list');
+            const topics = [...new Set(customQuestions.map(q => q.topic || '기타'))];
+
+            // 저장된 선택이 비어있으면(=전체) 모두 체크된 상태로 보여줌
+            const allSelected = selectedQuestionTopics.length === 0;
+
+            listBox.innerHTML = `
+                <label class="flex items-center gap-2 bg-violet-50 px-4 py-3 rounded-xl cursor-pointer border border-violet-100">
+                    <input type="checkbox" id="topic-check-all" onchange="toggleAllTopicChecks(this.checked)" ${allSelected ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                    <span class="text-sm font-bold text-violet-700">전체 주제</span>
+                </label>
+                <div class="h-px bg-slate-100 my-1"></div>
+            ` + topics.map(t => {
+                const count = customQuestions.filter(q => (q.topic || '기타') === t).length;
+                const checked = allSelected || selectedQuestionTopics.includes(t);
+                return `
+                    <label class="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 rounded-xl cursor-pointer border border-slate-100 hover:bg-violet-50 transition-colors">
+                        <span class="flex items-center gap-2">
+                            <input type="checkbox" data-topic-check="${t.replace(/"/g, '&quot;')}" onchange="onTopicCheckChange()" ${checked ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                            <span class="text-sm font-semibold text-slate-700">${t}</span>
                         </span>
-                        <div class="flex items-center gap-1.5">
-                            <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="regular">규칙</option>
-                                <option value="irregular">불규칙</option>
-                            </select>
-                            <select id="input-verb-irregular-type" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium" disabled>
-                                <option value="none">- 형태 -</option>
-                                <option value="1인칭">1인칭</option>
-                                <option value="e ➡️ ie">e ➡️ ie</option>
-                                <option value="o ➡️ ue">o ➡️ ue</option>
-                                <option value="e ➡️ i">e ➡️ i</option>
-                                <option value="완전 불규칙">완전 불규칙</option>
-                                <option value="1인칭 및 e ➡️ ie">1인칭 및 e ➡️ ie</option>
-                                <option value="1인칭 및 o ➡️ ue">1인칭 및 o ➡️ ue</option>
-                                <option value="기타 변형">기타 변형</option>
-                            </select>
+                        <span class="text-xs text-slate-400">${count}개</span>
+                    </label>
+                `;
+            }).join('');
+
+            document.getElementById('topic-picker-modal').classList.remove('hidden');
+        }
+        function closeTopicPickerModal() {
+            document.getElementById('topic-picker-modal').classList.add('hidden');
+        }
+        function toggleAllTopicChecks(checked) {
+            document.querySelectorAll('[data-topic-check]').forEach(cb => { cb.checked = checked; });
+        }
+        function onTopicCheckChange() {
+            // 개별 체크가 모두 켜졌는지 보고 '전체' 체크 상태 동기화
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const allChecked = all.length > 0 && all.every(cb => cb.checked);
+            const allBox = document.getElementById('topic-check-all');
+            if (allBox) allBox.checked = allChecked;
+        }
+        function saveTopicSelection() {
+            const all = [...document.querySelectorAll('[data-topic-check]')];
+            const checkedTopics = all.filter(cb => cb.checked).map(cb => cb.getAttribute('data-topic-check'));
+            if (checkedTopics.length === 0) {
+                showToast("최소 한 개 주제는 선택해 주세요!", "error");
+                return;
+            }
+            // 전부 선택이면 빈 배열로 저장(= 전체)해서 새 주제가 생겨도 자동 포함되게 함
+            selectedQuestionTopics = (checkedTopics.length === all.length) ? [] : checkedTopics;
+            saveToStorage();
+            closeTopicPickerModal();
+            const label = selectedQuestionTopics.length === 0 ? '전체 주제' : selectedQuestionTopics.join(', ');
+            showToast(`랜덤 뽑기 주제를 '${label}'(으)로 설정했어요! 🎯`, "success");
+        }
+
+        function pickRandomQuestion() {
+            if (customQuestions.length === 0) {
+                showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
+                return;
+            }
+            // 저장된 주제 설정에 따라 후보군 결정 (빈 배열이면 전체)
+            const pool = selectedQuestionTopics.length === 0
+                ? customQuestions
+                : customQuestions.filter(q => selectedQuestionTopics.includes(q.topic || '기타'));
+
+            if (pool.length === 0) {
+                showToast("설정한 주제에 질문이 없어요. '주제 설정'에서 다시 골라주세요!", "error");
+                return;
+            }
+            const randIdx = Math.floor(Math.random() * pool.length);
+            currentQuestionForAnswer = pool[randIdx];
+            document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
+            const topicBadge = document.getElementById('question-topic-badge');
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (topicBadge) topicBadge.innerText = '주제 보기';
+            if (revealBtn) {
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
+                const icon = revealBtn.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
+            document.getElementById('question-answer-input').value = '';
+            document.getElementById('question-answer-input').disabled = false;
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+            document.getElementById('question-followup-btn')?.classList.add('hidden');
+            document.getElementById('question-translation-text')?.classList.add('hidden'); // 해석 숨김
+            AudioFX.playPunch();
+        }
+
+        // [냐냐 PATCH] 주제 보기/숨기기 토글
+        function toggleTopicReveal() {
+            const topicBadge = document.getElementById('question-topic-badge');
+            const revealBtn = document.getElementById('question-topic-reveal-btn');
+            if (!topicBadge || !revealBtn || !currentQuestionForAnswer) {
+                if (!currentQuestionForAnswer) showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+                return;
+            }
+            const icon = revealBtn.querySelector('i');
+            const isHidden = topicBadge.innerText === '주제 보기';
+            if (isHidden) {
+                topicBadge.innerText = currentQuestionForAnswer._isFollowup ? (currentQuestionForAnswer.koreanHint || '연관 질문') : (currentQuestionForAnswer.topic || '기타');
+                revealBtn.classList.remove('bg-white', 'text-violet-600');
+                revealBtn.classList.add('bg-violet-600', 'text-white');
+                if (icon) icon.className = 'fa-solid fa-eye-slash text-[10px]';
+            } else {
+                topicBadge.innerText = '주제 보기';
+                revealBtn.classList.remove('bg-violet-600', 'text-white');
+                revealBtn.classList.add('bg-white', 'text-violet-600');
+                if (icon) icon.className = 'fa-solid fa-eye text-[10px]';
+            }
+        }
+
+        // [냐냐 PATCH] 질문 해석 보기/숨기기 (AI로 한국어 번역, 결과 캐시) — item 6
+        async function toggleQuestionTranslation() {
+            const transEl = document.getElementById('question-translation-text');
+            const btn = document.getElementById('question-translate-btn');
+            if (!transEl || !currentQuestionForAnswer) {
+                if (!currentQuestionForAnswer) showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+                return;
+            }
+            // 이미 보이면 숨김
+            if (!transEl.classList.contains('hidden')) {
+                transEl.classList.add('hidden');
+                return;
+            }
+            // 이미 번역해둔 게 있으면 바로 표시
+            if (currentQuestionForAnswer._koreanTranslation) {
+                transEl.innerText = '💬 ' + currentQuestionForAnswer._koreanTranslation;
+                transEl.classList.remove('hidden');
+                return;
+            }
+            // AI로 번역
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 필요해요. 우측 상단 배지에서 등록해 주세요!", "error");
+                return;
+            }
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i> 번역 중';
+            try {
+                const prompt = `다음 스페인어 질문을 자연스러운 한국어로 번역해줘. 번역문만 출력(따옴표 없이): "${currentQuestionForAnswer.question}"`;
+                const responseText = await callGemini(prompt, "당신은 스페인어-한국어 번역가입니다. 번역문만 간결하게 출력하세요.", null, 'low');
+                const ko = (responseText || '').trim().replace(/^["']|["']$/g, '');
+                currentQuestionForAnswer._koreanTranslation = ko;
+                transEl.innerText = '💬 ' + ko;
+                transEl.classList.remove('hidden');
+            } catch (e) {
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        // [냐냐 PATCH] 연관 질문 생성용 - 직전에 답한 질문/답변 맥락
+        let lastAnsweredQuestion = null;
+
+        async function generateFollowupQuestion() {
+            if (!lastAnsweredQuestion) {
+                showToast("먼저 질문에 답변을 제출해 주세요!", "error");
+                return;
+            }
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어 연관 질문을 만들 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+            const btn = document.getElementById('question-followup-btn');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
+
+            const prompt = `Previous question: "${lastAnsweredQuestion.question}"
+            Student's answer (Spanish): "${lastAnsweredQuestion.answer}"
+            Corrected answer: "${lastAnsweredQuestion.corrected}"
+
+            Generate ONE natural follow-up question in Spanish that continues this conversation, as a real conversation partner would. It should build on the student's answer to keep the dialogue flowing (e.g., ask for more detail, a related opinion, or a next step). Keep it at a similar or slightly higher difficulty. Return JSON only.`;
+            const system = `You are a friendly Spanish conversation partner for a learner named "냐냐". Create engaging follow-up questions that make conversation flow naturally.
+            Return JSON matching this schema:
+            {
+               "followupQuestion": "The follow-up question in Spanish",
+               "koreanHint": "Korean translation/meaning of the question, 1 sentence"
+            }
+            Do not wrap JSON in markdown.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    followupQuestion: { type: "STRING" },
+                    koreanHint: { type: "STRING" }
+                },
+                required: ["followupQuestion", "koreanHint"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const data = extractAndParseJson(responseText);
+                // 생성된 연관 질문을 현재 질문으로 세팅 (등록 질문 목록엔 저장 안 함 — 일회성 대화 흐름)
+                currentQuestionForAnswer = { question: data.followupQuestion, _isFollowup: true, koreanHint: data.koreanHint || '' };
+                document.getElementById('question-display-text').innerText = data.followupQuestion;
+                // 주제 배지를 한국어 힌트로 활용
+                const topicBadge = document.getElementById('question-topic-badge');
+                if (topicBadge) topicBadge.innerText = '주제 보기';
+                // 답변창 초기화
+                const answerInput = document.getElementById('question-answer-input');
+                answerInput.value = '';
+                answerInput.disabled = false;
+                // 이전 채점 결과 숨기기
+                document.getElementById('ai-feedback-result')?.classList.add('hidden');
+                document.getElementById('question-followup-btn')?.classList.add('hidden');
+                showToast("이어지는 질문이 생성됐어요! 대화를 계속해 보세요 💬", "success");
+                document.getElementById('question-display-text').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => answerInput.focus(), 300); // 바로 답변 입력 가능하게
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        // [냐냐 PATCH] 답변창 엔터 처리: 제출 전이면 제출, 제출 후(연관질문 버튼 보이면)면 연관질문 생성
+        function handleQuestionAnswerKeydown(e) {
+            if (e.key !== 'Enter' || e.shiftKey) return; // Shift+Enter는 줄바꿈
+            e.preventDefault();
+            const submitBtn = document.getElementById('question-submit-btn');
+            const followupBtn = document.getElementById('question-followup-btn');
+            // 연관 질문 버튼이 보이면(=이미 답변 제출됨) → 엔터로 연관 질문 생성
+            if (followupBtn && !followupBtn.classList.contains('hidden')) {
+                generateFollowupQuestion();
+            } else if (submitBtn && !submitBtn.disabled) {
+                submitQuestionAnswer();
+            }
+        }
+
+        async function submitQuestionAnswer() {
+            if (!currentQuestionForAnswer) {
+                showToast("먼저 '랜덤 질문 뽑기'를 눌러서 질문을 받아주세요!", "error");
+                return;
+            }
+            const userAnswer = document.getElementById('question-answer-input').value.trim();
+            if (!userAnswer) {
+                showToast("스페인어로 답변을 입력해 주세요!", "error");
+                return;
+            }
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('question-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`;
+            showToast("Gemini AI가 답변을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
+            Student's Spanish Answer: "${userAnswer}"
+
+            Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar).
+            For "correctedText": output the corrected sentence; wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags. Already-correct words stay plain.
+            For "originalMarked": output the student's ORIGINAL answer verbatim; wrap ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags. Correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            const system = `You are an expert Spanish tutor evaluating a student named "냐냐" answering a practice question in Spanish.
+            Return feedback matching this JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 답변이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "userTranslation": "냐냐님이 실제로 쓴 스페인어 문장을 있는 그대로 한국어로 직역한 것 (의도와 다를 수 있으니 실제 쓴 대로). 1문장.",
+               "correctedText": "The corrected Spanish answer. Wrap ONLY changed words in red span tags; leave correct words plain.",
+               "originalMarked": "The student ORIGINAL answer verbatim, with ONLY wrong words wrapped in line-through span tags; correct words stay plain.",
+               "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "changes": [
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+               ],
+               "tip": "One short, useful grammar or conversational tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
+            }
+            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    userTranslation: { type: "STRING", description: "Korean translation of what the student ACTUALLY wrote (literal meaning, may differ from intent)" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING" },
+                                to: { type: "STRING" },
+                                why: { type: "STRING" }
+                            },
+                            required: ["from", "to", "why"]
+                        }
+                    },
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🎉";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝";
+                    coachVerdict.className = "text-sm font-bold text-rose-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userAnswer;
+                    correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
+                    // [냐냐 PATCH] 냐냐님이 쓴 스페인어의 실제 한국어 뜻 표시 (의도와 다를 수 있음) — item 5
+                    const utEl = document.getElementById('ai-user-translation');
+                    if (utEl) {
+                        if (feedback.userTranslation) {
+                            utEl.innerHTML = `<span class="text-[11px] text-slate-400">냐냐님이 쓴 문장의 실제 뜻</span><br>💬 ${feedback.userTranslation}`;
+                            utEl.classList.remove('hidden');
+                        } else {
+                            utEl.classList.add('hidden');
+                        }
+                    }
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+
+                breakdownGrid.innerHTML = '';
+                const seenWordsQ = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWordsQ.has(w)) return;
+                    seenWordsQ.add(w);
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 질문-답변 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>질문:</b> ${currentQuestionForAnswer.question}<br><b>냐냐님 답변:</b> ${userAnswer}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 답변:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                // [냐냐 PATCH] 연관 질문 생성 버튼 노출 + 직전 문답 맥락 저장
+                lastAnsweredQuestion = { question: currentQuestionForAnswer.question, answer: userAnswer, corrected: (feedback.correctedText || '').replace(/<[^>]*>/g, '') };
+                const followupBtn = document.getElementById('question-followup-btn');
+                if (followupBtn) followupBtn.classList.remove('hidden');
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("채점이 끝났어요! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        function toggleAiHint() {
+            const hintBox = document.getElementById('ai-mission-hint-box');
+            if (isAiHintVisible) {
+                hintBox.classList.add('hidden');
+                isAiHintVisible = false;
+            } else {
+                if (!aiCurrentWordForMission) {
+                    hintBox.innerText = "아직 미션 문장이 없어요. 먼저 '✨ 랜덤 문장 생성'을 눌러주세요!";
+                } else {
+                    let hintHtml = `💡 <b>학습 단어 힌트:</b> ${aiCurrentWordForMission.word} (${aiCurrentWordForMission.meaning}) <br>`;
+                    if (aiCurrentWordForMission.pos === 'verb') {
+                        hintHtml += `👉 <b>V. (동사) 힌트:</b> 현재 1인칭 변형은 <b>'${aiCurrentWordForMission.conjugations?.yo || '비정형'}'</b> 입니다. 어순에 신경써 보세요!`;
+                    } else if (aiCurrentWordForMission.pos === 'noun') {
+                        const genderKorean = aiCurrentWordForMission.gender === 'masculine' ? '남성명사(정관사 el)' : aiCurrentWordForMission.gender === 'feminine' ? '여성명사(정관사 la)' : '성별 지정 없음';
+                        hintHtml += `👉 <b>명사 성별 힌트:</b> 이 명사는 <b>${genderKorean}</b> 입니다. 관사 및 형용사 어미 일치에 주의하세요!`;
+                    } else {
+                        hintHtml += `👉 문맥 속에서 단어가 매끄럽게 연결되도록 문법 어순을 천천히 조립해 보세요!`;
+                    }
+                    hintBox.innerHTML = hintHtml;
+                }
+                hintBox.classList.remove('hidden');
+                isAiHintVisible = true;
+                AudioFX.playPunch();
+            }
+        }
+
+        // [PATCH] 한->스 모드는 이제 기본적으로 빈 상태로 시작 (자동 생성 없음)
+        function resetKoEsMissionState() {
+            const missionHeading = document.getElementById('ai-mission-korean');
+            const resultBox = document.getElementById('ai-feedback-result');
+            const hintBox = document.getElementById('ai-mission-hint-box');
+
+            resultBox.classList.add('hidden');
+            hintBox.classList.add('hidden');
+            isAiHintVisible = false;
+            document.getElementById('ai-user-input').value = '';
+            aiCurrentWordForMission = null;
+            aiCurrentKoreanSentence = "";
+
+            if (vocabulary.length === 0) {
+                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
+            } else {
+                missionHeading.innerText = "아직 생성된 문장이 없어요! 위의 '✨ 랜덤 문장 생성'을 눌러서 시작해보세요.";
+            }
+        }
+
+        // [PATCH] AI 호출이 실패했을 때만 쓰는 안전한 대체 문장 (기존 curated/rule 로직 재사용)
+        // [PATCH] 내 단어장 기반으로 AI가 실시간으로 자연스러운 한국어 미션 문장을 생성
+        // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
+        //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
+        async function generateAiMission() {
+            const missionHeading = document.getElementById('ai-mission-korean');
+            const resultBox = document.getElementById('ai-feedback-result');
+            const hintBox = document.getElementById('ai-mission-hint-box');
+            const genBtn = document.getElementById('ai-generate-mission-btn');
+
+            resultBox.classList.add('hidden');
+            hintBox.classList.add('hidden');
+            isAiHintVisible = false;
+            document.getElementById('ai-user-input').value = '';
+
+            if (vocabulary.length === 0) {
+                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 없어서 AI 문장 생성을 사용할 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                missionHeading.innerText = "API 키가 없어서 문장을 생성할 수 없어요.";
+                openApiKeyModal();
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+                return;
+            }
+
+            const randIdx = Math.floor(Math.random() * vocabulary.length);
+            const targetWord = vocabulary[randIdx];
+
+            const originalBtnHtml = genBtn.innerHTML;
+            genBtn.disabled = true;
+            genBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
+            missionHeading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
+
+            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
+            매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 단어를 한국어 문장 안에 그대로 노출하면 절대 안 됩니다. 의미는 한국어 뜻("${targetWord.meaning}")으로만 표현하세요.
+            ${buildLearnerProfileSummary()}`;
+            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개. 스페인어 단어나 알파벳 절대 포함 금지" }
+                },
+                required: ["sentence"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
+                const result = extractAndParseJson(responseText);
+                const candidateSentence = (result.sentence || '').trim();
+
+                // [PATCH-안전장치] 그래도 스페인어/알파벳이 섞여 나오면(정답 노출) 실패로 처리
+                if (/[a-zA-Z]/.test(candidateSentence)) {
+                    throw new Error("SENTENCE_CONTAINS_SPANISH");
+                }
+
+                aiCurrentWordForMission = targetWord;
+                aiCurrentKoreanSentence = candidateSentence;
+                missionHeading.innerText = aiCurrentKoreanSentence;
+                AudioFX.playPunch();
+            } catch (e) {
+                console.warn("AI 미션 생성 실패", e);
+                if (String(e.message || '').includes('SENTENCE_CONTAINS_SPANISH')) {
+                    showToast("생성된 문장에 스페인어가 섞여 있어서 다시 시도해 주세요!", "error");
+                } else {
+                    showToast(describeGeminiError(e), "error");
+                }
+                missionHeading.innerText = "문장 생성에 실패했어요. '✨ 랜덤 문장 생성'을 다시 눌러주세요.";
+                aiCurrentWordForMission = null;
+                aiCurrentKoreanSentence = "";
+            } finally {
+                genBtn.disabled = false;
+                genBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        async function submitAiTranslationKoEs() {
+            if (!aiCurrentWordForMission) {
+                showToast("먼저 '✨ 랜덤 문장 생성'을 눌러서 미션을 받아주세요!", "error");
+                return;
+            }
+            const userText = document.getElementById('ai-user-input').value.trim();
+            if (!userText) {
+                showToast("스페인어 답변을 입력해 주세요!", "error");
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('ai-ko-es-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            showToast("Gemini AI가 냐냐님의 답변을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
+            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
+            Student's Spanish Answer: "${userText}"
+            
+            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
+            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            
+            const system = `You are an encouraging and extremely precise professional Spanish tutor tutoring a passionate student named "냐냐".
+            Evaluate the student's translation. Accept ANY grammatically correct sentence that conveys the intended meaning as correct — there is never only one right translation. Return feedback matching this exact JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise evaluation in Korean, 1-2 sentences max. Mention the student '냐냐님' and the key grammar point (어순/conjugation). No long essays.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "changes": [
+                  { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "Short Korean reason WHY it changed, e.g. '스페인어는 형용사가 명사 뒤에 와요' or '관사가 더 자연스러워요'. 1 sentence." }
+               ],
+               "tip": "One short, useful grammatical tip in Korean, 1 sentence."
+            }
+            IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING", description: "Original wrong part (word or phrase)" },
+                                to: { type: "STRING", description: "Corrected part" },
+                                why: { type: "STRING", description: "Short Korean reason for the change" }
+                            },
+                            required: ["from", "to", "why"]
+                        }
+                    },
+                    tip: { type: "STRING" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                // 안전 파서 작동
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🏆🏅";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝📝";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+                
+                breakdownGrid.innerHTML = '';
+                const seenWords = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWords.has(w)) return; // 중복/빈 항목 제거
+                    seenWords.add(w);
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (aiCurrentWordForMission) {
+                    const pos = aiCurrentWordForMission.pos || 'etc';
+                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("AI 첨삭이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 내 예문으로 연습 모드
+        // ============================================================
+        let exampleMissionMode = 'translate'; // 'translate'(예문 그대로 번역) | 'similar'(비슷한 새 문장)
+
+        function resetExampleMissionState() {
+            aiCurrentWordForMission = null;
+            aiCurrentKoreanSentence = "";
+            const box = document.getElementById('ai-example-korean');
+            if (box) box.innerText = "'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.";
+            const input = document.getElementById('ai-example-input');
+            if (input) input.value = '';
+            const hint = document.getElementById('ai-example-hint-box');
+            if (hint) hint.classList.add('hidden');
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+        }
+
+        async function generateExampleMission() {
+            // 예문이 있는 단어만 대상으로
+            const withExample = vocabulary.filter(w => w.example && w.example.trim() && w.exampleMeaning && w.exampleMeaning.trim());
+            if (withExample.length === 0) {
+                showToast("예문이 등록된 단어가 없어요! 단어에 예문을 추가한 뒤 이용해 주세요.", "error");
+                return;
+            }
+
+            const target = withExample[Math.floor(Math.random() * withExample.length)];
+            aiCurrentWordForMission = target;
+
+            // 절반은 예문 그대로 번역, 절반은 비슷한 새 문장 만들기
+            exampleMissionMode = Math.random() < 0.5 ? 'translate' : 'similar';
+            const badge = document.getElementById('ai-example-mode-badge');
+            const koreanBox = document.getElementById('ai-example-korean');
+            document.getElementById('ai-example-input').value = '';
+            document.getElementById('ai-feedback-result').classList.add('hidden');
+
+            if (exampleMissionMode === 'translate') {
+                // 예문의 한국어 뜻을 미션으로 → 학생이 스페인어로 (원래 예문이 정답)
+                if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                aiCurrentKoreanSentence = target.exampleMeaning;
+                koreanBox.innerText = target.exampleMeaning;
+            } else {
+                // AI가 예문을 참고해 비슷한 새 한국어 문장을 만들어 미션으로
+                if (badge) badge.innerText = '비슷한 새 문장 🎲';
+                if (!hasGeminiApiKey()) {
+                    // 키 없으면 그냥 번역 모드로 대체
+                    exampleMissionMode = 'translate';
+                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                    aiCurrentKoreanSentence = target.exampleMeaning;
+                    koreanBox.innerText = target.exampleMeaning;
+                    return;
+                }
+                koreanBox.innerText = "AI가 비슷한 문장을 만들고 있어요...";
+                const btn = document.getElementById('ai-generate-example-btn');
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
+                try {
+                    const prompt = `단어 "${target.word}" (뜻: ${target.meaning})의 예문: "${target.example}" (${target.exampleMeaning}).
+                    이 예문과 같은 단어를 쓰되, 상황/주어/목적어를 조금 바꾼 자연스러운 새 스페인어 문장 1개와 그 한국어 번역을 만들어줘. 너무 어렵지 않게, 원래 예문과 난이도 비슷하게.`;
+                    const system = `You are a Spanish tutor. Create ONE new natural Spanish sentence using the same target word, similar in difficulty to the given example. Return JSON only.`;
+                    const schema = {
+                        type: "OBJECT",
+                        properties: {
+                            spanish: { type: "STRING", description: "새 스페인어 문장" },
+                            korean: { type: "STRING", description: "그 문장의 자연스러운 한국어 번역" }
+                        },
+                        required: ["spanish", "korean"]
+                    };
+                    const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
+                    const res = extractAndParseJson(responseText);
+                    aiCurrentKoreanSentence = res.korean || target.exampleMeaning;
+                    koreanBox.innerText = aiCurrentKoreanSentence;
+                } catch (e) {
+                    console.error(e);
+                    // 실패 시 예문 그대로 번역으로 대체
+                    exampleMissionMode = 'translate';
+                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
+                    aiCurrentKoreanSentence = target.exampleMeaning;
+                    koreanBox.innerText = target.exampleMeaning;
+                    showToast("새 문장 생성에 실패해서 예문 번역으로 대체했어요", "info");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+        }
+
+        // 예문 연습 힌트 (단어 정보)
+        function toggleExampleHint() {
+            const box = document.getElementById('ai-example-hint-box');
+            if (!box) return;
+            box.classList.toggle('hidden');
+        }
+
+        // 예문 연습 답변 제출 — 기존 한->스 채점 로직을 재사용 (aiCurrentWordForMission/aiCurrentKoreanSentence 세팅됨)
+        async function submitExampleMission() {
+            if (!aiCurrentWordForMission) {
+                showToast("먼저 '✨ 문장 뽑기'를 눌러서 미션을 받아주세요!", "error");
+                return;
+            }
+            const userText = document.getElementById('ai-example-input').value.trim();
+            if (!userText) {
+                showToast("스페인어 답변을 입력해 주세요!", "error");
+                return;
+            }
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('ai-example-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            AudioFX.playPunch();
+
+            const refExample = aiCurrentWordForMission.example || '';
+            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
+            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
+            Reference example sentence (for context): "${refExample}"
+            Student's Spanish Answer: "${userText}"
+
+            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+
+            const system = `You are an encouraging and precise Spanish tutor tutoring a student named "냐냐".
+            Return feedback matching this exact JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
+               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
+               "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
+               "tip": "One short useful tip in Korean."
+            }
+            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle" },
+                                mean: { type: "STRING", description: "Korean meaning, 1-4 words, never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    tip: { type: "STRING" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "🏆🏅";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝📝";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+
+                breakdownGrid.innerHTML = '';
+                const seenWords = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWords.has(w)) return;
+                    seenWords.add(w);
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // 학습 프로필 반영
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (aiCurrentWordForMission) {
+                    const pos = aiCurrentWordForMission.pos || 'etc';
+                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 추가 질문에 친근하게 한국어로 답해주세요." },
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>제출 답안:</b> ${userText}<br><b>총평:</b> ${feedback.message}<br><b>정석:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("AI 첨삭이 끝났습니다! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        async function submitAiTranslationEsKo() {
+            const userEsText = document.getElementById('ai-free-input-es').value.trim();
+            if (!userEsText) {
+                showToast("검사받을 스페인어 문장을 적어주세요!", "error");
+                return;
+            }
+
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
+
+            const submitBtn = document.getElementById('ai-es-ko-submit-btn');
+            const originalHtml = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
+            showToast("Gemini AI가 자유 문장의 문법을 분석하고 있습니다...", "info");
+            AudioFX.playPunch();
+
+            const prompt = `Student's Free Spanish Sentence: "${userEsText}"
+            
+            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${buildLearnerProfileSummary()}`;
+            
+            const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
+            Return feedback matching this JSON schema:
+            {
+               "isCorrect": true/false,
+               "verdict": "e.g., 어순이 완벽해요! 🟢 or 어순을 다시 살펴봐요! 🟠",
+               "correctedText": "The corrected standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
+               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
+               "message": "Concise grammatical analysis in Korean mentioning '냐냐님', 1-2 sentences max. No long essays.",
+               "breakdown": [
+                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+               ],
+               "changes": [
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+               ],
+               "tip": "One short, useful grammar tip in Korean, 1 sentence.",
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
+            }
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
+            Do not wrap JSON in markdown blockticks.`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    isCorrect: { type: "BOOLEAN" },
+                    verdict: { type: "STRING" },
+                    correctedText: { type: "STRING" },
+                    originalMarked: { type: "STRING" },
+                    message: { type: "STRING" },
+                    breakdown: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "Exactly one Spanish word or particle, never a phrase or sentence" },
+                                mean: { type: "STRING", description: "Korean meaning of that single word, 1-4 words, required and never empty" }
+                            },
+                            required: ["word", "mean"]
+                        }
+                    },
+                    changes: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                from: { type: "STRING" },
+                                to: { type: "STRING" },
+                                why: { type: "STRING" }
+                            },
+                            required: ["from", "to", "why"]
+                        }
+                    },
+                    tip: { type: "STRING" },
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" }
+                },
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low');
+                // 안전 파서 작동
+                const feedback = extractAndParseJson(responseText);
+
+                const resultBox = document.getElementById('ai-feedback-result');
+                const correctionBox = document.getElementById('ai-coach-correction-box');
+                const originalRender = document.getElementById('ai-original-render');
+                const correctedRender = document.getElementById('ai-corrected-render');
+                const coachVerdict = document.getElementById('ai-coach-verdict');
+                const coachMsg = document.getElementById('ai-coach-message');
+                const breakdownGrid = document.getElementById('ai-word-breakdown');
+                const coachTip = document.getElementById('ai-coach-tip');
+                const coachIcon = document.getElementById('ai-coach-icon');
+
+                resultBox.classList.remove('hidden');
+
+                if (feedback.isCorrect) {
+                    coachIcon.innerText = "⭐🟢";
+                    coachVerdict.className = "text-sm font-bold text-emerald-600";
+                    correctionBox.classList.add('hidden');
+                } else {
+                    coachIcon.innerText = "📝🟠";
+                    coachVerdict.className = "text-sm font-bold text-red-600";
+                    correctionBox.classList.remove('hidden');
+                    originalRender.innerHTML = feedback.originalMarked || userEsText;
+                    correctedRender.innerHTML = feedback.correctedText;
+                    renderAiChanges(feedback);
+                }
+
+                coachVerdict.innerText = feedback.verdict;
+                coachMsg.innerHTML = feedback.message;
+                
+                breakdownGrid.innerHTML = '';
+                const seenWordsEs = new Set();
+                feedback.breakdown.forEach(item => {
+                    const w = (item.word || '').trim();
+                    const m = (item.mean || item.meaning || '').trim();
+                    if (!w || seenWordsEs.has(w)) return; // 중복/빈 항목 제거
+                    seenWordsEs.add(w);
+                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
+                });
+
+                coachTip.innerText = feedback.tip;
+
+                // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
+                // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
+                learnerProfile.totalAnswered++;
+                if (feedback.isCorrect) {
+                    learnerProfile.totalCorrect++;
+                } else if (feedback.issueType && feedback.issueType !== '없음') {
+                    learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
+                }
+
+                aiChatHistory = [
+                    { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 자유 작문 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
+                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                ];
+                renderChatThread();
+
+                logAction('ai');
+                saveToStorage();
+                updateStats();
+                resultBox.scrollIntoView({ behavior: 'smooth' });
+                showToast("자유 문장 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
+            } catch (e) {
+                console.error(e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+        // [냐냐 PATCH] AI 답변의 마크다운(**굵게**, ### 제목, * 목록, 줄바꿈)을 HTML로 변환 + 가독성
+        function formatAiText(text) {
+            if (!text) return '';
+            let html = text;
+            // [냐냐 PATCH] 과한 줄바꿈 정리: 연속 빈 줄(3개+)을 2개로 축소
+            html = html.replace(/\n{3,}/g, '\n\n');
+            html = html
+                .replace(/^###\s*(.+)$/gm, '<div class="font-black text-slate-900 mt-2 mb-1">$1</div>') // ### 제목
+                .replace(/^##\s*(.+)$/gm, '<div class="font-black text-slate-900 mt-2 mb-1">$1</div>')
+                .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') // **굵게**
+                .replace(/`(.+?)`/g, '<code class="bg-slate-200 px-1 rounded text-[0.9em]">$1</code>') // `코드`
+                .replace(/^\s*[\*\-]\s+(.+)$/gm, '<div class="flex gap-1.5 my-0.5"><span class="text-indigo-400">•</span><span>$1</span></div>') // * 목록
+                .replace(/---+/g, '<hr class="my-2 border-slate-200">') // 구분선
+                .replace(/\n\n/g, '<br>') // 문단 구분은 br 1개
+                .replace(/\n/g, '<br>'); // 나머지 줄바꿈
+            return html;
+        }
+
+        // [냐냐 PATCH] 핵심 분석 한 줄 — 단어장에 없는 단어면 등록 버튼 추가 (item 4)
+        // [냐냐 PATCH] 단어가 이미 등록됐는지 스마트 확인 (동사 변형·형용사 성수변화 포함)
+        function wordExistsInVocab(rawWord) {
+            const target = normalizeSpanishAnswer(rawWord);
+            if (!target) return false;
+            for (const v of vocabulary) {
+                // 1) 원형/사전형 그대로 일치
+                if (normalizeSpanishAnswer(v.word) === target) return true;
+                // 2) 동사: 등록된 모든 시제/인칭 변형과 대조
+                if (v.pos === 'verb') {
+                    const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                    for (const tk in tenses) {
+                        const forms = tenses[tk];
+                        if (!forms) continue;
+                        for (const pk in forms) {
+                            if (forms[pk] && normalizeSpanishAnswer(forms[pk]) === target) return true;
+                        }
+                    }
+                }
+                // 3) 형용사: 남성형으로 등록됐어도 여성형/복수형이면 같은 단어로 취급
+                if (v.pos === 'adjective') {
+                    const base = normalizeSpanishAnswer(v.word);
+                    const stem = base.replace(/(o|a|os|as|e|es)$/, '');
+                    // 어간이 충분히 길고, 대상이 같은 어간으로 시작하며 형용사 어미로 끝나면 같은 단어
+                    if (stem.length >= 2 && target.startsWith(stem) && /^(o|a|os|as|e|es)?$/.test(target.slice(stem.length))) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function buildBreakdownRow(word, mean) {
+            const w = (word || '').trim();
+            const m = (mean || '').trim();
+            if (!w) return '';
+            // 단어장에 이미 있는지 확인 (동사 변형·형용사 성수변화까지 고려)
+            const exists = wordExistsInVocab(w);
+            const registerBtn = exists
+                ? '<span class="text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>'
+                : `<button onclick="registerWordFromBreakdown('${w.replace(/'/g, "\\'")}', '${m.replace(/'/g, "\\'")}')" class="text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all">+ 등록</button>`;
+            return `
+                <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span class="font-bold text-slate-800 shrink-0">${w}</span>
+                    <span class="text-slate-500 text-right flex-1 truncate">${m}</span>
+                    ${registerBtn}
+                </div>
+            `;
+        }
+
+        // 핵심 분석에서 단어 바로 등록
+        function registerWordFromBreakdown(word, mean) {
+            // [냐냐 PATCH] 탭을 옮기지 않고 현재 화면(AI 첨삭) 위에 등록 모달만 띄움
+            openWordModal();
+            setTimeout(() => {
+                const wordInput = document.getElementById('input-word');
+                const meanInput = document.getElementById('input-meaning');
+                if (wordInput) wordInput.value = word;
+                if (meanInput) meanInput.value = mean;
+                if (wordInput) handleWordInput(word);
+            }, 100);
+        }
+
+        function renderChatThread() {
+            const threadEl = document.getElementById('ai-chat-thread');
+            threadEl.innerHTML = '';
+            
+            if (aiChatHistory.length <= 2) {
+                threadEl.innerHTML = `
+                    <div class="text-center text-slate-400 py-4 font-semibold">
+                        🤖 AI에게 실시간으로 추가 질문을 해보세요!<br>
+                        "왜 이 전치사가 들어가죠?", "성별 일치는 어떻게 되나요?" 등을 아래에 편하게 타이핑해 물어보세요.
+                    </div>
+                `;
+                return;
+            }
+
+            for (let i = 2; i < aiChatHistory.length; i++) {
+                const msg = aiChatHistory[i];
+                if (msg.role === 'user') {
+                    threadEl.innerHTML += `
+                        <div class="flex justify-end">
+                            <div class="bg-indigo-600 text-white rounded-2xl px-4 py-2.5 max-w-[85%] text-sm font-semibold shadow-xs">
+                                ${formatAiText(msg.content)}
+                            </div>
                         </div>
-                    </div>
-                    <!-- [냐냐 PATCH] 시제 선택 (기본은 현재시제만, 버튼으로 다른 시제 펼침) -->
-                    <div class="flex items-center justify-between gap-2">
-                        <span id="conj-tense-label" class="text-[11px] font-bold text-indigo-600">직설법 현재 (presente)</span>
-                        <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
-                            <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
-                        </button>
-                    </div>
-                    <div id="conj-tense-selector-box" class="hidden flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-400 shrink-0">시제</span>
-                        <select id="input-verb-tense" onchange="switchConjTense()" class="flex-1 bg-white px-2 py-1.5 rounded-lg border border-indigo-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700">
-                            <option value="presente">직설법 현재 (presente)</option>
-                            <option value="indefinido">직설법 부정과거 (pretérito indefinido)</option>
-                            <option value="imperfecto">직설법 불완료과거 (imperfecto)</option>
-                            <option value="futuro">직설법 미래 (futuro)</option>
-                            <option value="condicional">조건법 (condicional)</option>
-                            <option value="subjPresente">접속법 현재 (subjuntivo presente)</option>
-                            <option value="subjImperfecto">접속법 불완료과거 (subj. imperfecto)</option>
-                            <option value="imperativo">명령법 (imperativo)</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
-                            <input type="text" id="conj-yo" placeholder="tengo" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
+                    `;
+                } else {
+                    threadEl.innerHTML += `
+                        <div class="flex justify-start gap-2 items-start">
+                            <div class="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-sm shrink-0">🤖</div>
+                            <div class="bg-slate-100 text-slate-800 rounded-2xl px-4 py-3 max-w-[85%] text-sm font-medium shadow-2xs leading-relaxed">
+                                ${formatAiText(msg.content)}
+                            </div>
                         </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">tú (너)</span>
-                            <input type="text" id="conj-tu" placeholder="tienes" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">él/ella (그/그녀)</span>
-                            <input type="text" id="conj-el" placeholder="tiene" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">nosotros (우리)</span>
-                            <input type="text" id="conj-nos" placeholder="tenemos" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">vosotros (너희)</span>
-                            <input type="text" id="conj-vos" placeholder="tenéis" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">ellos/ellas (그들)</span>
-                            <input type="text" id="conj-ellos" placeholder="tienen" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                    </div>
-                </div>
+                    `;
+                }
+            }
+            
+            setTimeout(() => {
+                threadEl.scrollTop = threadEl.scrollHeight;
+            }, 50);
+        }
 
-                <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-500">관용구 / 자주 쓰는 표현 (선택, 여러 개 가능)</label>
-                        <button id="idiom-toggle-btn" type="button" onclick="toggleIdiomSection()" class="w-6 h-6 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all">
-                            <i id="idiom-toggle-icon" class="fa-solid fa-plus text-xs"></i>
-                        </button>
-                    </div>
-                    <div id="idiom-fields-box" class="hidden space-y-2 pt-1">
-                        <div id="idiom-entries-box" class="space-y-2"></div>
-                        <button type="button" onclick="addIdiomRow()" class="w-full text-center text-xs font-bold text-violet-600 hover:text-violet-700 border border-dashed border-violet-200 rounded-xl py-2 transition-all">
-                            <i class="fa-solid fa-plus text-[10px]"></i> 관용구 추가
-                        </button>
-                    </div>
-                </div>
+        async function sendFollowupQuestion() {
+            const inputEl = document.getElementById('ai-followup-input');
+            const question = inputEl.value.trim();
+            if (!question) return;
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
-                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
-                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                </div>
+            if (!hasGeminiApiKey()) {
+                showToast("Gemini API 키가 등록되지 않아 AI와의 대화를 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                openApiKeyModal();
+                return;
+            }
 
-                <div class="space-y-1.5">
-                    <label class="block text-xs font-bold text-slate-500">비고 / 메모 (Notes)</label>
-                    <div class="relative">
-                        <textarea id="input-notes" onkeydown="handleNotesEnterKey(event)" oninput="toggleNotesClearBtn()" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 pr-9 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-wrap"></textarea>
-                        <button type="button" id="notes-clear-btn" onclick="clearNotes()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            const originalHtml = sendBtn.innerHTML;
 
-            <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
-                <button onclick="closeWordModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveWord()" class="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md shadow-violet-100">저장하기</button>
-            </div>
-        </div>
-    </div>
+            aiChatHistory.push({ role: "user", content: question });
+            renderChatThread();
+            inputEl.value = '';
 
-    <!-- PRESET 2: CUSTOM CONFIRM MODAL -->
-    <!-- 문법 표 편집기 모달 -->
-    <div id="grammar-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-extrabold text-slate-900" id="grammar-editor-title">새 표 만들기</h3>
-                <button onclick="closeGrammarEditor()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i>`;
+            AudioFX.playPunch();
 
-            <div class="grid grid-cols-[auto_1fr] gap-3 items-end">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">아이콘</label>
-                    <input id="ge-icon" maxlength="4" placeholder="📋" class="w-16 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-center text-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">표 제목 *</label>
-                    <input id="ge-title" placeholder="예: 소유형용사" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-            </div>
+            let contextPrompt = `이전 대화 맥락:\n`;
+            aiChatHistory.slice(0, -1).forEach(m => {
+                contextPrompt += `${m.role === 'user' ? '학생(냐냐)' : '선생님'}: ${m.content}\n`;
+            });
+            contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 선생님으로서 상냥하고 정확하게 답변해 주세요.`;
 
-            <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-500">설명 (선택)</label>
-                <textarea id="ge-desc" rows="2" placeholder="표에 대한 간단한 설명" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-            </div>
+            try {
+                const response = await callGemini(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely.", null, 'low');
+                aiChatHistory.push({ role: "assistant", content: response.trim() });
+                AudioFX.playSuccess();
+                renderChatThread();
+            } catch (e) {
+                console.error(e);
+                aiChatHistory.push({ role: "assistant", content: `앗, 냐냐님! ${describeGeminiError(e)}` });
+                renderChatThread();
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = originalHtml;
+            }
+        }
 
-            <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                    <label class="block text-xs font-bold text-slate-500">표 내용 (첫 열은 자동으로 강조돼요)</label>
-                    <div class="flex gap-1">
-                        <button onclick="addGeColumn()" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
-                        <button onclick="removeGeColumn()" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
-                    </div>
-                </div>
-                <div id="ge-grid" class="overflow-x-auto"></div>
-                <button onclick="addGeRow()" class="w-full py-2 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 hover:border-violet-300 transition-all"><i class="fa-solid fa-plus mr-1"></i> 행 추가</button>
-            </div>
+        function speakText(event, textIdOrWord) {
+            if (event) event.stopPropagation();
+            
+            let utteranceText = textIdOrWord;
+            const targetEl = document.getElementById(textIdOrWord);
+            if (targetEl) {
+                utteranceText = targetEl.innerText;
+            }
 
-            <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-500">💡 팁/예시 (선택)</label>
-                <textarea id="ge-note" rows="2" placeholder="예: mi libro (내 책), mis libros (내 책들)" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-            </div>
-
-            <div class="flex gap-2 pt-2">
-                <button onclick="closeGrammarEditor()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
-                <button onclick="saveGrammarEditor()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center space-y-4">
-            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <div>
-                <h3 class="text-lg font-bold text-slate-900" id="confirm-modal-title">정말 삭제하시겠습니까?</h3>
-                <p class="text-sm text-slate-500 mt-1" id="confirm-modal-desc">삭제된 단어는 복구할 수 없습니다.</p>
-            </div>
-            <div class="flex gap-2 pt-2">
-                <button id="confirm-cancel-btn" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
-                <button id="confirm-ok-btn" class="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-red-100">삭제 확정</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PRESET 3: GEMINI API KEY SETUP MODAL -->
-    <div id="api-key-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">🔑</div>
-                <div>
-                    <h3 class="text-base font-bold text-slate-900">Gemini API 키 등록</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">진짜 AI 추천/채점 기능을 쓰려면 키가 필요해요</p>
-                </div>
-            </div>
-
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                <b>왜 필요한가요?</b> 이 앱은 브라우저에서 직접 구글 Gemini API를 호출해요.
-                무료로 키를 발급받아 <b>이 브라우저에만</b> 저장하면 AI 추천과 AI 채점이 진짜로 작동합니다.
-                키는 외부로 전송되지 않고 내 컴퓨터의 localStorage에만 남아요. (단, 이 파일을 다른 사람과 공유하면
-                키가 코드에 노출되니, 본인만 쓰는 파일에 입력해 주세요!)
-            </div>
-
-            <a href="https://aistudio.google.com/apikey" target="_blank" class="block text-center text-xs font-bold text-indigo-600 hover:text-indigo-700 underline">
-                👉 Google AI Studio에서 무료 API 키 발급받기
-            </a>
-
-            <div class="space-y-1.5">
-                <label class="block text-xs font-bold text-slate-500">API 키 입력</label>
-                <input type="password" id="api-key-input" placeholder="AIza..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
-            </div>
-
-            <div class="flex gap-2 pt-1">
-                <button onclick="clearApiKey()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">키 삭제</button>
-                <button onclick="closeApiKeyModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveApiKey()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">저장하기</button>
-            </div>
-            <button onclick="clearAiWordCacheUI()" class="w-full text-center text-[11px] text-slate-400 hover:text-slate-600 underline pt-1">단어 추천 캐시 초기화 (예전에 저장된 추천 결과를 지워요)</button>
-        </div>
-    </div>
-
-    <!-- PRESET 3.5: SYNC PASSWORD MODAL -->
-    <div id="sync-password-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🔐</div>
-                <div>
-                    <h3 class="text-base font-bold text-slate-900">동기화 비밀번호</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">이 비밀번호로 내 데이터만 안전하게 동기화돼요</p>
-                </div>
-            </div>
-
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                이 비밀번호는 코드(GitHub)에는 절대 저장되지 않고, <b>이 기기에만</b> 저장돼요.
-                다른 기기(폰 등)에서도 똑같이 동기화하려면, 그 기기에서도 <b>똑같은 비밀번호</b>를 한 번 입력해 주세요.
-                비밀번호를 잊으면 데이터에 다시 접근하기 어려우니 어딘가에 적어두는 걸 추천해요!
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="block text-xs font-bold text-slate-500">비밀번호 (아무 문자열이나 가능)</label>
-                <input type="password" id="sync-password-input" placeholder="예: nyanya-secret-2026" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
-            </div>
-
-            <div class="flex gap-2 pt-1">
-                <button onclick="closeSyncPasswordModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveSyncPassword()" class="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">저장하고 동기화</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PRESET 4: BACKUP / TRANSFER TO OTHER DEVICE MODAL -->
-    <!-- 질문 관리 모달 -->
-    <!-- 질문 수정 모달 -->
-    <div id="question-edit-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">✏️ 질문 수정</h3>
-                <button onclick="closeQuestionEditModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-3">
-                <input type="hidden" id="edit-question-id">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">주제</label>
-                    <input type="text" id="edit-question-topic-input" autocomplete="off" list="question-topics-datalist" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">질문</label>
-                    <input type="text" id="edit-question-input" autocomplete="off" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <button onclick="saveEditedQuestion()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 mt-2">수정 저장</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="question-manage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">💬 질문 관리</h3>
-                <button onclick="closeQuestionManageModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="px-6 pt-3 pb-6 space-y-5">
-                <!-- 질문 등록 -->
-                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
-                    <span class="text-xs font-bold text-violet-700">새 질문 등록</span>
-                    <div class="space-y-2">
-                        <input type="text" id="new-question-topic-input" placeholder="주제 (예: 일상, 음식, 날씨...)" autocomplete="off" list="question-topics-datalist" class="w-full bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                        <datalist id="question-topics-datalist"></datalist>
-                        <div class="flex gap-2">
-                            <input type="text" id="new-question-input" placeholder="질문 (예: ¿Qué tiempo hace hoy?)" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button onclick="addCustomQuestion()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0">추가</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 검색 -->
-                <div class="relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-                    <input type="text" id="question-search-input" oninput="renderCustomQuestionsList()" placeholder="질문/주제 검색..." autocomplete="off" class="w-full bg-slate-50 pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-
-                <!-- 주제별 질문 목록 -->
-                <div id="question-list-box" class="space-y-3 max-h-72 overflow-y-auto"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 랜덤 질문 주제 선택 모달 -->
-    <div id="topic-picker-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl max-h-[80vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">🎯 랜덤 뽑기 주제 설정</h3>
-                <button onclick="closeTopicPickerModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <p class="px-5 pt-4 text-xs text-slate-400">선택한 주제에서만 랜덤 질문이 나와요. 이 설정은 저장되어 다음에도 유지돼요.</p>
-            <div id="topic-picker-list" class="p-5 space-y-2"></div>
-            <div class="p-5 border-t border-slate-100 sticky bottom-0 bg-white">
-                <button onclick="saveTopicSelection()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">설정 저장</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="backup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">📦 백업 (비상용 안전망)</h3>
-                <button onclick="closeBackupModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-6">
-                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                    동기화 비밀번호를 설정했다면 데이터는 이미 자동으로 동기화되고 있어요.
-                    이 기능은 <b>비밀번호를 잊었거나, 동기화가 안 될 때</b> 데이터를 안전하게 옮기는 비상용 백업이에요.
-                </div>
-
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-500">① 이 기기에서: 내보내기</label>
-                        <button onclick="copyBackupExport()" class="text-xs font-bold text-violet-600 hover:text-violet-700"><i class="fa-solid fa-copy"></i> 복사하기</button>
-                    </div>
-                    <textarea id="backup-export-area" readonly rows="4" class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono"></textarea>
-                    <p class="text-[11px] text-slate-400">위 내용을 복사해서, 다른 기기로 (카카오톡 나에게 보내기, 메모앱 등으로) 전달해 주세요.</p>
-                </div>
-
-                <div class="space-y-2 pt-2 border-t border-slate-100">
-                    <label class="block text-xs font-bold text-slate-500">② 다른 기기에서: 붙여넣고 가져오기</label>
-                    <textarea id="backup-import-area" rows="4" placeholder="여기에 복사해 온 내용을 붙여넣으세요..." class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-                    <button onclick="importBackupData()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">가져오기 (현재 기기 데이터를 덮어씁니다)</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <script src="js/dictionary-data.js"></script>
-    <script src="js/core.js"></script>
-    <script src="js/vocab.js"></script>
-    <script src="js/flashcards.js"></script>
-    <script src="js/quiz.js"></script>
-    <script src="js/games.js"></script>
-    <script src="js/ai-feedback.js"></script>
-</body>
-</html>
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(utteranceText);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                showToast("죄송합니다. 현재 브라우저가 원어민 음성 합성을 지원하지 않습니다.", "error");
+            }
+        }
