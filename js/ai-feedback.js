@@ -470,7 +470,7 @@
                "originalMarked": "The student ORIGINAL answer verbatim, with ONLY wrong words wrapped in line-through span tags; correct words stay plain.",
                "message": "Concise feedback in Korean mentioning '냐냐님', 1-2 sentences. Comment on both grammar AND whether the answer actually addresses the question.",
                "breakdown": [
-                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+                  { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
@@ -774,7 +774,7 @@
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences max. Mention the student '냐냐님' and the key grammar point (어순/conjugation). No long essays.",
                "breakdown": [
-                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+                  { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "Short Korean reason WHY it changed, e.g. '스페인어는 형용사가 명사 뒤에 와요' or '관사가 더 자연스러워요'. 1 sentence." }
@@ -782,7 +782,7 @@
                "tip": "One short, useful grammatical tip in Korean, 1 sentence."
             }
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
-            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1167,7 +1167,7 @@
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise grammatical analysis in Korean mentioning '냐냐님', 1-2 sentences max. No long essays.",
                "breakdown": [
-                  { "word": "ONE short Spanish word or particle from correctedText (never a phrase or full clause)", "mean": "Its Korean meaning, 1-4 words only, never empty" }
+                  { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
@@ -1175,7 +1175,7 @@
                "tip": "One short, useful grammar tip in Korean, 1 sentence.",
                "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
             }
-            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1312,6 +1312,9 @@
         function wordExistsInVocab(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return false;
+            // [냐냐 PATCH] 재귀동사 대응: 앞의 재귀대명사(me/te/se/nos/os)를 뗀 형태도 준비
+            //   예: "me llamo" → "llamo", "se llama" → "llama"
+            const targetNoReflexive = target.replace(/^(me|te|se|nos|os)\s+/, '');
             for (const v of vocabulary) {
                 // 1) 원형/사전형 그대로 일치
                 if (normalizeSpanishAnswer(v.word) === target) return true;
@@ -1322,7 +1325,14 @@
                         const forms = tenses[tk];
                         if (!forms) continue;
                         for (const pk in forms) {
-                            if (forms[pk] && normalizeSpanishAnswer(forms[pk]) === target) return true;
+                            if (!forms[pk]) continue;
+                            const formN = normalizeSpanishAnswer(forms[pk]);
+                            // 저장된 변형에서도 재귀대명사를 떼고 비교 (양쪽 다 관대하게)
+                            const formNoReflexive = formN.replace(/^(me|te|se|nos|os)\s+/, '');
+                            if (formN === target || formN === targetNoReflexive
+                                || formNoReflexive === target || formNoReflexive === targetNoReflexive) {
+                                return true;
+                            }
                         }
                     }
                 }
