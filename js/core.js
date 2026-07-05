@@ -481,6 +481,31 @@ let vocabulary = [];
                 .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
         }
 
+        // [냐냐 PATCH] 망각곡선 복습 — 틀린 날로부터 며칠 지났는지 계산
+        function daysSince(dateStr) {
+            if (!dateStr) return -1;
+            const parts = dateStr.split('-').map(Number);
+            if (parts.length !== 3) return -1;
+            const then = new Date(parts[0], parts[1] - 1, parts[2]);
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            then.setHours(0, 0, 0, 0);
+            return Math.round((now - then) / (1000 * 60 * 60 * 24));
+        }
+
+        // 망각곡선 복습 주기 (일). 이 날짜에 해당하면 복습 대상
+        const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
+
+        // 오늘 복습해야 할 단어 (오늘 틀린 것 + 복습 주기에 도달한 것)
+        function getReviewDueWords() {
+            return vocabulary.filter(w => {
+                if (w.mastered || !w.lastWrongDate) return false;
+                const d = daysSince(w.lastWrongDate);
+                // 오늘(0일) 또는 복습 주기(1,3,7,14,30일)에 해당
+                return d === 0 || REVIEW_INTERVALS.includes(d);
+            }).sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+        }
+
         // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
         let todayWrongFilterActive = false;
         function showTodayWrongInList() {
@@ -493,13 +518,13 @@ let vocabulary = [];
             renderWordList();
             const grid = document.getElementById('vocabulary-grid');
             if (grid) setTimeout(() => grid.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-            showToast("오늘 틀린 단어만 모아서 보여드려요! 📖", "info");
+            showToast("오늘 복습할 단어를 모아서 보여드려요! 📖", "info");
         }
 
         function renderTodayReview() {
             const box = document.getElementById('today-review-box');
             if (!box) return;
-            const words = getTodayReviewWords();
+            const words = getReviewDueWords(); // [냐냐 PATCH] 망각곡선 복습 대상
             const countEl = document.getElementById('today-review-count');
             if (countEl) countEl.innerText = words.length;
             if (words.length === 0) {
