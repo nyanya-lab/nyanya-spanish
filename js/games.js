@@ -1,6 +1,6 @@
 // ============================================================
         // [냐냐 PATCH] 미니 게임 모음
-        // ===========================================================
+        // ============================================================
         let gameState = null; // 현재 진행 중인 게임 상태
 
         // 게임 메뉴로 돌아가기 (진행 중이던 게임 정리)
@@ -48,13 +48,18 @@
 
         // 정답 비교 (악센트/관사 관용 — 기존 normalizeSpanishAnswer 재사용)
         function gameCheckAnswer(userRaw, correct) {
-            return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct);
+            const stripArticle = (s) => normalizeSpanishAnswer(s).replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            // 관사 포함/미포함 둘 다 정답 인정 (힌트가 관사를 뗀 앞글자를 주므로)
+            return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct)
+                || stripArticle(userRaw) === stripArticle(correct);
         }
 
         // [냐냐 PATCH] 동의어 방지용 시작 글자 힌트 (앞 2글자) — 게임 item 2
         function gameStartHint(word) {
             if (!word) return '';
-            const clean = word.trim();
+            let clean = word.trim();
+            // [냐냐 PATCH] 명사 등에서 정관사/부정관사를 떼고 실제 단어의 앞글자로 힌트
+            clean = clean.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
             const n = Math.min(2, clean.length);
             return clean.slice(0, n);
         }
@@ -73,11 +78,11 @@
                     w.mastered = true;
                 }
             } else {
-                // 오답: 약점 점수 +2, 마스터 점수 -3
-                w.weakScore = (w.weakScore || 0) + 2;
+                // 오답: 게임은 시간에 쫓겨 못 맞추기도 하니 약하게 감점 (약점 +1, 마스터 -1)
+                w.weakScore = (w.weakScore || 0) + 1;
                 w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
                 if (w.weakScore >= 5) w.weak = true;
-                w.masterScore = Math.max(0, (w.masterScore || 0) - 3);
+                w.masterScore = Math.max(0, (w.masterScore || 0) - 1);
                 if (w.mastered && w.masterScore < 5) w.mastered = false;
             }
         }
@@ -349,7 +354,7 @@
             input.disabled = true;
 
             const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
-            applyGameScore(gameState.current.id, isCorrect); // 마스터/약점 점수 반영
+            // [냐냐 PATCH] 깜빡이 게임은 복습용이라 마스터/약점 점수에 반영하지 않음
             const fb = document.getElementById('flash-feedback');
             if (isCorrect) {
                 gameState.correct++;
@@ -429,7 +434,7 @@
                             <span id="fall-lives" class="text-sm">${'❤️'.repeat(5)}</span>
                         </div>
                     </div>
-                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: 340px;">
+                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: 480px;">
                         <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-300"></div>
                     </div>
                     <input type="text" id="fall-input" autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
