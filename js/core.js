@@ -297,6 +297,41 @@ let vocabulary = [];
         // [냐냐 PATCH-날짜버그수정] toISOString()은 UTC 기준이라 한국(UTC+9) 등에서는
         // 날짜가 하루 어긋날 수 있음(특히 자정~오전 9시, 그리고 차트의 날짜 범위 계산에서는
         // 항상 하루씩 밀림). 로컬(내 기기) 시간 기준으로 YYYY-MM-DD를 만드는 함수로 통일.
+        // [냐냐 PATCH] 스페인어 여성 목소리 선택 + 공용 읽기 함수
+        let _cachedEsVoice = null;
+        function pickSpanishVoice() {
+            if (_cachedEsVoice) return _cachedEsVoice;
+            if (!('speechSynthesis' in window)) return null;
+            const voices = window.speechSynthesis.getVoices() || [];
+            const esVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('es'));
+            if (esVoices.length === 0) return null;
+            // 여성 이름 힌트 (스페인어권 여성 음성들)
+            const femaleHints = ['mónica','monica','paulina','helena','laura','marisol','sabina','female','mujer','esperanza','lucia','lucía','conchita','penelope','penélope'];
+            let pick = esVoices.find(v => femaleHints.some(h => (v.name || '').toLowerCase().includes(h)));
+            // 스페인(es-ES) 여성 우선, 없으면 아무 스페인어 여성, 없으면 첫 스페인어 음성
+            if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es' && femaleHints.some(h => (v.name||'').toLowerCase().includes(h)));
+            if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es') || esVoices[0];
+            _cachedEsVoice = pick;
+            return pick;
+        }
+        // 음성 목록은 비동기로 로드되므로 로드되면 캐시 초기화
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => { _cachedEsVoice = null; pickSpanishVoice(); };
+        }
+        function speakSpanishVoice(text, rate) {
+            if (!('speechSynthesis' in window)) {
+                showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'es-ES';
+            u.rate = rate || 0.9;
+            const voice = pickSpanishVoice();
+            if (voice) u.voice = voice;
+            window.speechSynthesis.speak(u);
+        }
+
         function getLocalDateString(date = new Date()) {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
