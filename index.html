@@ -138,12 +138,14 @@
                         <button id="cal-nav-next" onclick="calNav(1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-right text-xs"></i></button>
                     </div>
                     <div id="learning-calendar"></div>
-                    <div class="flex items-center justify-end gap-1.5 text-[9px] text-slate-400">
+                    <div class="flex items-center justify-end gap-1 text-[9px] text-slate-400">
                         <span>적음</span>
                         <span class="w-2.5 h-2.5 rounded-sm bg-slate-100 border border-slate-200"></span>
+                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-100"></span>
                         <span class="w-2.5 h-2.5 rounded-sm bg-emerald-200"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span>
+                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-300"></span>
+                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
+                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-700"></span>
                         <span>많음</span>
                     </div>
                 </div>
@@ -851,6 +853,18 @@
                             </div>
                         </div>
                         <p class="text-[11px] text-orange-400 text-right shrink-0 max-w-[130px] leading-relaxed">하루에 5개 이상 학습하면 연속일이 쌓여요!</p>
+                    </div>
+
+                    <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 -->
+                    <div class="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-3xl p-5">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-lg">🥚</span>
+                            <div>
+                                <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
+                                <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올지는 부화해봐야 알아요!</p>
+                            </div>
+                        </div>
+                        <div id="egg-widget"></div>
                     </div>
 
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
