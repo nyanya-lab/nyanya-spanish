@@ -424,49 +424,125 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 학습 히트맵 (깃허브 잔디 스타일) — 최근 약 17주
-        function renderHeatmap() {
-            const container = document.getElementById('learning-heatmap');
-            if (!container) return;
-            const WEEKS = 17;
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            // 이번 주 일요일까지 채우기 위해 끝을 이번 주 토요일로
-            const end = new Date(today);
-            // 그리드 시작: WEEKS*7일 전의 일요일
-            const start = new Date(today);
-            start.setDate(start.getDate() - (WEEKS * 7 - 1));
-            // 시작을 일요일로 맞춤
-            start.setDate(start.getDate() - start.getDay());
+        // [냐냐 PATCH] 학습 달력 상태
+        let calView = 'month'; // 'month' | 'year' | 'decade'
+        let calYear = new Date().getFullYear();
+        let calMonth = new Date().getMonth(); // 0-11
 
-            const dayActivity = (dateStr) => {
-                const d = nyanyaDiary[dateStr];
-                if (!d) return 0;
-                return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
-            };
-            const levelColor = (n) => {
-                if (n === 0) return 'bg-slate-100';
-                if (n < 5) return 'bg-emerald-200';
-                if (n < 15) return 'bg-emerald-400';
-                return 'bg-emerald-600';
-            };
-            const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        function dayActivity(dateStr) {
+            const d = nyanyaDiary[dateStr];
+            if (!d) return 0;
+            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+        }
+        function fmtDate(dt) {
+            return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        }
+        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정
+        function calColor(n, maxVal) {
+            if (n === 0) return 'bg-slate-100 border border-slate-200 text-slate-400';
+            const ratio = maxVal > 0 ? n / maxVal : 0;
+            if (ratio <= 0.25) return 'bg-emerald-200 text-emerald-800';
+            if (ratio <= 0.5) return 'bg-emerald-300 text-emerald-900';
+            if (ratio <= 0.75) return 'bg-emerald-400 text-white';
+            return 'bg-emerald-600 text-white';
+        }
 
-            let cols = '';
-            const cur = new Date(start);
-            for (let w = 0; w < WEEKS + 1; w++) {
-                let cells = '';
-                for (let dow = 0; dow < 7; dow++) {
-                    if (cur > today) { cells += `<div class="w-3 h-3"></div>`; }
-                    else {
-                        const ds = fmt(cur);
-                        const n = dayActivity(ds);
-                        cells += `<div class="w-3 h-3 rounded-sm ${levelColor(n)}" title="${ds} · ${n}개 학습"></div>`;
-                    }
-                    cur.setDate(cur.getDate() + 1);
+        function renderCalendar() {
+            const container = document.getElementById('learning-calendar');
+            const titleEl = document.getElementById('cal-title');
+            if (!container || !titleEl) return;
+
+            if (calView === 'month') {
+                titleEl.innerText = `${calYear}년 ${calMonth + 1}월`;
+                const first = new Date(calYear, calMonth, 1);
+                const startDow = first.getDay(); // 0=일
+                const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                // 이달 최대 학습량 (상대평가 기준)
+                let maxVal = 0;
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const v = dayActivity(fmtDate(new Date(calYear, calMonth, d)));
+                    if (v > maxVal) maxVal = v;
                 }
-                cols += `<div class="flex flex-col gap-1">${cells}</div>`;
+                const todayStr = getLocalDateString();
+                const dowHead = ['일','월','화','수','목','금','토'].map((d, i) =>
+                    `<div class="text-center text-[10px] font-bold ${i===0?'text-rose-400':i===6?'text-blue-400':'text-slate-400'}">${d}</div>`).join('');
+                let cells = '';
+                for (let i = 0; i < startDow; i++) cells += `<div></div>`;
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const ds = fmtDate(new Date(calYear, calMonth, d));
+                    const n = dayActivity(ds);
+                    const isToday = ds === todayStr;
+                    cells += `<div class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${ds} · ${n}개 학습">${d}</div>`;
+                }
+                container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
+            } else if (calView === 'year') {
+                titleEl.innerText = `${calYear}년`;
+                // 각 월의 총 학습량
+                const monthVals = [];
+                for (let m = 0; m < 12; m++) {
+                    const dim = new Date(calYear, m + 1, 0).getDate();
+                    let sum = 0;
+                    for (let d = 1; d <= dim; d++) sum += dayActivity(fmtDate(new Date(calYear, m, d)));
+                    monthVals.push(sum);
+                }
+                const maxVal = Math.max(...monthVals);
+                const cells = monthVals.map((v, m) =>
+                    `<button onclick="calPickMonth(${m})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(v, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${calYear}년 ${m+1}월 · ${v}개 학습">
+                        <span>${m + 1}월</span>
+                        <span class="text-[9px] opacity-80">${v}</span>
+                    </button>`).join('');
+                container.innerHTML = `<div class="grid grid-cols-3 gap-2">${cells}</div>`;
+            } else { // decade
+                const startY = Math.floor(calYear / 10) * 10;
+                titleEl.innerText = `${startY} ~ ${startY + 9}`;
+                const yearVals = [];
+                for (let y = startY; y < startY + 10; y++) {
+                    let sum = 0;
+                    for (const ds in nyanyaDiary) {
+                        if (ds.startsWith(String(y))) sum += dayActivity(ds);
+                    }
+                    yearVals.push({ year: y, val: sum });
+                }
+                const maxVal = Math.max(...yearVals.map(x => x.val));
+                const cells = yearVals.map(x =>
+                    `<button onclick="calPickYear(${x.year})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(x.val, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${x.year}년 · ${x.val}개 학습">
+                        <span>${x.year}</span>
+                        <span class="text-[9px] opacity-80">${x.val}</span>
+                    </button>`).join('');
+                container.innerHTML = `<div class="grid grid-cols-3 gap-2">${cells}</div>`;
             }
-            container.innerHTML = `<div class="flex gap-1 min-w-max">${cols}</div>`;
+        }
+
+        // 제목 클릭 → 확대 (월→연→연도별)
+        function calZoomOut() {
+            if (calView === 'month') calView = 'year';
+            else if (calView === 'year') calView = 'decade';
+            renderCalendar();
+        }
+        // 연 화면에서 월 클릭 → 그 월 상세
+        function calPickMonth(m) {
+            calMonth = m;
+            calView = 'month';
+            renderCalendar();
+        }
+        // 연도별 화면에서 연도 클릭 → 그 해 월별
+        function calPickYear(y) {
+            calYear = y;
+            calView = 'year';
+            renderCalendar();
+        }
+        // 이전/다음 (화면 단위로)
+        function calNav(dir) {
+            if (calView === 'month') {
+                calMonth += dir;
+                if (calMonth < 0) { calMonth = 11; calYear--; }
+                else if (calMonth > 11) { calMonth = 0; calYear++; }
+            } else if (calView === 'year') {
+                calYear += dir;
+            } else {
+                calYear += dir * 10;
+            }
+            renderCalendar();
         }
 
         function renderStreakBadge() {
@@ -635,7 +711,7 @@ let vocabulary = [];
         // 학습 일지 렌더링
         function renderDiary() {
             renderStreakBadge();
-            renderHeatmap(); // [냐냐 PATCH] 학습 히트맵
+            renderCalendar(); // [냐냐 PATCH] 학습 달력
             const container = document.getElementById('nyanya-diary-list');
             const today = getLocalDateString();
             const log = nyanyaDiary[today];
@@ -1280,6 +1356,7 @@ let vocabulary = [];
 
             container.innerHTML = tables.map((t, idx) => {
                 const cellHl = grammarCellHighlights[t.id] || {}; // [냐냐 PATCH] {"ri-ci": true} 강조된 칸
+                const hlCols = t.highlightCols || [0]; // [냐냐 PATCH] 열 강조 (글씨체)
                 const headerRow = (t.headers || []).map((h, ci) => {
                     return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`;
                 }).join('');
@@ -1287,12 +1364,14 @@ let vocabulary = [];
                     // 행마다 번갈아 배경색 (줄무늬) — 부드러운 파랑
                     const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
                     const cells = r.map((c, ci) => {
-                        // [냐냐 PATCH] 칸마다 별표 아이콘 → 클릭하면 노란색 강조 토글
+                        // [냐냐 PATCH] 칸마다 별표 아이콘 → 클릭하면 연분홍 배경 강조 토글
                         const key = `${ri}-${ci}`;
                         const isHl = !!cellHl[key];
-                        const cellBg = isHl ? 'bg-[#fff1a8]' : '';
-                        const starColor = isHl ? 'text-amber-500' : 'text-slate-200 hover:text-amber-300';
-                        return `<td class="px-2 py-2 text-sm text-center border border-[#e1edf7] text-slate-800 font-bold ${cellBg} relative group/cell">
+                        const cellBg = isHl ? 'bg-[#ffe0ec]' : '';
+                        const starColor = isHl ? 'text-pink-400' : 'text-slate-200 hover:text-pink-300';
+                        // [냐냐 PATCH] 열 강조: 해당 열은 진한 파랑 두꺼운 글씨
+                        const colHl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
+                        return `<td class="px-2 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg} relative group/cell">
                             <span class="inline-flex items-center gap-1 justify-center">
                                 <span>${escapeHtml(c || '')}</span>
                                 <button onclick="event.stopPropagation(); toggleGrammarCellHighlight('${t.id}', ${ri}, ${ci})" title="강조 표시" class="${starColor} transition-colors shrink-0 ${isHl ? '' : 'opacity-0 group-hover/cell:opacity-100'}"><i class="fa-solid fa-star text-[10px]"></i></button>
@@ -1435,15 +1514,19 @@ let vocabulary = [];
             document.getElementById('ge-desc').value = s.desc;
             document.getElementById('ge-note').value = s.note;
 
+            // 편집 중인 표의 칸 강조 상태 (id 기준)
+            const hl = (s.id && grammarCellHighlights[s.id]) ? grammarCellHighlights[s.id] : {};
+
             // 표 그리드 (헤더 행 + 데이터 행들)
             const grid = document.getElementById('ge-grid');
             const colCount = s.headers.length;
             let html = '<table class="border-collapse w-full"><thead><tr>';
             s.headers.forEach((h, ci) => {
-                const isHl = (s.highlightCols || []).includes(ci);
+                // [냐냐 PATCH] 열 강조(글씨체) 버튼을 열 제목 '위'에 배치
+                const isColHl = (s.highlightCols || []).includes(ci);
                 html += `<th class="p-1 align-top">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mb-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isColHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isColHl ? '★ 열 강조 켬' : '☆ 열 강조'}</button>
                     <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#f3f8fd] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#5896cb]">
-                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mt-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isHl ? '★ 강조 켬' : '☆ 강조'}</button>
                 </th>`;
             });
             html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
@@ -1451,7 +1534,16 @@ let vocabulary = [];
                 html += '<tr>';
                 for (let ci = 0; ci < colCount; ci++) {
                     const val = row[ci] || '';
-                    html += `<td class="p-1"><input value="${escapeAttr(val)}" oninput="updateGeCell(${ri}, ${ci}, this.value)" class="w-full min-w-[90px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400"></td>`;
+                    // [냐냐 PATCH] 각 칸에 별표 → 클릭하면 연분홍 강조 토글 (편집 중에도 가능)
+                    const isHl = !!hl[`${ri}-${ci}`];
+                    const cellBg = isHl ? 'bg-[#ffe0ec]' : 'bg-slate-50';
+                    const starColor = isHl ? 'text-pink-400' : 'text-slate-300 hover:text-pink-300';
+                    html += `<td class="p-1">
+                        <div class="flex items-center gap-1 ${cellBg} rounded-lg px-1">
+                            <button type="button" onclick="toggleGeCellHighlight(${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
+                            <input value="${escapeAttr(val)}" oninput="updateGeCell(${ri}, ${ci}, this.value)" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
+                        </div>
+                    </td>`;
                 }
                 html += `<td class="p-1"><button onclick="removeGeRow(${ri})" title="행 삭제" class="text-slate-300 hover:text-red-500 px-1"><i class="fa-solid fa-circle-minus"></i></button></td>`;
                 html += '</tr>';
@@ -1460,10 +1552,26 @@ let vocabulary = [];
             grid.innerHTML = html;
         }
 
+        // [냐냐 PATCH] 편집 중 칸 강조 토글 (표 id 기준으로 grammarCellHighlights에 저장)
+        function toggleGeCellHighlight(ri, ci) {
+            const s = grammarEditorState;
+            if (!s || !s.id) return;
+            if (!grammarCellHighlights[s.id]) grammarCellHighlights[s.id] = {};
+            const key = `${ri}-${ci}`;
+            if (grammarCellHighlights[s.id][key]) {
+                delete grammarCellHighlights[s.id][key];
+                if (Object.keys(grammarCellHighlights[s.id]).length === 0) delete grammarCellHighlights[s.id];
+            } else {
+                grammarCellHighlights[s.id][key] = true;
+            }
+            renderGrammarEditorFields();
+        }
+
         function escapeAttr(s) {
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
         function updateGeHeader(ci, val) { grammarEditorState.headers[ci] = val; }
+        // [냐냐 PATCH] 열 강조(글씨체) 토글 — 편집 중
         function toggleGeHighlight(ci) {
             if (!grammarEditorState.highlightCols) grammarEditorState.highlightCols = [];
             const idx = grammarEditorState.highlightCols.indexOf(ci);
@@ -1618,7 +1726,6 @@ let vocabulary = [];
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
                 renderStreakBadge();
-                renderHeatmap(); // [냐냐 PATCH] 학습 히트맵
             } else if (tabId === 'grammar') {
                 // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
                 grammarOpenState = {};
