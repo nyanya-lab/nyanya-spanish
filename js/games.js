@@ -75,6 +75,7 @@
             } else {
                 // 오답: 약점 점수 +2, 마스터 점수 -3
                 w.weakScore = (w.weakScore || 0) + 2;
+                w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
                 if (w.weakScore >= 5) w.weak = true;
                 w.masterScore = Math.max(0, (w.masterScore || 0) - 3);
                 if (w.mastered && w.masterScore < 5) w.mastered = false;
