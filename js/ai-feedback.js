@@ -307,6 +307,26 @@
             }
         }
 
+        // [냐냐 PATCH] 질문 답하기 - 스페인어 질문 읽어주기 (item 2)
+        function speakCurrentQuestion() {
+            if (currentQuestionForAnswer && currentQuestionForAnswer.question) {
+                speakSpanishVoice(currentQuestionForAnswer.question, 0.9);
+            } else {
+                showToast("먼저 '랜덤 질문 뽑기'를 눌러주세요!", "info");
+            }
+        }
+
+        // [냐냐 PATCH] 스→한 자유작문 - 내가 쓴 스페인어 읽어주기
+        function speakEsKoInput() {
+            const el = document.getElementById('ai-free-input-es');
+            const text = el ? el.value.trim() : '';
+            if (text) {
+                speakSpanishVoice(text, 0.9);
+            } else {
+                showToast("먼저 스페인어 문장을 입력해 주세요!", "info");
+            }
+        }
+
         // [냐냐 PATCH] 질문 해석 보기/숨기기 (AI로 한국어 번역, 결과 캐시) — item 6
         async function toggleQuestionTranslation() {
             const transEl = document.getElementById('question-translation-text');
@@ -1505,11 +1525,7 @@
             }
 
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(utteranceText);
-                utterance.lang = 'es-ES';
-                utterance.rate = 0.9;
-                window.speechSynthesis.speak(utterance);
+                speakSpanishVoice(utteranceText, 0.9);
             } else {
                 showToast("죄송합니다. 현재 브라우저가 원어민 음성 합성을 지원하지 않습니다.", "error");
             }
