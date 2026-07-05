@@ -614,6 +614,10 @@
                         </div>
 
                         <div class="flex gap-2 justify-end">
+                            <button onclick="speakEsKoInput()" class="bg-sky-50 hover:bg-sky-100 text-sky-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
+                                <i class="fa-solid fa-volume-high"></i>
+                                <span>듣기</span>
+                            </button>
                             <button onclick="resetEsKoPane()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
                                 <i class="fa-solid fa-rotate-right"></i>
                                 <span>새 문장 쓰기</span>
@@ -651,6 +655,10 @@
                                     <button id="question-translate-btn" onclick="toggleQuestionTranslation()" class="text-xs bg-white text-teal-600 px-2.5 py-0.5 rounded-full font-bold border border-teal-200 transition-all active:scale-95 flex items-center gap-1">
                                         <i class="fa-solid fa-language text-[10px]"></i>
                                         <span>해석 보기</span>
+                                    </button>
+                                    <button onclick="speakCurrentQuestion()" class="text-xs bg-white text-sky-600 px-2.5 py-0.5 rounded-full font-bold border border-sky-200 transition-all active:scale-95 flex items-center gap-1">
+                                        <i class="fa-solid fa-volume-high text-[10px]"></i>
+                                        <span>듣기</span>
                                     </button>
                                 </div>
                                 <div class="flex gap-2">
