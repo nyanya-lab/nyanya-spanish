@@ -455,6 +455,26 @@
                             </div>
                         </div>
                         <p id="review-scope-count" class="text-xs text-slate-400 text-center">복습할 범위를 선택하세요</p>
+
+                        <div>
+                            <p class="text-sm font-bold text-slate-700 mb-2">몇 개나 복습할까요?</p>
+                            <div class="grid grid-cols-4 gap-2">
+                                <button onclick="selectReviewCount(10)" data-review-count="10" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">10개</button>
+                                <button onclick="selectReviewCount(20)" data-review-count="20" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">20개</button>
+                                <button onclick="selectReviewCount(30)" data-review-count="30" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">30개</button>
+                                <button onclick="selectReviewCount(9999)" data-review-count="9999" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">전체</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="text-sm font-bold text-slate-700 mb-2">몇 번 반복할까요?</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="selectReviewRepeat(1)" data-review-repeat="1" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">1회</button>
+                                <button onclick="selectReviewRepeat(2)" data-review-repeat="2" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">2회</button>
+                                <button onclick="selectReviewRepeat(3)" data-review-repeat="3" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">3회</button>
+                            </div>
+                        </div>
+
                         <button onclick="startWordReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">복습 시작하기</button>
                     </div>
 
