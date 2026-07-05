@@ -156,7 +156,8 @@ let vocabulary = [];
                 customQuestions: customQuestions,
                 selectedQuestionTopics: selectedQuestionTopics,
                 customGrammarTables: customGrammarTables,
-                pinnedGrammar: pinnedGrammar
+                pinnedGrammar: pinnedGrammar,
+                grammarCellHighlights: grammarCellHighlights
             };
             const json = JSON.stringify(payload);
 
@@ -261,6 +262,7 @@ let vocabulary = [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
+                grammarCellHighlights = payload.grammarCellHighlights || {};
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -269,6 +271,7 @@ let vocabulary = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
                 pinnedGrammar = {};
+                grammarCellHighlights = {};
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -1126,6 +1129,7 @@ let vocabulary = [];
         // ============================================================
         let grammarOpenState = {}; // 표별 펼침 상태 기억
         let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
+        let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -1275,7 +1279,7 @@ let vocabulary = [];
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
 
             container.innerHTML = tables.map((t, idx) => {
-                const hlCols = t.highlightCols || [0];
+                const cellHl = grammarCellHighlights[t.id] || {}; // [냐냐 PATCH] {"ri-ci": true} 강조된 칸
                 const headerRow = (t.headers || []).map((h, ci) => {
                     return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`;
                 }).join('');
@@ -1283,11 +1287,19 @@ let vocabulary = [];
                     // 행마다 번갈아 배경색 (줄무늬) — 부드러운 파랑
                     const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
                     const cells = r.map((c, ci) => {
-                        // 모든 칸 두꺼운 글씨. 강조 열(뜻/한국어 등)은 진한 파랑 글씨로 구분
-                        const hl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
-                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${hl}">${escapeHtml(c || '')}</td>`;
+                        // [냐냐 PATCH] 칸마다 별표 아이콘 → 클릭하면 노란색 강조 토글
+                        const key = `${ri}-${ci}`;
+                        const isHl = !!cellHl[key];
+                        const cellBg = isHl ? 'bg-[#fff1a8]' : '';
+                        const starColor = isHl ? 'text-amber-500' : 'text-slate-200 hover:text-amber-300';
+                        return `<td class="px-2 py-2 text-sm text-center border border-[#e1edf7] text-slate-800 font-bold ${cellBg} relative group/cell">
+                            <span class="inline-flex items-center gap-1 justify-center">
+                                <span>${escapeHtml(c || '')}</span>
+                                <button onclick="event.stopPropagation(); toggleGrammarCellHighlight('${t.id}', ${ri}, ${ci})" title="강조 표시" class="${starColor} transition-colors shrink-0 ${isHl ? '' : 'opacity-0 group-hover/cell:opacity-100'}"><i class="fa-solid fa-star text-[10px]"></i></button>
+                            </span>
+                        </td>`;
                     }).join('');
-                    return `<tr class="${rowBg} hover:bg-[#fff3c4] transition-colors">${cells}</tr>`;
+                    return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
@@ -1338,6 +1350,20 @@ let vocabulary = [];
         function expandAllGrammar(open) {
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
             renderGrammarTables();
+        }
+
+        // [냐냐 PATCH] 문법표 칸 강조 토글 (별표 클릭 → 노란색)
+        function toggleGrammarCellHighlight(tableId, ri, ci) {
+            if (!grammarCellHighlights[tableId]) grammarCellHighlights[tableId] = {};
+            const key = `${ri}-${ci}`;
+            if (grammarCellHighlights[tableId][key]) {
+                delete grammarCellHighlights[tableId][key];
+                if (Object.keys(grammarCellHighlights[tableId]).length === 0) delete grammarCellHighlights[tableId];
+            } else {
+                grammarCellHighlights[tableId][key] = true;
+            }
+            renderGrammarTables();
+            saveToStorage();
         }
 
         // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
