@@ -32,6 +32,7 @@ let vocabulary = [];
             }
             await loadFromStorage();
             checkStatsReset(); // [냐냐 PATCH] 정답률 통계 월별 초기화 확인
+            if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
             renderWordList();
             updateStats();
             renderDiary();
@@ -157,7 +158,8 @@ let vocabulary = [];
                 selectedQuestionTopics: selectedQuestionTopics,
                 customGrammarTables: customGrammarTables,
                 pinnedGrammar: pinnedGrammar,
-                grammarCellHighlights: grammarCellHighlights
+                grammarCellHighlights: grammarCellHighlights,
+                eggState: eggState
             };
             const json = JSON.stringify(payload);
 
@@ -263,6 +265,7 @@ let vocabulary = [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
                 grammarCellHighlights = payload.grammarCellHighlights || {};
+                eggState = payload.eggState || defaultEggState();
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -272,6 +275,7 @@ let vocabulary = [];
                 customGrammarTables = [];
                 pinnedGrammar = {};
                 grammarCellHighlights = {};
+                eggState = defaultEggState();
             }
 
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
@@ -424,6 +428,211 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 학습 히트맵 (깃허브 잔디 스타일) — 최근 약 17주
+        // ============================================================
+        // [냐냐 PATCH] 미스터리 알 키우기 🥚 — 학습하면 알이 자라고 부화해서 정체불명 생물이 나옴!
+        // ============================================================
+        let eggState = null;
+        function defaultEggState() {
+            return {
+                progress: 0,        // 현재 알의 누적 학습 포인트
+                collection: [],     // 부화시킨 생물들의 id 목록 (도감)
+                totalHatched: 0,    // 총 부화 수
+                lastCountedTotal: null // 학습량 델타 계산용 (총 학습 활동 수 스냅샷)
+            };
+        }
+
+        // 부화에 필요한 포인트
+        const EGG_HATCH_GOAL = 200;
+
+        // 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
+        const CREATURES = [
+            // ===== common (일반) =====
+            { id: 'chick',    emoji: '🐤', name: '포이토 (pollito)',   rarity: 'common', desc: '병아리. 갓 태어난 노란 친구!' },
+            { id: 'cat',      emoji: '🐱', name: '가토 (gato)',        rarity: 'common', desc: '고양이. 늘어지게 낮잠을 좋아해요.' },
+            { id: 'dog',      emoji: '🐶', name: '페로 (perro)',       rarity: 'common', desc: '강아지. 충직한 친구예요.' },
+            { id: 'frog',     emoji: '🐸', name: '라나 (rana)',        rarity: 'common', desc: '개구리. 웅덩이에서 폴짝!' },
+            { id: 'snail',    emoji: '🐌', name: '카라콜 (caracol)',   rarity: 'common', desc: '달팽이. 느리지만 꾸준해요.' },
+            { id: 'bee',      emoji: '🐝', name: '아베하 (abeja)',     rarity: 'common', desc: '벌. 부지런한 일꾼!' },
+            { id: 'mouse',    emoji: '🐭', name: '라톤 (ratón)',       rarity: 'common', desc: '생쥐. 작지만 재빨라요.' },
+            { id: 'rabbit',   emoji: '🐰', name: '코네호 (conejo)',    rarity: 'common', desc: '토끼. 깡충깡충!' },
+            { id: 'chicken',  emoji: '🐔', name: '가이나 (gallina)',   rarity: 'common', desc: '암탉. 알을 낳는 엄마예요.' },
+            { id: 'pig',      emoji: '🐷', name: '세르도 (cerdo)',     rarity: 'common', desc: '돼지. 하몽의 주인공!' },
+            { id: 'duck',     emoji: '🦆', name: '파토 (pato)',        rarity: 'common', desc: '오리. 물에서 둥둥.' },
+            { id: 'fish',     emoji: '🐟', name: '페스 (pez)',         rarity: 'common', desc: '물고기. 바닷속을 헤엄쳐요.' },
+            // ===== rare (레어) =====
+            { id: 'bull',     emoji: '🐂', name: '토로 (toro)',        rarity: 'rare',   desc: '황소. 스페인의 상징이에요!' },
+            { id: 'owl',      emoji: '🦉', name: '부오 (búho)',        rarity: 'rare',   desc: '부엉이. 밤에 공부하는 친구.' },
+            { id: 'fox',      emoji: '🦊', name: '소로 (zorro)',       rarity: 'rare',   desc: '여우. 영리하고 재빨라요.' },
+            { id: 'octopus',  emoji: '🐙', name: '풀포 (pulpo)',       rarity: 'rare',   desc: '문어. 갈리시아식 pulpo가 유명해요!' },
+            { id: 'horse',    emoji: '🐴', name: '카바요 (caballo)',   rarity: 'rare',   desc: '말. 안달루시아 명마!' },
+            { id: 'lion',     emoji: '🦁', name: '레온 (león)',        rarity: 'rare',   desc: '사자. 용맹의 상징이에요.' },
+            { id: 'wolf',     emoji: '🐺', name: '로보 (lobo)',        rarity: 'rare',   desc: '늑대. 이베리아 늑대예요.' },
+            { id: 'bear',     emoji: '🐻', name: '오소 (oso)',         rarity: 'rare',   desc: '곰. 마드리드의 상징이에요!' },
+            { id: 'eagle',    emoji: '🦅', name: '아길라 (águila)',    rarity: 'rare',   desc: '독수리. 하늘의 제왕.' },
+            { id: 'turtle',   emoji: '🐢', name: '토르투가 (tortuga)', rarity: 'rare',   desc: '거북이. 오래오래 살아요.' },
+            { id: 'butterfly',emoji: '🦋', name: '마리포사 (mariposa)',rarity: 'rare',   desc: '나비. 예쁘게 팔랑팔랑.' },
+            // ===== epic (에픽) =====
+            { id: 'dragon',   emoji: '🐲', name: '드라곤 (dragón)',    rarity: 'epic',   desc: '용! 카탈루냐 전설의 용이에요.' },
+            { id: 'unicorn',  emoji: '🦄', name: '우니코르니오 (unicornio)', rarity: 'epic', desc: '유니콘! 아주 드물어요.' },
+            { id: 'phoenix',  emoji: '🔥', name: '페닉스 (fénix)',     rarity: 'epic',   desc: '불사조! 다시 타오르는 열정!' },
+            { id: 'whale',    emoji: '🐋', name: '바예나 (ballena)',   rarity: 'epic',   desc: '고래. 바다의 거인이에요.' },
+            { id: 'peacock',  emoji: '🦚', name: '파보레알 (pavo real)',rarity: 'epic',  desc: '공작. 화려한 깃털을 뽐내요.' },
+            { id: 'flamingo', emoji: '🦩', name: '플라멩코 (flamenco)',rarity: 'epic',   desc: '홍학! 스페인 춤이랑 이름이 같아요.' },
+            // ===== legendary (전설) =====
+            { id: 'alien',    emoji: '👽', name: '알리에니헤나 (alienígena)', rarity: 'legendary', desc: '외계 생명체... 대체 뭐지?!' },
+            { id: 'ghost',    emoji: '👾', name: '미스테리오 (misterio)',     rarity: 'legendary', desc: '미스터리. 정체를 알 수 없어요!' },
+            { id: 'robot',    emoji: '🤖', name: '로봇 (robot)',              rarity: 'legendary', desc: '수수께끼의 로봇. 어디서 왔을까?' },
+            { id: 'ninja',    emoji: '🥷', name: '닌하 (ninja)',              rarity: 'legendary', desc: '그림자처럼 나타난 닌자!' },
+        ];
+
+        const RARITY_INFO = {
+            common:    { label: '일반',   color: 'text-slate-500',  bg: 'bg-slate-100',   star: '⭐' },
+            rare:      { label: '레어',   color: 'text-blue-600',   bg: 'bg-blue-50',     star: '⭐⭐' },
+            epic:      { label: '에픽',   color: 'text-violet-600', bg: 'bg-violet-50',   star: '⭐⭐⭐' },
+            legendary: { label: '전설',   color: 'text-amber-600',  bg: 'bg-amber-50',    star: '👑' },
+        };
+
+        // 총 학습 활동 수 (누적) — 알 성장의 기준
+        function totalLearningActivity() {
+            let sum = 0;
+            for (const k in nyanyaDiary) {
+                const d = nyanyaDiary[k];
+                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+            }
+            return sum;
+        }
+
+        // 학습할 때마다 호출 — 델타만큼 알 성장, 목표 도달 시 부화
+        function updateEggProgress() {
+            if (!eggState) eggState = defaultEggState();
+            const total = totalLearningActivity();
+            if (eggState.lastCountedTotal === null) {
+                // 첫 실행: 기준점만 잡고 성장은 다음부터 (기존 학습량으로 갑자기 부화 방지)
+                eggState.lastCountedTotal = total;
+                renderEgg();
+                return;
+            }
+            const delta = total - eggState.lastCountedTotal;
+            if (delta > 0) {
+                eggState.progress += delta;
+                eggState.lastCountedTotal = total;
+                // 부화 체크
+                while (eggState.progress >= EGG_HATCH_GOAL) {
+                    eggState.progress -= EGG_HATCH_GOAL;
+                    hatchEgg();
+                }
+                saveToStorage();
+            }
+            renderEgg();
+        }
+
+        // 희귀도 뽑기 — 연속학습일/정답률이 높으면 희귀 확률 UP
+        function rollRarity() {
+            const streak = (typeof calcStreak === 'function') ? calcStreak() : 0;
+            const acc = (learnerProfile && learnerProfile.totalAnswered >= 5)
+                ? (learnerProfile.totalCorrect / learnerProfile.totalAnswered) : 0.5;
+            // 보너스: 연속 7일+ 이거나 정답률 80%+ 이면 희귀 확률 상승
+            let bonus = 0;
+            if (streak >= 7) bonus += 0.08;
+            if (streak >= 30) bonus += 0.07;
+            if (acc >= 0.8) bonus += 0.08;
+
+            const r = Math.random();
+            // 기본 확률: legendary 2%, epic 8%, rare 25%, common 65% (+bonus는 상위 등급으로)
+            if (r < 0.02 + bonus * 0.5) return 'legendary';
+            if (r < 0.10 + bonus) return 'epic';
+            if (r < 0.35 + bonus) return 'rare';
+            return 'common';
+        }
+
+        function hatchEgg() {
+            const rarity = rollRarity();
+            const pool = CREATURES.filter(c => c.rarity === rarity);
+            const creature = pool[Math.floor(Math.random() * pool.length)];
+            eggState.collection.push(creature.id);
+            eggState.totalHatched = (eggState.totalHatched || 0) + 1;
+            // 부화 축하 팝업
+            showHatchCelebration(creature);
+        }
+
+        function showHatchCelebration(creature) {
+            const info = RARITY_INFO[creature.rarity];
+            const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
+            if (typeof AudioFX !== 'undefined' && AudioFX.playSuccess) AudioFX.playSuccess();
+            showConfirm(
+                `🎉 부화 성공!`,
+                `${creature.emoji} ${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
+                () => { changeTab('records'); setTimeout(renderEgg, 100); },
+                { okLabel: '도감 보기', cancelLabel: '닫기', okStyle: 'primary' }
+            );
+        }
+
+        // 알 성장 단계 (progress 비율에 따라)
+        function eggStageVisual(ratio) {
+            // [냐냐 PATCH] 부화 과정 세분화 (7단계)
+            if (ratio < 0.14) return { emoji: '🥚', label: '갓 태어난 알이에요', anim: '' };
+            if (ratio < 0.28) return { emoji: '🥚', label: '알이 따뜻해지고 있어요', anim: 'scale-105' };
+            if (ratio < 0.43) return { emoji: '🥚', label: '알이 조금 커졌어요', anim: 'scale-105' };
+            if (ratio < 0.57) return { emoji: '🥚', label: '알 속에서 뭔가 움직여요', anim: 'scale-110' };
+            if (ratio < 0.71) return { emoji: '🥚', label: '알이 꿈틀거려요!', anim: 'scale-110 animate-pulse' };
+            if (ratio < 0.85) return { emoji: '🐣', label: '작은 금이 생겼어요!', anim: 'scale-110 animate-pulse' };
+            if (ratio < 0.95) return { emoji: '🐣', label: '쩍! 금이 크게 갔어요', anim: 'scale-125 animate-bounce' };
+            return { emoji: '💥', label: '곧 부화해요!! 두근두근', anim: 'scale-125 animate-bounce' };
+        }
+
+        function renderEgg() {
+            const container = document.getElementById('egg-widget');
+            if (!container) return;
+            if (!eggState) eggState = defaultEggState();
+            const ratio = Math.min(1, eggState.progress / EGG_HATCH_GOAL);
+            const stage = eggStageVisual(ratio);
+            const pct = Math.round(ratio * 100);
+            const remain = Math.max(0, EGG_HATCH_GOAL - eggState.progress);
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center text-center gap-3">
+                    <div class="text-6xl transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
+                    <p class="text-sm font-black text-slate-800">${stage.label}</p>
+                    <div class="w-full">
+                        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-500" style="width:${pct}%"></div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-1.5">부화까지 <b class="text-orange-500">${remain}</b> 학습 남았어요 (${pct}%)</p>
+                    </div>
+                    <p class="text-[11px] text-slate-500">지금까지 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
+                </div>
+                ${renderCollectionGrid()}
+            `;
+        }
+
+        function renderCollectionGrid() {
+            const owned = new Set(eggState.collection);
+            const counts = {};
+            eggState.collection.forEach(id => counts[id] = (counts[id] || 0) + 1);
+            const cells = CREATURES.map(c => {
+                const has = owned.has(c.id);
+                const info = RARITY_INFO[c.rarity];
+                if (has) {
+                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl ${info.bg} border border-slate-100" title="${c.name} (${info.label}) — ${c.desc}">
+                        <span class="text-2xl">${c.emoji}</span>
+                        <span class="text-[9px] font-bold ${info.color} leading-tight">${c.name}</span>
+                        ${counts[c.id] > 1 ? `<span class="text-[8px] text-slate-400">×${counts[c.id]}</span>` : ''}
+                    </div>`;
+                } else {
+                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl bg-slate-50 border border-slate-100 opacity-60" title="아직 못 만난 생물">
+                        <span class="text-2xl grayscale">❔</span>
+                        <span class="text-[9px] font-bold text-slate-300 leading-tight">???</span>
+                    </div>`;
+                }
+            }).join('');
+            return `
+                <div class="mt-4 pt-4 border-t border-slate-100">
+                    <p class="text-xs font-bold text-slate-600 mb-2 text-center">🗂️ 생물 도감</p>
+                    <div class="grid grid-cols-4 gap-1.5">${cells}</div>
+                </div>
+            `;
+        }
+
         // [냐냐 PATCH] 학습 달력 상태
         let calView = 'month'; // 'month' | 'year' | 'decade'
         let calYear = new Date().getFullYear();
@@ -437,14 +646,17 @@ let vocabulary = [];
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
         }
-        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정
+        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정 (7단계)
         function calColor(n, maxVal) {
             if (n === 0) return 'bg-slate-100 border border-slate-200 text-slate-400';
             const ratio = maxVal > 0 ? n / maxVal : 0;
-            if (ratio <= 0.25) return 'bg-emerald-200 text-emerald-800';
-            if (ratio <= 0.5) return 'bg-emerald-300 text-emerald-900';
-            if (ratio <= 0.75) return 'bg-emerald-400 text-white';
-            return 'bg-emerald-600 text-white';
+            if (ratio <= 0.14) return 'bg-emerald-100 text-emerald-700';
+            if (ratio <= 0.28) return 'bg-emerald-200 text-emerald-800';
+            if (ratio <= 0.43) return 'bg-emerald-300 text-emerald-900';
+            if (ratio <= 0.57) return 'bg-emerald-400 text-white';
+            if (ratio <= 0.71) return 'bg-emerald-500 text-white';
+            if (ratio <= 0.85) return 'bg-emerald-600 text-white';
+            return 'bg-emerald-700 text-white';
         }
 
         function renderCalendar() {
@@ -706,6 +918,7 @@ let vocabulary = [];
 
             saveToStorage();
             renderDiary();
+            if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 성장
         }
 
         // 학습 일지 렌더링
@@ -1368,15 +1581,10 @@ let vocabulary = [];
                         const key = `${ri}-${ci}`;
                         const isHl = !!cellHl[key];
                         const cellBg = isHl ? 'bg-[#ffe0ec]' : '';
-                        const starColor = isHl ? 'text-pink-400' : 'text-slate-200 hover:text-pink-300';
                         // [냐냐 PATCH] 열 강조: 해당 열은 진한 파랑 두꺼운 글씨
                         const colHl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
-                        return `<td class="px-2 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg} relative group/cell">
-                            <span class="inline-flex items-center gap-1 justify-center">
-                                <span>${escapeHtml(c || '')}</span>
-                                <button onclick="event.stopPropagation(); toggleGrammarCellHighlight('${t.id}', ${ri}, ${ci})" title="강조 표시" class="${starColor} transition-colors shrink-0 ${isHl ? '' : 'opacity-0 group-hover/cell:opacity-100'}"><i class="fa-solid fa-star text-[10px]"></i></button>
-                            </span>
-                        </td>`;
+                        // [냐냐 PATCH] 조회 화면에선 별표 없이 색 강조만 (별표는 수정 탭에서만)
+                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${escapeHtml(c || '')}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
                 }).join('');
@@ -1726,6 +1934,7 @@ let vocabulary = [];
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
                 renderStreakBadge();
+                if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯
             } else if (tabId === 'grammar') {
                 // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
                 grammarOpenState = {};
