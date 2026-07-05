@@ -642,3 +642,158 @@
                 fb.innerHTML += `<br><span class="text-xs text-slate-400 font-normal">${gameState.current.exampleMeaning}</span>`;
             }
         }
+
+
+        // ============================================================
+        // [냐냐 PATCH] 단어 복습 (깜빡이 방식, 점수 없음, 단어 선택 가능)
+        // ============================================================
+        let reviewState = null;
+        let reviewScope = 'today-wrong';
+
+        function resetReviewTab() {
+            reviewState = null;
+            const setup = document.getElementById('review-setup');
+            const play = document.getElementById('review-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            // 기본 선택: 오늘 틀린 단어
+            selectReviewScope(reviewScope || 'today-wrong');
+        }
+
+        function getReviewPool(scope) {
+            const today = getLocalDateString();
+            if (scope === 'today-wrong') return vocabulary.filter(w => w.lastWrongDate === today && !w.mastered);
+            if (scope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
+            if (scope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
+            return vocabulary.slice(); // all
+        }
+
+        function selectReviewScope(scope) {
+            reviewScope = scope;
+            // 버튼 하이라이트
+            document.querySelectorAll('.review-scope-btn').forEach(btn => {
+                if (btn.dataset.reviewScope === scope) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
+            const cnt = getReviewPool(scope).length;
+            const cntEl = document.getElementById('review-scope-count');
+            if (cntEl) cntEl.innerText = `복습할 단어: ${cnt}개`;
+        }
+
+        function startWordReview() {
+            const pool = getReviewPool(reviewScope);
+            if (pool.length < 1) {
+                showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error");
+                return;
+            }
+            // 순서 섞기
+            const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+            reviewState = { pool: shuffled, index: 0, correct: 0, total: shuffled.length, showMs: 1800 };
+            document.getElementById('review-setup').classList.add('hidden');
+            document.getElementById('review-play-area').classList.remove('hidden');
+            reviewShowWord();
+        }
+
+        function reviewShowWord() {
+            if (!reviewState) return;
+            if (reviewState.index >= reviewState.pool.length) { reviewEnd(); return; }
+            const w = reviewState.pool[reviewState.index];
+            reviewState.current = w;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(reviewState.index / reviewState.total * 100)}%"></div>
+                    </div>
+                    <div class="text-center py-10">
+                        <p class="text-xs font-bold text-indigo-400 mb-3">👁️ 잘 기억하세요!</p>
+                        <p class="text-4xl font-black text-slate-900">${w.word}</p>
+                        <p class="text-sm text-slate-400 mt-2">${w.meaning}</p>
+                    </div>
+                </div>
+            `;
+            reviewState.flashTimeout = setTimeout(() => { if (reviewState) reviewAskInput(); }, reviewState.showMs);
+        }
+
+        function reviewAskInput() {
+            if (!reviewState) return;
+            const w = reviewState.current;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
+                    </div>
+                    <div class="text-center py-6">
+                        <p class="text-xs font-bold text-slate-400 mb-1">방금 본 단어를 써보세요!</p>
+                        <p class="text-lg font-bold text-indigo-600">${w.meaning}</p>
+                        <p id="review-feedback" class="text-sm font-bold mt-2 h-5"></p>
+                    </div>
+                    <input type="text" id="review-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <div class="flex gap-2">
+                        <button onclick="reviewReveal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all">모르겠어요</button>
+                        <button onclick="reviewSubmit()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
+                    </div>
+                </div>
+            `;
+            const input = document.getElementById('review-input');
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); reviewSubmit(); } });
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function reviewSubmit() {
+            if (!reviewState || !reviewState.current) return;
+            const input = document.getElementById('review-input');
+            const userAnswer = input.value.trim();
+            input.disabled = true;
+            const w = reviewState.current;
+            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, w.word) : false;
+            const fb = document.getElementById('review-feedback');
+            if (isCorrect) {
+                reviewState.correct++;
+                if (fb) { fb.innerText = "✓ 정답!"; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${w.word}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+            reviewState.index++;
+            setTimeout(() => { if (reviewState) reviewShowWord(); }, 1200);
+        }
+
+        function reviewReveal() {
+            if (!reviewState || !reviewState.current) return;
+            const fb = document.getElementById('review-feedback');
+            const input = document.getElementById('review-input');
+            if (input) input.disabled = true;
+            if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${reviewState.current.word}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-slate-500"; }
+            reviewState.index++;
+            setTimeout(() => { if (reviewState) reviewShowWord(); }, 1400);
+        }
+
+        function reviewEnd() {
+            const correct = reviewState ? reviewState.correct : 0;
+            const total = reviewState ? reviewState.total : 0;
+            reviewState = null;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">🎉</div>
+                    <h3 class="text-xl font-black text-slate-900">복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}개 중 <b class="text-emerald-600">${correct}개</b> 기억했어요!</p>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetReviewTab()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+        }
