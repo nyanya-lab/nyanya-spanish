@@ -680,6 +680,8 @@
         // ============================================================
         let reviewState = null;
         let reviewScope = 'today-wrong';
+        let reviewCount = 20;   // [냐냐 PATCH] 복습할 단어 개수
+        let reviewRepeat = 1;   // [냐냐 PATCH] 반복 횟수
 
         function resetReviewTab() {
             reviewState = null;
@@ -687,8 +689,36 @@
             const play = document.getElementById('review-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            // 기본 선택: 오늘 틀린 단어
+            // 기본 선택
             selectReviewScope(reviewScope || 'today-wrong');
+            selectReviewCount(reviewCount || 20);
+            selectReviewRepeat(reviewRepeat || 1);
+        }
+
+        function selectReviewCount(n) {
+            reviewCount = n;
+            document.querySelectorAll('.review-count-btn').forEach(btn => {
+                if (parseInt(btn.dataset.reviewCount) === n) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
+        }
+
+        function selectReviewRepeat(n) {
+            reviewRepeat = n;
+            document.querySelectorAll('.review-repeat-btn').forEach(btn => {
+                if (parseInt(btn.dataset.reviewRepeat) === n) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
         }
 
         function getReviewPool(scope) {
@@ -722,9 +752,15 @@
                 showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error");
                 return;
             }
-            // 순서 섞기
-            const shuffled = pool.slice().sort(() => Math.random() - 0.5);
-            reviewState = { pool: shuffled, index: 0, correct: 0, total: shuffled.length, showMs: 1800 };
+            // 순서 섞고, 선택한 개수만큼 자르기
+            let shuffled = pool.slice().sort(() => Math.random() - 0.5);
+            shuffled = shuffled.slice(0, reviewCount);
+            // 반복 횟수만큼 리스트를 이어붙임 (매 회차 순서 다시 섞음)
+            let sequence = [];
+            for (let r = 0; r < reviewRepeat; r++) {
+                sequence = sequence.concat(shuffled.slice().sort(() => Math.random() - 0.5));
+            }
+            reviewState = { pool: sequence, index: 0, correct: 0, total: sequence.length, showMs: 2500, uniqueCount: shuffled.length, repeat: reviewRepeat };
             document.getElementById('review-setup').classList.add('hidden');
             document.getElementById('review-play-area').classList.remove('hidden');
             reviewShowWord();
