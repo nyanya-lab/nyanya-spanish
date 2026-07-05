@@ -546,3 +546,94 @@
                 </div>
             `);
         }
+
+
+        // ============================================================
+        // 게임 4: 듣기 받아쓰기 (예문 듣고 따라 쓰기, 점수 없음)
+        // ============================================================
+        function speakSpanish(text) {
+            if (!('speechSynthesis' in window)) {
+                showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'es-ES';
+            u.rate = 0.9;
+            window.speechSynthesis.speak(u);
+        }
+
+        function startListeningQuiz() {
+            // 예문이 있는 단어만 사용
+            const pool = vocabulary.filter(w => w.example && w.example.trim().length > 0);
+            if (pool.length < 1) {
+                showToast("예문이 있는 단어가 없어요! 단어에 예문을 추가해 주세요.", "error");
+                return;
+            }
+            stopCurrentGame();
+            gameState = { type: 'listening', pool, index: 0, correct: 0, total: 0, current: null };
+            listeningNext();
+        }
+
+        function listeningNext() {
+            if (!gameState) return;
+            gameState.current = gameState.pool[Math.floor(Math.random() * gameState.pool.length)];
+            gameState.total++;
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${gameState.total}번째 · 맞힌 문장 <span class="text-sky-600">${gameState.correct}</span></span>
+                    </div>
+                    <div class="text-center py-6 space-y-4">
+                        <p class="text-xs font-bold text-sky-400">🎧 예문을 듣고 똑같이 써보세요!</p>
+                        <button onclick="speakSpanish(gameState.current.example)" class="bg-sky-500 hover:bg-sky-600 text-white w-16 h-16 rounded-full text-2xl shadow-lg shadow-sky-100 transition-all active:scale-90">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <p class="text-xs text-slate-400">다시 들으려면 스피커를 눌러요</p>
+                        <p id="listen-feedback" class="text-sm font-bold h-5"></p>
+                    </div>
+                    <textarea id="listen-input" rows="2" placeholder="들은 문장을 입력하세요..." class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-semibold focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
+                    <button onclick="listeningSubmit()" class="w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
+                </div>
+            `);
+            // 자동으로 한 번 읽어주기
+            setTimeout(() => { speakSpanish(gameState.current.example); document.getElementById('listen-input')?.focus(); }, 300);
+        }
+
+        function listeningSubmit() {
+            if (!gameState || !gameState.current) return;
+            const input = document.getElementById('listen-input');
+            const fb = document.getElementById('listen-feedback');
+            const userText = input.value.trim();
+            input.disabled = true;
+
+            // 문장 비교 (악센트/문장부호/대소문자 관대하게)
+            const norm = (s) => s.toLowerCase().replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim()
+                .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
+            const correct = gameState.current.example;
+            const isCorrect = norm(userText) === norm(correct);
+
+            if (isCorrect) {
+                gameState.correct++;
+                if (fb) { fb.innerText = "✓ 완벽해요!"; fb.className = "text-sm font-bold h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                if (fb) { fb.innerHTML = `✗ 정답: <span class="text-slate-700">${correct}</span>`; fb.className = "text-sm font-bold h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+            // 다음 문장 버튼 표시
+            const playArea = document.getElementById('game-play-area');
+            const nextBtnHtml = `
+                <div class="flex gap-2 justify-center pt-3">
+                    <button onclick="listeningNext()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다음 문장</button>
+                    <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                </div>`;
+            // 확인 버튼을 다음 버튼으로 교체
+            const confirmBtn = playArea.querySelector('button[onclick="listeningSubmit()"]');
+            if (confirmBtn) confirmBtn.outerHTML = nextBtnHtml;
+            // 정답 뜻도 보여주기
+            if (fb && gameState.current.exampleMeaning) {
+                fb.innerHTML += `<br><span class="text-xs text-slate-400 font-normal">${gameState.current.exampleMeaning}</span>`;
+            }
+        }
