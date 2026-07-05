@@ -647,6 +647,8 @@ let quizSession = null;
                 // [냐냐 PATCH] 정답 처리: 약점 점수↓ + 마스터 점수↑ (동시에, 모순 방지)
                 const vocabItemC = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItemC) {
+                    // [냐냐 PATCH] 정답률용 카운터
+                    vocabItemC.correctTotal = (vocabItemC.correctTotal || 0) + 1;
                     // (1) 약점 점수 내리기: 객관식 -2, 주관식 -1
                     const isProduction = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
                     const weakReward = isProduction ? 1 : 2;
@@ -674,6 +676,8 @@ let quizSession = null;
                 // [냐냐 PATCH] 오답 처리: 약점 점수↑ + 마스터 점수↓ (동시에)
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
+                    // [냐냐 PATCH] 정답률용 카운터
+                    vocabItem.wrongTotal = (vocabItem.wrongTotal || 0) + 1;
                     // (1) 약점 점수 올리기: 객관식 +2, 주관식 +1
                     const penalty = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective') ? 1 : 2;
                     vocabItem.weakScore = (vocabItem.weakScore || 0) + penalty;
