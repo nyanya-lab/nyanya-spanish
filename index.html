@@ -88,9 +88,13 @@
                         <i class="fa-solid fa-table-list text-base"></i>
                         <span>문법 표</span>
                     </button>
-                    <button onclick="changeTab('cards')" id="nav-cards" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-clone text-base"></i>
                         <span>플래시 카드 복습</span>
+                    </button>
+                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                        <i class="fa-solid fa-eye text-base"></i>
+                        <span>단어 복습</span>
                     </button>
                     <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-bullseye text-base"></i>
@@ -417,6 +421,45 @@
                             <button onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md">같은 개수로 또 풀기</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- TAB: 단어 복습 (깜빡이 방식) -->
+                <div id="tab-review" class="hidden space-y-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-slate-900">단어 복습</h2>
+                            <p class="text-xs text-slate-400">단어가 잠깐 보였다 사라져요. 기억해서 써보며 복습해요!</p>
+                        </div>
+                    </div>
+
+                    <!-- 복습 설정 화면 -->
+                    <div id="review-setup" class="bg-white rounded-3xl p-6 border border-slate-200 space-y-5">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700 mb-2">어떤 단어를 복습할까요?</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="selectReviewScope('today-wrong')" data-review-scope="today-wrong" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
+                                    📌 오늘 틀린 단어
+                                </button>
+                                <button onclick="selectReviewScope('weak')" data-review-scope="weak" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
+                                    ⭐ 약점 단어
+                                </button>
+                                <button onclick="selectReviewScope('not-mastered')" data-review-scope="not-mastered" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
+                                    📖 안 외운 단어
+                                </button>
+                                <button onclick="selectReviewScope('all')" data-review-scope="all" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
+                                    🗂️ 전체 단어
+                                </button>
+                            </div>
+                        </div>
+                        <p id="review-scope-count" class="text-xs text-slate-400 text-center">복습할 범위를 선택하세요</p>
+                        <button onclick="startWordReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">복습 시작하기</button>
+                    </div>
+
+                    <!-- 복습 진행 화면 -->
+                    <div id="review-play-area" class="hidden"></div>
                 </div>
 
                 <!-- TAB: 미니 게임 -->
