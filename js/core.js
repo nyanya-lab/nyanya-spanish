@@ -31,6 +31,7 @@ let vocabulary = [];
                 return;
             }
             await loadFromStorage();
+            checkStatsReset(); // [냐냐 PATCH] 정답률 통계 월별 초기화 확인
             renderWordList();
             updateStats();
             renderDiary();
@@ -419,6 +420,52 @@ let vocabulary = [];
             return streak;
         }
 
+        // [냐냐 PATCH] 학습 히트맵 (깃허브 잔디 스타일) — 최근 약 17주
+        function renderHeatmap() {
+            const container = document.getElementById('learning-heatmap');
+            if (!container) return;
+            const WEEKS = 17;
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            // 이번 주 일요일까지 채우기 위해 끝을 이번 주 토요일로
+            const end = new Date(today);
+            // 그리드 시작: WEEKS*7일 전의 일요일
+            const start = new Date(today);
+            start.setDate(start.getDate() - (WEEKS * 7 - 1));
+            // 시작을 일요일로 맞춤
+            start.setDate(start.getDate() - start.getDay());
+
+            const dayActivity = (dateStr) => {
+                const d = nyanyaDiary[dateStr];
+                if (!d) return 0;
+                return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+            };
+            const levelColor = (n) => {
+                if (n === 0) return 'bg-slate-100';
+                if (n < 5) return 'bg-emerald-200';
+                if (n < 15) return 'bg-emerald-400';
+                return 'bg-emerald-600';
+            };
+            const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+
+            let cols = '';
+            const cur = new Date(start);
+            for (let w = 0; w < WEEKS + 1; w++) {
+                let cells = '';
+                for (let dow = 0; dow < 7; dow++) {
+                    if (cur > today) { cells += `<div class="w-3 h-3"></div>`; }
+                    else {
+                        const ds = fmt(cur);
+                        const n = dayActivity(ds);
+                        cells += `<div class="w-3 h-3 rounded-sm ${levelColor(n)}" title="${ds} · ${n}개 학습"></div>`;
+                    }
+                    cur.setDate(cur.getDate() + 1);
+                }
+                cols += `<div class="flex flex-col gap-1">${cells}</div>`;
+            }
+            container.innerHTML = `<div class="flex gap-1 min-w-max">${cols}</div>`;
+        }
+
         function renderStreakBadge() {
             const streak = calcStreak();
             // 최고 기록 갱신 (learnerProfile에 저장)
@@ -479,6 +526,34 @@ let vocabulary = [];
             return vocabulary
                 .filter(w => w.lastWrongDate === today && !w.mastered)
                 .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+        }
+
+        // [냐냐 PATCH] 단어별 정답률 (이번 통계 기간 동안). 시도 3회 미만이면 null(표시 안 함)
+        function getWordAccuracy(w) {
+            const c = w.correctTotal || 0;
+            const x = w.wrongTotal || 0;
+            const total = c + x;
+            if (total < 3) return null; // 데이터 적으면 신뢰 어려움
+            return Math.round(c / total * 100);
+        }
+
+        // [냐냐 PATCH] 정답률 통계 주기적 초기화 (기본 1달마다) — 최근 실력만 반영
+        const STATS_RESET_MONTHS = 1; // 몇 달마다 초기화할지 (1 또는 2)
+        function currentStatsPeriod() {
+            const d = new Date();
+            // STATS_RESET_MONTHS 단위로 기간 키 생성 (예: 1달=매월, 2달=격월)
+            const periodIndex = Math.floor(d.getMonth() / STATS_RESET_MONTHS);
+            return `${d.getFullYear()}-${periodIndex}`;
+        }
+        function checkStatsReset() {
+            const saved = localStorage.getItem('nyanya_stats_period');
+            const now = currentStatsPeriod();
+            if (saved && saved !== now) {
+                // 기간이 바뀌었으면 모든 단어의 정답/오답 카운터 초기화
+                vocabulary.forEach(w => { w.correctTotal = 0; w.wrongTotal = 0; });
+                try { saveToStorage(); } catch (e) {}
+            }
+            try { localStorage.setItem('nyanya_stats_period', now); } catch (e) {}
         }
 
         // [냐냐 PATCH] 망각곡선 복습 — 틀린 날로부터 며칠 지났는지 계산
@@ -557,6 +632,7 @@ let vocabulary = [];
         // 학습 일지 렌더링
         function renderDiary() {
             renderStreakBadge();
+            renderHeatmap(); // [냐냐 PATCH] 학습 히트맵
             const container = document.getElementById('nyanya-diary-list');
             const today = getLocalDateString();
             const log = nyanyaDiary[today];
@@ -1516,6 +1592,7 @@ let vocabulary = [];
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
                 renderStreakBadge();
+                renderHeatmap(); // [냐냐 PATCH] 학습 히트맵
             } else if (tabId === 'grammar') {
                 // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
                 grammarOpenState = {};
