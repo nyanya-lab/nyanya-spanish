@@ -570,8 +570,8 @@
         }
 
         function getReviewPool(scope) {
-            const today = getLocalDateString();
-            if (scope === 'today-wrong') return vocabulary.filter(w => w.lastWrongDate === today && !w.mastered);
+            // [냐냐 PATCH] '오늘 복습' = 망각곡선 복습 대상 (오늘 틀린 것 + 1·3·7·14·30일 주기)
+            if (scope === 'today-wrong') return getReviewDueWords();
             if (scope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (scope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice(); // all
