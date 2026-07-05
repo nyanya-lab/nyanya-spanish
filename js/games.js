@@ -557,15 +557,7 @@
         // 게임 4: 듣기 받아쓰기 (예문 듣고 따라 쓰기, 점수 없음)
         // ============================================================
         function speakSpanish(text, rate) {
-            if (!('speechSynthesis' in window)) {
-                showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
-                return;
-            }
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'es-ES';
-            u.rate = rate || 0.9;
-            window.speechSynthesis.speak(u);
+            speakSpanishVoice(text, rate || 0.9);
         }
 
         // [냐냐 PATCH] 듣기 퀴즈 재생 속도 (기본 0.9)
