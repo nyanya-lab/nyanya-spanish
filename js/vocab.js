@@ -855,6 +855,8 @@ function togglePosFields() {
             closeWordModal();
             renderWordList();
             updateStats();
+            // [냐냐 PATCH] AI 첨삭 핵심분석에 등록 버튼이 떠있으면 '✓ 등록됨'으로 갱신
+            if (typeof refreshBreakdownRegisterButtons === 'function') refreshBreakdownRegisterButtons();
         }
 
         function deleteWord(wordId, event) {
@@ -958,6 +960,7 @@ function togglePosFields() {
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
+            if (val.trim()) todayWrongFilterActive = false; // [냐냐 PATCH] 검색 시 오늘틀린 필터 해제
             // [냐냐 PATCH] 검색을 시작하면 필터를 전체로 초기화해서 모든 단어에서 검색되게 함
             if (val.trim()) {
                 const posSel = document.getElementById('pos-filter-select');
@@ -989,7 +992,7 @@ function togglePosFields() {
             const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
             const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
             // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
-            const expandedAll = searchVal.length > 0 ? true : wordListExpandedAll;
+            const expandedAll = (searchVal.length > 0 || todayWrongFilterActive) ? true : wordListExpandedAll;
             
             const filtered = vocabulary.filter(w => {
                 const queryInWord = w.word.toLowerCase().includes(searchVal);
@@ -1002,7 +1005,9 @@ function togglePosFields() {
                     || (masteryFilter === 'not-mastered' && !w.mastered)
                     || (masteryFilter === 'weak' && w.weak)
                     || (masteryFilter === 'not-weak' && !w.weak);
-                return matchesSearch && matchesPos && matchesMastery;
+                // [냐냐 PATCH] '오늘 틀린 단어 보기'가 켜져있으면 오늘 틀린 단어만
+                const matchesTodayWrong = !todayWrongFilterActive || (w.lastWrongDate === getLocalDateString() && !w.mastered);
+                return matchesSearch && matchesPos && matchesMastery && matchesTodayWrong;
             });
 
             // [냐냐 PATCH] 기본값이 아닌 필터/정렬이 하나라도 켜져 있으면 버튼에 표시점 보여줌
