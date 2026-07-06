@@ -130,6 +130,12 @@
                 showToast("질문 내용을 입력해 주세요!", "error");
                 return;
             }
+            // [냐냐 PATCH] 같은 주제에 중복 질문 확인
+            const dup = customQuestions.find(q => (q.topic || '기타') === topic && q.question.trim().toLowerCase() === text.toLowerCase());
+            if (dup) {
+                showToast(`'${topic}' 주제에 이미 같은 질문이 있어요!`, "error");
+                return;
+            }
             customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
             input.value = '';
             // 새로 만든 주제가 숨김 목록에 있었으면 다시 보이게
@@ -271,11 +277,16 @@
                 if (!groups[t]) groups[t] = [];
                 groups[t].push(q);
             });
+            // [냐냐 PATCH] 각 주제 안의 질문은 ABC 오름차순 정렬
+            Object.values(groups).forEach(qs => qs.sort((a, b) => a.question.localeCompare(b.question, 'es', { sensitivity: 'base' })));
+            // [냐냐 PATCH] 주제는 내림차순 정렬
+            const sortedTopics = Object.keys(groups).sort((a, b) => b.localeCompare(a, 'ko'));
 
             // 검색 중이면 다 펼침, 아니면 저장된 상태(기본 접힘)
             const searching = !!searchVal;
 
-            box.innerHTML = Object.entries(groups).map(([topic, qs]) => {
+            box.innerHTML = sortedTopics.map(topic => {
+                const qs = groups[topic];
                 const isOpen = searching ? true : !!questionTopicOpen[topic];
                 return `
                 <div class="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
