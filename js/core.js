@@ -7,7 +7,7 @@ let vocabulary = [];
         let nyanyaDiary = {}; 
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
-        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향음
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
@@ -597,19 +597,21 @@ let vocabulary = [];
                         <span class="text-lg">🥚</span>
                         <div>
                             <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
-                            <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
+                            <p class="text-[11px] text-indigo-500">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
                         </div>
                     </div>
-                    <div class="flex flex-col items-center text-center gap-3">
-                        <div class="text-6xl transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
-                        <p class="text-sm font-black text-slate-800">${stage.label}</p>
-                        <div class="w-full">
-                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-500" style="width:${pct}%"></div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-6xl shrink-0 transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
+                        <div class="flex-1 min-w-0 space-y-2">
+                            <p class="text-sm font-black text-slate-800">${stage.label}</p>
+                            <div>
+                                <div class="h-2.5 bg-white/70 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-500" style="width:${pct}%"></div>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-1">부화까지 <b class="text-indigo-500">${remain}</b> 학습 남음 (${pct}%)</p>
                             </div>
-                            <p class="text-[11px] text-slate-400 mt-1.5">부화까지 <b class="text-orange-500">${remain}</b> 학습 남았어요 (${pct}%)</p>
+                            <p class="text-[11px] text-slate-500">🐣 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 📖 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
                         </div>
-                        <p class="text-[11px] text-slate-500">지금까지 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
                     </div>
                 `;
             }
