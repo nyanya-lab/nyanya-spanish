@@ -301,6 +301,22 @@ function togglePosFields() {
             document.getElementById('confirm-modal-desc').innerText = desc;
             modal.classList.remove('hidden');
 
+            // [냐냐 PATCH] 아이콘 커스터마이즈 (기본: 빨간 경고, 'happy'면 보라 스마일)
+            const iconBox = document.getElementById('confirm-modal-icon-box');
+            const iconEl = document.getElementById('confirm-modal-icon');
+            if (iconBox && iconEl) {
+                if (options.icon === 'happy') {
+                    iconBox.className = "w-16 h-16 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center text-3xl mx-auto";
+                    iconEl.className = "fa-solid fa-face-smile";
+                } else if (options.icon === 'info') {
+                    iconBox.className = "w-16 h-16 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center text-3xl mx-auto";
+                    iconEl.className = "fa-solid fa-circle-info";
+                } else {
+                    iconBox.className = "w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto";
+                    iconEl.className = "fa-solid fa-triangle-exclamation";
+                }
+            }
+
             const btnOk = document.getElementById('confirm-ok-btn');
             const btnCancel = document.getElementById('confirm-cancel-btn');
 
@@ -734,9 +750,13 @@ function togglePosFields() {
                 return;
             }
 
+            // [냐냐 PATCH] ABC 오름차순 정렬 (정관사/부정관사 제외하고 비교)
+            const stripArt = (w) => (w || '').toLowerCase().trim().replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+            results.sort((a, b) => stripArt(a.key).localeCompare(stripArt(b.key), 'es', { sensitivity: 'base' }));
+
             container.classList.remove('hidden');
             let html = '';
-            results.slice(0, 6).forEach(r => {
+            results.slice(0, 15).forEach(r => {
                 const safeKey = r.key.replace(/'/g, "\\'");
                 html += `
                     <div onclick="selectSuggestion('${safeKey}', ${r.registeredId ? `'${r.registeredId}'` : 'null'})" class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors gap-2">
@@ -878,6 +898,7 @@ function togglePosFields() {
                         okLabel: '계속 등록',
                         cancelLabel: '아니요',
                         okStyle: 'primary',
+                        icon: 'happy', // [냐냐 PATCH] 경고 아이콘 대신 스마일
                         onCancel: () => { closeWordModal(); } // 아니요 → 등록창 닫기
                     }
                 );
@@ -1122,6 +1143,7 @@ function togglePosFields() {
             pendingFilterWeak = 'all';
             pendingFilterSort = 'weak-score';
             syncFilterPanelUI();
+            applyFilters(); // [냐냐 PATCH] 초기화 누르면 바로 기본세팅 적용
         }
 
         // [냐냐 PATCH] 현재 필터/정렬 한 줄 요약
@@ -1189,8 +1211,7 @@ function togglePosFields() {
             const filtered = vocabulary.filter(w => {
                 const queryInWord = w.word.toLowerCase().includes(searchVal);
                 const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
-                const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
-                const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
+                const matchesSearch = queryInWord || queryInMeaning; // [냐냐 PATCH] 메모 제외, 단어·뜻만 검색
                 const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
                 // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
                 const matchesMastery = masteryFilter === 'all'
@@ -1275,7 +1296,7 @@ function togglePosFields() {
                 } else if (w.pos === 'pronoun') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
                 } else if (w.pos === 'interrogative') {
-                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-700 shadow-sm">의문사</span>`;
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-700 shadow-sm">Int.</span>`;
                 } else if (w.pos === 'phrase') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
                 }
