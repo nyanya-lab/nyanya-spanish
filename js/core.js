@@ -7,7 +7,7 @@ let vocabulary = [];
         let nyanyaDiary = {}; 
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
-        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
