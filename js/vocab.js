@@ -750,9 +750,20 @@ function togglePosFields() {
                 return;
             }
 
-            // [냐냐 PATCH] ABC 오름차순 정렬 (정관사/부정관사 제외하고 비교)
+            // [냐냐 PATCH] 정렬 우선순위: ①정확히 일치 → ②그 단어로 시작 → ③포함, 각 그룹 안에서는 ABC순
             const stripArt = (w) => (w || '').toLowerCase().trim().replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
-            results.sort((a, b) => stripArt(a.key).localeCompare(stripArt(b.key), 'es', { sensitivity: 'base' }));
+            const q = cleanQuery;
+            const rank = (w) => {
+                const s = stripArt(w);
+                if (s === q) return 0;            // 정확히 일치 → 맨 위
+                if (s.startsWith(q)) return 1;    // 입력으로 시작
+                return 2;                          // 그냥 포함
+            };
+            results.sort((a, b) => {
+                const ra = rank(a.key), rb = rank(b.key);
+                if (ra !== rb) return ra - rb;
+                return stripArt(a.key).localeCompare(stripArt(b.key), 'es', { sensitivity: 'base' });
+            });
 
             container.classList.remove('hidden');
             let html = '';
