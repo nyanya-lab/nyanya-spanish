@@ -33,6 +33,7 @@ let vocabulary = [];
             await loadFromStorage();
             checkStatsReset(); // [냐냐 PATCH] 정답률 통계 월별 초기화 확인
             if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
+            if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
             renderWordList();
             updateStats();
             renderDiary();
@@ -454,42 +455,109 @@ let vocabulary = [];
         // 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
         const CREATURES = [
             // ===== common (일반) =====
-            { id: 'chick',    emoji: '🐤', name: '포이토 (pollito)',   rarity: 'common', desc: '병아리. 갓 태어난 노란 친구!' },
-            { id: 'cat',      emoji: '🐱', name: '가토 (gato)',        rarity: 'common', desc: '고양이. 늘어지게 낮잠을 좋아해요.' },
-            { id: 'dog',      emoji: '🐶', name: '페로 (perro)',       rarity: 'common', desc: '강아지. 충직한 친구예요.' },
-            { id: 'frog',     emoji: '🐸', name: '라나 (rana)',        rarity: 'common', desc: '개구리. 웅덩이에서 폴짝!' },
-            { id: 'snail',    emoji: '🐌', name: '카라콜 (caracol)',   rarity: 'common', desc: '달팽이. 느리지만 꾸준해요.' },
-            { id: 'bee',      emoji: '🐝', name: '아베하 (abeja)',     rarity: 'common', desc: '벌. 부지런한 일꾼!' },
-            { id: 'mouse',    emoji: '🐭', name: '라톤 (ratón)',       rarity: 'common', desc: '생쥐. 작지만 재빨라요.' },
-            { id: 'rabbit',   emoji: '🐰', name: '코네호 (conejo)',    rarity: 'common', desc: '토끼. 깡충깡충!' },
-            { id: 'chicken',  emoji: '🐔', name: '가이나 (gallina)',   rarity: 'common', desc: '암탉. 알을 낳는 엄마예요.' },
-            { id: 'pig',      emoji: '🐷', name: '세르도 (cerdo)',     rarity: 'common', desc: '돼지. 하몽의 주인공!' },
-            { id: 'duck',     emoji: '🦆', name: '파토 (pato)',        rarity: 'common', desc: '오리. 물에서 둥둥.' },
-            { id: 'fish',     emoji: '🐟', name: '페스 (pez)',         rarity: 'common', desc: '물고기. 바닷속을 헤엄쳐요.' },
+            { id: "chick", emoji: "🐤", name: "pollito (병아리)", rarity: "common", desc: "갓 태어난 노란 병아리예요!" },
+            { id: "cat", emoji: "🐱", name: "gato (고양이)", rarity: "common", desc: "늘어지게 낮잠을 좋아해요." },
+            { id: "dog", emoji: "🐶", name: "perro (개)", rarity: "common", desc: "충직한 친구예요." },
+            { id: "frog", emoji: "🐸", name: "rana (개구리)", rarity: "common", desc: "웅덩이에서 폴짝!" },
+            { id: "snail", emoji: "🐌", name: "caracol (달팽이)", rarity: "common", desc: "느리지만 꾸준해요." },
+            { id: "bee", emoji: "🐝", name: "abeja (벌)", rarity: "common", desc: "부지런한 일꾼이에요." },
+            { id: "mouse", emoji: "🐭", name: "ratón (생쥐)", rarity: "common", desc: "작지만 재빨라요." },
+            { id: "rabbit", emoji: "🐰", name: "conejo (토끼)", rarity: "common", desc: "깡충깡충 뛰어다녀요." },
+            { id: "chicken", emoji: "🐔", name: "gallina (암탉)", rarity: "common", desc: "알을 낳는 엄마예요." },
+            { id: "pig", emoji: "🐷", name: "cerdo (돼지)", rarity: "common", desc: "하몽의 주인공이에요." },
+            { id: "duck", emoji: "🦆", name: "pato (오리)", rarity: "common", desc: "물에서 둥둥 떠다녀요." },
+            { id: "fish", emoji: "🐟", name: "pez (물고기)", rarity: "common", desc: "바닷속을 헤엄쳐요." },
+            { id: "cow", emoji: "🐮", name: "vaca (소)", rarity: "common", desc: "음메- 우유를 줘요." },
+            { id: "sheep", emoji: "🐑", name: "oveja (양)", rarity: "common", desc: "포근한 털을 가졌어요." },
+            { id: "goat", emoji: "🐐", name: "cabra (염소)", rarity: "common", desc: "산을 잘 타요." },
+            { id: "hen", emoji: "🐓", name: "gallo (수탉)", rarity: "common", desc: "아침을 알려요." },
+            { id: "turkey", emoji: "🦃", name: "pavo (칠면조)", rarity: "common", desc: "크리스마스의 주인공!" },
+            { id: "hamster", emoji: "🐹", name: "hámster (햄스터)", rarity: "common", desc: "볼주머니가 빵빵해요." },
+            { id: "ant", emoji: "🐜", name: "hormiga (개미)", rarity: "common", desc: "작지만 힘이 세요." },
+            { id: "ladybug", emoji: "🐞", name: "mariquita (무당벌레)", rarity: "common", desc: "빨간 등에 점이 있어요." },
+            { id: "spider", emoji: "🕷️", name: "araña (거미)", rarity: "common", desc: "거미줄을 쳐요." },
+            { id: "caterpillar", emoji: "🐛", name: "oruga (애벌레)", rarity: "common", desc: "곧 나비가 될 거예요." },
+            { id: "cricket", emoji: "🦗", name: "grillo (귀뚜라미)", rarity: "common", desc: "밤에 노래해요." },
+            { id: "apple", emoji: "🍎", name: "manzana (사과)", rarity: "common", desc: "빨갛고 아삭해요." },
+            { id: "banana", emoji: "🍌", name: "plátano (바나나)", rarity: "common", desc: "달콤하고 노래요." },
+            { id: "grape", emoji: "🍇", name: "uva (포도)", rarity: "common", desc: "스페인에선 새해에 12알 먹어요!" },
+            { id: "orange", emoji: "🍊", name: "naranja (오렌지)", rarity: "common", desc: "비타민C가 가득!" },
+            { id: "lemon", emoji: "🍋", name: "limón (레몬)", rarity: "common", desc: "시큼시큼해요." },
+            { id: "strawberry", emoji: "🍓", name: "fresa (딸기)", rarity: "common", desc: "달콤한 봄의 과일." },
+            { id: "tomato", emoji: "🍅", name: "tomate (토마토)", rarity: "common", desc: "토마티나 축제의 주인공!" },
+            { id: "carrot", emoji: "🥕", name: "zanahoria (당근)", rarity: "common", desc: "토끼가 좋아해요." },
+            { id: "corn", emoji: "🌽", name: "maíz (옥수수)", rarity: "common", desc: "노란 알갱이가 가득." },
+            { id: "bread", emoji: "🍞", name: "pan (빵)", rarity: "common", desc: "갓 구운 냄새가 좋아요." },
+            { id: "cheese", emoji: "🧀", name: "queso (치즈)", rarity: "common", desc: "고소하고 쫄깃해요." },
+            { id: "egg", emoji: "🥚", name: "huevo (달걀)", rarity: "common", desc: "또 다른 알이네요?" },
+            { id: "flower", emoji: "🌸", name: "flor (꽃)", rarity: "common", desc: "예쁘게 피었어요." },
+            { id: "rose", emoji: "🌹", name: "rosa (장미)", rarity: "common", desc: "사랑의 꽃이에요." },
+            { id: "sunflower", emoji: "🌻", name: "girasol (해바라기)", rarity: "common", desc: "해를 따라 움직여요." },
+            { id: "tulip", emoji: "🌷", name: "tulipán (튤립)", rarity: "common", desc: "봄의 전령이에요." },
+            { id: "tree", emoji: "🌳", name: "árbol (나무)", rarity: "common", desc: "든든하게 서 있어요." },
+            { id: "cactus", emoji: "🌵", name: "cactus (선인장)", rarity: "common", desc: "물 없이도 잘 살아요." },
+            { id: "leaf", emoji: "🍃", name: "hoja (잎)", rarity: "common", desc: "바람에 살랑살랑." },
+            { id: "mushroom", emoji: "🍄", name: "seta (버섯)", rarity: "common", desc: "숲속에서 자라요." },
+            { id: "star", emoji: "⭐", name: "estrella (별)", rarity: "common", desc: "밤하늘에 반짝여요." },
+            { id: "cloud", emoji: "☁️", name: "nube (구름)", rarity: "common", desc: "하늘에 두둥실." },
             // ===== rare (레어) =====
-            { id: 'bull',     emoji: '🐂', name: '토로 (toro)',        rarity: 'rare',   desc: '황소. 스페인의 상징이에요!' },
-            { id: 'owl',      emoji: '🦉', name: '부오 (búho)',        rarity: 'rare',   desc: '부엉이. 밤에 공부하는 친구.' },
-            { id: 'fox',      emoji: '🦊', name: '소로 (zorro)',       rarity: 'rare',   desc: '여우. 영리하고 재빨라요.' },
-            { id: 'octopus',  emoji: '🐙', name: '풀포 (pulpo)',       rarity: 'rare',   desc: '문어. 갈리시아식 pulpo가 유명해요!' },
-            { id: 'horse',    emoji: '🐴', name: '카바요 (caballo)',   rarity: 'rare',   desc: '말. 안달루시아 명마!' },
-            { id: 'lion',     emoji: '🦁', name: '레온 (león)',        rarity: 'rare',   desc: '사자. 용맹의 상징이에요.' },
-            { id: 'wolf',     emoji: '🐺', name: '로보 (lobo)',        rarity: 'rare',   desc: '늑대. 이베리아 늑대예요.' },
-            { id: 'bear',     emoji: '🐻', name: '오소 (oso)',         rarity: 'rare',   desc: '곰. 마드리드의 상징이에요!' },
-            { id: 'eagle',    emoji: '🦅', name: '아길라 (águila)',    rarity: 'rare',   desc: '독수리. 하늘의 제왕.' },
-            { id: 'turtle',   emoji: '🐢', name: '토르투가 (tortuga)', rarity: 'rare',   desc: '거북이. 오래오래 살아요.' },
-            { id: 'butterfly',emoji: '🦋', name: '마리포사 (mariposa)',rarity: 'rare',   desc: '나비. 예쁘게 팔랑팔랑.' },
+            { id: "bull", emoji: "🐂", name: "toro (황소)", rarity: "rare", desc: "스페인의 상징이에요!" },
+            { id: "owl", emoji: "🦉", name: "búho (부엉이)", rarity: "rare", desc: "밤에 공부하는 친구." },
+            { id: "fox", emoji: "🦊", name: "zorro (여우)", rarity: "rare", desc: "영리하고 재빨라요." },
+            { id: "octopus", emoji: "🐙", name: "pulpo (문어)", rarity: "rare", desc: "갈리시아식 pulpo가 유명해요!" },
+            { id: "horse", emoji: "🐴", name: "caballo (말)", rarity: "rare", desc: "안달루시아 명마예요." },
+            { id: "lion", emoji: "🦁", name: "león (사자)", rarity: "rare", desc: "용맹의 상징이에요." },
+            { id: "wolf", emoji: "🐺", name: "lobo (늑대)", rarity: "rare", desc: "이베리아 늑대예요." },
+            { id: "bear", emoji: "🐻", name: "oso (곰)", rarity: "rare", desc: "마드리드의 상징이에요!" },
+            { id: "eagle", emoji: "🦅", name: "águila (독수리)", rarity: "rare", desc: "하늘의 제왕이에요." },
+            { id: "turtle", emoji: "🐢", name: "tortuga (거북이)", rarity: "rare", desc: "오래오래 살아요." },
+            { id: "butterfly", emoji: "🦋", name: "mariposa (나비)", rarity: "rare", desc: "예쁘게 팔랑팔랑." },
+            { id: "deer", emoji: "🦌", name: "ciervo (사슴)", rarity: "rare", desc: "숲을 우아하게 달려요." },
+            { id: "monkey", emoji: "🐵", name: "mono (원숭이)", rarity: "rare", desc: "나무를 잘 타요." },
+            { id: "elephant", emoji: "🐘", name: "elefante (코끼리)", rarity: "rare", desc: "코가 아주 길어요." },
+            { id: "penguin", emoji: "🐧", name: "pingüino (펭귄)", rarity: "rare", desc: "뒤뚱뒤뚱 걸어요." },
+            { id: "dolphin", emoji: "🐬", name: "delfín (돌고래)", rarity: "rare", desc: "똑똑한 바다 친구." },
+            { id: "shark", emoji: "🦈", name: "tiburón (상어)", rarity: "rare", desc: "바다의 사냥꾼이에요." },
+            { id: "snake", emoji: "🐍", name: "serpiente (뱀)", rarity: "rare", desc: "스르륵 미끄러져요." },
+            { id: "crab", emoji: "🦀", name: "cangrejo (게)", rarity: "rare", desc: "옆으로 걸어요." },
+            { id: "swan", emoji: "🦢", name: "cisne (백조)", rarity: "rare", desc: "우아한 물새예요." },
+            { id: "peacock_r", emoji: "🦚", name: "pavo real (공작)", rarity: "rare", desc: "화려한 깃털을 뽐내요." },
+            { id: "flamingo", emoji: "🦩", name: "flamenco (홍학)", rarity: "rare", desc: "스페인 춤이랑 이름이 같아요!" },
+            { id: "parrot", emoji: "🦜", name: "loro (앵무새)", rarity: "rare", desc: "말을 따라 해요." },
+            { id: "hedgehog", emoji: "🦔", name: "erizo (고슴도치)", rarity: "rare", desc: "가시로 몸을 지켜요." },
+            { id: "bat", emoji: "🦇", name: "murciélago (박쥐)", rarity: "rare", desc: "발렌시아의 상징이에요!" },
+            { id: "paella", emoji: "🥘", name: "paella (파에야)", rarity: "rare", desc: "스페인 대표 요리예요!" },
+            { id: "grapes_wine", emoji: "🍷", name: "vino (와인)", rarity: "rare", desc: "스페인 리오하 와인!" },
+            { id: "churro", emoji: "🍩", name: "churro (츄러스)", rarity: "rare", desc: "초콜릿에 찍어 먹어요." },
+            { id: "olive", emoji: "🫒", name: "aceituna (올리브)", rarity: "rare", desc: "스페인이 세계 1위예요." },
+            { id: "rainbow", emoji: "🌈", name: "arcoíris (무지개)", rarity: "rare", desc: "비 온 뒤 나타나요." },
             // ===== epic (에픽) =====
-            { id: 'dragon',   emoji: '🐲', name: '드라곤 (dragón)',    rarity: 'epic',   desc: '용! 카탈루냐 전설의 용이에요.' },
-            { id: 'unicorn',  emoji: '🦄', name: '우니코르니오 (unicornio)', rarity: 'epic', desc: '유니콘! 아주 드물어요.' },
-            { id: 'phoenix',  emoji: '🔥', name: '페닉스 (fénix)',     rarity: 'epic',   desc: '불사조! 다시 타오르는 열정!' },
-            { id: 'whale',    emoji: '🐋', name: '바예나 (ballena)',   rarity: 'epic',   desc: '고래. 바다의 거인이에요.' },
-            { id: 'peacock',  emoji: '🦚', name: '파보레알 (pavo real)',rarity: 'epic',  desc: '공작. 화려한 깃털을 뽐내요.' },
-            { id: 'flamingo', emoji: '🦩', name: '플라멩코 (flamenco)',rarity: 'epic',   desc: '홍학! 스페인 춤이랑 이름이 같아요.' },
+            { id: "dragon", emoji: "🐲", name: "dragón (용)", rarity: "epic", desc: "카탈루냐 전설의 용이에요!" },
+            { id: "unicorn", emoji: "🦄", name: "unicornio (유니콘)", rarity: "epic", desc: "아주 드문 전설의 동물!" },
+            { id: "phoenix", emoji: "🔥", name: "fénix (불사조)", rarity: "epic", desc: "다시 타오르는 열정!" },
+            { id: "whale", emoji: "🐋", name: "ballena (고래)", rarity: "epic", desc: "바다의 거인이에요." },
+            { id: "tiger", emoji: "🐯", name: "tigre (호랑이)", rarity: "epic", desc: "용맹한 밀림의 왕." },
+            { id: "panda", emoji: "🐼", name: "panda (판다)", rarity: "epic", desc: "대나무를 좋아해요." },
+            { id: "koala", emoji: "🐨", name: "koala (코알라)", rarity: "epic", desc: "나무에 매달려 자요." },
+            { id: "crocodile", emoji: "🐊", name: "cocodrilo (악어)", rarity: "epic", desc: "강가의 포식자예요." },
+            { id: "rhino", emoji: "🦏", name: "rinoceronte (코뿔소)", rarity: "epic", desc: "단단한 뿔이 있어요." },
+            { id: "hippo", emoji: "🦛", name: "hipopótamo (하마)", rarity: "epic", desc: "물속에서 지내요." },
+            { id: "gorilla", emoji: "🦍", name: "gorila (고릴라)", rarity: "epic", desc: "힘이 아주 세요." },
+            { id: "camel", emoji: "🐫", name: "camello (낙타)", rarity: "epic", desc: "사막을 건너요." },
+            { id: "giraffe", emoji: "🦒", name: "jirafa (기린)", rarity: "epic", desc: "목이 아주 길어요." },
+            { id: "volcano", emoji: "🌋", name: "volcán (화산)", rarity: "epic", desc: "용암을 뿜어요." },
+            { id: "comet", emoji: "☄️", name: "cometa (혜성)", rarity: "epic", desc: "긴 꼬리를 그려요." },
+            { id: "moon", emoji: "🌙", name: "luna (달)", rarity: "epic", desc: "밤을 밝혀줘요." },
+            { id: "sun", emoji: "☀️", name: "sol (태양)", rarity: "epic", desc: "세상을 비춰요." },
+            { id: "crystal", emoji: "💎", name: "cristal (수정)", rarity: "epic", desc: "반짝이는 보석이에요." },
             // ===== legendary (전설) =====
-            { id: 'alien',    emoji: '👽', name: '알리에니헤나 (alienígena)', rarity: 'legendary', desc: '외계 생명체... 대체 뭐지?!' },
-            { id: 'ghost',    emoji: '👾', name: '미스테리오 (misterio)',     rarity: 'legendary', desc: '미스터리. 정체를 알 수 없어요!' },
-            { id: 'robot',    emoji: '🤖', name: '로봇 (robot)',              rarity: 'legendary', desc: '수수께끼의 로봇. 어디서 왔을까?' },
-            { id: 'ninja',    emoji: '🥷', name: '닌하 (ninja)',              rarity: 'legendary', desc: '그림자처럼 나타난 닌자!' },
+            { id: "alien", emoji: "👽", name: "alienígena (외계인)", rarity: "legendary", desc: "정체불명의 외계 생명체!" },
+            { id: "ghost", emoji: "👾", name: "misterio (미스터리)", rarity: "legendary", desc: "정체를 알 수 없어요!" },
+            { id: "robot", emoji: "🤖", name: "robot (로봇)", rarity: "legendary", desc: "수수께끼의 로봇이에요." },
+            { id: "ninja", emoji: "🥷", name: "ninja (닌자)", rarity: "legendary", desc: "그림자처럼 나타나요!" },
+            { id: "wizard", emoji: "🧙", name: "mago (마법사)", rarity: "legendary", desc: "신비한 마법을 부려요." },
+            { id: "mermaid", emoji: "🧜", name: "sirena (인어)", rarity: "legendary", desc: "바닷속 전설의 존재!" },
+            { id: "fairy", emoji: "🧚", name: "hada (요정)", rarity: "legendary", desc: "반짝이는 날개를 가졌어요." },
         ];
 
         const RARITY_INFO = {
@@ -661,21 +729,23 @@ let vocabulary = [];
                 const has = owned.has(c.id);
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
-                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl ${info.bg} border border-slate-100" title="${c.name} (${info.label}) — ${c.desc}">
-                        <span class="text-2xl">${c.emoji}</span>
-                        <span class="text-[9px] font-bold ${info.color} leading-tight">${c.name}</span>
-                        ${counts[c.id] > 1 ? `<span class="text-[8px] text-slate-400">×${counts[c.id]}</span>` : ''}
+                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border border-slate-100">
+                        ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
+                        <span class="text-3xl">${c.emoji}</span>
+                        <span class="text-[11px] font-black ${info.color} leading-tight">${c.name}</span>
+                        <span class="text-[9px] text-slate-400 leading-snug">${c.desc}</span>
                     </div>`;
                 } else {
-                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl bg-slate-50 border border-slate-100 opacity-60" title="아직 못 만난 생물">
-                        <span class="text-2xl grayscale">❔</span>
-                        <span class="text-[9px] font-bold text-slate-300 leading-tight">???</span>
+                    return `<div class="flex flex-col items-center justify-center gap-1 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
+                        <span class="text-3xl grayscale">❔</span>
+                        <span class="text-[11px] font-bold text-slate-300 leading-tight">???</span>
+                        <span class="text-[9px] text-slate-300">아직 못 만났어요</span>
                     </div>`;
                 }
             }).join('');
             return `
                 <div class="mt-3">
-                    <div class="grid grid-cols-4 gap-1.5">${cells}</div>
+                    <div class="grid grid-cols-3 gap-2">${cells}</div>
                 </div>
             `;
         }
@@ -693,17 +763,30 @@ let vocabulary = [];
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
         }
-        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정 (7단계)
+        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정 (12단계)
         function calColor(n, maxVal) {
             if (n === 0) return 'bg-slate-100 border border-slate-200 text-slate-400';
             const ratio = maxVal > 0 ? n / maxVal : 0;
-            if (ratio <= 0.14) return 'bg-emerald-100 text-emerald-700';
-            if (ratio <= 0.28) return 'bg-emerald-200 text-emerald-800';
-            if (ratio <= 0.43) return 'bg-emerald-300 text-emerald-900';
-            if (ratio <= 0.57) return 'bg-emerald-400 text-white';
-            if (ratio <= 0.71) return 'bg-emerald-500 text-white';
-            if (ratio <= 0.85) return 'bg-emerald-600 text-white';
-            return 'bg-emerald-700 text-white';
+            // 12단계 색상 (연함 → 진함)
+            const steps = [
+                'bg-emerald-50 text-emerald-700',
+                'bg-emerald-100 text-emerald-700',
+                'bg-emerald-200 text-emerald-800',
+                'bg-emerald-300 text-emerald-900',
+                'bg-emerald-400 text-white',
+                'bg-emerald-500 text-white',
+                'bg-emerald-600 text-white',
+                'bg-emerald-700 text-white',
+                'bg-emerald-800 text-white',
+                'bg-teal-800 text-white',
+                'bg-teal-900 text-white',
+                'bg-emerald-950 text-white',
+            ];
+            // ratio 0~1 을 1~12 단계로 매핑 (최소 1단계)
+            let idx = Math.ceil(ratio * steps.length) - 1;
+            if (idx < 0) idx = 0;
+            if (idx >= steps.length) idx = steps.length - 1;
+            return steps[idx];
         }
 
         function renderCalendar() {
@@ -1706,14 +1789,14 @@ let vocabulary = [];
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
+                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc).replace(/\n/g, '<br>')}</p>` : ''}
                             <div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
                                     ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<p class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">💡 ${escapeHtml(t.note)}</p>` : ''}
+                            ${t.note ? `<p class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">💡 ${escapeHtml(t.note).replace(/\n/g, '<br>')}</p>` : ''}
                         </div>
                     </div>
                 `;
