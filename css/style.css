@@ -37,3 +37,6 @@ html {
             100% { transform: scale(1) translateX(0); }
         }
         .punch-effect-right { animation: punch-right 0.2s ease-out; }
+        /* [냐냐 PATCH] 사이드바 고정 시 스크롤바 숨김 (내용은 스크롤 가능) */
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
