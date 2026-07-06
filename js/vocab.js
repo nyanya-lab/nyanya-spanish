@@ -966,6 +966,8 @@ function togglePosFields() {
             else pendingFilterPos.push(pos);
             styleFilterPill(btn, i < 0);
         }
+        // [냐냐 PATCH] 전체 품사 목록
+        const ALL_POS_LIST = ['noun','verb','adjective','adverb','preposition','conjunction','pronoun','phrase'];
         function setFilterMastery(btn) {
             pendingFilterMastery = btn.dataset.mastery;
             document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b === btn));
@@ -984,16 +986,18 @@ function togglePosFields() {
 
         // 패널 열 때 현재 적용된 값으로 임시상태 초기화 + 버튼 하이라이트 반영
         function syncFilterPanelUI() {
-            pendingFilterPos = [...activeFilterPos];
-            pendingFilterMastery = document.getElementById('mastery-filter-select')?.value || 'all';
-            pendingFilterSort = document.getElementById('sort-select')?.value || 'recent';
+            // [냐냐 PATCH] 전체(빈 배열)이면 모든 품사가 선택된 것처럼 표시
+            pendingFilterPos = activeFilterPos.length === 0 ? [...ALL_POS_LIST] : [...activeFilterPos];
+            pendingFilterMastery = document.getElementById('mastery-filter-select')?.value || 'not-mastered';
+            pendingFilterSort = document.getElementById('sort-select')?.value || 'weak-score';
             document.querySelectorAll('.filter-pos-btn').forEach(b => styleFilterPill(b, pendingFilterPos.includes(b.dataset.pos)));
             document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.mastery === pendingFilterMastery));
             document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b.dataset.sort === pendingFilterSort));
         }
 
         function applyFilters() {
-            activeFilterPos = [...pendingFilterPos];
+            // [냐냐 PATCH] 전부 선택 = 전체(빈 배열로 저장)
+            activeFilterPos = (pendingFilterPos.length === 0 || pendingFilterPos.length === ALL_POS_LIST.length) ? [] : [...pendingFilterPos];
             const masterySel = document.getElementById('mastery-filter-select');
             const sortSel = document.getElementById('sort-select');
             if (masterySel) masterySel.value = pendingFilterMastery;
