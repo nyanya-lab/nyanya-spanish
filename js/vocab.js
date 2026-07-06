@@ -184,6 +184,10 @@ function togglePosFields() {
             }
             togglePosFields();
             toggleNotesClearBtn();
+            // [냐냐 PATCH] 새 단어 등록이면 단어 입력칸에 바로 커서 (즉시 타이핑 가능)
+            if (!wordId) {
+                setTimeout(() => { const wi = document.getElementById('input-word'); if (wi) wi.focus(); }, 50);
+            }
         }
 
         // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
@@ -323,6 +327,14 @@ function togglePosFields() {
                 if (options.onCancel) options.onCancel();
                 cleanup();
             };
+            // [냐냐 PATCH] 엔터로 확인 버튼 실행 (연속 등록 편하게)
+            setTimeout(() => { try { btnOk.focus(); } catch(e){} }, 50);
+            const keyHandler = (e) => {
+                if (modal.classList.contains('hidden')) { document.removeEventListener('keydown', keyHandler); return; }
+                if (e.key === 'Enter') { e.preventDefault(); btnOk.click(); document.removeEventListener('keydown', keyHandler); }
+                else if (e.key === 'Escape') { e.preventDefault(); btnCancel.click(); document.removeEventListener('keydown', keyHandler); }
+            };
+            document.addEventListener('keydown', keyHandler);
         }
 
         // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
@@ -852,11 +864,52 @@ function togglePosFields() {
                 logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
-            closeWordModal();
             renderWordList();
             updateStats();
-            // [냐냐 PATCH] AI 첨삭 핵심분석에 등록 버튼이 떠있으면 '✓ 등록됨'으로 갱신
             if (typeof refreshBreakdownRegisterButtons === 'function') refreshBreakdownRegisterButtons();
+
+            // [냐냐 PATCH] 새 단어 등록이면 계속 등록할지 물어봄 (수정이면 그냥 닫기)
+            if (!modalId) {
+                showConfirm(
+                    "단어를 등록했어요! 📚",
+                    "계속해서 다른 단어를 등록하시겠어요?",
+                    () => { prepareNextWordEntry(); }, // 예 → 폼 비우고 바로 다음 단어 입력
+                    {
+                        okLabel: '계속 등록',
+                        cancelLabel: '아니요',
+                        okStyle: 'primary',
+                        onCancel: () => { closeWordModal(); } // 아니요 → 등록창 닫기
+                    }
+                );
+            } else {
+                closeWordModal();
+            }
+        }
+
+        // [냐냐 PATCH] 다음 단어를 바로 입력할 수 있게 폼 초기화 + 커서 이동
+        function prepareNextWordEntry() {
+            document.getElementById('modal-word-id').value = '';
+            document.getElementById('input-word').value = '';
+            document.getElementById('input-meaning').value = '';
+            document.getElementById('input-pos').value = 'noun';
+            document.getElementById('input-gender').value = 'none';
+            document.getElementById('input-adj-agreement').value = 'full';
+            document.getElementById('input-verb-class').value = 'regular';
+            document.getElementById('input-verb-irregular-type').value = 'none';
+            document.getElementById('input-verb-irregular-type').disabled = true;
+            clearConjugationFields();
+            document.getElementById('input-example').value = '';
+            document.getElementById('input-example-meaning').value = '';
+            clearIdiomRows();
+            const ib = document.getElementById('idiom-fields-box');
+            const ii = document.getElementById('idiom-toggle-icon');
+            if (ib) ib.classList.add('hidden');
+            if (ii) ii.className = "fa-solid fa-plus text-xs";
+            document.getElementById('input-notes').value = '· ';
+            document.getElementById('word-suggestions').classList.add('hidden');
+            togglePosFields();
+            toggleNotesClearBtn();
+            setTimeout(() => { const wi = document.getElementById('input-word'); if (wi) wi.focus(); }, 50);
         }
 
         function deleteWord(wordId, event) {
@@ -954,10 +1007,46 @@ function togglePosFields() {
         // Render Vocabulary Tab List
         // [냐냐 PATCH] 필터/정렬 패널 펼치기/접기
         // [냐냐 PATCH] 필터 패널: 품사 중복선택 + 마스터/정렬 단일선택, 확인 눌러야 적용
-        let activeFilterPos = [];          // 적용된 품사 목록 (빈 배열 = 전체)
-        let pendingFilterPos = [];         // 패널에서 선택 중인 (임시)
+        const ALL_POS_LIST = ['noun','verb','adjective','adverb','preposition','conjunction','pronoun','interrogative','phrase'];
+        const POS_LABELS = { noun:'명사', verb:'동사', adjective:'형용사', adverb:'부사', preposition:'전치사', conjunction:'접속사', pronoun:'대명사', interrogative:'의문사', phrase:'구문' };
+        const MASTERY_LABELS = { all:'전체', mastered:'마스터만', 'not-mastered':'미마스터' };
+        const WEAK_LABELS = { all:'', weak:'약점만', 'not-weak':'약점제외' };
+        const SORT_LABELS = { recent:'최근순', oldest:'오래된순', 'weak-score':'약점순', 'alpha-asc':'A→Z', 'alpha-desc':'Z→A' };
+
+        // 적용된 필터 상태 (localStorage에서 복원, 없으면 기본값)
+        let activeFilterPos = [];          // 빈 배열 = 전체
+        let activeFilterMastery = 'not-mastered';
+        let activeFilterWeak = 'all';
+        let activeFilterSort = 'weak-score';
+        // 패널에서 선택 중인 임시 상태
+        let pendingFilterPos = [];
         let pendingFilterMastery = 'not-mastered';
+        let pendingFilterWeak = 'all';
         let pendingFilterSort = 'weak-score';
+
+        // [냐냐 PATCH] 필터/정렬 저장·복원 (localStorage)
+        function saveFilterPrefs() {
+            try {
+                localStorage.setItem('nyanya_word_filters', JSON.stringify({
+                    pos: activeFilterPos, mastery: activeFilterMastery, weak: activeFilterWeak, sort: activeFilterSort
+                }));
+            } catch (e) {}
+        }
+        function loadFilterPrefs() {
+            try {
+                const raw = localStorage.getItem('nyanya_word_filters');
+                if (!raw) return; // 첫 방문 = 기본값 유지
+                const f = JSON.parse(raw);
+                if (Array.isArray(f.pos)) activeFilterPos = f.pos;
+                if (f.mastery) activeFilterMastery = f.mastery;
+                if (f.weak) activeFilterWeak = f.weak;
+                if (f.sort) activeFilterSort = f.sort;
+                // 숨은 select도 동기화
+                const ms = document.getElementById('mastery-filter-select'); if (ms) ms.value = activeFilterMastery;
+                const ws = document.getElementById('weak-filter-select'); if (ws) ws.value = activeFilterWeak;
+                const ss = document.getElementById('sort-select'); if (ss) ss.value = activeFilterSort;
+            } catch (e) {}
+        }
 
         function toggleFilterPos(btn) {
             const pos = btn.dataset.pos;
@@ -965,12 +1054,26 @@ function togglePosFields() {
             if (i >= 0) pendingFilterPos.splice(i, 1);
             else pendingFilterPos.push(pos);
             styleFilterPill(btn, i < 0);
+            updatePosAllBtnLabel();
         }
-        // [냐냐 PATCH] 전체 품사 목록
-        const ALL_POS_LIST = ['noun','verb','adjective','adverb','preposition','conjunction','pronoun','phrase'];
+        // [냐냐 PATCH] 품사 전체 선택/해제 토글
+        function toggleAllFilterPos() {
+            const allOn = pendingFilterPos.length >= ALL_POS_LIST.length;
+            pendingFilterPos = allOn ? [] : [...ALL_POS_LIST];
+            document.querySelectorAll('.filter-pos-btn').forEach(b => styleFilterPill(b, pendingFilterPos.includes(b.dataset.pos)));
+            updatePosAllBtnLabel();
+        }
+        function updatePosAllBtnLabel() {
+            const btn = document.getElementById('filter-pos-all-btn');
+            if (btn) btn.innerText = (pendingFilterPos.length >= ALL_POS_LIST.length) ? '전체 해제' : '전체 선택';
+        }
         function setFilterMastery(btn) {
             pendingFilterMastery = btn.dataset.mastery;
             document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b === btn));
+        }
+        function setFilterWeak(btn) {
+            pendingFilterWeak = btn.dataset.weak;
+            document.querySelectorAll('.filter-weak-btn').forEach(b => styleFilterPill(b, b === btn));
         }
         function setFilterSort(btn) {
             pendingFilterSort = btn.dataset.sort;
@@ -984,33 +1087,63 @@ function togglePosFields() {
             }
         }
 
-        // 패널 열 때 현재 적용된 값으로 임시상태 초기화 + 버튼 하이라이트 반영
+        // 패널 열 때 현재 '적용된' 값으로 임시상태 초기화 (최근 선택값 유지)
         function syncFilterPanelUI() {
-            // [냐냐 PATCH] 전체(빈 배열)이면 모든 품사가 선택된 것처럼 표시
             pendingFilterPos = activeFilterPos.length === 0 ? [...ALL_POS_LIST] : [...activeFilterPos];
-            pendingFilterMastery = document.getElementById('mastery-filter-select')?.value || 'not-mastered';
-            pendingFilterSort = document.getElementById('sort-select')?.value || 'weak-score';
+            pendingFilterMastery = activeFilterMastery;
+            pendingFilterWeak = activeFilterWeak;
+            pendingFilterSort = activeFilterSort;
             document.querySelectorAll('.filter-pos-btn').forEach(b => styleFilterPill(b, pendingFilterPos.includes(b.dataset.pos)));
             document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.mastery === pendingFilterMastery));
+            document.querySelectorAll('.filter-weak-btn').forEach(b => styleFilterPill(b, b.dataset.weak === pendingFilterWeak));
             document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b.dataset.sort === pendingFilterSort));
+            updatePosAllBtnLabel();
         }
 
         function applyFilters() {
-            // [냐냐 PATCH] 전부 선택 = 전체(빈 배열로 저장)
             activeFilterPos = (pendingFilterPos.length === 0 || pendingFilterPos.length === ALL_POS_LIST.length) ? [] : [...pendingFilterPos];
+            activeFilterMastery = pendingFilterMastery;
+            activeFilterWeak = pendingFilterWeak;
+            activeFilterSort = pendingFilterSort;
             const masterySel = document.getElementById('mastery-filter-select');
+            const weakSel = document.getElementById('weak-filter-select');
             const sortSel = document.getElementById('sort-select');
-            if (masterySel) masterySel.value = pendingFilterMastery;
-            if (sortSel) sortSel.value = pendingFilterSort;
+            if (masterySel) masterySel.value = activeFilterMastery;
+            if (weakSel) weakSel.value = activeFilterWeak;
+            if (sortSel) sortSel.value = activeFilterSort;
             todayWrongFilterActive = false;
+            saveFilterPrefs();
             closeFilterPanel();
             renderWordList();
         }
         function resetFilters() {
-            pendingFilterPos = [];
+            pendingFilterPos = [...ALL_POS_LIST];
             pendingFilterMastery = 'not-mastered';
+            pendingFilterWeak = 'all';
             pendingFilterSort = 'weak-score';
             syncFilterPanelUI();
+        }
+
+        // [냐냐 PATCH] 현재 필터/정렬 한 줄 요약
+        function renderFilterSummary() {
+            const box = document.getElementById('filter-summary');
+            if (!box) return;
+            const chips = [];
+            // 품사
+            if (activeFilterPos.length > 0 && activeFilterPos.length < ALL_POS_LIST.length) {
+                chips.push(activeFilterPos.map(p => POS_LABELS[p] || p).join('·'));
+            }
+            // 마스터 상태 (기본 미마스터가 아닐 때만 표시... 은 아니고 항상 상태 보여주되 '전체'는 생략)
+            if (activeFilterMastery !== 'all') chips.push(MASTERY_LABELS[activeFilterMastery]);
+            // 약점 (전체가 아니면)
+            if (activeFilterWeak !== 'all') chips.push(WEAK_LABELS[activeFilterWeak]);
+            // 정렬은 항상 표시
+            const sortLabel = SORT_LABELS[activeFilterSort] || activeFilterSort;
+
+            const filterPart = chips.length > 0
+                ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${c}</span>`).join('')
+                : `<span class="text-slate-400">전체 단어</span>`;
+            box.innerHTML = `<i class="fa-solid fa-filter text-[9px]"></i>${filterPart}<span class="text-slate-300">·</span><span class="text-slate-500">${sortLabel}</span>`;
         }
         function closeFilterPanel() {
             document.getElementById('filter-panel').classList.add('hidden');
@@ -1026,15 +1159,7 @@ function togglePosFields() {
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
-            if (val.trim()) todayWrongFilterActive = false; // [냐냐 PATCH] 검색 시 오늘틀린 필터 해제
-            // [냐냐 PATCH] 검색을 시작하면 필터를 전체로 초기화해서 모든 단어에서 검색되게 함
-            if (val.trim()) {
-                activeFilterPos = []; // [냐냐 PATCH] 검색 시 품사 필터도 초기화
-                const masterySel = document.getElementById('mastery-filter-select');
-                const sortSel = document.getElementById('sort-select');
-                if (masterySel) masterySel.value = 'all';
-                if (sortSel) sortSel.value = 'recent';
-            }
+            if (val.trim()) todayWrongFilterActive = false;
             renderWordList();
         }
 
@@ -1054,7 +1179,10 @@ function togglePosFields() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
-            const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
+            const isSearching = searchVal.length > 0; // [냐냐 PATCH] 검색 중이면 필터 무시하고 전체에서 검색
+            const masteryFilter = isSearching ? 'all' : activeFilterMastery;
+            const weakFilter = isSearching ? 'all' : activeFilterWeak;
+            const posFilterActive = isSearching ? [] : activeFilterPos;
             // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
             const expandedAll = (searchVal.length > 0 || todayWrongFilterActive) ? true : wordListExpandedAll;
             
@@ -1063,26 +1191,28 @@ function togglePosFields() {
                 const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
                 const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
                 const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
-                const matchesPos = activeFilterPos.length === 0 || activeFilterPos.includes(w.pos);
+                const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
+                // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
                 const matchesMastery = masteryFilter === 'all'
                     || (masteryFilter === 'mastered' && w.mastered)
-                    || (masteryFilter === 'not-mastered' && !w.mastered)
-                    || (masteryFilter === 'weak' && w.weak)
-                    || (masteryFilter === 'not-weak' && !w.weak);
-                // [냐냐 PATCH] '오늘 틀린 단어 보기'가 켜져있으면 오늘 틀린 단어만
-                // [냐냐 PATCH] '복습할 단어 보기'가 켜져있으면 망각곡선 복습 대상만
+                    || (masteryFilter === 'not-mastered' && !w.mastered);
+                // [냐냐 PATCH] 약점 필터 (전체/약점만/약점제외) — 분리됨
+                const matchesWeak = weakFilter === 'all'
+                    || (weakFilter === 'weak' && w.weak)
+                    || (weakFilter === 'not-weak' && !w.weak);
                 const matchesTodayWrong = !todayWrongFilterActive || (!w.mastered && w.lastWrongDate && (daysSince(w.lastWrongDate) === 0 || REVIEW_INTERVALS.includes(daysSince(w.lastWrongDate))));
-                return matchesSearch && matchesPos && matchesMastery && matchesTodayWrong;
+                return matchesSearch && matchesPos && matchesMastery && matchesWeak && matchesTodayWrong;
             });
 
-            // [냐냐 PATCH] 기본값이 아닌 필터/정렬이 하나라도 켜져 있으면 버튼에 표시점 보여줌
-            const sortModeForBadge = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
-            const hasActiveFilter = activeFilterPos.length > 0 || masteryFilter !== 'not-mastered' || sortModeForBadge !== 'weak-score';
+            // [냐냐 PATCH] 필터/정렬 요약 한 줄 + 활성 표시점
+            renderFilterSummary();
+            const sortModeForBadge = activeFilterSort;
+            const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered' || activeFilterWeak !== 'all' || sortModeForBadge !== 'weak-score';
             const badge = document.getElementById('filter-active-badge');
             if (badge) badge.classList.toggle('hidden', !hasActiveFilter);
 
-            // [PATCH-20] 정렬 기능 (최근 추가순은 배열 기본 순서를 그대로 사용)
-            const sortMode = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
+            // [냐냐 PATCH] 단어 목록은 항상 ABC순(정관사 제외) — 검색 결과도 정렬
+            const sortMode = isSearching ? 'alpha-asc' : activeFilterSort;
 
             // [냐냐 PATCH] 정렬용으로만 맨 앞 정관사/부정관사를 떼어냄 (단수·복수 모두)
             // 예: "el libro" → "libro", "las casas" → "casas". 화면에 보이는 단어는 그대로 유지됨.
@@ -1144,6 +1274,8 @@ function togglePosFields() {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-cyan-100 text-cyan-700 shadow-sm">Conj.</span>`;
                 } else if (w.pos === 'pronoun') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
+                } else if (w.pos === 'interrogative') {
+                    badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-indigo-100 text-indigo-700 shadow-sm">의문사</span>`;
                 } else if (w.pos === 'phrase') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
                 }
