@@ -327,6 +327,7 @@
 
                 <!-- TAB 3: VOCAB QUIZ -->
                 <div id="tab-quiz" class="hidden space-y-6">
+                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
@@ -339,6 +340,7 @@
                             <span class="text-xs font-bold text-slate-500">진행:</span>
                             <span id="quiz-progress-text" class="text-lg font-black text-violet-600">0/0</span>
                         </div>
+                    </div>
                     </div>
 
                     <!-- 설정 화면 -->
@@ -462,12 +464,14 @@
 
                 <!-- TAB: 단어 복습 (깜빡이 방식) -->
                 <div id="tab-review" class="hidden space-y-6">
+                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
                         <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">👁️</div>
                         <div>
                             <h2 class="text-base font-bold text-slate-900">단어 복습</h2>
                             <p class="text-xs text-slate-400 mt-0.5">단어가 잠깐 보였다 사라져요. 기억해서 써보며 복습해요!</p>
                         </div>
+                    </div>
                     </div>
 
                     <!-- 복습 설정 화면 -->
@@ -519,12 +523,14 @@
 
                 <!-- TAB: 미니 게임 -->
                 <div id="tab-games" class="hidden space-y-6">
+                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
                         <div class="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center text-2xl">🎮</div>
                         <div>
                             <h2 class="text-base font-bold text-slate-900">미니 게임</h2>
                             <p class="text-xs text-slate-400 mt-0.5">재미있게 단어를 복습해 보세요!</p>
                         </div>
+                    </div>
                     </div>
 
                     <!-- 게임 선택 화면 -->
@@ -554,6 +560,7 @@
 
                 <!-- TAB 4: AI 1:1 TRANSLATION RING -->
                 <div id="tab-ai-feedback" class="hidden space-y-6">
+                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div class="flex items-center gap-3">
@@ -581,6 +588,7 @@
                             </button>
                         </div>
                     </div>
+                    </div><!-- /sticky ai title wrap -->
 
                     <!-- MODE A: KOREAN TO SPANISH PLAYGROUND -->
                     <div id="ai-pane-ko-es" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
@@ -1348,6 +1356,26 @@
     <!-- PRESET 4: BACKUP / TRANSFER TO OTHER DEVICE MODAL -->
     <!-- 질문 관리 모달 -->
     <!-- 질문 수정 모달 -->
+    <!-- [냐냐 PATCH] 주제 이름 수정 모달 -->
+    <div id="topic-rename-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">✏️ 주제 이름 수정</h3>
+                <button onclick="closeTopicRenameModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-3">
+                <p class="text-xs text-slate-400"><span id="topic-rename-old" class="font-bold text-slate-600"></span> 주제의 이름을 바꾸면, 이 주제의 모든 질문이 새 이름으로 옮겨져요.</p>
+                <div class="space-y-1">
+                    <label class="block text-xs font-bold text-slate-500">새 주제 이름</label>
+                    <input type="text" id="topic-rename-input" onkeydown="if(event.key==='Enter'){event.preventDefault();saveTopicRename();}" autocomplete="off" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                </div>
+                <button onclick="saveTopicRename()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 mt-2">이름 바꾸기</button>
+            </div>
+        </div>
+    </div>
+
     <div id="question-edit-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -1374,7 +1402,7 @@
     <div id="question-manage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">💬 질문 관리</h3>
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">💬 질문 관리 <span id="question-total-count" class="text-xs font-bold text-violet-500 bg-violet-50 px-2 py-0.5 rounded-full"></span></h3>
                 <button onclick="closeQuestionManageModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
