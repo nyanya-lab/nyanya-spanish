@@ -265,7 +265,8 @@ let vocabulary = [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
                 grammarCellHighlights = payload.grammarCellHighlights || {};
-                eggState = payload.eggState || defaultEggState();
+                eggState = Object.assign(defaultEggState(), payload.eggState || {});
+                if (!Array.isArray(eggState.collection)) eggState.collection = [];
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -583,50 +584,68 @@ let vocabulary = [];
         let eggCollectionOpen = false; // [냐냐 PATCH] 도감 접힘 상태 (기본 접힘)
         function renderEgg() {
             const container = document.getElementById('egg-widget');
-            if (!container) return;
             if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
             const ratio = Math.min(1, eggState.progress / EGG_HATCH_GOAL);
             const stage = eggStageVisual(ratio);
             const pct = Math.round(ratio * 100);
             const remain = Math.max(0, EGG_HATCH_GOAL - eggState.progress);
 
-            container.innerHTML = `
-                <div class="flex items-center gap-2 mb-3">
-                    <span class="text-lg">🥚</span>
-                    <div>
-                        <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
-                        <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
-                    </div>
-                </div>
-                <div class="flex flex-col items-center text-center gap-3">
-                    <div class="text-6xl transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
-                    <p class="text-sm font-black text-slate-800">${stage.label}</p>
-                    <div class="w-full">
-                        <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-500" style="width:${pct}%"></div>
+            if (container) {
+                container.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🥚</span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
+                            <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-1.5">부화까지 <b class="text-orange-500">${remain}</b> 학습 남았어요 (${pct}%)</p>
                     </div>
-                    <p class="text-[11px] text-slate-500">지금까지 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
-                </div>
-                <div class="mt-3 pt-3 border-t border-amber-100">
-                    <button onclick="toggleEggCollection()" class="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
-                        🗂️ 생물 도감 보기
-                        <i class="fa-solid fa-chevron-down text-[10px] transition-transform ${eggCollectionOpen ? 'rotate-180' : ''}"></i>
-                    </button>
-                    <div id="egg-collection-body" class="${eggCollectionOpen ? '' : 'hidden'}">
-                        ${renderCollectionGrid()}
+                    <div class="flex flex-col items-center text-center gap-3">
+                        <div class="text-6xl transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
+                        <p class="text-sm font-black text-slate-800">${stage.label}</p>
+                        <div class="w-full">
+                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-500" style="width:${pct}%"></div>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-1.5">부화까지 <b class="text-orange-500">${remain}</b> 학습 남았어요 (${pct}%)</p>
+                        </div>
+                        <p class="text-[11px] text-slate-500">지금까지 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
                     </div>
+                `;
+            }
+            // 도감(별도 하단 섹션)도 같이 갱신
+            renderEggCollectionSection();
+        }
+
+        // [냐냐 PATCH] 생물 도감 — 하단 별도 섹션 (접힘 기본)
+        function renderEggCollectionSection() {
+            const sec = document.getElementById('egg-collection-section');
+            if (!sec) return;
+            if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
+            const uniqueCount = new Set(eggState.collection).size;
+            sec.innerHTML = `
+                <button onclick="toggleEggCollection()" class="w-full flex items-center justify-between gap-2">
+                    <span class="flex items-center gap-2 text-left">
+                        <span class="text-sm">🗂️</span>
+                        <span class="text-xs font-bold text-slate-700">생물 도감 <span class="font-normal text-slate-400">(${uniqueCount}/${CREATURES.length} 수집)</span></span>
+                    </span>
+                    <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0 ${eggCollectionOpen ? '' : 'rotate-180'}"></i>
+                </button>
+                <div id="egg-collection-body" class="${eggCollectionOpen ? '' : 'hidden'}">
+                    ${renderCollectionGrid()}
                 </div>
             `;
         }
 
         function toggleEggCollection() {
             eggCollectionOpen = !eggCollectionOpen;
-            renderEgg();
+            renderEggCollectionSection();
         }
 
         function renderCollectionGrid() {
+            if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
             const owned = new Set(eggState.collection);
             const counts = {};
             eggState.collection.forEach(id => counts[id] = (counts[id] || 0) + 1);
