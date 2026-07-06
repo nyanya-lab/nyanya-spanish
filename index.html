@@ -843,28 +843,22 @@
                         </div>
                     </div>
 
-                    <!-- 연속 학습일 -->
-                    <div id="streak-card" class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-3xl p-5 flex items-center justify-between gap-4">
-                        <div class="flex items-center gap-4 min-w-0">
-                            <div class="text-4xl shrink-0" id="streak-fire">🔥</div>
-                            <div class="min-w-0">
-                                <p class="text-2xl font-black text-orange-700 leading-tight" id="streak-main">0일 연속</p>
-                                <p class="text-xs font-bold text-orange-500 mt-0.5" id="streak-best">최고 기록: 0일</p>
+                    <!-- 연속 학습일 + 알 키우기 (한 줄) -->
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div id="streak-card" class="flex-1 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-3xl p-5 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="text-3xl shrink-0" id="streak-fire">🔥</div>
+                                <div class="min-w-0">
+                                    <p class="text-xl font-black text-orange-700 leading-tight" id="streak-main">0일 연속</p>
+                                    <p class="text-[11px] font-bold text-orange-500 mt-0.5" id="streak-best">최고 기록: 0일</p>
+                                </div>
                             </div>
                         </div>
-                        <p class="text-[11px] text-orange-400 text-right shrink-0 max-w-[130px] leading-relaxed">하루에 5개 이상 학습하면 연속일이 쌓여요!</p>
-                    </div>
 
-                    <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 -->
-                    <div class="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-3xl p-5">
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-lg">🥚</span>
-                            <div>
-                                <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
-                                <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올지는 부화해봐야 알아요!</p>
-                            </div>
+                        <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 (최고기록 옆) -->
+                        <div class="flex-1 bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-3xl p-5">
+                            <div id="egg-widget"></div>
                         </div>
-                        <div id="egg-widget"></div>
                     </div>
 
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
@@ -873,52 +867,6 @@
                         <label class="text-xs font-bold text-slate-500">종료일</label>
                         <input type="date" id="record-custom-end" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
                         <button onclick="applyCustomRecordRange()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95">적용</button>
-                    </div>
-
-                    <!-- 요약 스탯 -->
-                    <div>
-                        <button onclick="toggleChartCard('summary-stats-body', this)" class="w-full flex items-center justify-between gap-2 mb-2">
-                            <span class="text-xs font-bold text-slate-500">숫자 요약</span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="summary-stats-body" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
-                            <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 등록</span>
-                            <span id="record-stat-new-words" class="text-xl font-black text-violet-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">풀이 퀴즈</span>
-                            <span id="record-stat-quiz" class="text-xl font-black text-amber-600">0/0</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 마스터 단어</span>
-                            <span id="record-stat-mastered" class="text-xl font-black text-emerald-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 마스터</span>
-                            <span id="record-stat-new-mastered" class="text-xl font-black text-emerald-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">AI 첨삭</span>
-                            <span id="record-stat-ai" class="text-xl font-black text-indigo-600">0회</span>
-                        </div>
-                        </div>
-                    </div>
-
-                    <!-- 내 학습 수준 (AI 맞춤용 데이터) -->
-                    <div class="bg-gradient-to-br from-violet-50 to-violet-50 p-5 rounded-3xl border border-violet-100 shadow-sm">
-                        <button onclick="toggleChartCard('learner-profile-display', this)" class="w-full flex items-center justify-between gap-2 mb-3">
-                            <span class="flex items-center gap-2 text-left">
-                                <span class="text-sm">🎯</span>
-                                <span class="text-xs font-bold text-slate-700">내 학습 수준 <span class="font-normal text-slate-400">(AI가 문제·첨삭 난이도를 맞출 때 참고하는 데이터예요)</span></span>
-                            </span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
                     </div>
 
                     <!-- 단어장 성장 그래프 -->
@@ -971,6 +919,54 @@
                         </button>
                         <div id="chart-body-ai"><div id="record-ai-chart" class="w-full relative"></div></div>
                     </div>
+
+                    <!-- [냐냐 PATCH] 숫자 요약 + 학습 수준 (맨 아래로 이동) -->
+                    <!-- 요약 스탯 -->
+                    <div>
+                        <button onclick="toggleChartCard('summary-stats-body', this)" class="w-full flex items-center justify-between gap-2 mb-2">
+                            <span class="text-xs font-bold text-slate-500">숫자 요약</span>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
+                        </button>
+                        <div id="summary-stats-body" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
+                            <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 등록</span>
+                            <span id="record-stat-new-words" class="text-xl font-black text-violet-400">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">풀이 퀴즈</span>
+                            <span id="record-stat-quiz" class="text-xl font-black text-amber-600">0/0</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">총 마스터 단어</span>
+                            <span id="record-stat-mastered" class="text-xl font-black text-emerald-600">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 마스터</span>
+                            <span id="record-stat-new-mastered" class="text-xl font-black text-emerald-400">0개</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">AI 첨삭</span>
+                            <span id="record-stat-ai" class="text-xl font-black text-indigo-600">0회</span>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- 내 학습 수준 (AI 맞춤용 데이터) -->
+                    <div class="bg-gradient-to-br from-violet-50 to-violet-50 p-5 rounded-3xl border border-violet-100 shadow-sm">
+                        <button onclick="toggleChartCard('learner-profile-display', this)" class="w-full flex items-center justify-between gap-2 mb-3">
+                            <span class="flex items-center gap-2 text-left">
+                                <span class="text-sm">🎯</span>
+                                <span class="text-xs font-bold text-slate-700">내 학습 수준 <span class="font-normal text-slate-400">(AI가 문제·첨삭 난이도를 맞출 때 참고하는 데이터예요)</span></span>
+                            </span>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
+                        </button>
+                        <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
+                    </div>
+
                 </div>
 
                 <!-- TAB: 문법 표 -->
