@@ -83,30 +83,104 @@
             document.getElementById('question-manage-modal').classList.add('hidden');
         }
 
-        // 등록된 주제들을 모아서 입력창 자동완성(datalist)에 채움
+        // [냐냐 PATCH] 드롭다운에서 숨긴 주제 목록 (질문은 유지, 목록에서만 숨김)
+        // hiddenQuestionTopics는 core.js 전역에서 관리됨
         function refreshTopicsDatalist() {
-            const datalist = document.getElementById('question-topics-datalist');
-            if (!datalist) return;
-            const topics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
-            datalist.innerHTML = topics.map(t => `<option value="${t.replace(/"/g, '&quot;')}">`).join('');
+            const sel = document.getElementById('new-question-topic-select');
+            if (!sel) return;
+            const prev = sel.value;
+            const allTopics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
+            const visible = allTopics.filter(t => !hiddenQuestionTopics.includes(t));
+            let html = '';
+            if (visible.length > 0) {
+                html += visible.map(t => `<option value="${t.replace(/"/g, '&quot;')}">${t}</option>`).join('');
+            }
+            html += `<option value="__new__">➕ 새 주제 입력...</option>`;
+            sel.innerHTML = html;
+            // 이전 선택 유지 (있으면)
+            if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+            onTopicSelectChange();
+        }
+        // 드롭다운에서 '새 주제'를 고르면 텍스트 입력칸 표시
+        function onTopicSelectChange() {
+            const sel = document.getElementById('new-question-topic-select');
+            const input = document.getElementById('new-question-topic-input');
+            if (!sel || !input) return;
+            if (sel.value === '__new__') {
+                input.classList.remove('hidden');
+                input.focus();
+            } else {
+                input.classList.add('hidden');
+            }
         }
 
         function addCustomQuestion() {
             const input = document.getElementById('new-question-input');
+            const sel = document.getElementById('new-question-topic-select');
             const topicInput = document.getElementById('new-question-topic-input');
             const text = input.value.trim();
-            const topic = topicInput.value.trim() || '기타';
+            // 주제: 드롭다운이 '새 주제'면 입력칸 값, 아니면 선택값
+            let topic;
+            if (sel && sel.value === '__new__') {
+                topic = topicInput.value.trim() || '기타';
+            } else {
+                topic = (sel && sel.value) ? sel.value : '기타';
+            }
             if (!text) {
                 showToast("질문 내용을 입력해 주세요!", "error");
                 return;
             }
             customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
             input.value = '';
-            // 주제는 연속 등록 편하게 유지
+            // 새로 만든 주제가 숨김 목록에 있었으면 다시 보이게
+            const hi = hiddenQuestionTopics.indexOf(topic);
+            if (hi >= 0) hiddenQuestionTopics.splice(hi, 1);
             saveToStorage();
             renderCustomQuestionsList();
             refreshTopicsDatalist();
+            if (sel) sel.value = topic; // 방금 등록한 주제 유지
+            onTopicSelectChange();
             showToast(`'${topic}' 주제에 질문을 등록했어요! 📝`, "success");
+        }
+
+        // ── 주제 관리 모달 (드롭다운에서 숨기기/보이기) ──
+        function openTopicManageModal() {
+            renderTopicManageList();
+            document.getElementById('topic-manage-modal').classList.remove('hidden');
+        }
+        function closeTopicManageModal() {
+            document.getElementById('topic-manage-modal').classList.add('hidden');
+        }
+        function renderTopicManageList() {
+            const box = document.getElementById('topic-manage-list');
+            if (!box) return;
+            const counts = {};
+            customQuestions.forEach(q => { const t = q.topic || '기타'; counts[t] = (counts[t] || 0) + 1; });
+            const topics = Object.keys(counts);
+            if (topics.length === 0) {
+                box.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">등록된 주제가 없어요.</p>`;
+                return;
+            }
+            box.innerHTML = topics.map(t => {
+                const hidden = hiddenQuestionTopics.includes(t);
+                return `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border ${hidden ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200'}">
+                    <span class="flex items-center gap-2 min-w-0">
+                        <span class="text-xs font-bold ${hidden ? 'text-slate-400 line-through' : 'text-slate-700'} truncate">${t}</span>
+                        <span class="text-[10px] text-slate-400 shrink-0">${counts[t]}개</span>
+                    </span>
+                    <button onclick="toggleHiddenTopic('${t.replace(/'/g, "\\'")}')" title="${hidden ? '드롭다운에 다시 보이기' : '드롭다운에서 숨기기'}" class="shrink-0 ${hidden ? 'text-slate-400 hover:text-violet-500' : 'text-slate-300 hover:text-rose-500'} transition-colors px-1">
+                        <i class="fa-solid ${hidden ? 'fa-eye' : 'fa-trash-can'} text-xs"></i>
+                    </button>
+                </div>`;
+            }).join('');
+        }
+        async function toggleHiddenTopic(topic) {
+            const i = hiddenQuestionTopics.indexOf(topic);
+            if (i >= 0) hiddenQuestionTopics.splice(i, 1);
+            else hiddenQuestionTopics.push(topic);
+            await saveToStorage();
+            renderTopicManageList();
+            refreshTopicsDatalist();
         }
 
         function deleteCustomQuestion(id) {
