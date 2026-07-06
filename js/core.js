@@ -159,6 +159,7 @@ let vocabulary = [];
                 customGrammarTables: customGrammarTables,
                 pinnedGrammar: pinnedGrammar,
                 hiddenDefaultGrammar: hiddenDefaultGrammar,
+                hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 eggState: eggState
             };
@@ -266,6 +267,7 @@ let vocabulary = [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
                 hiddenDefaultGrammar = payload.hiddenDefaultGrammar || [];
+                hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 eggState = Object.assign(defaultEggState(), payload.eggState || {});
                 if (!Array.isArray(eggState.collection)) eggState.collection = [];
@@ -278,6 +280,7 @@ let vocabulary = [];
                 customGrammarTables = [];
                 pinnedGrammar = {};
                 hiddenDefaultGrammar = [];
+                hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 eggState = defaultEggState();
             }
@@ -1495,6 +1498,7 @@ let vocabulary = [];
         let grammarOpenState = {}; // 표별 펼침 상태 기억
         let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
+        let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
         const GRAMMAR_TABLES = [
             {
@@ -1626,6 +1630,19 @@ let vocabulary = [];
             return result;
         }
 
+        // [냐냐 PATCH] 문법표 정렬 모드 ('newest' | 'oldest'), 기본 최신순
+        let grammarSortMode = 'newest';
+        function toggleGrammarSort() {
+            grammarSortMode = grammarSortMode === 'newest' ? 'oldest' : 'newest';
+            const btn = document.getElementById('grammar-sort-btn');
+            if (btn) {
+                btn.innerHTML = grammarSortMode === 'newest'
+                    ? '<i class="fa-solid fa-arrow-down-wide-short mr-1"></i>최신순'
+                    : '<i class="fa-solid fa-arrow-up-wide-short mr-1"></i>오래된순';
+            }
+            renderGrammarTables();
+        }
+
         function renderGrammarTables() {
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
@@ -1642,7 +1659,11 @@ let vocabulary = [];
 
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
-            // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 원래 순서 유지)
+            // [냐냐 PATCH] 최신순/오래된순 정렬 (natural order = 오래된순, reverse = 최신순)
+            if (grammarSortMode === 'newest') {
+                tables = [...tables].reverse();
+            }
+            // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 정렬된 순서 유지)
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
 
             container.innerHTML = tables.map((t, idx) => {
@@ -1792,10 +1813,38 @@ let vocabulary = [];
             grammarEditorState = null;
         }
 
+        // [냐냐 PATCH] 문법 종류별 아이콘 목록
+        const GRAMMAR_ICONS = [
+            { icon: '📘', label: '기본' },
+            { icon: '🔢', label: '숫자' },
+            { icon: '👤', label: '인칭/대명사' },
+            { icon: '⏰', label: '시제' },
+            { icon: '🔀', label: '동사변화' },
+            { icon: '📝', label: '형용사' },
+            { icon: '🔗', label: '전치사/접속사' },
+            { icon: '❗', label: '불규칙' },
+            { icon: '💬', label: '회화' },
+            { icon: '⭐', label: '기타' },
+        ];
+        function renderGeIconPicker() {
+            const box = document.getElementById('ge-icon-picker');
+            if (!box) return;
+            const cur = document.getElementById('ge-icon').value || '📘';
+            box.innerHTML = GRAMMAR_ICONS.map(g => {
+                const sel = g.icon === cur;
+                return `<button type="button" onclick="selectGeIcon('${g.icon}')" title="${g.label}" class="w-10 h-10 rounded-xl border text-lg flex items-center justify-center transition-all ${sel ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}">${g.icon}</button>`;
+            }).join('');
+        }
+        function selectGeIcon(icon) {
+            document.getElementById('ge-icon').value = icon;
+            renderGeIconPicker();
+        }
+
         function renderGrammarEditorFields() {
             const s = grammarEditorState;
             if (!s) return;
-            document.getElementById('ge-icon').value = s.icon;
+            document.getElementById('ge-icon').value = s.icon || '📘';
+            renderGeIconPicker(); // [냐냐 PATCH] 아이콘 선택 UI
             document.getElementById('ge-title').value = s.title;
             document.getElementById('ge-desc').value = s.desc;
             document.getElementById('ge-note').value = s.note;
@@ -1811,6 +1860,10 @@ let vocabulary = [];
                 // [냐냐 PATCH] 열 강조(글씨체) 버튼을 열 제목 '위'에 배치
                 const isColHl = (s.highlightCols || []).includes(ci);
                 html += `<th class="p-1 align-top">
+                    <div class="flex items-center justify-center gap-1 mb-1">
+                        <button type="button" onclick="moveGeCol(${ci}, -1)" title="왼쪽으로" class="w-5 h-5 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors flex items-center justify-center ${ci === 0 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-left text-[9px]"></i></button>
+                        <button type="button" onclick="moveGeCol(${ci}, 1)" title="오른쪽으로" class="w-5 h-5 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors flex items-center justify-center ${ci === colCount - 1 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-right text-[9px]"></i></button>
+                    </div>
                     <button type="button" onclick="toggleGeHighlight(${ci})" class="mb-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isColHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isColHl ? '★ 열 강조 켬' : '☆ 열 강조'}</button>
                     <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#f3f8fd] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#5896cb]">
                 </th>`;
@@ -1866,6 +1919,36 @@ let vocabulary = [];
             renderGrammarEditorFields();
         }
         function updateGeCell(ri, ci, val) { grammarEditorState.rows[ri][ci] = val; }
+        // [냐냐 PATCH] 열 위치 이동 (좌우 스왑)
+        function moveGeCol(ci, dir) {
+            const s = grammarEditorState;
+            if (!s) return;
+            const nc = ci + dir;
+            if (nc < 0 || nc >= s.headers.length) return;
+            // 헤더 스왑
+            [s.headers[ci], s.headers[nc]] = [s.headers[nc], s.headers[ci]];
+            // 각 행의 셀 스왑
+            s.rows.forEach(row => {
+                const a = row[ci] || '', b = row[nc] || '';
+                row[ci] = b; row[nc] = a;
+            });
+            // 열 강조 목록 갱신
+            if (s.highlightCols) {
+                s.highlightCols = s.highlightCols.map(x => x === ci ? nc : (x === nc ? ci : x));
+            }
+            // 칸 강조(grammarCellHighlights)도 열 위치 반영
+            if (s.id && grammarCellHighlights[s.id]) {
+                const newHl = {};
+                Object.keys(grammarCellHighlights[s.id]).forEach(key => {
+                    const [ri, cc] = key.split('-').map(Number);
+                    let ncc = cc;
+                    if (cc === ci) ncc = nc; else if (cc === nc) ncc = ci;
+                    newHl[`${ri}-${ncc}`] = true;
+                });
+                grammarCellHighlights[s.id] = newHl;
+            }
+            renderGrammarEditorFields();
+        }
         // [냐냐 PATCH] 표 편집 중 엔터 → 다음 칸(아래칸, 없으면 다음 열 맨 위)로 이동
         function handleGeCellKey(e, ri, ci) {
             if (e.key !== 'Enter') return;
