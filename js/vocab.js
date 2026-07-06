@@ -953,8 +953,70 @@ function togglePosFields() {
 
         // Render Vocabulary Tab List
         // [냐냐 PATCH] 필터/정렬 패널 펼치기/접기
+        // [냐냐 PATCH] 필터 패널: 품사 중복선택 + 마스터/정렬 단일선택, 확인 눌러야 적용
+        let activeFilterPos = [];          // 적용된 품사 목록 (빈 배열 = 전체)
+        let pendingFilterPos = [];         // 패널에서 선택 중인 (임시)
+        let pendingFilterMastery = 'not-mastered';
+        let pendingFilterSort = 'weak-score';
+
+        function toggleFilterPos(btn) {
+            const pos = btn.dataset.pos;
+            const i = pendingFilterPos.indexOf(pos);
+            if (i >= 0) pendingFilterPos.splice(i, 1);
+            else pendingFilterPos.push(pos);
+            styleFilterPill(btn, i < 0);
+        }
+        function setFilterMastery(btn) {
+            pendingFilterMastery = btn.dataset.mastery;
+            document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b === btn));
+        }
+        function setFilterSort(btn) {
+            pendingFilterSort = btn.dataset.sort;
+            document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b === btn));
+        }
+        function styleFilterPill(btn, on) {
+            if (on) {
+                btn.className = btn.className.replace(/border-slate-200 bg-slate-50 text-slate-500/, 'border-violet-500 bg-violet-50 text-violet-600');
+            } else {
+                btn.className = btn.className.replace(/border-violet-500 bg-violet-50 text-violet-600/, 'border-slate-200 bg-slate-50 text-slate-500');
+            }
+        }
+
+        // 패널 열 때 현재 적용된 값으로 임시상태 초기화 + 버튼 하이라이트 반영
+        function syncFilterPanelUI() {
+            pendingFilterPos = [...activeFilterPos];
+            pendingFilterMastery = document.getElementById('mastery-filter-select')?.value || 'all';
+            pendingFilterSort = document.getElementById('sort-select')?.value || 'recent';
+            document.querySelectorAll('.filter-pos-btn').forEach(b => styleFilterPill(b, pendingFilterPos.includes(b.dataset.pos)));
+            document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.mastery === pendingFilterMastery));
+            document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b.dataset.sort === pendingFilterSort));
+        }
+
+        function applyFilters() {
+            activeFilterPos = [...pendingFilterPos];
+            const masterySel = document.getElementById('mastery-filter-select');
+            const sortSel = document.getElementById('sort-select');
+            if (masterySel) masterySel.value = pendingFilterMastery;
+            if (sortSel) sortSel.value = pendingFilterSort;
+            todayWrongFilterActive = false;
+            closeFilterPanel();
+            renderWordList();
+        }
+        function resetFilters() {
+            pendingFilterPos = [];
+            pendingFilterMastery = 'not-mastered';
+            pendingFilterSort = 'weak-score';
+            syncFilterPanelUI();
+        }
+        function closeFilterPanel() {
+            document.getElementById('filter-panel').classList.add('hidden');
+        }
+
         function toggleFilterPanel() {
-            document.getElementById('filter-panel').classList.toggle('hidden');
+            const panel = document.getElementById('filter-panel');
+            const willOpen = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            if (willOpen) syncFilterPanelUI();
         }
 
         function handleSearchInput() {
@@ -963,10 +1025,9 @@ function togglePosFields() {
             if (val.trim()) todayWrongFilterActive = false; // [냐냐 PATCH] 검색 시 오늘틀린 필터 해제
             // [냐냐 PATCH] 검색을 시작하면 필터를 전체로 초기화해서 모든 단어에서 검색되게 함
             if (val.trim()) {
-                const posSel = document.getElementById('pos-filter-select');
+                activeFilterPos = []; // [냐냐 PATCH] 검색 시 품사 필터도 초기화
                 const masterySel = document.getElementById('mastery-filter-select');
                 const sortSel = document.getElementById('sort-select');
-                if (posSel) posSel.value = 'all';
                 if (masterySel) masterySel.value = 'all';
                 if (sortSel) sortSel.value = 'recent';
             }
@@ -989,7 +1050,6 @@ function togglePosFields() {
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
-            const posFilter = document.getElementById('pos-filter-select') ? document.getElementById('pos-filter-select').value : 'all';
             const masteryFilter = document.getElementById('mastery-filter-select') ? document.getElementById('mastery-filter-select').value : 'all';
             // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
             const expandedAll = (searchVal.length > 0 || todayWrongFilterActive) ? true : wordListExpandedAll;
@@ -999,20 +1059,21 @@ function togglePosFields() {
                 const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
                 const queryInNotes = w.notes && w.notes.toLowerCase().includes(searchVal);
                 const matchesSearch = queryInWord || queryInMeaning || queryInNotes;
-                const matchesPos = posFilter === 'all' || w.pos === posFilter;
+                const matchesPos = activeFilterPos.length === 0 || activeFilterPos.includes(w.pos);
                 const matchesMastery = masteryFilter === 'all'
                     || (masteryFilter === 'mastered' && w.mastered)
                     || (masteryFilter === 'not-mastered' && !w.mastered)
                     || (masteryFilter === 'weak' && w.weak)
                     || (masteryFilter === 'not-weak' && !w.weak);
                 // [냐냐 PATCH] '오늘 틀린 단어 보기'가 켜져있으면 오늘 틀린 단어만
-                const matchesTodayWrong = !todayWrongFilterActive || (w.lastWrongDate === getLocalDateString() && !w.mastered);
+                // [냐냐 PATCH] '복습할 단어 보기'가 켜져있으면 망각곡선 복습 대상만
+                const matchesTodayWrong = !todayWrongFilterActive || (!w.mastered && w.lastWrongDate && (daysSince(w.lastWrongDate) === 0 || REVIEW_INTERVALS.includes(daysSince(w.lastWrongDate))));
                 return matchesSearch && matchesPos && matchesMastery && matchesTodayWrong;
             });
 
             // [냐냐 PATCH] 기본값이 아닌 필터/정렬이 하나라도 켜져 있으면 버튼에 표시점 보여줌
             const sortModeForBadge = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'recent';
-            const hasActiveFilter = posFilter !== 'all' || masteryFilter !== 'all' || sortModeForBadge !== 'recent';
+            const hasActiveFilter = activeFilterPos.length > 0 || masteryFilter !== 'not-mastered' || sortModeForBadge !== 'weak-score';
             const badge = document.getElementById('filter-active-badge');
             if (badge) badge.classList.toggle('hidden', !hasActiveFilter);
 
@@ -1081,6 +1142,15 @@ function togglePosFields() {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-pink-100 text-pink-700 shadow-sm">Pron.</span>`;
                 } else if (w.pos === 'phrase') {
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
+                }
+
+                // [냐냐 PATCH] 정답률 배지 (시도 3회 이상일 때만) — 색으로 실력 표시
+                const acc = getWordAccuracy(w);
+                if (acc !== null) {
+                    const accColor = acc >= 80 ? 'bg-emerald-100 text-emerald-700'
+                        : acc >= 50 ? 'bg-amber-100 text-amber-700'
+                        : 'bg-rose-100 text-rose-600';
+                    badgeMarkup += `<span class="px-2 py-0.5 text-[10px] font-black rounded-full ${accColor} shadow-sm" title="이번 달 정답률 (정답 ${w.correctTotal||0} / 시도 ${(w.correctTotal||0)+(w.wrongTotal||0)})">${acc}%</span>`;
                 }
 
                 const cardStyle = w.mastered 
