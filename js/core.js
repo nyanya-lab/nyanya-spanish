@@ -580,6 +580,7 @@ let vocabulary = [];
             return { emoji: '💥', label: '곧 부화해요!! 두근두근', anim: 'scale-125 animate-bounce' };
         }
 
+        let eggCollectionOpen = false; // [냐냐 PATCH] 도감 접힘 상태 (기본 접힘)
         function renderEgg() {
             const container = document.getElementById('egg-widget');
             if (!container) return;
@@ -590,6 +591,13 @@ let vocabulary = [];
             const remain = Math.max(0, EGG_HATCH_GOAL - eggState.progress);
 
             container.innerHTML = `
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-lg">🥚</span>
+                    <div>
+                        <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
+                        <p class="text-[11px] text-amber-600">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
+                    </div>
+                </div>
                 <div class="flex flex-col items-center text-center gap-3">
                     <div class="text-6xl transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
                     <p class="text-sm font-black text-slate-800">${stage.label}</p>
@@ -601,8 +609,21 @@ let vocabulary = [];
                     </div>
                     <p class="text-[11px] text-slate-500">지금까지 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
                 </div>
-                ${renderCollectionGrid()}
+                <div class="mt-3 pt-3 border-t border-amber-100">
+                    <button onclick="toggleEggCollection()" class="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
+                        🗂️ 생물 도감 보기
+                        <i class="fa-solid fa-chevron-down text-[10px] transition-transform ${eggCollectionOpen ? 'rotate-180' : ''}"></i>
+                    </button>
+                    <div id="egg-collection-body" class="${eggCollectionOpen ? '' : 'hidden'}">
+                        ${renderCollectionGrid()}
+                    </div>
+                </div>
             `;
+        }
+
+        function toggleEggCollection() {
+            eggCollectionOpen = !eggCollectionOpen;
+            renderEgg();
         }
 
         function renderCollectionGrid() {
@@ -626,8 +647,7 @@ let vocabulary = [];
                 }
             }).join('');
             return `
-                <div class="mt-4 pt-4 border-t border-slate-100">
-                    <p class="text-xs font-bold text-slate-600 mb-2 text-center">🗂️ 생물 도감</p>
+                <div class="mt-3">
                     <div class="grid grid-cols-4 gap-1.5">${cells}</div>
                 </div>
             `;
