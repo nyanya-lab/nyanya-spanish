@@ -91,37 +91,37 @@
 
         <main class="max-w-7xl mx-auto w-full px-4 mt-4 flex-1 flex flex-col md:flex-row gap-4">
             <!-- Sidebar Drawer / Column -->
-            <aside id="sidebar-menu" class="md:w-56 flex-shrink-0 flex flex-col gap-4 transition-all duration-300 md:sticky md:top-12 md:self-start md:max-h-[calc(100vh-3.5rem)] md:overflow-y-auto no-scrollbar">
+            <aside id="sidebar-menu" class="md:w-56 flex-shrink-0 flex flex-col gap-2 transition-all duration-300 md:sticky md:top-2 md:self-start md:max-h-[calc(100vh-1rem)] md:overflow-y-auto no-scrollbar">
                 <div class="space-y-1 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100">
+                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100">
                         <i class="fa-solid fa-book-bookmark text-base"></i>
                         <span>내 단어장</span>
                     </button>
-                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-table-list text-base"></i>
                         <span>문법 표</span>
                     </button>
-                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-clone text-base"></i>
                         <span>플래시 카드 복습</span>
                     </button>
-                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-eye text-base"></i>
                         <span>단어 복습</span>
                     </button>
-                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-bullseye text-base"></i>
                         <span>퀴즈</span>
                     </button>
-                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-gamepad text-base"></i>
                         <span>미니 게임</span>
                     </button>
-                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-robot text-base"></i>
                         <span>AI 1:1 번역 첨삭</span>
                     </button>
-                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
+                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
                         <i class="fa-solid fa-chart-line text-base"></i>
                         <span>학습기록</span>
                     </button>
@@ -129,22 +129,22 @@
 
 
                 <!-- 일일 학습 일지 현황판 -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex items-center gap-2 text-slate-700 text-xs font-bold border-b border-slate-100 pb-2">
                         <i class="fa-solid fa-calendar-check text-rose-500"></i>
                         <span>냐냐의 일일 학습 일지</span>
                     </div>
-                    <div id="diary-streak-line" class="hidden bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
+                    <div id="diary-streak-line" class="hidden bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <span class="flex items-center gap-1.5 text-sm font-black text-orange-700"><span id="diary-streak-fire">🔥</span> <span id="diary-streak-days">0일 연속</span></span>
                         <span id="diary-streak-best" class="text-[10px] font-bold text-orange-400">최고 0일</span>
                     </div>
-                    <div id="nyanya-diary-list" class="space-y-2 max-h-48 overflow-y-auto text-xs text-slate-600">
+                    <div id="nyanya-diary-list" class="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-600">
                         <p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>
                     </div>
                 </div>
 
                 <!-- [냐냐 PATCH] 학습 달력 (월↔연↔연도별 전환, 학습량 색상) -->
-                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex items-center justify-between gap-2">
                         <button id="cal-nav-prev" onclick="calNav(-1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-left text-xs"></i></button>
                         <button id="cal-title" onclick="calZoomOut()" class="text-sm font-black text-slate-800 hover:text-violet-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50">2026년</button>
@@ -183,7 +183,7 @@
                         </div>
                     </div>
                     <!-- Search & Action Bar -->
-                    <div class="sticky top-12 z-30 bg-slate-50 pt-3 -mt-3 rounded-b-2xl">
+                    <div class="sticky top-11 z-40 bg-[#f8fafc] pt-2 pb-1 -mt-2">
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
                         <div class="relative w-full sm:flex-1">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -978,7 +978,7 @@
 
                 <!-- TAB: 문법 표 -->
                 <div id="tab-grammar" class="hidden space-y-4">
-                    <div class="sticky top-12 z-30 bg-slate-50 pt-3 -mt-3 rounded-b-2xl">
+                    <div class="sticky top-11 z-40 bg-[#f8fafc] pt-2 pb-1 -mt-2">
                     <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div>
@@ -1437,7 +1437,7 @@
             <div class="p-6 space-y-6">
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
                     동기화 비밀번호를 설정했다면 데이터는 이미 자동으로 동기화되고 있어요.
-                    이 기능은 <b>비밀번호를 잊었거나, 동기화가 안 될 때</b> 데이터를 안전하게 옮기는 비상용 백업이에요
+                    이 기능은 <b>비밀번호를 잊었거나, 동기화가 안 될 때</b> 데이터를 안전하게 옮기는 비상용 백업이에요.
                 </div>
 
                 <div class="space-y-2">
