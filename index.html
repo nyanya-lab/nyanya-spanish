@@ -1002,6 +1002,7 @@
                                 <input type="text" id="grammar-search" oninput="renderGrammarTables()" placeholder="표 제목·내용 검색..." class="w-full bg-slate-50 pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                                 <button type="button" id="grammar-search-clear" onclick="clearGrammarSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-circle-xmark"></i></button>
                             </div>
+                            <button onclick="toggleGrammarSort()" id="grammar-sort-btn" title="정렬" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-arrow-down-wide-short mr-1"></i>최신순</button>
                             <button onclick="expandAllGrammar(true)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-down mr-1"></i>전체 펼치기</button>
                             <button onclick="expandAllGrammar(false)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-up mr-1"></i>전체 접기</button>
                         </div>
@@ -1231,15 +1232,17 @@
                 <button onclick="closeGrammarEditor()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
 
-            <div class="grid grid-cols-[auto_1fr] gap-3 items-end">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">아이콘</label>
-                    <input id="ge-icon" maxlength="4" placeholder="📋" class="w-16 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-center text-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
+            <div class="space-y-1">
+                <label class="block text-xs font-bold text-slate-500">아이콘</label>
+                <div id="ge-icon-picker" class="flex flex-wrap gap-1.5">
+                    <!-- 아이콘 버튼들이 JS로 채워짐 -->
                 </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">표 제목 *</label>
-                    <input id="ge-title" placeholder="예: 소유형용사" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
+                <input id="ge-icon" type="hidden" value="📘">
+            </div>
+
+            <div class="space-y-1">
+                <label class="block text-xs font-bold text-slate-500">표 제목 *</label>
+                <input id="ge-title" placeholder="예: 소유형용사" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
             </div>
 
             <div class="space-y-1">
@@ -1355,6 +1358,22 @@
     <!-- PRESET 4: BACKUP / TRANSFER TO OTHER DEVICE MODAL -->
     <!-- 질문 관리 모달 -->
     <!-- 질문 수정 모달 -->
+    <!-- [냐냐 PATCH] 주제 관리 모달 (드롭다운 숨기기) -->
+    <div id="topic-manage-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">⚙️ 주제 관리</h3>
+                <button onclick="closeTopicManageModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <p class="text-xs text-slate-400">🗑️ 누르면 새 질문 등록 드롭다운에서 숨겨져요 (질문은 그대로 남아요). 👁️ 누르면 다시 보여요.</p>
+                <div id="topic-manage-list" class="space-y-1.5 max-h-72 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- [냐냐 PATCH] 주제 이름 수정 모달 -->
     <div id="topic-rename-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl">
@@ -1412,8 +1431,13 @@
                 <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
                     <span class="text-xs font-bold text-violet-700">새 질문 등록</span>
                     <div class="space-y-2">
-                        <input type="text" id="new-question-topic-input" placeholder="주제 (예: 일상, 음식, 날씨...)" autocomplete="off" list="question-topics-datalist" class="w-full bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                        <datalist id="question-topics-datalist"></datalist>
+                        <div class="flex gap-2">
+                            <select id="new-question-topic-select" onchange="onTopicSelectChange()" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                                <!-- JS로 채움 -->
+                            </select>
+                            <button type="button" onclick="openTopicManageModal()" title="주제 관리 (숨기기)" class="bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0"><i class="fa-solid fa-gear"></i></button>
+                        </div>
+                        <input type="text" id="new-question-topic-input" placeholder="새 주제 이름 입력" autocomplete="off" class="hidden w-full bg-white px-3 py-2 rounded-xl border border-violet-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                         <div class="flex gap-2">
                             <input type="text" id="new-question-input" placeholder="질문 (예: ¿Qué tiempo hace hoy?)" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                             <button onclick="addCustomQuestion()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0">추가</button>
