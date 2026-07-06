@@ -158,6 +158,7 @@ let vocabulary = [];
                 selectedQuestionTopics: selectedQuestionTopics,
                 customGrammarTables: customGrammarTables,
                 pinnedGrammar: pinnedGrammar,
+                hiddenDefaultGrammar: hiddenDefaultGrammar,
                 grammarCellHighlights: grammarCellHighlights,
                 eggState: eggState
             };
@@ -264,6 +265,7 @@ let vocabulary = [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
+                hiddenDefaultGrammar = payload.hiddenDefaultGrammar || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 eggState = Object.assign(defaultEggState(), payload.eggState || {});
                 if (!Array.isArray(eggState.collection)) eggState.collection = [];
@@ -275,6 +277,7 @@ let vocabulary = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
                 pinnedGrammar = {};
+                hiddenDefaultGrammar = [];
                 grammarCellHighlights = {};
                 eggState = defaultEggState();
             }
@@ -1491,6 +1494,7 @@ let vocabulary = [];
         // ============================================================
         let grammarOpenState = {}; // 표별 펼침 상태 기억
         let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
+        let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
         const GRAMMAR_TABLES = [
             {
@@ -1611,6 +1615,7 @@ let vocabulary = [];
             // 기본 표 + 사용자 표. 사용자가 기본 표를 수정하면 override로 대체.
             const result = [];
             GRAMMAR_TABLES.forEach(base => {
+                if (hiddenDefaultGrammar.includes(base.id)) return; // [냐냐 PATCH] 삭제한 기본 표는 숨김
                 const override = customGrammarTables.find(c => c.id === base.id);
                 result.push(override ? { ...override, isCustom: !!override._edited } : base);
             });
@@ -1667,7 +1672,7 @@ let vocabulary = [];
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
-                        ${t.isCustom ? `<button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>` : `<button onclick="resetGrammarTable('${t.id}')" title="기본값으로 되돌리기" class="w-7 h-7 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><i class="fa-solid fa-rotate-left text-xs"></i></button>`}
+                        <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
                 return `
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1822,7 +1827,7 @@ let vocabulary = [];
                     html += `<td class="p-1">
                         <div class="flex items-center gap-1 ${cellBg} rounded-lg px-1">
                             <button type="button" onclick="toggleGeCellHighlight(${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
-                            <input value="${escapeAttr(val)}" oninput="updateGeCell(${ri}, ${ci}, this.value)" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
+                            <input value="${escapeAttr(val)}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${ri}, ${ci})" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
                         </div>
                     </td>`;
                 }
@@ -1861,6 +1866,24 @@ let vocabulary = [];
             renderGrammarEditorFields();
         }
         function updateGeCell(ri, ci, val) { grammarEditorState.rows[ri][ci] = val; }
+        // [냐냐 PATCH] 표 편집 중 엔터 → 다음 칸(아래칸, 없으면 다음 열 맨 위)로 이동
+        function handleGeCellKey(e, ri, ci) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const s = grammarEditorState;
+            if (!s) return;
+            const rowCount = s.rows.length;
+            const colCount = s.headers.length;
+            let nr = ri + 1, nc = ci;
+            if (nr >= rowCount) {
+                // 아래 칸 없으면 다음 열의 맨 위로
+                nr = 0;
+                nc = ci + 1;
+                if (nc >= colCount) return; // 마지막 열 마지막 행이면 그대로
+            }
+            const next = document.querySelector(`[data-ge-ri="${nr}"][data-ge-ci="${nc}"]`);
+            if (next) { next.focus(); next.select(); }
+        }
         function addGeRow() {
             grammarEditorState.rows.push(new Array(grammarEditorState.headers.length).fill(''));
             renderGrammarEditorFields();
@@ -1917,12 +1940,15 @@ let vocabulary = [];
 
         function deleteGrammarTable(id) {
             const t = getAllGrammarTables().find(x => x.id === id);
+            const isDefault = GRAMMAR_TABLES.find(b => b.id === id); // 기본 표인지
             showConfirm(
                 `"${t ? t.title : '이 표'}"를 삭제할까요?`,
                 "삭제한 표는 다시 꺼낼 수 없어요.",
                 async () => {
                     customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    if (isDefault && !hiddenDefaultGrammar.includes(id)) hiddenDefaultGrammar.push(id); // [냐냐 PATCH] 기본 표는 숨김 목록에 추가
                     delete grammarOpenState[id];
+                    delete pinnedGrammar[id];
                     renderGrammarTables();
                     await saveToStorage();
                     showToast("표를 삭제했어요", "success");
