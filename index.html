@@ -171,19 +171,6 @@
                 
                 <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-2">
-                    <!-- 오늘 틀린 단어 복습 -->
-                    <div class="flex flex-col gap-3">
-                        <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <span class="text-2xl shrink-0">🔔</span>
-                                <div class="min-w-0">
-                                    <p class="text-sm font-extrabold text-amber-900">오늘 복습할 단어 <span id="today-review-count">0</span>개</p>
-                                    <p class="text-xs text-amber-700">틀린 단어를 1·3·7·14·30일 주기로 다시 복습해요! (망각곡선)</p>
-                                </div>
-                            </div>
-                            <button onclick="showTodayWrongInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">복습할 단어 보기</button>
-                        </div>
-                    </div>
                     <!-- Search & Action Bar -->
                     <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
@@ -205,41 +192,53 @@
                                     <span>필터 & 정렬</span>
                                     <span id="filter-active-badge" class="hidden w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                                 </button>
-                                <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-3 w-64">
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사</label>
-                                        <select id="pos-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">All</option>
-                                            <option value="noun">N.</option>
-                                            <option value="verb">V.</option>
-                                            <option value="adjective">Adj.</option>
-                                            <option value="adverb">Adv.</option>
-                                            <option value="preposition">Prep.</option>
-                                            <option value="conjunction">Conj.</option>
-                                            <option value="pronoun">Pron.</option>
-                                            <option value="phrase">Phr.</option>
-                                        </select>
+                                <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-4 w-72 max-h-[70vh] overflow-y-auto">
+                                    <!-- 품사 (중복 선택) -->
+                                    <div class="space-y-1.5">
+                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사 <span class="text-slate-300 normal-case">(여러 개 선택 가능)</span></label>
+                                        <div id="filter-pos-box" class="flex flex-wrap gap-1.5">
+                                            <button type="button" data-pos="noun" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">명사</button>
+                                            <button type="button" data-pos="verb" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">동사</button>
+                                            <button type="button" data-pos="adjective" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">형용사</button>
+                                            <button type="button" data-pos="adverb" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">부사</button>
+                                            <button type="button" data-pos="preposition" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">전치사</button>
+                                            <button type="button" data-pos="conjunction" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">접속사</button>
+                                            <button type="button" data-pos="pronoun" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">대명사</button>
+                                            <button type="button" data-pos="phrase" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">구문</button>
+                                        </div>
                                     </div>
-                                    <div class="space-y-1">
+                                    <!-- 마스터 상태 (하나만) -->
+                                    <div class="space-y-1.5">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">마스터 상태</label>
-                                        <select id="mastery-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">전체 단어</option>
-                                            <option value="mastered">마스터 단어만</option>
-                                            <option value="not-mastered">안 된 단어만</option>
-                                            <option value="weak">⭐ 약점 단어만</option>
-                                            <option value="not-weak">약점 단어 제외</option>
-                                        </select>
+                                        <div id="filter-mastery-box" class="flex flex-wrap gap-1.5">
+                                            <button type="button" data-mastery="all" onclick="setFilterMastery(this)" class="filter-mastery-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">전체</button>
+                                            <button type="button" data-mastery="mastered" onclick="setFilterMastery(this)" class="filter-mastery-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">마스터만</button>
+                                            <button type="button" data-mastery="not-mastered" onclick="setFilterMastery(this)" class="filter-mastery-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">안 된 것만</button>
+                                            <button type="button" data-mastery="weak" onclick="setFilterMastery(this)" class="filter-mastery-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">⭐ 약점만</button>
+                                            <button type="button" data-mastery="not-weak" onclick="setFilterMastery(this)" class="filter-mastery-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">약점 제외</button>
+                                        </div>
                                     </div>
-                                    <div class="space-y-1">
+                                    <!-- 정렬 기준 (하나만) -->
+                                    <div class="space-y-1.5">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준</label>
-                                        <select id="sort-select" onchange="renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="recent">최근 추가순</option>
-                                            <option value="oldest">오래된 순</option>
-                                            <option value="weak-score">⭐ 약점 점수 높은순</option>
-                                            <option value="alpha-asc">알파벳 오름차순 (A→Z)</option>
-                                            <option value="alpha-desc">알파벳 내림차순 (Z→A)</option>
-                                        </select>
+                                        <div id="filter-sort-box" class="flex flex-wrap gap-1.5">
+                                            <button type="button" data-sort="recent" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">최근순</button>
+                                            <button type="button" data-sort="oldest" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">오래된순</button>
+                                            <button type="button" data-sort="weak-score" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">⭐ 약점순</button>
+                                            <button type="button" data-sort="alpha-asc" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A→Z</button>
+                                            <button type="button" data-sort="alpha-desc" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">Z→A</button>
+                                        </div>
                                     </div>
+                                    <!-- 취소 / 확인 -->
+                                    <div class="flex gap-2 pt-1 border-t border-slate-100">
+                                        <button type="button" onclick="resetFilters()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs transition-all">초기화</button>
+                                        <button type="button" onclick="closeFilterPanel()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition-all">취소</button>
+                                        <button type="button" onclick="applyFilters()" class="flex-1 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm">확인</button>
+                                    </div>
+                                    <!-- 숨겨진 값 저장용 (기존 로직 호환) -->
+                                    <select id="pos-filter-select" class="hidden"><option value="all">all</option></select>
+                                    <select id="mastery-filter-select" class="hidden"><option value="not-mastered">not-mastered</option></select>
+                                    <select id="sort-select" class="hidden"><option value="weak-score">weak-score</option></select>
                                 </div>
                             </div>
                             <button onclick="openWordModal()" class="flex-1 sm:flex-initial bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
