@@ -1433,6 +1433,19 @@ let vocabulary = [];
             `;
         }
 
+        // [냐냐 PATCH] 제목 헤더 접기/펼치기 (기본 접힘)
+        let headerExpanded = false;
+        function toggleHeader() {
+            headerExpanded = !headerExpanded;
+            const full = document.getElementById('header-full');
+            const icon = document.getElementById('header-toggle-icon');
+            const collapsedTitle = document.getElementById('header-collapsed-title');
+            if (full) full.classList.toggle('hidden', !headerExpanded);
+            if (icon) icon.style.transform = headerExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+            // 펼쳐지면 얇은 바의 제목은 숨겨서 중복 방지
+            if (collapsedTitle) collapsedTitle.classList.toggle('opacity-0', headerExpanded);
+        }
+
         function toggleMobileMenu() {
             if (isMenuCollapsed) expandMobileMenu();
             else collapseMobileMenu();
