@@ -117,9 +117,69 @@
         }
 
         // 주제별로 묶어서 보여주기 (+ 검색 필터 + 수정 버튼)
+        // [냐냐 PATCH] 질문 관리: 주제별 접기/펼치기 상태 (기본 접힘)
+        let questionTopicOpen = {};
+        function toggleQuestionTopic(topic) {
+            questionTopicOpen[topic] = !questionTopicOpen[topic];
+            renderCustomQuestionsList();
+        }
+        // [냐냐 PATCH] 주제 이름 수정 — 그 주제의 모든 질문을 새 이름으로 옮김
+        let _renamingTopic = null;
+        function editQuestionTopic(topic) {
+            _renamingTopic = topic;
+            const input = document.getElementById('topic-rename-input');
+            if (input) input.value = topic;
+            const label = document.getElementById('topic-rename-old');
+            if (label) label.innerText = topic;
+            document.getElementById('topic-rename-modal').classList.remove('hidden');
+            setTimeout(() => { if (input) input.focus(); }, 50);
+        }
+        function closeTopicRenameModal() {
+            document.getElementById('topic-rename-modal').classList.add('hidden');
+            _renamingTopic = null;
+        }
+        async function saveTopicRename() {
+            const newName = (document.getElementById('topic-rename-input').value || '').trim();
+            if (!newName) { showToast("주제 이름을 입력해 주세요!", "error"); return; }
+            if (_renamingTopic === null) return;
+            if (newName === _renamingTopic) { closeTopicRenameModal(); return; }
+            let count = 0;
+            customQuestions.forEach(q => {
+                if ((q.topic || '기타') === _renamingTopic) { q.topic = newName; count++; }
+            });
+            // 접힘 상태도 새 이름으로 옮김
+            if (questionTopicOpen[_renamingTopic] !== undefined) {
+                questionTopicOpen[newName] = questionTopicOpen[_renamingTopic];
+                delete questionTopicOpen[_renamingTopic];
+            }
+            await saveToStorage();
+            renderCustomQuestionsList();
+            refreshTopicsDatalist();
+            closeTopicRenameModal();
+            showToast(`주제 이름을 "${newName}"(으)로 바꿨어요 (질문 ${count}개)`, "success");
+        }
+
+        function deleteQuestionTopic(topic) {
+            const qs = customQuestions.filter(q => (q.topic || '기타') === topic);
+            showConfirm(
+                `"${topic}" 주제를 통째로 삭제할까요?`,
+                `이 주제의 질문 ${qs.length}개가 모두 삭제돼요. 되돌릴 수 없어요.`,
+                async () => {
+                    customQuestions = customQuestions.filter(q => (q.topic || '기타') !== topic);
+                    await saveToStorage();
+                    renderCustomQuestionsList();
+                    refreshTopicsDatalist();
+                    showToast(`"${topic}" 주제를 삭제했어요`, "success");
+                }
+            );
+        }
+
         function renderCustomQuestionsList() {
             const box = document.getElementById('question-list-box');
             if (!box) return;
+            // [냐냐 PATCH] 전체 질문 개수 항상 표시
+            const totalEl = document.getElementById('question-total-count');
+            if (totalEl) totalEl.innerText = customQuestions.length > 0 ? `총 ${customQuestions.length}개` : '';
             const searchVal = (document.getElementById('question-search-input')?.value || '').trim().toLowerCase();
 
             const filtered = customQuestions.filter(q =>
@@ -138,21 +198,36 @@
                 groups[t].push(q);
             });
 
-            box.innerHTML = Object.entries(groups).map(([topic, qs]) => `
-                <div class="space-y-1.5">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[11px] font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">${topic}</span>
-                        <span class="text-[10px] text-slate-400">${qs.length}개</span>
-                    </div>
-                    ${qs.map(q => `
-                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs ml-1 gap-2">
-                            <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
-                            <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-violet-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
-                            <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+            // 검색 중이면 다 펼침, 아니면 저장된 상태(기본 접힘)
+            const searching = !!searchVal;
+
+            box.innerHTML = Object.entries(groups).map(([topic, qs]) => {
+                const isOpen = searching ? true : !!questionTopicOpen[topic];
+                return `
+                <div class="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
+                    <div class="flex items-center justify-between gap-2 px-3 py-2">
+                        <button onclick="toggleQuestionTopic('${topic.replace(/'/g, "\\'")}')" class="flex items-center gap-2 flex-1 min-w-0 text-left">
+                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform shrink-0" style="${isOpen ? 'transform:rotate(90deg);' : ''}"></i>
+                            <span class="text-[11px] font-extrabold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full truncate">${topic}</span>
+                            <span class="text-[10px] text-slate-400 shrink-0">${qs.length}개</span>
+                        </button>
+                        <div class="flex items-center shrink-0">
+                            <button onclick="editQuestionTopic('${topic.replace(/'/g, "\\'")}')" title="주제 이름 수정" class="text-slate-300 hover:text-violet-500 transition-colors px-1"><i class="fa-solid fa-pen text-xs"></i></button>
+                            <button onclick="deleteQuestionTopic('${topic.replace(/'/g, "\\'")}')" title="주제 전체 삭제" class="text-slate-300 hover:text-rose-500 transition-colors px-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
                         </div>
-                    `).join('')}
+                    </div>
+                    <div class="${isOpen ? '' : 'hidden'} px-2 pb-2 space-y-1.5">
+                        ${qs.map(q => `
+                            <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs gap-2">
+                                <span class="text-slate-700 font-semibold truncate pr-1 flex-1">${q.question}</span>
+                                <button onclick="openQuestionEditModal('${q.id}')" class="text-slate-300 hover:text-violet-500 transition-colors shrink-0"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="deleteCustomQuestion('${q.id}')" class="text-slate-300 hover:text-rose-500 transition-colors shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // ── 질문 수정 ──
