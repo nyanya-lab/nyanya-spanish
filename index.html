@@ -417,7 +417,7 @@
                     <div id="quiz-results-screen" class="hidden bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
                         <div class="text-6xl">🎉</div>
                         <div>
-                            <h3 class="text-xl font-bold text-slate-900">퀴즈완료!</h3>
+                            <h3 class="text-xl font-bold text-slate-900">퀴즈 완료!</h3>
                             <p id="quiz-results-score" class="text-3xl font-black text-violet-600 mt-2">8 / 10</p>
                             <p id="quiz-results-percent" class="text-sm text-slate-400 mt-1">정답률 80%</p>
                         </div>
@@ -843,22 +843,9 @@
                         </div>
                     </div>
 
-                    <!-- 연속 학습일 + 알 키우기 (한 줄) -->
-                    <div class="flex flex-col md:flex-row gap-4">
-                        <div id="streak-card" class="flex-1 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-3xl p-5 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <div class="text-3xl shrink-0" id="streak-fire">🔥</div>
-                                <div class="min-w-0">
-                                    <p class="text-xl font-black text-orange-700 leading-tight" id="streak-main">0일 연속</p>
-                                    <p class="text-[11px] font-bold text-orange-500 mt-0.5" id="streak-best">최고 기록: 0일</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 (최고기록 옆) -->
-                        <div class="flex-1 bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-3xl p-5">
-                            <div id="egg-widget"></div>
-                        </div>
+                    <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 -->
+                    <div class="bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-50 border border-indigo-100 rounded-3xl p-5">
+                        <div id="egg-widget"></div>
                     </div>
 
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
