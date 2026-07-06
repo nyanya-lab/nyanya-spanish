@@ -929,6 +929,7 @@ let vocabulary = [];
         }
 
         function renderTodayReview() {
+            // [냐냐 PATCH] 단어장 알림 박스 제거됨 (단어 복습 탭에서 복습). 호환용 빈 함수.
             const box = document.getElementById('today-review-box');
             if (!box) return;
             const words = getReviewDueWords(); // [냐냐 PATCH] 망각곡선 복습 대상
