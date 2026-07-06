@@ -1,1468 +1,2035 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>냐냐의 스페인어 공부방 📖</title>
-    
-    <!-- Premium App Icon (Favicon & Apple Touch Icon) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%238b5cf6;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23a855f7;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23c026d3;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>📖</text></svg>">
-    <link class="apple-touch-icon" rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='url(%23grad)'/><defs><linearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' style='stop-color:%238b5cf6;stop-opacity:1'/><stop offset='50%25' style='stop-color:%23a855f7;stop-opacity:1'/><stop offset='100%25' style='stop-color:%23c026d3;stop-opacity:1'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='2' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><text x='50%25' y='65%25' font-size='48' text-anchor='middle' filter='url(%23glow)'>📖</text></svg>">
+let vocabulary = [];
+        let activeTab = 'list';
+        let currentFlashcardIndex = 0;
+        let isFlashcardFlipped = false;
+        let isMenuCollapsed = false;
+        
+        let nyanyaDiary = {}; 
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Premium Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Gowun+Dodum:wght@400;700&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="text-slate-800 min-h-screen flex flex-col antialiased">
+        // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
+        // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
+        let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+        // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
+        let customQuestions = [];
+        let currentQuestionForAnswer = null;
+        let selectedQuestionTopics = []; // [] = 전체 주제. 랜덤 뽑기 주제 선택을 저장해서 유지
+        let customGrammarTables = []; // [냐냐 PATCH] 사용자가 직접 만든 문법 표 (기본 표와 합쳐서 표시)
 
-    <div id="app" class="flex-1 flex flex-col pb-16">
-        <!-- Top Sticky Premium Header -->
-        <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-            <!-- [냐냐 PATCH] 접을 수 있는 제목 영역 (기본 접힘) -->
-            <div id="header-full" class="hidden max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div id="header-logo" class="w-11 h-11 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-xl flex items-center justify-center text-2xl shadow-md shadow-violet-100 cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95" onclick="triggerPunchLogo()">
-                        📖
-                    </div>
-                    <div>
-                        <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            냐냐의 스페인어 공부방
-                        </h1>
-                    </div>
-                </div>
-                
-                <!-- Right Stats -->
-                <div class="flex items-center gap-2">
-                    <div class="hidden sm:flex items-center gap-4 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-200">
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">오늘</span>
-                            <span id="header-today-date" class="text-sm font-bold text-violet-600">-</span>
+        // AI 꼬리대화 히스토리 및 힌트 상태 관리
+        let aiChatHistory = [];
+        let isAiHintVisible = false;
+
+        // 실시간 입력 타이머
+        // (실시간 입력 타이머는 더 이상 사용하지 않음 — AI 추천 버튼으로 대체됨)
+
+        window.onload = async function() {
+            // [냐냐 PATCH-진단] dictionary-data.js가 누락되면(업로드 안 됨) 여기서 멈춰서
+            // 모든 버튼이 먹통처럼 보임 → 명확한 안내를 띄워서 원인을 알 수 있게 함
+            if (typeof OFFLINE_DICT_DB === 'undefined' || typeof DEFAULT_VOCABULARY === 'undefined') {
+                alert("필수 파일(dictionary-data.js)이 로드되지 않았어요!\n\nGitHub에 'js/dictionary-data.js' 파일이 업로드됐는지, 그리고 index.html에서 이 파일을 불러오는 줄이 있는지 확인해 주세요.");
+                return;
+            }
+            await loadFromStorage();
+            checkStatsReset(); // [냐냐 PATCH] 정답률 통계 월별 초기화 확인
+            if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
+            renderWordList();
+            updateStats();
+            renderDiary();
+            resetKoEsMissionState();
+            updateApiKeyBadge();
+
+            // [냐냐 PATCH] 주관식 퀴즈: 제출 후 정답 확인 화면에서 엔터 한 번 더 치면 다음 문제로
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Enter') return;
+                const quizTab = document.getElementById('tab-quiz');
+                if (!quizTab || quizTab.classList.contains('hidden')) return; // 퀴즈 탭일 때만
+                const reviewPanel = document.getElementById('quiz-review-panel');
+                const nextBtn = document.getElementById('quiz-next-btn');
+                // 정답 확인 패널이 열려있고(제출됨) 다음 버튼이 활성화됐을 때만
+                if (reviewPanel && !reviewPanel.classList.contains('hidden') && nextBtn && !nextBtn.disabled) {
+                    // 방금 제출한 엔터가 곧바로 다음 문제로 넘어가지 않도록 0.6초 가드
+                    if (window._quizReviewShownAt && (Date.now() - window._quizReviewShownAt) < 600) return;
+                    e.preventDefault();
+                    nextQuizQuestion();
+                }
+            });
+
+            if (!hasGeminiApiKey()) {
+                setTimeout(() => {
+                    showToast("AI 추천을 쓰려면 우측 상단 'AI 키 미등록' 배지를 눌러 Gemini API 키를 등록해 주세요!", "warning");
+                }, 800);
+            }
+
+            if (!hasSyncPassword()) {
+                setTimeout(() => {
+                    showToast("기기 간 자동 동기화를 쓰려면 '동기화 비밀번호 설정하기' 배지를 눌러주세요!", "info");
+                }, 1600);
+            }
+            
+            if (window.innerWidth < 768) {
+                collapseMobileMenu();
+            }
+
+            document.addEventListener('keydown', function(e) {
+                if (activeTab === 'cards') {
+                    if (e.key === 'ArrowRight') nextFlashcard();
+                    if (e.key === 'ArrowLeft') prevFlashcard();
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        flipFlashcard();
+                    }
+                }
+            });
+
+            // 드롭다운 외부 클릭 시 닫기
+            document.addEventListener('click', function(e) {
+                const suggs = document.getElementById('word-suggestions');
+                const inp = document.getElementById('input-word');
+                if (suggs && e.target !== inp && !suggs.contains(e.target)) {
+                    suggs.classList.add('hidden');
+                }
+
+                // [냐냐 PATCH] 필터 패널도 바깥 클릭하면 닫힘 (버튼 클릭은 stopPropagation으로 여기까지 안 옴)
+                const filterPanel = document.getElementById('filter-panel');
+                if (filterPanel && !filterPanel.classList.contains('hidden') && !filterPanel.contains(e.target)) {
+                    filterPanel.classList.add('hidden');
+                }
+            });
+        };
+
+        // ============================================================
+        // [냐냐 PATCH-진짜 동기화] Firebase Realtime Database를 1순위로 사용.
+        // 이 방식은 Claude 안이든 밖이든, 폰이든 PC든, 어떤 브라우저에서 열어도
+        // 똑같이 동기화됨 (Claude에 의존하지 않는 진짜 서버 저장).
+        // Firebase 연결이 안 될 때만 Claude 아티팩트 저장소 → 이 기기 로컬 저장소 순으로 대체.
+        // ============================================================
+        const FIREBASE_DB_URL = 'https://nyanya-vocab-default-rtdb.firebaseio.com';
+        const SYNC_PASSWORD_KEY = 'nyanya_sync_password';
+
+        // [냐냐 PATCH-비밀번호 동기화] 비밀번호 자체가 Firebase 안에서의 "내 데이터 경로"가 됨.
+        // 이 비밀번호는 코드(GitHub)에는 절대 들어가지 않고 이 기기의 localStorage에만 저장됨.
+        // Firebase 규칙에서 이 경로를 모르는 사람은 읽기/쓰기가 막히도록 설정해야 진짜 보안이 생김
+        // (콘솔 → Realtime Database → 규칙에서 와일드카드 규칙으로 변경 필요).
+        function getSyncPassword() {
+            return (localStorage.getItem(SYNC_PASSWORD_KEY) || '').trim();
+        }
+        function hasSyncPassword() {
+            return getSyncPassword().length > 0;
+        }
+        function getFirebaseDataPath() {
+            const pw = getSyncPassword();
+            if (!pw) return null;
+            return `${FIREBASE_DB_URL}/vocab/${encodeURIComponent(pw)}.json`;
+        }
+
+        function openSyncPasswordModal() {
+            document.getElementById('sync-password-input').value = getSyncPassword();
+            document.getElementById('sync-password-modal').classList.remove('hidden');
+        }
+        function closeSyncPasswordModal() {
+            document.getElementById('sync-password-modal').classList.add('hidden');
+        }
+        async function saveSyncPassword() {
+            const value = document.getElementById('sync-password-input').value.trim();
+            if (!value) {
+                showToast("비밀번호를 입력해 주세요!", "error");
+                return;
+            }
+            localStorage.setItem(SYNC_PASSWORD_KEY, value);
+            closeSyncPasswordModal();
+            showToast("비밀번호가 저장됐어요! 동기화를 다시 확인하는 중...", "info");
+            await loadFromStorage();
+            renderWordList();
+            updateStats();
+            renderDiary();
+        }
+
+        function hasServerStorage() {
+            return typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+        }
+
+        async function saveToStorage() {
+            const payload = {
+                vocabulary: vocabulary,
+                nyanyaDiary: nyanyaDiary,
+                learnerProfile: learnerProfile,
+                customQuestions: customQuestions,
+                selectedQuestionTopics: selectedQuestionTopics,
+                customGrammarTables: customGrammarTables,
+                pinnedGrammar: pinnedGrammar,
+                grammarCellHighlights: grammarCellHighlights,
+                eggState: eggState
+            };
+            const json = JSON.stringify(payload);
+
+            // 항상 이 기기에도 백업 저장 (모든 동기화 방법이 실패해도 최소한 이 기기에서는 안전)
+            try { localStorage.setItem('nyanya_data_v2', json); } catch (e) {}
+
+            // 1순위: Firebase (어디서 열어도 동기화됨) — 비밀번호를 설정해야 사용 가능
+            const firebasePath = getFirebaseDataPath();
+            if (firebasePath) {
+                try {
+                    const res = await fetch(firebasePath, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: json
+                    });
+                    if (res.ok) {
+                        updateSyncBadge(true);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn("Firebase 저장 실패, 다른 저장소로 대체", e);
+                }
+            }
+
+            // 2순위: Claude 아티팩트 저장소 (Claude 안에서만 동기화)
+            if (hasServerStorage()) {
+                try {
+                    await window.storage.set('nyanya-vocab-data', json, false);
+                    updateSyncBadge('claude-only');
+                    return;
+                } catch (e) {
+                    console.warn("Claude 저장소도 실패, 이 기기에만 저장됨", e);
+                }
+            }
+
+            updateSyncBadge(false);
+        }
+
+        async function loadFromStorage() {
+            let payload = null;
+            let firebaseReachable = false;
+
+            // 1순위: Firebase에서 불러오기 — 비밀번호를 설정해야 사용 가능
+            const firebasePath = getFirebaseDataPath();
+            if (firebasePath) {
+                try {
+                    const res = await fetch(firebasePath);
+                    if (res.ok) {
+                        firebaseReachable = true;
+                        const data = await res.json();
+                        if (data) payload = data;
+                    }
+                } catch (e) {
+                    console.warn("Firebase 연결 실패, 다른 저장소 확인", e);
+                }
+            }
+
+            if (firebasePath && firebaseReachable) {
+                updateSyncBadge(true);
+            } else if (!firebasePath) {
+                updateSyncBadge('no-password');
+            } else if (hasServerStorage()) {
+                // 2순위: Claude 아티팩트 저장소
+                try {
+                    const result = await window.storage.get('nyanya-vocab-data', false);
+                    if (result && result.value) payload = JSON.parse(result.value);
+                    updateSyncBadge('claude-only');
+                } catch (e) {
+                    updateSyncBadge(false);
+                }
+            } else {
+                updateSyncBadge(false);
+            }
+
+            if (!payload) {
+                // 3순위: 이 기기 로컬 백업 (통합 키)
+                try {
+                    const localV2 = localStorage.getItem('nyanya_data_v2');
+                    if (localV2) payload = JSON.parse(localV2);
+                } catch (e) {}
+            }
+
+            if (!payload) {
+                // 4순위: 예전 버전(분리된 키)에 저장된 데이터가 있으면 마이그레이션
+                const oldVocab = localStorage.getItem('nyanya_vocabulary');
+                if (oldVocab) {
+                    try {
+                        payload = {
+                            vocabulary: JSON.parse(oldVocab),
+                            nyanyaDiary: JSON.parse(localStorage.getItem('nyanya_diary') || '{}')
+                        };
+                    } catch (e) {}
+                }
+            }
+
+            if (payload) {
+                vocabulary = payload.vocabulary || [...DEFAULT_VOCABULARY];
+                nyanyaDiary = payload.nyanyaDiary || {};
+                learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+                if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
+                customQuestions = payload.customQuestions || [];
+                selectedQuestionTopics = payload.selectedQuestionTopics || [];
+                customGrammarTables = payload.customGrammarTables || [];
+                pinnedGrammar = payload.pinnedGrammar || {};
+                grammarCellHighlights = payload.grammarCellHighlights || {};
+                eggState = Object.assign(defaultEggState(), payload.eggState || {});
+                if (!Array.isArray(eggState.collection)) eggState.collection = [];
+            } else {
+                vocabulary = [...DEFAULT_VOCABULARY];
+                nyanyaDiary = {};
+                learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+                customQuestions = [];
+                selectedQuestionTopics = [];
+                customGrammarTables = [];
+                pinnedGrammar = {};
+                grammarCellHighlights = {};
+                eggState = defaultEggState();
+            }
+
+            // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
+            // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
+            saveToStorage();
+        }
+
+        function updateSyncBadge(state) {
+            const badge = document.getElementById('sync-status-badge');
+            if (!badge) return;
+            if (state === true) {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> 모든 기기 동기화 중</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
+            } else if (state === 'claude-only') {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span class="hidden sm:inline"> Claude 안에서만 동기화</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 cursor-pointer";
+            } else if (state === 'no-password') {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span><span class="hidden sm:inline"> 동기화 비밀번호 설정하기</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
+            } else {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 이 기기에만 저장됨</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
+            }
+        }
+
+        // 학습일지 로그 누적 기록 함수
+        // [냐냐 PATCH-날짜버그수정] toISOString()은 UTC 기준이라 한국(UTC+9) 등에서는
+        // 날짜가 하루 어긋날 수 있음(특히 자정~오전 9시, 그리고 차트의 날짜 범위 계산에서는
+        // 항상 하루씩 밀림). 로컬(내 기기) 시간 기준으로 YYYY-MM-DD를 만드는 함수로 통일.
+        // [냐냐 PATCH] 스페인어 여성 목소리 선택 + 공용 읽기 함수
+        let _cachedEsVoice = null;
+        function pickSpanishVoice() {
+            if (_cachedEsVoice) return _cachedEsVoice;
+            if (!('speechSynthesis' in window)) return null;
+            const voices = window.speechSynthesis.getVoices() || [];
+            const esVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('es'));
+            if (esVoices.length === 0) return null;
+            // 여성 이름 힌트 (스페인어권 여성 음성들)
+            const femaleHints = ['mónica','monica','paulina','helena','laura','marisol','sabina','female','mujer','esperanza','lucia','lucía','conchita','penelope','penélope'];
+            let pick = esVoices.find(v => femaleHints.some(h => (v.name || '').toLowerCase().includes(h)));
+            // 스페인(es-ES) 여성 우선, 없으면 아무 스페인어 여성, 없으면 첫 스페인어 음성
+            if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es' && femaleHints.some(h => (v.name||'').toLowerCase().includes(h)));
+            if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es') || esVoices[0];
+            _cachedEsVoice = pick;
+            return pick;
+        }
+        // 음성 목록은 비동기로 로드되므로 로드되면 캐시 초기화
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => { _cachedEsVoice = null; pickSpanishVoice(); };
+        }
+        function speakSpanishVoice(text, rate) {
+            if (!('speechSynthesis' in window)) {
+                showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'es-ES';
+            u.rate = rate || 0.9;
+            const voice = pickSpanishVoice();
+            if (voice) u.voice = voice;
+            window.speechSynthesis.speak(u);
+        }
+
+        function getLocalDateString(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // [냐냐 PATCH-수준맞춤] 누적된 작은 통계만으로 AI 프롬프트에 넣을 짧은 요약 문장 생성.
+        // 전체 기록을 보내지 않고 이 요약 텍스트(보통 100토큰 이내)만 매번 같이 보냄.
+        function buildLearnerProfileSummary() {
+            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
+            if (totalAnswered < 5) {
+                return "학습 데이터가 아직 적어서 평균적인 초급자 기준으로 설명해 주세요.";
+            }
+            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            let level = "초급";
+            if (accuracy >= 85 && vocabulary.length >= 50) level = "중상급";
+            else if (accuracy >= 70) level = "중급";
+
+            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
+            const weakPos = Object.entries(wrongByPos).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([pos]) => posNameKo[pos] || pos);
+            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => t);
+
+            let summary = `학습자 수준: ${level} (정답률 ${accuracy}%, 총 ${totalAnswered}문제 풀이, 등록 단어 ${vocabulary.length}개).`;
+            if (weakPos.length > 0) {
+                summary += ` 자주 틀리는 품사: ${weakPos.join(', ')}.`;
+            }
+            if (weakGrammar.length > 0) {
+                summary += ` 자유 작문에서 자주 틀리는 문법 유형: ${weakGrammar.join(', ')}.`;
+            }
+            summary += ` 이 수준에 맞게 문장 난이도와 설명의 깊이를 조절해 주세요 (초급이면 더 짧고 쉬운 표현, 중상급이면 더 자연스럽고 다양한 표현 사용). 자주 틀리는 문법 유형이 있다면 가능하면 그 부분을 다시 짚어주거나 비슷한 연습이 되도록 신경써 주세요.`;
+            return summary;
+        }
+
+        function touchDiarySnapshot() {
+            const today = getLocalDateString();
+            if (!nyanyaDiary[today]) {
+                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0 };
+            }
+            // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
+            const d = nyanyaDiary[today];
+            if (d.registeredTotal === undefined) d.registeredTotal = 0;
+            if (d.masteredTotal === undefined) d.masteredTotal = 0;
+            if (d.quizTotal === undefined) d.quizTotal = d.quizzes || 0;
+            if (d.quizCorrect === undefined) d.quizCorrect = 0;
+            if (d.aiSessions === undefined) d.aiSessions = 0;
+            if (d.newWordsCount === undefined) d.newWordsCount = 0;
+            if (d.newMasteredCount === undefined) d.newMasteredCount = 0;
+
+            d.registeredTotal = vocabulary.length;
+            d.masteredTotal = vocabulary.filter(w => w.mastered).length;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 연속 학습일(streak) 계산 — nyanyaDiary(날짜별 기록) 기반
+        // ============================================================
+        function calcStreak() {
+            const dates = Object.keys(nyanyaDiary || {}).filter(d => {
+                const log = nyanyaDiary[d];
+                // 하루 총 활동(퀴즈 문제 + AI 첨삭 + 새 단어)이 5개 이상인 날만 "학습한 날"로 인정
+                if (!log) return false;
+                const total = (log.quizTotal || 0) + (log.aiSessions || 0) + (log.newWordsCount || 0);
+                return total >= 5;
+            }).sort(); // 오름차순
+            if (dates.length === 0) return 0;
+
+            const toDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const oneDay = 86400000;
+
+            // 가장 최근 학습일이 오늘이거나 어제여야 streak 유효
+            const last = toDate(dates[dates.length - 1]);
+            const daysSinceLast = Math.round((today - last) / oneDay);
+            if (daysSinceLast > 1) return 0; // 이틀 이상 공백이면 streak 끊김
+
+            // 최근 학습일부터 거꾸로 연속된 날 세기
+            let streak = 1;
+            for (let i = dates.length - 1; i > 0; i--) {
+                const cur = toDate(dates[i]);
+                const prev = toDate(dates[i - 1]);
+                const gap = Math.round((cur - prev) / oneDay);
+                if (gap === 1) streak++;
+                else break;
+            }
+            return streak;
+        }
+
+        // [냐냐 PATCH] 학습 히트맵 (깃허브 잔디 스타일) — 최근 약 17주
+        // ============================================================
+        // [냐냐 PATCH] 미스터리 알 키우기 🥚 — 학습하면 알이 자라고 부화해서 정체불명 생물이 나옴!
+        // ============================================================
+        let eggState = null;
+        function defaultEggState() {
+            return {
+                progress: 0,        // 현재 알의 누적 학습 포인트
+                collection: [],     // 부화시킨 생물들의 id 목록 (도감)
+                totalHatched: 0,    // 총 부화 수
+                lastCountedTotal: null // 학습량 델타 계산용 (총 학습 활동 수 스냅샷)
+            };
+        }
+
+        // 부화에 필요한 포인트
+        const EGG_HATCH_GOAL = 200;
+
+        // 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
+        const CREATURES = [
+            // ===== common (일반) =====
+            { id: 'chick',    emoji: '🐤', name: '포이토 (pollito)',   rarity: 'common', desc: '병아리. 갓 태어난 노란 친구!' },
+            { id: 'cat',      emoji: '🐱', name: '가토 (gato)',        rarity: 'common', desc: '고양이. 늘어지게 낮잠을 좋아해요.' },
+            { id: 'dog',      emoji: '🐶', name: '페로 (perro)',       rarity: 'common', desc: '강아지. 충직한 친구예요.' },
+            { id: 'frog',     emoji: '🐸', name: '라나 (rana)',        rarity: 'common', desc: '개구리. 웅덩이에서 폴짝!' },
+            { id: 'snail',    emoji: '🐌', name: '카라콜 (caracol)',   rarity: 'common', desc: '달팽이. 느리지만 꾸준해요.' },
+            { id: 'bee',      emoji: '🐝', name: '아베하 (abeja)',     rarity: 'common', desc: '벌. 부지런한 일꾼!' },
+            { id: 'mouse',    emoji: '🐭', name: '라톤 (ratón)',       rarity: 'common', desc: '생쥐. 작지만 재빨라요.' },
+            { id: 'rabbit',   emoji: '🐰', name: '코네호 (conejo)',    rarity: 'common', desc: '토끼. 깡충깡충!' },
+            { id: 'chicken',  emoji: '🐔', name: '가이나 (gallina)',   rarity: 'common', desc: '암탉. 알을 낳는 엄마예요.' },
+            { id: 'pig',      emoji: '🐷', name: '세르도 (cerdo)',     rarity: 'common', desc: '돼지. 하몽의 주인공!' },
+            { id: 'duck',     emoji: '🦆', name: '파토 (pato)',        rarity: 'common', desc: '오리. 물에서 둥둥.' },
+            { id: 'fish',     emoji: '🐟', name: '페스 (pez)',         rarity: 'common', desc: '물고기. 바닷속을 헤엄쳐요.' },
+            // ===== rare (레어) =====
+            { id: 'bull',     emoji: '🐂', name: '토로 (toro)',        rarity: 'rare',   desc: '황소. 스페인의 상징이에요!' },
+            { id: 'owl',      emoji: '🦉', name: '부오 (búho)',        rarity: 'rare',   desc: '부엉이. 밤에 공부하는 친구.' },
+            { id: 'fox',      emoji: '🦊', name: '소로 (zorro)',       rarity: 'rare',   desc: '여우. 영리하고 재빨라요.' },
+            { id: 'octopus',  emoji: '🐙', name: '풀포 (pulpo)',       rarity: 'rare',   desc: '문어. 갈리시아식 pulpo가 유명해요!' },
+            { id: 'horse',    emoji: '🐴', name: '카바요 (caballo)',   rarity: 'rare',   desc: '말. 안달루시아 명마!' },
+            { id: 'lion',     emoji: '🦁', name: '레온 (león)',        rarity: 'rare',   desc: '사자. 용맹의 상징이에요.' },
+            { id: 'wolf',     emoji: '🐺', name: '로보 (lobo)',        rarity: 'rare',   desc: '늑대. 이베리아 늑대예요.' },
+            { id: 'bear',     emoji: '🐻', name: '오소 (oso)',         rarity: 'rare',   desc: '곰. 마드리드의 상징이에요!' },
+            { id: 'eagle',    emoji: '🦅', name: '아길라 (águila)',    rarity: 'rare',   desc: '독수리. 하늘의 제왕.' },
+            { id: 'turtle',   emoji: '🐢', name: '토르투가 (tortuga)', rarity: 'rare',   desc: '거북이. 오래오래 살아요.' },
+            { id: 'butterfly',emoji: '🦋', name: '마리포사 (mariposa)',rarity: 'rare',   desc: '나비. 예쁘게 팔랑팔랑.' },
+            // ===== epic (에픽) =====
+            { id: 'dragon',   emoji: '🐲', name: '드라곤 (dragón)',    rarity: 'epic',   desc: '용! 카탈루냐 전설의 용이에요.' },
+            { id: 'unicorn',  emoji: '🦄', name: '우니코르니오 (unicornio)', rarity: 'epic', desc: '유니콘! 아주 드물어요.' },
+            { id: 'phoenix',  emoji: '🔥', name: '페닉스 (fénix)',     rarity: 'epic',   desc: '불사조! 다시 타오르는 열정!' },
+            { id: 'whale',    emoji: '🐋', name: '바예나 (ballena)',   rarity: 'epic',   desc: '고래. 바다의 거인이에요.' },
+            { id: 'peacock',  emoji: '🦚', name: '파보레알 (pavo real)',rarity: 'epic',  desc: '공작. 화려한 깃털을 뽐내요.' },
+            { id: 'flamingo', emoji: '🦩', name: '플라멩코 (flamenco)',rarity: 'epic',   desc: '홍학! 스페인 춤이랑 이름이 같아요.' },
+            // ===== legendary (전설) =====
+            { id: 'alien',    emoji: '👽', name: '알리에니헤나 (alienígena)', rarity: 'legendary', desc: '외계 생명체... 대체 뭐지?!' },
+            { id: 'ghost',    emoji: '👾', name: '미스테리오 (misterio)',     rarity: 'legendary', desc: '미스터리. 정체를 알 수 없어요!' },
+            { id: 'robot',    emoji: '🤖', name: '로봇 (robot)',              rarity: 'legendary', desc: '수수께끼의 로봇. 어디서 왔을까?' },
+            { id: 'ninja',    emoji: '🥷', name: '닌하 (ninja)',              rarity: 'legendary', desc: '그림자처럼 나타난 닌자!' },
+        ];
+
+        const RARITY_INFO = {
+            common:    { label: '일반',   color: 'text-slate-500',  bg: 'bg-slate-100',   star: '⭐' },
+            rare:      { label: '레어',   color: 'text-blue-600',   bg: 'bg-blue-50',     star: '⭐⭐' },
+            epic:      { label: '에픽',   color: 'text-violet-600', bg: 'bg-violet-50',   star: '⭐⭐⭐' },
+            legendary: { label: '전설',   color: 'text-amber-600',  bg: 'bg-amber-50',    star: '👑' },
+        };
+
+        // 총 학습 활동 수 (누적) — 알 성장의 기준
+        function totalLearningActivity() {
+            let sum = 0;
+            for (const k in nyanyaDiary) {
+                const d = nyanyaDiary[k];
+                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+            }
+            return sum;
+        }
+
+        // 학습할 때마다 호출 — 델타만큼 알 성장, 목표 도달 시 부화
+        function updateEggProgress() {
+            if (!eggState) eggState = defaultEggState();
+            const total = totalLearningActivity();
+            if (eggState.lastCountedTotal === null) {
+                // 첫 실행: 기준점만 잡고 성장은 다음부터 (기존 학습량으로 갑자기 부화 방지)
+                eggState.lastCountedTotal = total;
+                renderEgg();
+                return;
+            }
+            const delta = total - eggState.lastCountedTotal;
+            if (delta > 0) {
+                eggState.progress += delta;
+                eggState.lastCountedTotal = total;
+                // 부화 체크
+                while (eggState.progress >= EGG_HATCH_GOAL) {
+                    eggState.progress -= EGG_HATCH_GOAL;
+                    hatchEgg();
+                }
+                saveToStorage();
+            }
+            renderEgg();
+        }
+
+        // 희귀도 뽑기 — 연속학습일/정답률이 높으면 희귀 확률 UP
+        function rollRarity() {
+            const streak = (typeof calcStreak === 'function') ? calcStreak() : 0;
+            const acc = (learnerProfile && learnerProfile.totalAnswered >= 5)
+                ? (learnerProfile.totalCorrect / learnerProfile.totalAnswered) : 0.5;
+            // 보너스: 연속 7일+ 이거나 정답률 80%+ 이면 희귀 확률 상승
+            let bonus = 0;
+            if (streak >= 7) bonus += 0.08;
+            if (streak >= 30) bonus += 0.07;
+            if (acc >= 0.8) bonus += 0.08;
+
+            const r = Math.random();
+            // 기본 확률: legendary 2%, epic 8%, rare 25%, common 65% (+bonus는 상위 등급으로)
+            if (r < 0.02 + bonus * 0.5) return 'legendary';
+            if (r < 0.10 + bonus) return 'epic';
+            if (r < 0.35 + bonus) return 'rare';
+            return 'common';
+        }
+
+        function hatchEgg() {
+            const rarity = rollRarity();
+            const pool = CREATURES.filter(c => c.rarity === rarity);
+            const creature = pool[Math.floor(Math.random() * pool.length)];
+            eggState.collection.push(creature.id);
+            eggState.totalHatched = (eggState.totalHatched || 0) + 1;
+            // 부화 축하 팝업
+            showHatchCelebration(creature);
+        }
+
+        function showHatchCelebration(creature) {
+            const info = RARITY_INFO[creature.rarity];
+            const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
+            if (typeof AudioFX !== 'undefined' && AudioFX.playSuccess) AudioFX.playSuccess();
+            showConfirm(
+                `🎉 부화 성공!`,
+                `${creature.emoji} ${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
+                () => { changeTab('records'); setTimeout(renderEgg, 100); },
+                { okLabel: '도감 보기', cancelLabel: '닫기', okStyle: 'primary' }
+            );
+        }
+
+        // 알 성장 단계 (progress 비율에 따라)
+        function eggStageVisual(ratio) {
+            // [냐냐 PATCH] 부화 과정 세분화 (7단계)
+            if (ratio < 0.14) return { emoji: '🥚', label: '갓 태어난 알이에요', anim: '' };
+            if (ratio < 0.28) return { emoji: '🥚', label: '알이 따뜻해지고 있어요', anim: 'scale-105' };
+            if (ratio < 0.43) return { emoji: '🥚', label: '알이 조금 커졌어요', anim: 'scale-105' };
+            if (ratio < 0.57) return { emoji: '🥚', label: '알 속에서 뭔가 움직여요', anim: 'scale-110' };
+            if (ratio < 0.71) return { emoji: '🥚', label: '알이 꿈틀거려요!', anim: 'scale-110 animate-pulse' };
+            if (ratio < 0.85) return { emoji: '🐣', label: '작은 금이 생겼어요!', anim: 'scale-110 animate-pulse' };
+            if (ratio < 0.95) return { emoji: '🐣', label: '쩍! 금이 크게 갔어요', anim: 'scale-125 animate-bounce' };
+            return { emoji: '💥', label: '곧 부화해요!! 두근두근', anim: 'scale-125 animate-bounce' };
+        }
+
+        let eggCollectionOpen = false; // [냐냐 PATCH] 도감 접힘 상태 (기본 접힘)
+        function renderEgg() {
+            const container = document.getElementById('egg-widget');
+            if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
+            const ratio = Math.min(1, eggState.progress / EGG_HATCH_GOAL);
+            const stage = eggStageVisual(ratio);
+            const pct = Math.round(ratio * 100);
+            const remain = Math.max(0, EGG_HATCH_GOAL - eggState.progress);
+
+            if (container) {
+                container.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">🥚</span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
+                            <p class="text-[11px] text-indigo-500">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
                         </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">보유 단어</span>
-                            <span id="header-total-vocab" class="text-sm font-bold text-slate-800">0개</span>
-                        </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">마스터함</span>
-                            <span id="header-mastered-vocab" class="text-sm font-bold text-emerald-600">0개</span>
-                        </div>
                     </div>
-                    
-                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>
-                    </button>
-
-                    <button id="sync-status-badge" onclick="openSyncPasswordModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 확인 중...</span>
-                    </button>
-
-                    <button onclick="openBackupModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <i class="fa-solid fa-box-archive"></i><span class="hidden sm:inline"> 백업</span>
-                    </button>
-
-                    <button onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
-                        <i id="menu-toggle-icon" class="fa-solid fa-chevron-up text-sm"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- [냐냐 PATCH] 얇은 토글 바 (제목 접기/펼치기) -->
-            <div class="max-w-7xl mx-auto px-4 flex items-center justify-between" style="min-height: 32px;">
-                <button onclick="toggleHeader()" class="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-violet-600 transition-colors py-1.5">
-                    <span class="text-sm">📖</span>
-                    <span id="header-collapsed-title">냐냐의 스페인어 공부방</span>
-                    <i id="header-toggle-icon" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
-                </button>
-                <button onclick="toggleMobileMenu()" class="md:hidden w-8 h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-bars text-xs"></i>
-                </button>
-            </div>
-        </header>
-
-        <main class="max-w-7xl mx-auto w-full px-4 mt-4 flex-1 flex flex-col md:flex-row gap-4">
-            <!-- Sidebar Drawer / Column -->
-            <aside id="sidebar-menu" class="md:w-56 flex-shrink-0 flex flex-col gap-2">
-                <div id="sidebar-inner" class="flex flex-col gap-2 md:fixed md:top-14 md:bottom-2 md:w-56 md:overflow-y-auto no-scrollbar">
-                <div class="space-y-1 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100">
-                        <i class="fa-solid fa-book-bookmark text-base"></i>
-                        <span>내 단어장</span>
-                    </button>
-                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-table-list text-base"></i>
-                        <span>문법 표</span>
-                    </button>
-                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-clone text-base"></i>
-                        <span>플래시 카드 복습</span>
-                    </button>
-                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-eye text-base"></i>
-                        <span>단어 복습</span>
-                    </button>
-                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-bullseye text-base"></i>
-                        <span>퀴즈</span>
-                    </button>
-                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-gamepad text-base"></i>
-                        <span>미니 게임</span>
-                    </button>
-                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-robot text-base"></i>
-                        <span>AI 1:1 번역 첨삭</span>
-                    </button>
-                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-chart-line text-base"></i>
-                        <span>학습기록</span>
-                    </button>
-                </div>
-
-
-                <!-- 일일 학습 일지 현황판 -->
-                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-                    <div class="flex items-center gap-2 text-slate-700 text-xs font-bold border-b border-slate-100 pb-2">
-                        <i class="fa-solid fa-calendar-check text-rose-500"></i>
-                        <span>냐냐의 일일 학습 일지</span>
-                    </div>
-                    <div id="diary-streak-line" class="hidden bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                        <span class="flex items-center gap-1.5 text-sm font-black text-orange-700"><span id="diary-streak-fire">🔥</span> <span id="diary-streak-days">0일 연속</span></span>
-                        <span id="diary-streak-best" class="text-[10px] font-bold text-orange-400">최고 0일</span>
-                    </div>
-                    <div id="nyanya-diary-list" class="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-600">
-                        <p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>
-                    </div>
-                </div>
-
-                <!-- [냐냐 PATCH] 학습 달력 (월↔연↔연도별 전환, 학습량 색상) -->
-                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <button id="cal-nav-prev" onclick="calNav(-1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-left text-xs"></i></button>
-                        <button id="cal-title" onclick="calZoomOut()" class="text-sm font-black text-slate-800 hover:text-violet-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50">2026년</button>
-                        <button id="cal-nav-next" onclick="calNav(1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-right text-xs"></i></button>
-                    </div>
-                    <div id="learning-calendar"></div>
-                    <div class="flex items-center justify-end gap-1 text-[9px] text-slate-400">
-                        <span>적음</span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-slate-100 border border-slate-200"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-100"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-200"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-300"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
-                        <span class="w-2.5 h-2.5 rounded-sm bg-emerald-700"></span>
-                        <span>많음</span>
-                    </div>
-                </div>
-                </div><!-- /sidebar-inner -->
-            </aside>
-
-            <!-- Main Content Area -->
-            <section class="flex-1 min-w-0">
-                
-                <!-- TAB 1: WORD LIST & MANAGEMENT -->
-                <div id="tab-list" class="space-y-2">
-                    <!-- 오늘 틀린 단어 복습 -->
-                    <div class="flex flex-col gap-3">
-                        <div id="today-review-box" class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-3 min-w-0">
-                                <span class="text-2xl shrink-0">🔔</span>
-                                <div class="min-w-0">
-                                    <p class="text-sm font-extrabold text-amber-900">오늘 복습할 단어 <span id="today-review-count">0</span>개</p>
-                                    <p class="text-xs text-amber-700">틀린 단어를 1·3·7·14·30일 주기로 다시 복습해요! (망각곡선)</p>
-                                </div>
-                            </div>
-                            <button onclick="showTodayWrongInList()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm">복습할 단어 보기</button>
-                        </div>
-                    </div>
-                    <!-- Search & Action Bar -->
-                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
-                        <div class="relative w-full sm:flex-1">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" id="search-bar" oninput="handleSearchInput()" placeholder="단어, 뜻, 메모 검색..." autocomplete="off" class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button id="search-clear-btn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                                <i class="fa-solid fa-circle-xmark"></i>
-                            </button>
-                        </div>
-                        <div class="flex gap-2 w-full sm:w-auto shrink-0">
-                            <button id="expand-all-btn" onclick="toggleExpandAllBtn()" class="bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-up-right-and-down-left-from-center text-[10px]"></i>
-                                <span>전체 펼치기</span>
-                            </button>
-                            <div class="relative">
-                                <button onclick="event.stopPropagation(); toggleFilterPanel()" class="w-full sm:w-auto h-full bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
-                                    <i class="fa-solid fa-sliders"></i>
-                                    <span>필터 & 정렬</span>
-                                    <span id="filter-active-badge" class="hidden w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-                                </button>
-                                <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-3 w-64">
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사</label>
-                                        <select id="pos-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">All</option>
-                                            <option value="noun">N.</option>
-                                            <option value="verb">V.</option>
-                                            <option value="adjective">Adj.</option>
-                                            <option value="adverb">Adv.</option>
-                                            <option value="preposition">Prep.</option>
-                                            <option value="conjunction">Conj.</option>
-                                            <option value="pronoun">Pron.</option>
-                                            <option value="phrase">Phr.</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">마스터 상태</label>
-                                        <select id="mastery-filter-select" onchange="todayWrongFilterActive=false;renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="all">전체 단어</option>
-                                            <option value="mastered">마스터 단어만</option>
-                                            <option value="not-mastered">안 된 단어만</option>
-                                            <option value="weak">⭐ 약점 단어만</option>
-                                            <option value="not-weak">약점 단어 제외</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준</label>
-                                        <select id="sort-select" onchange="renderWordList()" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                            <option value="recent">최근 추가순</option>
-                                            <option value="oldest">오래된 순</option>
-                                            <option value="weak-score">⭐ 약점 점수 높은순</option>
-                                            <option value="alpha-asc">알파벳 오름차순 (A→Z)</option>
-                                            <option value="alpha-desc">알파벳 내림차순 (Z→A)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <button onclick="openWordModal()" class="flex-1 sm:flex-initial bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
-                                <i class="fa-solid fa-plus"></i>
-                                <span>새로운 단어 등록</span>
-                            </button>
-                        </div>
-                    </div>
-                    </div><!-- /sticky search wrap -->
-
-                    <!-- Vocabulary Grid List -->
-                    <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Word Cards will be dynamically injected here -->
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div id="vocab-empty-state" class="hidden text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <span class="text-5xl block mb-4">📖</span>
-                        <h3 class="text-lg font-bold text-slate-700">등록된 단어가 아직 없어요!</h3>
-                        <p class="text-sm text-slate-400 mt-1 max-w-sm mx-auto">새로운 단어를 등록하고 스페인어 학습을 시작해보세요!</p>
-                        <button onclick="openWordModal()" class="mt-5 inline-flex items-center gap-2 bg-violet-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md">
-                            첫 단어 등록하기
-                        </button>
-                    </div>
-                </div>
-
-                <!-- TAB 2: FLASHCARD PLAYGROUND -->
-                <div id="tab-cards" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
-                        <h2 class="text-base font-bold text-slate-900">플래시 카드로 복습하기</h2>
-                        <p class="text-xs text-slate-400 mt-1">카드를 터치하면 뒤집혀요! 뜻과 동사 변형을 소리 내어 말해 보세요.</p>
-                    </div>
-
-                    <div class="flex flex-col items-center justify-center gap-6 py-6">
-                        <div id="flashcard-container" onclick="flipFlashcard()" class="w-full max-w-md h-80 perspective-1000 cursor-pointer">
-                            <div id="flashcard-inner" class="w-full h-full transform-style-3d transition-transform duration-500 relative">
-                                <!-- Card Front -->
-                                <div class="absolute inset-0 bg-gradient-to-br from-white to-slate-50 border-2 border-slate-200 rounded-3xl p-8 flex flex-col justify-between backface-hidden shadow-md">
-                                    <div class="flex justify-between items-center">
-                                        <span id="card-front-pos" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">POS</span>
-                                        <button id="card-front-speaker-btn" onclick="speakText(event, 'card-word')" class="text-slate-400 hover:text-violet-500 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
-                                    </div>
-                                    <div class="text-center">
-                                        <h2 id="card-word" class="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">Word</h2>
-                                        <p id="card-front-irregular" class="text-xs text-amber-600 font-bold mt-2 h-4"></p>
-                                    </div>
-                                    <div class="text-center text-xs text-slate-400 flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-rotate"></i> 카드를 터치하면 뒤집어집니다
-                                    </div>
-                                </div>
-                                <!-- Card Back -->
-                                <div class="absolute inset-0 bg-gradient-to-br from-violet-50 to-indigo-50 text-slate-800 rounded-3xl p-6 flex flex-col justify-between backface-hidden rotate-y-180 shadow-xl border-2 border-violet-300">
-                                    <div class="flex justify-between items-center">
-                                        <span id="card-back-pos" class="text-xs bg-violet-100 text-violet-600 border border-violet-200 px-2.5 py-0.5 rounded-full font-bold">POS</span>
-                                        <button id="card-back-speaker-btn" onclick="speakText(event, 'card-meaning')" class="hidden text-slate-400 hover:text-violet-600 transition-colors p-1"><i class="fa-solid fa-volume-high text-lg"></i></button>
-                                        <span id="card-back-label" class="text-xs text-slate-400 font-bold">번역 결과</span>
-                                    </div>
-                                    <div class="text-center space-y-2 overflow-y-auto max-h-56">
-                                        <h3 id="card-meaning" class="text-2xl font-extrabold text-slate-900">뜻</h3>
-                                        <p id="card-notes" class="text-xs text-slate-500 max-w-xs mx-auto whitespace-pre-wrap"></p>
-                                        <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-white/70 p-2 rounded-xl border border-violet-100">
-                                            <div><span class="text-slate-400 block">yo</span><strong id="card-conj-yo" class="text-blue-600 font-extrabold"></strong></div>
-                                            <div><span class="text-slate-400 block">tú</span><strong id="card-conj-tu" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">él</span><strong id="card-conj-el" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">nos</span><strong id="card-conj-nos" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">vos</span><strong id="card-conj-vos" class="text-slate-700"></strong></div>
-                                            <div><span class="text-slate-400 block">ellos</span><strong id="card-conj-ellos" class="text-slate-700"></strong></div>
-                                        </div>
-                                    </div>
-                                    <div class="text-center text-[10px] text-slate-400 pt-2 border-t border-violet-100">
-                                        클릭 시 다시 앞면으로 전환
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Card Navigation Controls -->
-                        <div class="flex items-center gap-6">
-                            <button onclick="prevFlashcard()" class="w-12 h-12 bg-white hover:bg-slate-50 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 transition-all shadow-sm active:scale-95"><i class="fa-solid fa-arrow-left"></i></button>
-                            <span id="card-progress" class="text-sm font-semibold text-slate-500">0 / 0</span>
-                            <button onclick="nextFlashcard()" class="w-12 h-12 bg-white hover:bg-slate-50 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 transition-all shadow-sm active:scale-95"><i class="fa-solid fa-arrow-right"></i></button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 3: VOCAB QUIZ -->
-                <div id="tab-quiz" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-6xl shrink-0 transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
+                        <div class="flex-1 min-w-0 space-y-2">
+                            <p class="text-sm font-black text-slate-800">${stage.label}</p>
                             <div>
-                                <h2 class="text-base font-bold text-slate-900">단어 복습 퀴즈</h2>
-                                <p class="text-xs text-slate-400 mt-0.5">객관식과 주관식(스페인어 작문)이 섞여서 나와요!</p>
-                            </div>
-                        </div>
-                        <div id="quiz-combo-box" class="hidden items-center gap-2 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-                            <span class="text-xs font-bold text-slate-500">진행:</span>
-                            <span id="quiz-progress-text" class="text-lg font-black text-violet-600">0/0</span>
-                        </div>
-                    </div>
-
-                    <!-- 설정 화면 -->
-                    <div id="quiz-setup-screen" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-6">
-                        <div class="text-5xl">🎯</div>
-                        <div>
-                            <h3 class="text-lg font-bold text-slate-900">몇 문제 풀어볼까요?</h3>
-                            <p id="quiz-setup-sub" class="text-xs text-slate-400 mt-1">단어가 2개 이상 있어야 퀴즈를 시작할 수 있어요!</p>
-                        </div>
-                        <div class="flex justify-center gap-3">
-                            <button onclick="selectQuizCount(10, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">10개</button>
-                            <button onclick="selectQuizCount(30, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all">30개</button>
-                            <button onclick="selectQuizCount(50, this)" class="quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all">50개</button>
-                        </div>
-                        <div class="max-w-sm mx-auto text-left space-y-3">
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">문제 유형</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button type="button" onclick="selectQuizFormat('mc', this)" id="quiz-format-mc" class="quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all">객관식만</button>
-                                    <button type="button" onclick="selectQuizFormat('subjective', this)" id="quiz-format-subjective" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">주관식만</button>
-                                    <button type="button" onclick="selectQuizFormat('mixed', this)" id="quiz-format-mixed" class="quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all">섞어서</button>
+                                <div class="h-2.5 bg-white/70 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-500" style="width:${pct}%"></div>
                                 </div>
+                                <p class="text-[11px] text-slate-400 mt-1">부화까지 <b class="text-indigo-500">${remain}</b> 학습 남음 (${pct}%)</p>
                             </div>
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">출제 범위 (여러 개 선택 가능)</label>
-                                <div class="space-y-2 bg-slate-50 rounded-xl p-3 border border-slate-200">
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-not-mastered" checked class="w-4 h-4 accent-violet-600">
-                                        <span class="text-sm font-medium text-slate-700">📖 마스터 안 된 단어 (복습)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-mastered" class="w-4 h-4 accent-violet-600">
-                                        <span class="text-sm font-medium text-slate-700">✅ 마스터한 단어</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-weak" class="w-4 h-4 accent-amber-500">
-                                        <span class="text-sm font-medium text-slate-700">⭐ 약점 단어 (자주 틀림)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2.5 cursor-pointer">
-                                        <input type="checkbox" id="scope-promotion" class="w-4 h-4 accent-emerald-600">
-                                        <span class="text-sm font-medium text-slate-700">🏆 승급 대기 단어 (마스터 직전)</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <button id="quiz-start-btn" onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100">시작하기</button>
-                    </div>
-
-                    <!-- 문제 화면 -->
-                    <div id="quiz-question-screen" class="hidden bg-white rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-sm border border-slate-200 space-y-5">
-                        <div class="flex justify-between items-center text-xs text-slate-400">
-                            <span id="quiz-question-counter">1 / 10</span>
-                            <span id="arena-score" class="font-bold text-violet-600">정답 0개</span>
-                        </div>
-                        
-                        <div class="text-center py-4 space-y-3">
-                            <div id="quiz-coach-character" class="text-5xl select-none transition-transform duration-150">🧑‍🏫</div>
-                            <div class="inline-block bg-violet-50 px-4 py-2.5 rounded-2xl border border-violet-100 max-w-full">
-                                <span class="text-xs text-violet-500 font-bold block" id="quiz-question-label">QUESTION</span>
-                                <h3 id="quiz-question-text" class="text-lg md:text-xl font-bold text-slate-900 mt-1">다음 스페인어의 올바른 한국어 뜻은?</h3>
-                            </div>
-                        </div>
-
-                        <!-- 객관식 선택지 -->
-                        <div id="quiz-choices-box" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-
-                        <!-- 주관식 입력 (스페인어 작문) -->
-                        <div id="quiz-subjective-box" class="hidden space-y-3">
-                            <div id="quiz-synonym-hint" class="hidden bg-violet-50 border border-violet-200 rounded-xl p-3 text-sm text-violet-900 font-semibold leading-relaxed text-center"></div>
-                            <input type="text" id="quiz-subjective-input" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSubjectiveAnswer();}" placeholder="스페인어로 입력해 보세요..." autocomplete="off" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button id="quiz-subjective-submit-btn" onclick="submitSubjectiveAnswer()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">제출하기</button>
-                        </div>
-
-                        <!-- 정답 확인 + 복습 패널 -->
-                        <div id="quiz-review-panel" class="hidden bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                            <div id="quiz-review-verdict" class="text-sm font-bold"></div>
-                            <div class="bg-white rounded-xl p-3 border border-slate-100 flex items-center gap-3 flex-wrap">
-                                <span class="font-black text-slate-900 text-base" id="quiz-review-word"></span>
-                                <span class="text-slate-600 text-sm font-bold" id="quiz-review-meaning"></span>
-                            </div>
-                            <div id="quiz-review-hint-box" class="hidden bg-violet-50 border border-violet-200 rounded-xl p-3.5 text-sm text-violet-900 font-semibold leading-relaxed"></div>
-                            <div id="quiz-review-register-box" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between gap-2">
-                                <span class="text-xs font-bold text-blue-800">입력한 단어를 단어장에 등록할까요?</span>
-                                <button id="quiz-review-register-btn" onclick="registerUnknownFromQuiz()" class="shrink-0 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">등록</button>
-                            </div>
-                            <div id="quiz-review-notes-box" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 leading-relaxed"></div>
-                            <div id="quiz-review-conj-box" class="hidden"></div>
-                            <button id="quiz-next-btn" onclick="nextQuizQuestion()" disabled class="w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed">다음 문제</button>
+                            <p class="text-[11px] text-slate-500">🐣 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 📖 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
                         </div>
                     </div>
+                `;
+            }
+            // 도감(별도 하단 섹션)도 같이 갱신
+            renderEggCollectionSection();
+        }
 
-                    <!-- 결과 화면 -->
-                    <div id="quiz-results-screen" class="hidden bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
-                        <div class="text-6xl">🎉</div>
-                        <div>
-                            <h3 class="text-xl font-bold text-slate-900">퀴즈 완료!</h3>
-                            <p id="quiz-results-score" class="text-3xl font-black text-violet-600 mt-2">8 / 10</p>
-                            <p id="quiz-results-percent" class="text-sm text-slate-400 mt-1">정답률 80%</p>
-                        </div>
-                        <div id="quiz-results-changes-box" class="hidden text-left space-y-2"></div>
-
-                        <div id="quiz-results-wrong-list" class="text-left bg-slate-50 rounded-2xl p-4 space-y-2 max-h-64 overflow-y-auto"></div>
-
-                        <!-- 맞힌 단어 마스터 등록 -->
-                        <div id="quiz-results-mastery-box" class="hidden text-left bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-emerald-700">✅ 맞힌 단어를 마스터로 등록할까요?</span>
-                                <label class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 cursor-pointer">
-                                    <input type="checkbox" id="quiz-mastery-all" onchange="toggleAllMasteryChecks(this.checked)" class="w-4 h-4 accent-emerald-600"> 전체 선택
-                                </label>
-                            </div>
-                            <div id="quiz-mastery-list" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
-                            <button onclick="applyQuizMastery()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">선택한 단어 마스터 등록</button>
-                        </div>
-                        <div class="flex gap-2 justify-center">
-                            <button onclick="restartQuizSetup()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다시 설정</button>
-                            <button onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md">같은 개수로 또 풀기</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB: 단어 복습 (깜빡이 방식) -->
-                <div id="tab-review" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
-                        <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">👁️</div>
-                        <div>
-                            <h2 class="text-base font-bold text-slate-900">단어 복습</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">단어가 잠깐 보였다 사라져요. 기억해서 써보며 복습해요!</p>
-                        </div>
-                    </div>
-
-                    <!-- 복습 설정 화면 -->
-                    <div id="review-setup" class="bg-white rounded-3xl p-6 border border-slate-200 space-y-5">
-                        <div>
-                            <p class="text-sm font-bold text-slate-700 mb-2">어떤 단어를 복습할까요?</p>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button onclick="selectReviewScope('today-wrong')" data-review-scope="today-wrong" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
-                                    🔔 오늘 복습할 단어
-                                </button>
-                                <button onclick="selectReviewScope('weak')" data-review-scope="weak" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
-                                    ⭐ 약점 단어
-                                </button>
-                                <button onclick="selectReviewScope('not-mastered')" data-review-scope="not-mastered" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
-                                    📖 안 외운 단어
-                                </button>
-                                <button onclick="selectReviewScope('all')" data-review-scope="all" class="review-scope-btn text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">
-                                    🗂️ 전체 단어
-                                </button>
-                            </div>
-                        </div>
-                        <p id="review-scope-count" class="text-xs text-slate-400 text-center">복습할 범위를 선택하세요</p>
-
-                        <div>
-                            <p class="text-sm font-bold text-slate-700 mb-2">몇 개나 복습할까요?</p>
-                            <div class="grid grid-cols-4 gap-2">
-                                <button onclick="selectReviewCount(10)" data-review-count="10" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">10개</button>
-                                <button onclick="selectReviewCount(20)" data-review-count="20" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">20개</button>
-                                <button onclick="selectReviewCount(30)" data-review-count="30" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">30개</button>
-                                <button onclick="selectReviewCount(9999)" data-review-count="9999" class="review-count-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">전체</button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="text-sm font-bold text-slate-700 mb-2">몇 번 반복할까요?</p>
-                            <div class="grid grid-cols-3 gap-2">
-                                <button onclick="selectReviewRepeat(1)" data-review-repeat="1" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">1회</button>
-                                <button onclick="selectReviewRepeat(2)" data-review-repeat="2" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">2회</button>
-                                <button onclick="selectReviewRepeat(3)" data-review-repeat="3" class="review-repeat-btn px-2 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 transition-all">3회</button>
-                            </div>
-                        </div>
-
-                        <button onclick="startWordReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">복습 시작하기</button>
-                    </div>
-
-                    <!-- 복습 진행 화면 -->
-                    <div id="review-play-area" class="hidden"></div>
-                </div>
-
-                <!-- TAB: 미니 게임 -->
-                <div id="tab-games" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
-                        <div class="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center text-2xl">🎮</div>
-                        <div>
-                            <h2 class="text-base font-bold text-slate-900">미니 게임</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">재미있게 단어를 복습해 보세요!</p>
-                        </div>
-                    </div>
-
-                    <!-- 게임 선택 화면 -->
-                    <div id="games-menu" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onclick="startRapidFire()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-rose-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">⚡</div>
-                            <h3 class="text-sm font-black text-slate-900">속사포 퀴즈</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">제한 시간 안에 최대한 많이 맞혀요! 콤보를 쌓아 고득점에 도전하세요.</p>
-                            <div id="hs-rapidfire" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
-                        </button>
-                        <button onclick="startFallingWords()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">🌧️</div>
-                            <h3 class="text-sm font-black text-slate-900">떨어지는 단어</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">한글 뜻이 떨어져요. 바닥에 닿기 전에 스페인어를 입력하세요!</p>
-                            <div id="hs-falling" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
-                        </button>
-                        <button onclick="startListeningQuiz()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-sky-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">🎧</div>
-                            <h3 class="text-sm font-black text-slate-900">듣기 받아쓰기</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">예문을 듣고 똑같이 따라 써보세요! 듣기 연습용이라 점수엔 안 들어가요.</p>
-                        </button>
-                    </div>
-
-                    <!-- 게임 진행 화면 (공통 컨테이너) -->
-                    <div id="game-play-area" class="hidden"></div>
-                </div>
-
-                <!-- TAB 4: AI 1:1 TRANSLATION RING -->
-                <div id="tab-ai-feedback" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-12 h-12 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-md shadow-violet-100">🤖</div>
-                                <div>
-                                    <h2 class="text-base font-bold text-slate-900">AI 실시간 1:1 양방향 첨삭</h2>
-                                    <p class="text-xs text-slate-500 mt-0.5">Gemini AI가 실시간으로 어순을 분석하고 피드백을 제공합니다!</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-2 gap-2 mt-5 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                            <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
-                                🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
-                            </button>
-                            <button id="ai-mode-btn-es-ko" onclick="switchAiMode('es-ko')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                🇪🇸 스 ➡️ 🇰🇷 한 (자유 작문 첨삭)
-                            </button>
-                            <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                💬 질문에 답하기
-                            </button>
-                            <button id="ai-mode-btn-example" onclick="switchAiMode('example')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                📖 내 예문으로 연습
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE A: KOREAN TO SPANISH PLAYGROUND -->
-                    <div id="ai-pane-ko-es" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                <span>한국어 ➡️ 스페인어 번역 연습</span>
-                            </h3>
-                            <div class="flex gap-2">
-                                <button onclick="toggleAiHint()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-xs font-bold border border-amber-200 transition-all flex items-center gap-1">
-                                    <i class="fa-solid fa-lightbulb"></i>
-                                    <span>💡 힌트 보기</span>
-                                </button>
-                                <button id="ai-generate-mission-btn" onclick="generateAiMission()" class="bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                    <span>✨ 랜덤 문장 생성</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 힌트 노출 영역 -->
-                        <div id="ai-mission-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">오늘의 랜덤 미션 ✨</span>
-                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-bell"></i> 실전 구어체 챌린지!</span>
-                            </div>
-                            <h3 id="ai-mission-korean" class="text-lg font-bold text-slate-900 pt-1">여기에 한국어 번역 미션이 무작위로 출제됩니다.</h3>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
-                            <textarea id="ai-user-input" rows="3" placeholder="스페인어로 직접 머릿속으로 작문한 후 정답을 적어보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button id="ai-ko-es-submit-btn" onclick="submitAiTranslationKoEs()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE B: SPANISH TO KOREAN PLAYGROUND -->
-                    <div id="ai-pane-es-ko" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div>
-                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                                <span>스페인어 ➡️ 한국어 자유 작문 첨삭</span>
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-1">냐냐님이 스페인어로 아무 문장이나 자유롭게 작성해 보세요! 실시간으로 어순과 성수 일치를 정교하게 쪼개서 채점해 드립니다.</p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">스페인어 문장 자유 입력</label>
-                            <textarea id="ai-free-input-es" rows="3" placeholder="예: No tengo los libros ahora. 혹은 기입하고 싶은 임의의 스페인어 문장..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button onclick="speakEsKoInput()" class="bg-sky-50 hover:bg-sky-100 text-sky-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <i class="fa-solid fa-volume-high"></i>
-                                <span>듣기</span>
-                            </button>
-                            <button onclick="resetEsKoPane()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <i class="fa-solid fa-rotate-right"></i>
-                                <span>새 문장 쓰기</span>
-                            </button>
-                            <button id="ai-es-ko-submit-btn" onclick="submitAiTranslationEsKo()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-spell-check"></i>
-                                <span>첨삭 받기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE C: QUESTION & ANSWER PRACTICE -->
-                    <div id="ai-pane-question" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                    <span>질문에 스페인어로 답하기</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">등록한 질문 중 하나가 랜덤으로 나와요. 스페인어로 답해보세요!</p>
-                            </div>
-                            <button onclick="openQuestionManageModal()" class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5">
-                                <i class="fa-solid fa-gear"></i>
-                                <span>질문 관리</span>
-                            </button>
-                        </div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="flex gap-1.5">
-                                    <button id="question-topic-reveal-btn" onclick="toggleTopicReveal()" class="text-xs bg-white text-violet-600 px-2.5 py-0.5 rounded-full font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-eye text-[10px]"></i>
-                                        <span id="question-topic-badge">주제 보기</span>
-                                    </button>
-                                    <button id="question-translate-btn" onclick="toggleQuestionTranslation()" class="text-xs bg-white text-teal-600 px-2.5 py-0.5 rounded-full font-bold border border-teal-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-language text-[10px]"></i>
-                                        <span>해석 보기</span>
-                                    </button>
-                                    <button onclick="speakCurrentQuestion()" class="text-xs bg-white text-sky-600 px-2.5 py-0.5 rounded-full font-bold border border-sky-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-volume-high text-[10px]"></i>
-                                        <span>듣기</span>
-                                    </button>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="openTopicPickerModal()" class="bg-white hover:bg-violet-100 text-violet-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-list-check"></i>
-                                        <span>주제 설정</span>
-                                    </button>
-                                    <button onclick="pickRandomQuestion()" class="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
-                                        <i class="fa-solid fa-dice"></i>
-                                        <span>랜덤 질문 뽑기</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <h3 id="question-display-text" class="text-lg font-bold text-slate-900 pt-1">아직 질문이 없어요! '질문 관리'에서 질문을 등록하고 '랜덤 질문 뽑기'를 눌러보세요.</h3>
-                            <p id="question-translation-text" class="hidden text-sm text-teal-700 bg-teal-50 rounded-xl px-3 py-2 font-semibold"></p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변</label>
-                            <textarea id="question-answer-input" rows="3" onkeydown="handleQuestionAnswerKeydown(event)" placeholder="스페인어로 답을 작성해보세요... (Enter로 제출, Shift+Enter 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end flex-wrap">
-                            <button id="question-followup-btn" onclick="generateFollowupQuestion()" class="hidden bg-teal-50 hover:bg-teal-100 text-teal-600 px-4 py-3 rounded-xl text-sm font-bold border border-teal-200 flex items-center justify-center gap-2 transition-all active:scale-95">
-                                <i class="fa-solid fa-comments"></i>
-                                <span>연관 질문 생성하기</span>
-                            </button>
-                            <button id="question-submit-btn" onclick="submitQuestionAnswer()" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- MODE D: MY EXAMPLE PRACTICE -->
-                    <div id="ai-pane-example" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                    <span>내 예문으로 작문 연습</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">등록한 단어의 예문을 활용해요. 그대로 번역하거나, 비슷한 새 문장이 나와요!</p>
-                            </div>
-                            <button id="ai-generate-example-btn" onclick="generateExampleMission()" class="shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>✨ 문장 뽑기</span>
-                            </button>
-                        </div>
-
-                        <div id="ai-example-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
-
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span id="ai-example-mode-badge" class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">내 예문 연습 📖</span>
-                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-book-bookmark"></i> 등록 단어 기반</span>
-                            </div>
-                            <h3 id="ai-example-korean" class="text-lg font-bold text-slate-900 pt-1">'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.</h3>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
-                            <textarea id="ai-example-input" rows="3" placeholder="스페인어로 직접 작문한 후 적어보세요..." class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                        </div>
-
-                        <div class="flex gap-2 justify-end">
-                            <button id="ai-example-submit-btn" onclick="submitExampleMission()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>답변 제출하기</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- AI Feedback Result Panel -->
-                    <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
-                        <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
-                            <div id="ai-coach-icon" class="text-3xl">🤖</div>
-                            <div>
-                                <h4 class="font-bold text-slate-900">AI 첨삭 결과</h4>
-                                <p id="ai-coach-verdict" class="text-xs font-semibold text-slate-500">분석 완료!</p>
-                            </div>
-                        </div>
-
-                        <!-- Correction Zone -->
-                        <div id="ai-coach-correction-box" class="hidden bg-red-50 border border-red-100 p-4 rounded-2xl space-y-3">
-                            <div class="flex items-center gap-1.5 text-red-800 text-xs font-bold">
-                                <i class="fa-solid fa-shield-halved"></i>
-                                <span>수정이 필요한 부분</span>
-                            </div>
-                            <div class="text-sm font-semibold space-y-2">
-                                <div class="bg-white/70 rounded-xl p-3">
-                                    <span class="block text-[11px] text-slate-400 mb-1">냐냐님이 쓴 문장</span>
-                                    <span id="ai-original-render" class="block break-words leading-relaxed text-slate-500"></span>
-                                </div>
-                                <div class="flex justify-center text-slate-300">
-                                    <i class="fa-solid fa-arrow-down text-xs"></i>
-                                </div>
-                                <div class="bg-white rounded-xl p-3 border border-red-100">
-                                    <span class="block text-[11px] text-red-400 mb-1">고친 문장</span>
-                                    <span id="ai-corrected-render" class="block break-words leading-relaxed text-slate-800"></span>
-                                </div>
-                            </div>
-                            <div id="ai-changes-box" class="hidden border-t border-red-100 pt-2.5">
-                                <span class="block text-[11px] text-slate-500 mb-1.5 font-bold">💡 바뀐 부분</span>
-                                <ul id="ai-changes-list" class="space-y-1 text-xs text-slate-600 leading-relaxed"></ul>
-                            </div>
-                            <div id="ai-user-translation" class="hidden border-t border-red-100 pt-2.5 text-sm text-slate-600 font-semibold"></div>
-                        </div>
-
-                        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">AI 코멘트</span>
-                            <p id="ai-coach-message" class="text-base font-medium leading-relaxed text-slate-800"></p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">단어 하나하나 쪼개서 핵심 분석 🔍</span>
-                            <div id="ai-word-breakdown" class="flex flex-col bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden"></div>
-                        </div>
-
-                        <div class="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
-                            <div class="flex items-center gap-2 text-amber-800 text-xs font-bold mb-1">
-                                <i class="fa-solid fa-lightbulb"></i>
-                                <span>냐냐를 위한 오늘의 학습 팁</span>
-                            </div>
-                            <p id="ai-coach-tip" class="text-sm text-amber-900/80 leading-relaxed font-medium"></p>
-                        </div>
-
-                        <!-- AI 첨삭 Q&A -->
-                        <div class="border-t border-slate-200 pt-5 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-comments text-indigo-500"></i>
-                                    <span>AI에게 추가 질문하기 (무제한)</span>
-                                </span>
-                                <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">1:1 Q&A</span>
-                            </div>
-                            
-                            <div id="ai-chat-thread" class="space-y-3 max-h-96 overflow-y-auto p-3 bg-white rounded-2xl border border-slate-150 text-xs">
-                                <div class="text-center text-slate-400 py-2">첨삭 받은 후, 아래 입력창을 통해 분석 결과에 대해 궁금한 점을 끝까지 질문해 보세요!</div>
-                            </div>
-
-                            <div class="flex gap-2">
-                                <input type="text" id="ai-followup-input" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" autocomplete="off" class="flex-1 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <button onclick="sendFollowupQuestion()" id="ai-chat-send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
-                                    <i class="fa-solid fa-paper-plane"></i>
-                                    <span>전송</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 5: STUDY RECORDS -->
-                <div id="tab-records" class="hidden space-y-6">
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">📊</div>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900">학습기록</h2>
-                                <p class="text-xs text-slate-400 mt-0.5">등록 단어, 마스터 단어, 퀴즈, AI 첨삭 기록을 한눈에 봐요</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-                            <button id="range-btn-7d" onclick="setRecordRange('7d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">1주일</button>
-                            <button id="range-btn-30d" onclick="setRecordRange('30d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">한달</button>
-                            <button id="range-btn-1y" onclick="setRecordRange('1y')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">1년</button>
-                            <button id="range-btn-custom" onclick="setRecordRange('custom')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">기간설정</button>
-                        </div>
-                    </div>
-
-                    <!-- [냐냐 PATCH] 미스터리 알 키우기 🥚 -->
-                    <div class="bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-50 border border-indigo-100 rounded-3xl p-5">
-                        <div id="egg-widget"></div>
-                    </div>
-
-                    <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
-                        <label class="text-xs font-bold text-slate-500">시작일</label>
-                        <input type="date" id="record-custom-start" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-                        <label class="text-xs font-bold text-slate-500">종료일</label>
-                        <input type="date" id="record-custom-end" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-                        <button onclick="applyCustomRecordRange()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95">적용</button>
-                    </div>
-
-                    <!-- 단어장 성장 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-growth', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">단어장 성장</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>등록 단어(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>마스터 비율(%)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-growth"><div id="record-line-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- 일별 신규 등록/마스터 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-daily', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">일별 신규 등록 / 마스터</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-violet-500"></span>신규 등록(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-emerald-500 inline-block" style="border-top: 2px dashed #10b981; background:none;"></span>신규 마스터(개)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-daily"><div id="record-growth-daily-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- 퀴즈 풀이 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-quiz', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">퀴즈 풀이</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>전체 풀이 갯수</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-rose-400"></span>오답률(%)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-quiz"><div id="record-quiz-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- AI 첨삭 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-ai', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">AI 첨삭</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-indigo-500"></span>첨삭 횟수</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-ai"><div id="record-ai-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- [냐냐 PATCH] 숫자 요약 + 학습 수준 (맨 아래로 이동) -->
-                    <!-- 요약 스탯 -->
-                    <div>
-                        <button onclick="toggleChartCard('summary-stats-body', this)" class="w-full flex items-center justify-between gap-2 mb-2">
-                            <span class="text-xs font-bold text-slate-500">숫자 요약</span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="summary-stats-body" class="hidden grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 등록 단어</span>
-                            <span id="record-stat-words" class="text-xl font-black text-violet-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 등록</span>
-                            <span id="record-stat-new-words" class="text-xl font-black text-violet-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">풀이 퀴즈</span>
-                            <span id="record-stat-quiz" class="text-xl font-black text-amber-600">0/0</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">총 마스터 단어</span>
-                            <span id="record-stat-mastered" class="text-xl font-black text-emerald-600">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">이 기간 신규 마스터</span>
-                            <span id="record-stat-new-mastered" class="text-xl font-black text-emerald-400">0개</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">AI 첨삭</span>
-                            <span id="record-stat-ai" class="text-xl font-black text-indigo-600">0회</span>
-                        </div>
-                        </div>
-                    </div>
-
-                    <!-- 내 학습 수준 (AI 맞춤용 데이터) -->
-                    <div class="bg-gradient-to-br from-violet-50 to-violet-50 p-5 rounded-3xl border border-violet-100 shadow-sm">
-                        <button onclick="toggleChartCard('learner-profile-display', this)" class="w-full flex items-center justify-between gap-2 mb-3">
-                            <span class="flex items-center gap-2 text-left">
-                                <span class="text-sm">🎯</span>
-                                <span class="text-xs font-bold text-slate-700">내 학습 수준 <span class="font-normal text-slate-400">(AI가 문제·첨삭 난이도를 맞출 때 참고하는 데이터예요)</span></span>
-                            </span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
-                    </div>
-
-                    <!-- [냐냐 PATCH] 생물 도감 (맨 아래, 접힘) -->
-                    <div class="bg-gradient-to-br from-amber-50 to-yellow-50 p-5 rounded-3xl border border-amber-100 shadow-sm">
-                        <div id="egg-collection-section"></div>
-                    </div>
-
-                </div>
-
-                <!-- TAB: 문법 표 -->
-                <div id="tab-grammar" class="hidden space-y-4">
-                    <div class="sticky top-[42px] z-30 bg-[#f8fafc] pt-3 pb-3 -mt-3">
-                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <div class="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                                <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                                    <i class="fa-solid fa-table-list text-violet-600"></i> 문법 표
-                                </h2>
-                                <p class="text-xs text-slate-400 mt-1">자주 쓰는 스페인어 문법 표를 모아뒀어요. 직접 표를 만들거나 수정할 수도 있어요!</p>
-                            </div>
-                            <button onclick="openGrammarEditor()" class="shrink-0 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-violet-100">
-                                <i class="fa-solid fa-plus"></i> 새 표 만들기
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-2 mt-4 flex-wrap">
-                            <div class="relative flex-1 min-w-[180px]">
-                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="grammar-search" oninput="renderGrammarTables()" placeholder="표 제목·내용 검색..." class="w-full bg-slate-50 pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                                <button type="button" id="grammar-search-clear" onclick="clearGrammarSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-circle-xmark"></i></button>
-                            </div>
-                            <button onclick="expandAllGrammar(true)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-down mr-1"></i>전체 펼치기</button>
-                            <button onclick="expandAllGrammar(false)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"><i class="fa-solid fa-chevron-up mr-1"></i>전체 접기</button>
-                        </div>
-                    </div>
-                    </div><!-- /sticky grammar search wrap -->
-                    <div id="grammar-tables-container" class="space-y-3"></div>
-                    <div id="grammar-empty-msg" class="hidden text-center text-sm text-slate-400 py-10">검색 결과가 없어요.</div>
-                </div>
-
-            </section>
-        </main>
-    </div>
-
-    <!-- PRESET 1: ADD & EDIT WORD MODAL (Improved with Real-time Predict and Dropdown) -->
-    <div id="word-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 id="modal-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <span>📝 단어 정보 입력</span>
-                </h3>
-                <button onclick="closeWordModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
+        // [냐냐 PATCH] 생물 도감 — 하단 별도 섹션 (접힘 기본)
+        function renderEggCollectionSection() {
+            const sec = document.getElementById('egg-collection-section');
+            if (!sec) return;
+            if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
+            const uniqueCount = new Set(eggState.collection).size;
+            sec.innerHTML = `
+                <button onclick="toggleEggCollection()" class="w-full flex items-center justify-between gap-2">
+                    <span class="flex items-center gap-2 text-left">
+                        <span class="text-sm">🗂️</span>
+                        <span class="text-xs font-bold text-slate-700">생물 도감 <span class="font-normal text-slate-400">(${uniqueCount}/${CREATURES.length} 수집)</span></span>
+                    </span>
+                    <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0 ${eggCollectionOpen ? '' : 'rotate-180'}"></i>
                 </button>
-            </div>
+                <div id="egg-collection-body" class="${eggCollectionOpen ? '' : 'hidden'}">
+                    ${renderCollectionGrid()}
+                </div>
+            `;
+        }
 
-            <div class="p-6 space-y-5 flex-1 relative">
-                <!-- AI 추천 로딩 오버레이 (스켈레톤 + 예상 대기시간 안내) -->
-                <div id="ai-loading-overlay" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3 rounded-2xl">
-                    <div class="flex gap-1.5">
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-                        <span class="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        function toggleEggCollection() {
+            eggCollectionOpen = !eggCollectionOpen;
+            renderEggCollectionSection();
+        }
+
+        function renderCollectionGrid() {
+            if (!eggState) eggState = defaultEggState();
+            if (!Array.isArray(eggState.collection)) eggState.collection = [];
+            const owned = new Set(eggState.collection);
+            const counts = {};
+            eggState.collection.forEach(id => counts[id] = (counts[id] || 0) + 1);
+            const cells = CREATURES.map(c => {
+                const has = owned.has(c.id);
+                const info = RARITY_INFO[c.rarity];
+                if (has) {
+                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl ${info.bg} border border-slate-100" title="${c.name} (${info.label}) — ${c.desc}">
+                        <span class="text-2xl">${c.emoji}</span>
+                        <span class="text-[9px] font-bold ${info.color} leading-tight">${c.name}</span>
+                        ${counts[c.id] > 1 ? `<span class="text-[8px] text-slate-400">×${counts[c.id]}</span>` : ''}
+                    </div>`;
+                } else {
+                    return `<div class="flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl bg-slate-50 border border-slate-100 opacity-60" title="아직 못 만난 생물">
+                        <span class="text-2xl grayscale">❔</span>
+                        <span class="text-[9px] font-bold text-slate-300 leading-tight">???</span>
+                    </div>`;
+                }
+            }).join('');
+            return `
+                <div class="mt-3">
+                    <div class="grid grid-cols-4 gap-1.5">${cells}</div>
+                </div>
+            `;
+        }
+
+        // [냐냐 PATCH] 학습 달력 상태
+        let calView = 'month'; // 'month' | 'year' | 'decade'
+        let calYear = new Date().getFullYear();
+        let calMonth = new Date().getMonth(); // 0-11
+
+        function dayActivity(dateStr) {
+            const d = nyanyaDiary[dateStr];
+            if (!d) return 0;
+            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+        }
+        function fmtDate(dt) {
+            return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        }
+        // 상대평가 색상: 그 화면에서 가장 많이 한 값(maxVal) 대비 비율로 진하기 결정 (7단계)
+        function calColor(n, maxVal) {
+            if (n === 0) return 'bg-slate-100 border border-slate-200 text-slate-400';
+            const ratio = maxVal > 0 ? n / maxVal : 0;
+            if (ratio <= 0.14) return 'bg-emerald-100 text-emerald-700';
+            if (ratio <= 0.28) return 'bg-emerald-200 text-emerald-800';
+            if (ratio <= 0.43) return 'bg-emerald-300 text-emerald-900';
+            if (ratio <= 0.57) return 'bg-emerald-400 text-white';
+            if (ratio <= 0.71) return 'bg-emerald-500 text-white';
+            if (ratio <= 0.85) return 'bg-emerald-600 text-white';
+            return 'bg-emerald-700 text-white';
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('learning-calendar');
+            const titleEl = document.getElementById('cal-title');
+            if (!container || !titleEl) return;
+
+            if (calView === 'month') {
+                titleEl.innerText = `${calYear}년 ${calMonth + 1}월`;
+                const first = new Date(calYear, calMonth, 1);
+                const startDow = first.getDay(); // 0=일
+                const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                // 이달 최대 학습량 (상대평가 기준)
+                let maxVal = 0;
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const v = dayActivity(fmtDate(new Date(calYear, calMonth, d)));
+                    if (v > maxVal) maxVal = v;
+                }
+                const todayStr = getLocalDateString();
+                const dowHead = ['일','월','화','수','목','금','토'].map((d, i) =>
+                    `<div class="text-center text-[10px] font-bold ${i===0?'text-rose-400':i===6?'text-blue-400':'text-slate-400'}">${d}</div>`).join('');
+                let cells = '';
+                for (let i = 0; i < startDow; i++) cells += `<div></div>`;
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const ds = fmtDate(new Date(calYear, calMonth, d));
+                    const n = dayActivity(ds);
+                    const isToday = ds === todayStr;
+                    cells += `<div class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${ds} · ${n}개 학습">${d}</div>`;
+                }
+                container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
+            } else if (calView === 'year') {
+                titleEl.innerText = `${calYear}년`;
+                // 각 월의 총 학습량
+                const monthVals = [];
+                for (let m = 0; m < 12; m++) {
+                    const dim = new Date(calYear, m + 1, 0).getDate();
+                    let sum = 0;
+                    for (let d = 1; d <= dim; d++) sum += dayActivity(fmtDate(new Date(calYear, m, d)));
+                    monthVals.push(sum);
+                }
+                const maxVal = Math.max(...monthVals);
+                const cells = monthVals.map((v, m) =>
+                    `<button onclick="calPickMonth(${m})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(v, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${calYear}년 ${m+1}월 · ${v}개 학습">
+                        <span>${m + 1}월</span>
+                        <span class="text-[9px] opacity-80">${v}</span>
+                    </button>`).join('');
+                container.innerHTML = `<div class="grid grid-cols-3 gap-2">${cells}</div>`;
+            } else { // decade
+                const startY = Math.floor(calYear / 10) * 10;
+                titleEl.innerText = `${startY} ~ ${startY + 9}`;
+                const yearVals = [];
+                for (let y = startY; y < startY + 10; y++) {
+                    let sum = 0;
+                    for (const ds in nyanyaDiary) {
+                        if (ds.startsWith(String(y))) sum += dayActivity(ds);
+                    }
+                    yearVals.push({ year: y, val: sum });
+                }
+                const maxVal = Math.max(...yearVals.map(x => x.val));
+                const cells = yearVals.map(x =>
+                    `<button onclick="calPickYear(${x.year})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(x.val, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${x.year}년 · ${x.val}개 학습">
+                        <span>${x.year}</span>
+                        <span class="text-[9px] opacity-80">${x.val}</span>
+                    </button>`).join('');
+                container.innerHTML = `<div class="grid grid-cols-3 gap-2">${cells}</div>`;
+            }
+        }
+
+        // 제목 클릭 → 확대 (월→연→연도별)
+        function calZoomOut() {
+            if (calView === 'month') calView = 'year';
+            else if (calView === 'year') calView = 'decade';
+            renderCalendar();
+        }
+        // 연 화면에서 월 클릭 → 그 월 상세
+        function calPickMonth(m) {
+            calMonth = m;
+            calView = 'month';
+            renderCalendar();
+        }
+        // 연도별 화면에서 연도 클릭 → 그 해 월별
+        function calPickYear(y) {
+            calYear = y;
+            calView = 'year';
+            renderCalendar();
+        }
+        // 이전/다음 (화면 단위로)
+        function calNav(dir) {
+            if (calView === 'month') {
+                calMonth += dir;
+                if (calMonth < 0) { calMonth = 11; calYear--; }
+                else if (calMonth > 11) { calMonth = 0; calYear++; }
+            } else if (calView === 'year') {
+                calYear += dir;
+            } else {
+                calYear += dir * 10;
+            }
+            renderCalendar();
+        }
+
+        function renderStreakBadge() {
+            const streak = calcStreak();
+            // 최고 기록 갱신 (learnerProfile에 저장)
+            if (typeof learnerProfile !== 'undefined' && learnerProfile) {
+                if (!learnerProfile.bestStreak) learnerProfile.bestStreak = 0;
+                if (streak > learnerProfile.bestStreak) {
+                    learnerProfile.bestStreak = streak;
+                    saveToStorage();
+                }
+            }
+            const best = (typeof learnerProfile !== 'undefined' && learnerProfile) ? (learnerProfile.bestStreak || 0) : 0;
+
+            // 학습기록 탭의 연속 학습일 카드 갱신
+            const mainEl = document.getElementById('streak-main');
+            const bestEl = document.getElementById('streak-best');
+            const fireEl = document.getElementById('streak-fire');
+            if (mainEl && bestEl) {
+                if (streak >= 1) {
+                    mainEl.innerText = `${streak}일 연속`;
+                    mainEl.className = "text-2xl font-black text-orange-700 leading-tight";
+                    if (fireEl) fireEl.innerText = "🔥";
+                    if (best === streak && best > 1) {
+                        bestEl.innerText = `🎉 최고 기록 갱신 중! (${best}일)`;
+                    } else {
+                        bestEl.innerText = `최고 기록: ${best}일`;
+                    }
+                } else {
+                    // 연속 끊김
+                    mainEl.innerText = "0일 연속";
+                    mainEl.className = "text-2xl font-black text-slate-400 leading-tight";
+                    if (fireEl) fireEl.innerText = "❄️";
+                    bestEl.innerText = best >= 1 ? `최고 기록: ${best}일` : "아직 기록이 없어요";
+                }
+            }
+
+            // 사이드바 일일 학습일지의 연속 학습일 줄 갱신
+            const diaryLine = document.getElementById('diary-streak-line');
+            const diaryDays = document.getElementById('diary-streak-days');
+            const diaryBest = document.getElementById('diary-streak-best');
+            const diaryFire = document.getElementById('diary-streak-fire');
+            if (diaryLine && diaryDays && diaryBest) {
+                if (streak >= 1 || best >= 1) {
+                    diaryLine.classList.remove('hidden');
+                    diaryDays.innerText = `${streak}일 연속`;
+                    diaryBest.innerText = `최고 ${best}일`;
+                    if (diaryFire) diaryFire.innerText = streak >= 1 ? "🔥" : "❄️";
+                    diaryDays.className = streak >= 1 ? "text-orange-700" : "text-slate-400";
+                } else {
+                    diaryLine.classList.add('hidden');
+                }
+            }
+        }
+
+        // [냐냐 PATCH] 오늘 복습하면 좋은 단어 = 약점 점수(weakScore) 1점 이상. 점수 높은 순.
+        function getTodayReviewWords() {
+            const today = getLocalDateString();
+            // [냐냐 PATCH] 오늘 틀린 단어만 (아직 마스터 안 된 것)
+            return vocabulary
+                .filter(w => w.lastWrongDate === today && !w.mastered)
+                .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+        }
+
+        // [냐냐 PATCH] 단어별 정답률 (이번 통계 기간 동안). 시도 3회 미만이면 null(표시 안 함)
+        function getWordAccuracy(w) {
+            const c = w.correctTotal || 0;
+            const x = w.wrongTotal || 0;
+            const total = c + x;
+            if (total < 3) return null; // 데이터 적으면 신뢰 어려움
+            return Math.round(c / total * 100);
+        }
+
+        // [냐냐 PATCH] 정답률 통계 주기적 초기화 (기본 1달마다) — 최근 실력만 반영
+        const STATS_RESET_MONTHS = 1; // 몇 달마다 초기화할지 (1 또는 2)
+        function currentStatsPeriod() {
+            const d = new Date();
+            // STATS_RESET_MONTHS 단위로 기간 키 생성 (예: 1달=매월, 2달=격월)
+            const periodIndex = Math.floor(d.getMonth() / STATS_RESET_MONTHS);
+            return `${d.getFullYear()}-${periodIndex}`;
+        }
+        function checkStatsReset() {
+            const saved = localStorage.getItem('nyanya_stats_period');
+            const now = currentStatsPeriod();
+            if (saved && saved !== now) {
+                // 기간이 바뀌었으면 모든 단어의 정답/오답 카운터 초기화
+                vocabulary.forEach(w => { w.correctTotal = 0; w.wrongTotal = 0; });
+                try { saveToStorage(); } catch (e) {}
+            }
+            try { localStorage.setItem('nyanya_stats_period', now); } catch (e) {}
+        }
+
+        // [냐냐 PATCH] 망각곡선 복습 — 틀린 날로부터 며칠 지났는지 계산
+        function daysSince(dateStr) {
+            if (!dateStr) return -1;
+            const parts = dateStr.split('-').map(Number);
+            if (parts.length !== 3) return -1;
+            const then = new Date(parts[0], parts[1] - 1, parts[2]);
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            then.setHours(0, 0, 0, 0);
+            return Math.round((now - then) / (1000 * 60 * 60 * 24));
+        }
+
+        // 망각곡선 복습 주기 (일). 이 날짜에 해당하면 복습 대상
+        const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
+
+        // 오늘 복습해야 할 단어 (오늘 틀린 것 + 복습 주기에 도달한 것)
+        function getReviewDueWords() {
+            return vocabulary.filter(w => {
+                if (w.mastered || !w.lastWrongDate) return false;
+                const d = daysSince(w.lastWrongDate);
+                // 오늘(0일) 또는 복습 주기(1,3,7,14,30일)에 해당
+                return d === 0 || REVIEW_INTERVALS.includes(d);
+            }).sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+        }
+
+        // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
+        let todayWrongFilterActive = false;
+        function showTodayWrongInList() {
+            todayWrongFilterActive = true;
+            // 다른 필터는 초기화
+            const filter = document.getElementById('mastery-filter-select');
+            if (filter) filter.value = 'all';
+            const sortSel = document.getElementById('sort-select');
+            if (sortSel) sortSel.value = 'weak-score';
+            renderWordList();
+            const grid = document.getElementById('vocabulary-grid');
+            if (grid) setTimeout(() => grid.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+            showToast("오늘 복습할 단어를 모아서 보여드려요! 📖", "info");
+        }
+
+        function renderTodayReview() {
+            const box = document.getElementById('today-review-box');
+            if (!box) return;
+            const words = getReviewDueWords(); // [냐냐 PATCH] 망각곡선 복습 대상
+            const countEl = document.getElementById('today-review-count');
+            if (countEl) countEl.innerText = words.length;
+            if (words.length === 0) {
+                box.classList.add('hidden');
+            } else {
+                box.classList.remove('hidden');
+            }
+        }
+
+        function logAction(type, extra) {
+            touchDiarySnapshot();
+            const today = getLocalDateString();
+
+            if (type === 'quiz') {
+                nyanyaDiary[today].quizTotal++;
+                if (extra) nyanyaDiary[today].quizCorrect++;
+            } else if (type === 'ai') {
+                nyanyaDiary[today].aiSessions++;
+            } else if (type === 'new-word') {
+                nyanyaDiary[today].newWordsCount++;
+            } else if (type === 'new-mastered') {
+                nyanyaDiary[today].newMasteredCount++;
+            }
+            // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
+
+            saveToStorage();
+            renderDiary();
+            if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 성장
+        }
+
+        // 학습 일지 렌더링
+        function renderDiary() {
+            renderStreakBadge();
+            renderCalendar(); // [냐냐 PATCH] 학습 달력
+            const container = document.getElementById('nyanya-diary-list');
+            const today = getLocalDateString();
+            const log = nyanyaDiary[today];
+
+            if (!log) {
+                container.innerHTML = `<p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">
+                    <div>등록 단어: <strong class="text-violet-600">${log.newWordsCount || 0}개</strong></div>
+                    <div>마스터 단어: <strong class="text-emerald-600">${log.newMasteredCount || 0}개</strong></div>
+                    <div>퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
+                    <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 학습기록 탭: 기간별 통계 + 그래프
+        // ============================================================
+        let currentRecordRange = '7d';
+
+        // [냐냐 PATCH] 학습기록 그래프 카드 접기/펼치기
+        // [냐냐 PATCH] 학습 수준 데이터를 사용자가 직접 볼 수 있게 보기 좋게 렌더링
+        function renderLearnerProfileDisplay() {
+            const box = document.getElementById('learner-profile-display');
+            if (!box) return;
+            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
+
+            if (!totalAnswered || totalAnswered < 5) {
+                box.innerHTML = `<p class="text-slate-400 text-xs leading-relaxed">아직 데이터가 적어요! 퀴즈나 AI 첨삭을 ${5 - (totalAnswered || 0)}번 더 하면 수준 분석이 시작돼요. (현재 ${totalAnswered || 0}/5)</p>`;
+                return;
+            }
+
+            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            let level = "초급";
+            let levelColor = "text-emerald-600";
+            if (accuracy >= 85 && vocabulary.length >= 50) { level = "중상급"; levelColor = "text-violet-600"; }
+            else if (accuracy >= 70) { level = "중급"; levelColor = "text-blue-600"; }
+
+            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
+            const weakPos = Object.entries(wrongByPos || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+            let html = `
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div class="bg-white/70 rounded-2xl p-3 text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold">추정 수준</span>
+                        <span class="text-lg font-black ${levelColor}">${level}</span>
                     </div>
-                    <p class="text-sm font-bold text-slate-700">Gemini AI가 분석하고 있어요...</p>
-                    <p id="ai-loading-timer-text" class="text-xs text-slate-400">보통 3~5초 정도 걸려요 (0.0초)</p>
-                    <div class="w-48 space-y-1.5 mt-1">
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse"></div>
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse w-3/4"></div>
-                        <div class="h-3 bg-slate-100 rounded-full animate-pulse w-5/6"></div>
+                    <div class="bg-white/70 rounded-2xl p-3 text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold">전체 정답률</span>
+                        <span class="text-lg font-black text-slate-700">${accuracy}%</span>
                     </div>
                 </div>
+                <p class="text-[11px] text-slate-400 mb-3">총 ${totalAnswered}문제 풀이 (퀴즈 + AI 첨삭 합산)</p>
+            `;
 
-                <input type="hidden" id="modal-word-id">
+            html += `<div class="mb-2">
+                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 품사 <span class="font-normal text-slate-400">(퀴즈 기준)</span></span>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                    ${weakPos.length > 0
+                        ? weakPos.map(([pos, cnt]) => `<span class="text-[11px] font-semibold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full border border-rose-100">${posNameKo[pos] || pos} ${cnt}회</span>`).join('')
+                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요</span>'}
+                </div>
+            </div>`;
+            html += `<div>
+                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 문법 <span class="font-normal text-slate-400">(자유 작문·질문답하기 기준)</span></span>
+                <div class="flex flex-wrap gap-1.5 mt-1">
+                    ${weakGrammar.length > 0
+                        ? weakGrammar.map(([t, cnt]) => `<span class="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">${t} ${cnt}회</span>`).join('')
+                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요 (자유 작문/질문답하기를 해보세요!)</span>'}
+                </div>
+            </div>`;
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5 relative">
-                        <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-violet-400">*</span></label>
-                        <div class="flex gap-2">
-                            <div class="relative flex-1">
-                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('word-suggestions').classList.add('hidden'); triggerAiAutofill();}" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
-                                <!-- Real-time Suggestions Dropdown -->
-                                <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
-                            </div>
-                            <!-- Live AI Auto Recommendation Button -->
-                            <button id="ai-autofill-btn" onclick="triggerAiAutofill()" type="button" class="bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-600 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 shrink-0">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>AI 추천</span>
+            box.innerHTML = html;
+        }
+
+        function toggleChartCard(bodyId, btnEl) {
+            const body = document.getElementById(bodyId);
+            if (!body) return;
+            const chevron = btnEl ? btnEl.querySelector('i') : null;
+            const isHidden = body.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
+        function setRecordRange(range) {
+            currentRecordRange = range;
+            document.querySelectorAll('.record-range-btn').forEach(btn => {
+                btn.className = "record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500";
+            });
+            const btnMap = { '7d': 'range-btn-7d', '30d': 'range-btn-30d', '1y': 'range-btn-1y', 'custom': 'range-btn-custom' };
+            const activeBtn = document.getElementById(btnMap[range]);
+            if (activeBtn) activeBtn.className = "record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+
+            const customBox = document.getElementById('record-custom-range-box');
+            if (range === 'custom') {
+                customBox.classList.remove('hidden');
+                const end = new Date();
+                const start = new Date();
+                start.setDate(end.getDate() - 6);
+                document.getElementById('record-custom-start').value = getLocalDateString(start);
+                document.getElementById('record-custom-end').value = getLocalDateString(end);
+                return; // '적용' 버튼을 눌러야 그려짐
+            }
+            customBox.classList.add('hidden');
+
+            let days = 7;
+            if (range === '30d') days = 30;
+            else if (range === '1y') days = 365;
+
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - (days - 1));
+            renderRecordsForRange(start, end);
+        }
+
+        function applyCustomRecordRange() {
+            const startVal = document.getElementById('record-custom-start').value;
+            const endVal = document.getElementById('record-custom-end').value;
+            if (!startVal || !endVal) {
+                showToast("시작일과 종료일을 모두 선택해 주세요!", "error");
+                return;
+            }
+            const start = new Date(startVal);
+            const end = new Date(endVal);
+            if (start > end) {
+                showToast("시작일이 종료일보다 늦을 수 없어요!", "error");
+                return;
+            }
+            renderRecordsForRange(start, end);
+        }
+
+        function getDateRangeArray(start, end) {
+            const dates = [];
+            const cur = new Date(start);
+            cur.setHours(0,0,0,0);
+            const endCopy = new Date(end);
+            endCopy.setHours(0,0,0,0);
+            while (cur <= endCopy) {
+                dates.push(getLocalDateString(cur));
+                cur.setDate(cur.getDate() + 1);
+            }
+            return dates;
+        }
+
+        function renderRecordsForRange(start, end) {
+            const dateKeys = getDateRangeArray(start, end);
+            const allKeysSorted = Object.keys(nyanyaDiary).sort();
+
+            // 누적값(등록 단어/마스터 단어)은 그 날 기록이 없으면 이전 값을 그대로 이어붙임(carry-forward)
+            let lastRegistered = 0, lastMastered = 0;
+            for (const k of allKeysSorted) {
+                if (k < dateKeys[0]) {
+                    if (nyanyaDiary[k].registeredTotal !== undefined) lastRegistered = nyanyaDiary[k].registeredTotal;
+                    if (nyanyaDiary[k].masteredTotal !== undefined) lastMastered = nyanyaDiary[k].masteredTotal;
+                }
+            }
+
+            let prevRegistered = null;
+            let prevMastered = null;
+            const series = dateKeys.map(date => {
+                const log = nyanyaDiary[date];
+                if (log) {
+                    if (log.registeredTotal !== undefined) lastRegistered = log.registeredTotal;
+                    if (log.masteredTotal !== undefined) lastMastered = log.masteredTotal;
+                }
+                // [냐냐 PATCH] 신규 등록/마스터 수: 명시적 기록이 있으면 그걸 쓰고,
+                // 없으면(예전 데이터) '오늘 누적 - 어제 누적'으로 계산
+                let newWords = (log && log.newWordsCount) || 0;
+                let newMastered = (log && log.newMasteredCount) || 0;
+                if (newWords === 0 && prevRegistered !== null && lastRegistered > prevRegistered) {
+                    newWords = lastRegistered - prevRegistered;
+                }
+                if (newMastered === 0 && prevMastered !== null && lastMastered > prevMastered) {
+                    newMastered = lastMastered - prevMastered;
+                }
+                prevRegistered = lastRegistered;
+                prevMastered = lastMastered;
+                return {
+                    date,
+                    registeredTotal: lastRegistered,
+                    masteredTotal: lastMastered,
+                    quizTotal: (log && log.quizTotal) || 0,
+                    quizCorrect: (log && log.quizCorrect) || 0,
+                    aiSessions: (log && log.aiSessions) || 0,
+                    newWordsCount: newWords,
+                    newMasteredCount: newMastered
+                };
+            });
+
+            const totalQuiz = series.reduce((sum, d) => sum + d.quizTotal, 0);
+            const totalQuizCorrect = series.reduce((sum, d) => sum + d.quizCorrect, 0);
+            const totalAi = series.reduce((sum, d) => sum + d.aiSessions, 0);
+            const totalNewWords = series.reduce((sum, d) => sum + d.newWordsCount, 0);
+            const totalNewMastered = series.reduce((sum, d) => sum + d.newMasteredCount, 0);
+            const latestRegistered = series.length ? series[series.length - 1].registeredTotal : vocabulary.length;
+            const latestMastered = series.length ? series[series.length - 1].masteredTotal : 0;
+
+            document.getElementById('record-stat-words').innerText = `${latestRegistered}개`;
+            document.getElementById('record-stat-mastered').innerText = `${latestMastered}개`;
+            document.getElementById('record-stat-new-words').innerText = `${totalNewWords}개`;
+            document.getElementById('record-stat-new-mastered').innerText = `${totalNewMastered}개`;
+            document.getElementById('record-stat-quiz').innerText = `${totalQuizCorrect}/${totalQuiz}`;
+            document.getElementById('record-stat-ai').innerText = `${totalAi}회`;
+
+            renderRecordLineChart(series);
+            renderGrowthDailyChart(series);
+            renderQuizChart(series);
+            renderAiChart(series);
+            renderLearnerProfileDisplay();
+        }
+
+        function recordChartXLabels(series, xOf, height) {
+            const labelEvery = Math.max(1, Math.ceil(series.length / 7));
+            let html = '';
+            series.forEach((d, i) => {
+                if (i % labelEvery === 0 || i === series.length - 1) {
+                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="9" fill="#94a3b8" text-anchor="middle">${d.date.slice(5)}</text>`;
+                }
+            });
+            return html;
+        }
+
+        // [PATCH] 차트 너비를 기간 길이에 비례해서 늘리지 않고 항상 화면(컨테이너) 폭에 맞춤.
+        // viewBox는 고정값(CHART_VIEW_WIDTH)을 쓰고 svg width="100%"로 반응형 처리 →
+        // 기간이 길어져도(예: 1년) 좌우로 안 늘어나고 한 화면 안에 다 들어옴.
+        const CHART_VIEW_WIDTH = 700;
+
+        // [냐냐 PATCH] Y축 기준선 + 라벨 (세로축 기준점이 없다는 피드백 반영).
+        // 마우스를 올리면(데스크탑) 정확한 수치도 <title>로 보이게 함.
+        // [냐냐 PATCH-버그수정] 마우스 호버용 title 툴팁이 점이 너무 작아서 잘 안 보였음
+        // → 클릭/탭하면 바로 뜨는 방식으로 교체 (모바일에서도 동작함)
+        function showChartTooltip(event, tooltipId, text) {
+            event.stopPropagation();
+            const tooltip = document.getElementById(tooltipId);
+            if (!tooltip) return;
+            const container = tooltip.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            const clientX = event.clientX !== undefined ? event.clientX : (event.touches && event.touches[0] ? event.touches[0].clientX : 0);
+            const clientY = event.clientY !== undefined ? event.clientY : (event.touches && event.touches[0] ? event.touches[0].clientY : 0);
+            let x = clientX - containerRect.left;
+            let y = clientY - containerRect.top;
+            x = Math.max(30, Math.min(x, containerRect.width - 30));
+            tooltip.innerText = text;
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${Math.max(0, y - 38)}px`;
+            tooltip.classList.remove('hidden');
+            clearTimeout(tooltip._hideTimer);
+            tooltip._hideTimer = setTimeout(() => tooltip.classList.add('hidden'), 2500);
+        }
+
+        function recordChartTooltipDiv(id) {
+            return `<div id="${id}" class="hidden absolute z-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap -translate-x-1/2" style="left:0; top:0;"></div>`;
+        }
+
+        function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
+            const steps = 4;
+            let html = '';
+            for (let i = 0; i <= steps; i++) {
+                const val = Math.round((maxVal / steps) * i);
+                const y = padding.top + chartH - (i / steps) * chartH;
+                html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
+                html += `<text x="${(padding.left - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="#94a3b8" text-anchor="end">${val}${suffix}</text>`;
+            }
+            return html;
+        }
+
+        function renderRecordLineChart(series) {
+            const container = document.getElementById('record-line-chart');
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 180;
+            const padding = { top: 16, right: 12, bottom: 28, left: 32 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+
+            // [냐냐 PATCH] 마스터 단어는 절대 갯수 대신 "총 단어 대비 비율(%)"로 표시
+            const withRatio = series.map(d => ({
+                ...d,
+                masteredRatio: d.registeredTotal > 0 ? (d.masteredTotal / d.registeredTotal) * 100 : 0
+            }));
+
+            const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const baseY = height - padding.bottom;
+            const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
+            const barWidth = Math.min(8, groupWidth * 0.5);
+
+            // [냐냐 PATCH] 마스터 비율(%)은 막대그래프로 표시
+            let bars = '';
+            withRatio.forEach((d, i) => {
+                const barH = (d.masteredRatio / 100) * chartH;
+                const text = `${d.date}: 마스터 비율 ${Math.round(d.masteredRatio)}%`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#10b981" opacity="0.7" rx="1.5"/>`;
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+            });
+
+            // 등록 단어 수는 꺾은선
+            const linePath = withRatio.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(d.registeredTotal).toFixed(1)}`).join(' ');
+            const lineDots = withRatio.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOfCount(d.registeredTotal).toFixed(1);
+                const text = `${d.date}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+            }).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-line-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+            `;
+        }
+
+        // 일별 신규 등록(꺾은선) + 신규 마스터(막대) - 둘 다 갯수 기준, 같은 스케일 공유
+        function renderGrowthDailyChart(series) {
+            const container = document.getElementById('record-growth-daily-chart');
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 180;
+            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const maxVal = Math.max(1, ...series.map(d => Math.max(d.newWordsCount, d.newMasteredCount)));
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
+            const barWidth = Math.min(8, groupWidth * 0.5);
+
+            let bars = '';
+            series.forEach((d, i) => {
+                const barH = (d.newWordsCount / maxVal) * chartH;
+                const text = `${d.date}: 신규 등록 ${d.newWordsCount}개`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#8b5cf6" opacity="0.7" rx="1.5"/>`;
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+            });
+
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d.newMasteredCount).toFixed(1)}`).join(' ');
+            const lineDots = series.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOf(d.newMasteredCount).toFixed(1);
+                const text = `${d.date}: 신규 마스터 ${d.newMasteredCount}개`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#10b981"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+            }).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+                    ${lineDots}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+            `;
+        }
+
+        // 퀴즈 차트: 전체 풀이 갯수(꺾은선) + 오답률%(막대)를 한 차트에 겹쳐서 표시
+        function renderQuizChart(series) {
+            const container = document.getElementById('record-quiz-chart');
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 180;
+            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const withRate = series.map(d => ({
+                ...d,
+                wrongRate: d.quizTotal > 0 ? ((d.quizTotal - d.quizCorrect) / d.quizTotal) * 100 : 0
+            }));
+
+            const maxTotal = Math.max(1, ...withRate.map(d => d.quizTotal));
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
+            const barWidth = Math.min(8, groupWidth * 0.5);
+
+            // 오답률(%)은 0~100 고정 스케일의 막대로
+            let bars = '';
+            withRate.forEach((d, i) => {
+                const barH = (d.wrongRate / 100) * chartH;
+                const barX = (xOf(i) - barWidth / 2).toFixed(1);
+                const barY = (baseY - barH).toFixed(1);
+                const text = `${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
+                bars += `<rect x="${barX}" y="${barY}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
+                // 막대가 너무 얇아서 탭하기 어려우므로, 막대 전체 높이를 덮는 투명한 클릭 영역을 따로 추가
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
+            });
+
+            // 전체 풀이 갯수는 자기 자신의 최댓값 기준 꺾은선으로
+            const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
+            const linePath = withRate.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d.quizTotal).toFixed(1)}`).join(' ');
+            const lineDots = withRate.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOfTotal(d.quizTotal).toFixed(1);
+                const text = `${d.date}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
+            }).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-quiz-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
+                    ${recordChartXLabels(withRate, xOf, height)}
+                </svg>
+            `;
+        }
+
+        // AI 첨삭 차트: 일별 횟수 막대그래프
+        function renderAiChart(series) {
+            const container = document.getElementById('record-ai-chart');
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 140;
+            const padding = { top: 16, right: 12, bottom: 28, left: 24 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const maxVal = Math.max(1, ...series.map(d => d.aiSessions));
+            const groupWidth = chartW / series.length;
+            const barWidth = Math.min(10, groupWidth * 0.6);
+            const xOfGroup = (i) => padding.left + i * groupWidth + groupWidth / 2;
+
+            let bars = '';
+            series.forEach((d, i) => {
+                const barH = (d.aiSessions / maxVal) * chartH;
+                const text = `${d.date}: ${d.aiSessions}회`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
+                bars += `<rect x="${(xOfGroup(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-ai-chart-tooltip', '${text}')"/>`;
+            });
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-ai-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    ${recordChartXLabels(series, xOfGroup, height)}
+                </svg>
+            `;
+        }
+
+        // [냐냐 PATCH] 제목 헤더 접기/펼치기 (기본 접힘)
+        let headerExpanded = false;
+        // [냐냐 PATCH] 고정 사이드바의 좌우 위치를 실제 자리(aside)에 맞춰 동기화
+        function syncSidebarPosition() {
+            const aside = document.getElementById('sidebar-menu');
+            const inner = document.getElementById('sidebar-inner');
+            if (!aside || !inner) return;
+            // 데스크톱(md 이상)에서만 fixed 위치 계산
+            if (window.innerWidth >= 768) {
+                const rect = aside.getBoundingClientRect();
+                inner.style.left = rect.left + 'px';
+                inner.style.width = rect.width + 'px';
+            } else {
+                inner.style.left = '';
+                inner.style.width = '';
+            }
+        }
+        window.addEventListener('resize', syncSidebarPosition);
+        window.addEventListener('load', syncSidebarPosition);
+
+        function toggleHeader() {
+            headerExpanded = !headerExpanded;
+            const full = document.getElementById('header-full');
+            const icon = document.getElementById('header-toggle-icon');
+            const collapsedTitle = document.getElementById('header-collapsed-title');
+            if (full) full.classList.toggle('hidden', !headerExpanded);
+            if (icon) icon.style.transform = headerExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+            // 펼쳐지면 얇은 바의 제목은 숨겨서 중복 방지
+            if (collapsedTitle) collapsedTitle.classList.toggle('opacity-0', headerExpanded);
+        }
+
+        function toggleMobileMenu() {
+            if (isMenuCollapsed) expandMobileMenu();
+            else collapseMobileMenu();
+        }
+
+        function collapseMobileMenu() {
+            const menu = document.getElementById('sidebar-menu');
+            const icon = document.getElementById('menu-toggle-icon');
+            menu.classList.add('hidden', 'md:flex');
+            icon.className = "fa-solid fa-chevron-down text-sm";
+            isMenuCollapsed = true;
+        }
+
+        function expandMobileMenu() {
+            const menu = document.getElementById('sidebar-menu');
+            const icon = document.getElementById('menu-toggle-icon');
+            menu.classList.remove('hidden');
+            icon.className = "fa-solid fa-chevron-up text-sm";
+            isMenuCollapsed = false;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 문법 표 (참고용 표 모음)
+        // ============================================================
+        let grammarOpenState = {}; // 표별 펼침 상태 기억
+        let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
+        let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
+        const GRAMMAR_TABLES = [
+            {
+                id: 'possessive',
+                icon: '🫰',
+                title: '소유형용사 (mi, tu, su...)',
+                desc: '명사 앞에 붙어 "누구의"를 나타내요. 뒤에 오는 명사의 수(단·복수)에 맞춰 변해요. nuestro/vuestro만 성(남·여)도 변해요.',
+                headers: ['뜻', '단수 명사 앞', '복수 명사 앞'],
+                highlightCols: [0],
+                rows: [
+                    ['나의', 'mi', 'mis'],
+                    ['너의', 'tu', 'tus'],
+                    ['그/그녀/당신의', 'su', 'sus'],
+                    ['우리의', 'nuestro / nuestra', 'nuestros / nuestras'],
+                    ['너희의', 'vuestro / vuestra', 'vuestros / vuestras'],
+                    ['그들/당신들의', 'su', 'sus'],
+                ],
+                note: '예: mi libro (내 책), mis libros (내 책들), nuestra casa (우리 집)'
+            },
+            {
+                id: 'demonstrative',
+                icon: '👉',
+                title: '지시사 (이 · 그 · 저)',
+                desc: '거리에 따라 este(이·가까움) / ese(그·중간) / aquel(저·멀리)로 나뉘고, 각각 성·수에 맞춰 변해요.',
+                headers: ['뜻', '남성 단수', '여성 단수', '남성 복수', '여성 복수'],
+                highlightCols: [0],
+                rows: [
+                    ['이 (가까이)', 'este', 'esta', 'estos', 'estas'],
+                    ['그 (조금 멀리)', 'ese', 'esa', 'esos', 'esas'],
+                    ['저 (멀리)', 'aquel', 'aquella', 'aquellos', 'aquellas'],
+                ],
+                note: '중성 지시대명사 esto/eso/aquello는 "이것/그것/저것"처럼 특정 명사 없이 막연한 것을 가리킬 때 써요. 예: ¿Qué es esto? (이게 뭐야?)'
+            },
+            {
+                id: 'object-pronoun',
+                icon: '🎯',
+                title: '목적격 대명사 (me, te, lo, le...)',
+                desc: '직접목적격("~을/를")과 간접목적격("~에게")이 있어요. 보통 동사 앞에 와요.',
+                headers: ['뜻', '직접목적격 (~을/를)', '간접목적격 (~에게)'],
+                highlightCols: [0],
+                rows: [
+                    ['나', 'me', 'me'],
+                    ['너', 'te', 'te'],
+                    ['그/그것/당신(남)', 'lo', 'le'],
+                    ['그녀/그것/당신(여)', 'la', 'le'],
+                    ['우리', 'nos', 'nos'],
+                    ['너희', 'os', 'os'],
+                    ['그들/그것들/당신들(남)', 'los', 'les'],
+                    ['그녀들/그것들/당신들(여)', 'las', 'les'],
+                ],
+                note: '예: Te veo (너를 봐), Le doy un libro (그에게 책을 줘). 둘 다 쓸 땐 간접+직접 순서: Me lo da (나에게 그것을 줘).'
+            },
+            {
+                id: 'numbers',
+                icon: '🔢',
+                title: '숫자 (Números)',
+                desc: '기수(0~100 주요 숫자). 16~29는 한 단어로 붙여 써요(dieciséis, veintiuno...). 31부터는 y로 연결해요(treinta y uno).',
+                headers: ['숫자', '스페인어', '숫자', '스페인어'],
+                highlightCols: [0, 2],
+                rows: [
+                    ['0', 'cero', '16', 'dieciséis'],
+                    ['1', 'uno', '17', 'diecisiete'],
+                    ['2', 'dos', '18', 'dieciocho'],
+                    ['3', 'tres', '19', 'diecinueve'],
+                    ['4', 'cuatro', '20', 'veinte'],
+                    ['5', 'cinco', '21', 'veintiuno'],
+                    ['6', 'seis', '30', 'treinta'],
+                    ['7', 'siete', '40', 'cuarenta'],
+                    ['8', 'ocho', '50', 'cincuenta'],
+                    ['9', 'nueve', '60', 'sesenta'],
+                    ['10', 'diez', '70', 'setenta'],
+                    ['11', 'once', '80', 'ochenta'],
+                    ['12', 'doce', '90', 'noventa'],
+                    ['13', 'trece', '100', 'cien'],
+                    ['14', 'catorce', '1000', 'mil'],
+                    ['15', 'quince', '', ''],
+                ],
+                note: '예: 31 = treinta y uno, 45 = cuarenta y cinco, 100 = cien (딱 100), 101 = ciento uno'
+            },
+            {
+                id: 'months',
+                icon: '📅',
+                title: '월 (Meses)',
+                desc: '스페인어에서 월 이름은 소문자로 써요. 관사도 안 붙여요.',
+                headers: ['한국어', '스페인어', '한국어', '스페인어'],
+                highlightCols: [0, 2],
+                rows: [
+                    ['1월', 'enero', '7월', 'julio'],
+                    ['2월', 'febrero', '8월', 'agosto'],
+                    ['3월', 'marzo', '9월', 'septiembre'],
+                    ['4월', 'abril', '10월', 'octubre'],
+                    ['5월', 'mayo', '11월', 'noviembre'],
+                    ['6월', 'junio', '12월', 'diciembre'],
+                ],
+                note: '예: en enero (1월에), el 5 de mayo (5월 5일)'
+            },
+            {
+                id: 'weekdays',
+                icon: '🗓️',
+                title: '요일 (Días de la semana)',
+                desc: '요일도 소문자로 써요. 월요일부터 시작해요. 모두 남성명사예요.',
+                headers: ['한국어', '스페인어'],
+                highlightCols: [0],
+                rows: [
+                    ['월요일', 'lunes'],
+                    ['화요일', 'martes'],
+                    ['수요일', 'miércoles'],
+                    ['목요일', 'jueves'],
+                    ['금요일', 'viernes'],
+                    ['토요일', 'sábado'],
+                    ['일요일', 'domingo'],
+                ],
+                note: '예: el lunes (월요일에), los lunes (매주 월요일). lunes~viernes는 복수형이 단수와 같아요(el lunes → los lunes).'
+            },
+        ];
+
+        function getAllGrammarTables() {
+            // 기본 표 + 사용자 표. 사용자가 기본 표를 수정하면 override로 대체.
+            const result = [];
+            GRAMMAR_TABLES.forEach(base => {
+                const override = customGrammarTables.find(c => c.id === base.id);
+                result.push(override ? { ...override, isCustom: !!override._edited } : base);
+            });
+            // 완전히 새로 만든 사용자 표 (기본 id와 겹치지 않는 것)
+            customGrammarTables.forEach(c => {
+                if (!GRAMMAR_TABLES.find(b => b.id === c.id)) result.push({ ...c, isCustom: true });
+            });
+            return result;
+        }
+
+        function renderGrammarTables() {
+            const container = document.getElementById('grammar-tables-container');
+            if (!container) return;
+            const query = (document.getElementById('grammar-search')?.value || '').trim().toLowerCase();
+            document.getElementById('grammar-search-clear')?.classList.toggle('hidden', !query);
+
+            let tables = getAllGrammarTables();
+            if (query) {
+                tables = tables.filter(t => {
+                    const haystack = [t.title, t.desc, t.note, ...(t.headers || []), ...((t.rows || []).flat())].join(' ').toLowerCase();
+                    return haystack.includes(query);
+                });
+            }
+
+            document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
+
+            // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 원래 순서 유지)
+            tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
+
+            container.innerHTML = tables.map((t, idx) => {
+                const cellHl = grammarCellHighlights[t.id] || {}; // [냐냐 PATCH] {"ri-ci": true} 강조된 칸
+                const hlCols = t.highlightCols || [0]; // [냐냐 PATCH] 열 강조 (글씨체)
+                const headerRow = (t.headers || []).map((h, ci) => {
+                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`;
+                }).join('');
+                const bodyRows = (t.rows || []).map((r, ri) => {
+                    // 행마다 번갈아 배경색 (줄무늬) — 부드러운 파랑
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
+                    const cells = r.map((c, ci) => {
+                        // [냐냐 PATCH] 칸마다 별표 아이콘 → 클릭하면 연분홍 배경 강조 토글
+                        const key = `${ri}-${ci}`;
+                        const isHl = !!cellHl[key];
+                        const cellBg = isHl ? 'bg-[#ffe0ec]' : '';
+                        // [냐냐 PATCH] 열 강조: 해당 열은 진한 파랑 두꺼운 글씨
+                        const colHl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
+                        // [냐냐 PATCH] 조회 화면에선 별표 없이 색 강조만 (별표는 수정 탭에서만)
+                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${escapeHtml(c || '')}</td>`;
+                    }).join('');
+                    return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
+                }).join('');
+                // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
+                const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
+                const editBtns = `
+                    <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
+                        <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
+                        <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
+                        ${t.isCustom ? `<button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>` : `<button onclick="resetGrammarTable('${t.id}')" title="기본값으로 되돌리기" class="w-7 h-7 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><i class="fa-solid fa-rotate-left text-xs"></i></button>`}
+                    </span>`;
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="w-full flex items-center justify-between gap-2 px-5 py-4">
+                            <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
+                                <span class="text-lg shrink-0">${t.icon || '📋'}</span>
+                                <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</span>
                             </button>
+                            ${editBtns}
+                            <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
+                        </div>
+                        <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
+                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc)}</p>` : ''}
+                            <div class="overflow-x-auto rounded-xl border border-slate-100">
+                                <table class="w-full border-collapse">
+                                    ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
+                                    <tbody>${bodyRows}</tbody>
+                                </table>
+                            </div>
+                            ${t.note ? `<p class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">💡 ${escapeHtml(t.note)}</p>` : ''}
                         </div>
                     </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-violet-400">*</span></label>
-                        <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold">
-                    </div>
-                </div>
+                `;
+            }).join('');
+        }
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">품사 구분 (POS)</label>
-                        <select id="input-pos" onchange="togglePosFields()" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                            <option value="noun">Noun (N.)</option>
-                            <option value="verb">Verb (V.)</option>
-                            <option value="adjective">Adjective (Adj.)</option>
-                            <option value="adverb">Adverb (Adv.)</option>
-                            <option value="preposition">Preposition (Prep.)</option>
-                            <option value="conjunction">Conjunction (Conj.)</option>
-                            <option value="pronoun">Pronoun (Pron.)</option>
-                            <option value="phrase">Phrase (Phr.)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1.5">
-                        <!-- Dynamic Noun Section -->
-                        <div id="field-noun-details" class="space-y-1.5">
-                            <label class="block text-xs font-bold text-slate-500">명사 성별</label>
-                            <select id="input-gender" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="none">없음 (성별 없음)</option>
-                                <option value="masculine">M. 남성 명사 (el)</option>
-                                <option value="feminine">F. 여성 명사 (la)</option>
-                            </select>
+        function escapeHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function toggleGrammarTable(id) {
+            const body = document.querySelector(`[data-grammar-body="${id}"]`);
+            const chevron = document.querySelector(`[data-grammar-chevron="${id}"]`);
+            if (!body) return;
+            const nowHidden = body.classList.toggle('hidden');
+            grammarOpenState[id] = !nowHidden;
+            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
+        function expandAllGrammar(open) {
+            getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
+            renderGrammarTables();
+        }
+
+        // [냐냐 PATCH] 문법표 칸 강조 토글 (별표 클릭 → 노란색)
+        function toggleGrammarCellHighlight(tableId, ri, ci) {
+            if (!grammarCellHighlights[tableId]) grammarCellHighlights[tableId] = {};
+            const key = `${ri}-${ci}`;
+            if (grammarCellHighlights[tableId][key]) {
+                delete grammarCellHighlights[tableId][key];
+                if (Object.keys(grammarCellHighlights[tableId]).length === 0) delete grammarCellHighlights[tableId];
+            } else {
+                grammarCellHighlights[tableId][key] = true;
+            }
+            renderGrammarTables();
+            saveToStorage();
+        }
+
+        // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
+        function togglePinGrammar(id) {
+            if (pinnedGrammar[id]) {
+                delete pinnedGrammar[id];
+                showToast("고정을 해제했어요", "info");
+            } else {
+                pinnedGrammar[id] = true;
+                grammarOpenState[id] = true; // 고정하면 열어둠
+                showToast("표를 위에 고정했어요 📌", "success");
+            }
+            renderGrammarTables();
+            saveToStorage();
+        }
+
+        function clearGrammarSearch() {
+            const input = document.getElementById('grammar-search');
+            if (input) { input.value = ''; input.focus(); }
+            renderGrammarTables();
+        }
+
+        // ---- 문법 표 편집기 ----
+        let grammarEditorState = null; // { id, icon, title, desc, note, headers:[], rows:[[]] }
+
+        function openGrammarEditor(id) {
+            if (id) {
+                const existing = getAllGrammarTables().find(t => t.id === id);
+                // 깊은 복사
+                grammarEditorState = JSON.parse(JSON.stringify({
+                    id: existing.id,
+                    icon: existing.icon || '📋',
+                    title: existing.title || '',
+                    desc: existing.desc || '',
+                    note: existing.note || '',
+                    headers: existing.headers || ['', ''],
+                    rows: existing.rows || [['', '']],
+                    highlightCols: existing.highlightCols || [0],
+                    _isBaseId: !!GRAMMAR_TABLES.find(b => b.id === existing.id)
+                }));
+            } else {
+                grammarEditorState = {
+                    id: 'custom-' + Date.now(),
+                    icon: '📋',
+                    title: '',
+                    desc: '',
+                    note: '',
+                    headers: ['뜻', '스페인어'],
+                    rows: [['', ''], ['', '']],
+                    highlightCols: [0],
+                    _isBaseId: false
+                };
+            }
+            document.getElementById('grammar-editor-modal').classList.remove('hidden');
+            document.getElementById('grammar-editor-title').innerText = id ? '표 수정' : '새 표 만들기';
+            renderGrammarEditorFields();
+        }
+
+        function closeGrammarEditor() {
+            document.getElementById('grammar-editor-modal').classList.add('hidden');
+            grammarEditorState = null;
+        }
+
+        function renderGrammarEditorFields() {
+            const s = grammarEditorState;
+            if (!s) return;
+            document.getElementById('ge-icon').value = s.icon;
+            document.getElementById('ge-title').value = s.title;
+            document.getElementById('ge-desc').value = s.desc;
+            document.getElementById('ge-note').value = s.note;
+
+            // 편집 중인 표의 칸 강조 상태 (id 기준)
+            const hl = (s.id && grammarCellHighlights[s.id]) ? grammarCellHighlights[s.id] : {};
+
+            // 표 그리드 (헤더 행 + 데이터 행들)
+            const grid = document.getElementById('ge-grid');
+            const colCount = s.headers.length;
+            let html = '<table class="border-collapse w-full"><thead><tr>';
+            s.headers.forEach((h, ci) => {
+                // [냐냐 PATCH] 열 강조(글씨체) 버튼을 열 제목 '위'에 배치
+                const isColHl = (s.highlightCols || []).includes(ci);
+                html += `<th class="p-1 align-top">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mb-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isColHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isColHl ? '★ 열 강조 켬' : '☆ 열 강조'}</button>
+                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#f3f8fd] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#5896cb]">
+                </th>`;
+            });
+            html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
+            s.rows.forEach((row, ri) => {
+                html += '<tr>';
+                for (let ci = 0; ci < colCount; ci++) {
+                    const val = row[ci] || '';
+                    // [냐냐 PATCH] 각 칸에 별표 → 클릭하면 연분홍 강조 토글 (편집 중에도 가능)
+                    const isHl = !!hl[`${ri}-${ci}`];
+                    const cellBg = isHl ? 'bg-[#ffe0ec]' : 'bg-slate-50';
+                    const starColor = isHl ? 'text-pink-400' : 'text-slate-300 hover:text-pink-300';
+                    html += `<td class="p-1">
+                        <div class="flex items-center gap-1 ${cellBg} rounded-lg px-1">
+                            <button type="button" onclick="toggleGeCellHighlight(${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
+                            <input value="${escapeAttr(val)}" oninput="updateGeCell(${ri}, ${ci}, this.value)" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
                         </div>
-                        <!-- Dynamic Adjective Section -->
-                        <div id="field-adj-details" class="hidden space-y-1.5">
-                            <label class="block text-xs font-bold text-slate-500">형용사 성·수 변화</label>
-                            <select id="input-adj-agreement" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="full">성수 변화</option>
-                                <option value="no-gender">성 변화 X</option>
-                                <option value="no-number">수 변화 X</option>
-                                <option value="invariable">변화 X</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+                    </td>`;
+                }
+                html += `<td class="p-1"><button onclick="removeGeRow(${ri})" title="행 삭제" class="text-slate-300 hover:text-red-500 px-1"><i class="fa-solid fa-circle-minus"></i></button></td>`;
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            grid.innerHTML = html;
+        }
 
-                <!-- Dynamic Verb Conjugation Grid -->
-                <div id="field-verb-conjugations" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                            <i class="fa-solid fa-sliders"></i>
-                            <span>동사 변형</span>
-                        </span>
-                        <div class="flex items-center gap-1.5">
-                            <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="regular">규칙</option>
-                                <option value="irregular">불규칙</option>
-                            </select>
-                            <select id="input-verb-irregular-type" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium" disabled>
-                                <option value="none">- 형태 -</option>
-                                <option value="1인칭">1인칭</option>
-                                <option value="e ➡️ ie">e ➡️ ie</option>
-                                <option value="o ➡️ ue">o ➡️ ue</option>
-                                <option value="e ➡️ i">e ➡️ i</option>
-                                <option value="완전 불규칙">완전 불규칙</option>
-                                <option value="1인칭 및 e ➡️ ie">1인칭 및 e ➡️ ie</option>
-                                <option value="1인칭 및 o ➡️ ue">1인칭 및 o ➡️ ue</option>
-                                <option value="기타 변형">기타 변형</option>
-                            </select>
-                        </div>
-                    </div>
-                    <!-- [냐냐 PATCH] 시제 선택 (기본은 현재시제만, 버튼으로 다른 시제 펼침) -->
-                    <div class="flex items-center justify-between gap-2">
-                        <span id="conj-tense-label" class="text-[11px] font-bold text-indigo-600">직설법 현재 (presente)</span>
-                        <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
-                            <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
-                        </button>
-                    </div>
-                    <div id="conj-tense-selector-box" class="hidden flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-400 shrink-0">시제</span>
-                        <select id="input-verb-tense" onchange="switchConjTense()" class="flex-1 bg-white px-2 py-1.5 rounded-lg border border-indigo-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700">
-                            <option value="presente">직설법 현재 (presente)</option>
-                            <option value="indefinido">직설법 부정과거 (pretérito indefinido)</option>
-                            <option value="imperfecto">직설법 불완료과거 (imperfecto)</option>
-                            <option value="futuro">직설법 미래 (futuro)</option>
-                            <option value="condicional">조건법 (condicional)</option>
-                            <option value="subjPresente">접속법 현재 (subjuntivo presente)</option>
-                            <option value="subjImperfecto">접속법 불완료과거 (subj. imperfecto)</option>
-                            <option value="imperativo">명령법 (imperativo)</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
-                            <input type="text" id="conj-yo" placeholder="tengo" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">tú (너)</span>
-                            <input type="text" id="conj-tu" placeholder="tienes" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">él/ella (그/그녀)</span>
-                            <input type="text" id="conj-el" placeholder="tiene" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">nosotros (우리)</span>
-                            <input type="text" id="conj-nos" placeholder="tenemos" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">vosotros (너희)</span>
-                            <input type="text" id="conj-vos" placeholder="tenéis" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">ellos/ellas (그들)</span>
-                            <input type="text" id="conj-ellos" placeholder="tienen" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                    </div>
-                </div>
+        // [냐냐 PATCH] 편집 중 칸 강조 토글 (표 id 기준으로 grammarCellHighlights에 저장)
+        function toggleGeCellHighlight(ri, ci) {
+            const s = grammarEditorState;
+            if (!s || !s.id) return;
+            if (!grammarCellHighlights[s.id]) grammarCellHighlights[s.id] = {};
+            const key = `${ri}-${ci}`;
+            if (grammarCellHighlights[s.id][key]) {
+                delete grammarCellHighlights[s.id][key];
+                if (Object.keys(grammarCellHighlights[s.id]).length === 0) delete grammarCellHighlights[s.id];
+            } else {
+                grammarCellHighlights[s.id][key] = true;
+            }
+            renderGrammarEditorFields();
+        }
 
-                <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-500">관용구 / 자주 쓰는 표현 (선택, 여러 개 가능)</label>
-                        <button id="idiom-toggle-btn" type="button" onclick="toggleIdiomSection()" class="w-6 h-6 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all">
-                            <i id="idiom-toggle-icon" class="fa-solid fa-plus text-xs"></i>
-                        </button>
-                    </div>
-                    <div id="idiom-fields-box" class="hidden space-y-2 pt-1">
-                        <div id="idiom-entries-box" class="space-y-2"></div>
-                        <button type="button" onclick="addIdiomRow()" class="w-full text-center text-xs font-bold text-violet-600 hover:text-violet-700 border border-dashed border-violet-200 rounded-xl py-2 transition-all">
-                            <i class="fa-solid fa-plus text-[10px]"></i> 관용구 추가
-                        </button>
-                    </div>
-                </div>
+        function escapeAttr(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+        function updateGeHeader(ci, val) { grammarEditorState.headers[ci] = val; }
+        // [냐냐 PATCH] 열 강조(글씨체) 토글 — 편집 중
+        function toggleGeHighlight(ci) {
+            if (!grammarEditorState.highlightCols) grammarEditorState.highlightCols = [];
+            const idx = grammarEditorState.highlightCols.indexOf(ci);
+            if (idx >= 0) grammarEditorState.highlightCols.splice(idx, 1);
+            else grammarEditorState.highlightCols.push(ci);
+            renderGrammarEditorFields();
+        }
+        function updateGeCell(ri, ci, val) { grammarEditorState.rows[ri][ci] = val; }
+        function addGeRow() {
+            grammarEditorState.rows.push(new Array(grammarEditorState.headers.length).fill(''));
+            renderGrammarEditorFields();
+        }
+        function removeGeRow(ri) {
+            if (grammarEditorState.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
+            grammarEditorState.rows.splice(ri, 1);
+            renderGrammarEditorFields();
+        }
+        function addGeColumn() {
+            grammarEditorState.headers.push('');
+            grammarEditorState.rows.forEach(r => r.push(''));
+            renderGrammarEditorFields();
+        }
+        function removeGeColumn() {
+            if (grammarEditorState.headers.length <= 1) { showToast("최소 한 열은 있어야 해요", "error"); return; }
+            const lastIdx = grammarEditorState.headers.length - 1;
+            grammarEditorState.headers.pop();
+            grammarEditorState.rows.forEach(r => r.pop());
+            // 강조 목록에서 삭제된 열 제거
+            if (grammarEditorState.highlightCols) {
+                grammarEditorState.highlightCols = grammarEditorState.highlightCols.filter(ci => ci !== lastIdx);
+            }
+            renderGrammarEditorFields();
+        }
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
-                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
-                        <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    </div>
-                </div>
+        async function saveGrammarEditor() {
+            const s = grammarEditorState;
+            s.icon = document.getElementById('ge-icon').value.trim() || '📋';
+            s.title = document.getElementById('ge-title').value.trim();
+            s.desc = document.getElementById('ge-desc').value.trim();
+            s.note = document.getElementById('ge-note').value.trim();
+            if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
 
-                <div class="space-y-1.5">
-                    <label class="block text-xs font-bold text-slate-500">비고 / 메모 (Notes)</label>
-                    <div class="relative">
-                        <textarea id="input-notes" onkeydown="handleNotesEnterKey(event)" oninput="toggleNotesClearBtn()" rows="2" placeholder="단어에 대한 추가 팁이나 암기할 내용을 남겨보세요..." class="w-full bg-slate-50 px-4 py-2.5 pr-9 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 whitespace-pre-wrap"></textarea>
-                        <button type="button" id="notes-clear-btn" onclick="clearNotes()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
+            // 빈 행 정리 (모든 칸이 비어있으면 제거)
+            s.rows = s.rows.filter(r => r.some(c => (c || '').trim()));
+            if (s.rows.length === 0) s.rows = [new Array(s.headers.length).fill('')];
 
-            <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
-                <button onclick="closeWordModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveWord()" class="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md shadow-violet-100">저장하기</button>
-            </div>
-        </div>
-    </div>
+            const tableData = {
+                id: s.id, icon: s.icon, title: s.title, desc: s.desc, note: s.note,
+                headers: s.headers, rows: s.rows, highlightCols: s.highlightCols || [0], _edited: true
+            };
 
-    <!-- PRESET 2: CUSTOM CONFIRM MODAL -->
-    <!-- 문법 표 편집기 모달 -->
-    <div id="grammar-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-extrabold text-slate-900" id="grammar-editor-title">새 표 만들기</h3>
-                <button onclick="closeGrammarEditor()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
+            // 기존 사용자 표면 교체, 아니면 추가
+            const existingIdx = customGrammarTables.findIndex(c => c.id === s.id);
+            if (existingIdx >= 0) customGrammarTables[existingIdx] = tableData;
+            else customGrammarTables.push(tableData);
 
-            <div class="grid grid-cols-[auto_1fr] gap-3 items-end">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">아이콘</label>
-                    <input id="ge-icon" maxlength="4" placeholder="📋" class="w-16 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-center text-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">표 제목 *</label>
-                    <input id="ge-title" placeholder="예: 소유형용사" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-            </div>
+            closeGrammarEditor();
+            renderGrammarTables();
+            await saveToStorage();
+            showToast("문법 표가 저장됐어요! ✨", "success");
+        }
 
-            <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-500">설명 (선택)</label>
-                <textarea id="ge-desc" rows="2" placeholder="표에 대한 간단한 설명" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-            </div>
+        function deleteGrammarTable(id) {
+            const t = getAllGrammarTables().find(x => x.id === id);
+            showConfirm(
+                `"${t ? t.title : '이 표'}"를 삭제할까요?`,
+                "삭제한 표는 다시 꺼낼 수 없어요.",
+                async () => {
+                    customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    delete grammarOpenState[id];
+                    renderGrammarTables();
+                    await saveToStorage();
+                    showToast("표를 삭제했어요", "success");
+                }
+            );
+        }
 
-            <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                    <label class="block text-xs font-bold text-slate-500">표 내용 (열 제목 위 ☆로 열 전체 강조, 칸의 ★로 칸만 연분홍 강조)</label>
-                    <div class="flex gap-1">
-                        <button onclick="addGeColumn()" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
-                        <button onclick="removeGeColumn()" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
-                    </div>
-                </div>
-                <div id="ge-grid" class="overflow-x-auto"></div>
-                <button onclick="addGeRow()" class="w-full py-2 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 hover:border-violet-300 transition-all"><i class="fa-solid fa-plus mr-1"></i> 행 추가</button>
-            </div>
+        function resetGrammarTable(id) {
+            // 기본 표를 수정했던 걸 원래대로 되돌림
+            const wasEdited = customGrammarTables.find(c => c.id === id);
+            if (!wasEdited) { showToast("이미 기본 상태예요", "info"); return; }
+            showConfirm(
+                "기본값으로 되돌릴까요?",
+                "수정한 내용이 사라지고 원래 기본 표로 돌아가요.",
+                async () => {
+                    customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    renderGrammarTables();
+                    await saveToStorage();
+                    showToast("기본 표로 되돌렸어요", "success");
+                },
+                { okLabel: '되돌리기', cancelLabel: '취소', okStyle: 'primary' }
+            );
+        }
 
-            <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-500">💡 팁/예시 (선택)</label>
-                <textarea id="ge-note" rows="2" placeholder="예: mi libro (내 책), mis libros (내 책들)" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-            </div>
+        function changeTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            if (window.innerWidth < 768) {
+                collapseMobileMenu();
+            }
 
-            <div class="flex gap-2 pt-2">
-                <button onclick="closeGrammarEditor()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
-                <button onclick="saveGrammarEditor()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
-            </div>
-        </div>
-    </div>
+            const btns = {
+                'list': 'nav-list',
+                'cards': 'nav-cards',
+                'review': 'nav-review',
+                'quiz': 'nav-quiz',
+                'games': 'nav-games',
+                'ai-feedback': 'nav-ai',
+                'records': 'nav-records',
+                'grammar': 'nav-grammar'
+            };
+            
+            Object.keys(btns).forEach(key => {
+                const el = document.getElementById(btns[key]);
+                if (!el) return;
+                // [냐냐 PATCH] 플래시카드 메뉴는 숨김 유지 (className 재설정 때 튀어나오는 것 방지)
+                const hiddenPrefix = (key === 'cards') ? 'hidden ' : '';
+                if (key === tabId) {
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
+                } else {
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
+                }
+            });
 
-    <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center space-y-4">
-            <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <div>
-                <h3 class="text-lg font-bold text-slate-900" id="confirm-modal-title">정말 삭제하시겠습니까?</h3>
-                <p class="text-sm text-slate-500 mt-1" id="confirm-modal-desc">삭제된 단어는 복구할 수 없습니다.</p>
-            </div>
-            <div class="flex gap-2 pt-2">
-                <button id="confirm-cancel-btn" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
-                <button id="confirm-ok-btn" class="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-red-100">삭제 확정</button>
-            </div>
-        </div>
-    </div>
+            if (tabId === 'cards') {
+                currentFlashcardIndex = 0;
+                isFlashcardFlipped = false;
+                document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
+                shuffleFlashcards();
+                renderFlashcard();
+            } else if (tabId === 'quiz') {
+                initQuizTab();
+            } else if (tabId === 'games') {
+                // 게임 탭 열면 메뉴로 초기화
+                if (typeof resetGamesMenu === 'function') resetGamesMenu();
+            } else if (tabId === 'review') {
+                if (typeof resetReviewTab === 'function') resetReviewTab();
+            } else if (tabId === 'ai-feedback') {
+                resetKoEsMissionState();
+            } else if (tabId === 'records') {
+                // [냐냐 PATCH] 학습기록 탭 열 때마다 '숫자 요약'은 항상 접힌 상태로 시작
+                const statsBody = document.getElementById('summary-stats-body');
+                if (statsBody) statsBody.classList.add('hidden');
+                const statsChevron = document.querySelector("button[onclick=\"toggleChartCard('summary-stats-body', this)\"] i");
+                if (statsChevron) statsChevron.style.transform = 'rotate(180deg)';
+                // '내 학습 수준'도 항상 접힌 상태로 시작
+                const profileBody = document.getElementById('learner-profile-display');
+                if (profileBody) profileBody.classList.add('hidden');
+                const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
+                if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
+                setRecordRange('7d');
+                renderStreakBadge();
+                if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯
+            } else if (tabId === 'grammar') {
+                // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
+                grammarOpenState = {};
+                renderGrammarTables();
+            }
+        }
 
-    <!-- PRESET 3: GEMINI API KEY SETUP MODAL -->
-    <div id="api-key-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">🔑</div>
-                <div>
-                    <h3 class="text-base font-bold text-slate-900">Gemini API 키 등록</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">진짜 AI 추천/채점 기능을 쓰려면 키가 필요해요</p>
-                </div>
-            </div>
+        function triggerPunchLogo() {
+            AudioFX.playPunch();
+            
+            const logo = document.getElementById('header-logo');
+            logo.classList.add('punch-effect-right');
+            setTimeout(() => logo.classList.remove('punch-effect-right'), 200);
+        }
 
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                <b>왜 필요한가요?</b> 이 앱은 브라우저에서 직접 구글 Gemini API를 호출해요.
-                무료로 키를 발급받아 <b>이 브라우저에만</b> 저장하면 AI 추천과 AI 채점이 진짜로 작동합니다.
-                키는 외부로 전송되지 않고 내 컴퓨터의 localStorage에만 남아요. (단, 이 파일을 다른 사람과 공유하면
-                키가 코드에 노출되니, 본인만 쓰는 파일에 입력해 주세요!)
-            </div>
+        function updateStats() {
+            const total = vocabulary.length;
+            const mastered = vocabulary.filter(w => w.mastered).length;
+            
+            document.getElementById('header-total-vocab').innerText = `${total}개`;
+            document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
 
-            <a href="https://aistudio.google.com/apikey" target="_blank" class="block text-center text-xs font-bold text-indigo-600 hover:text-indigo-700 underline">
-                👉 Google AI Studio에서 무료 API 키 발급받기
-            </a>
-
-            <div class="space-y-1.5">
-                <label class="block text-xs font-bold text-slate-500">API 키 입력</label>
-                <input type="password" id="api-key-input" placeholder="AIza..." class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
-            </div>
-
-            <div class="flex gap-2 pt-1">
-                <button onclick="clearApiKey()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">키 삭제</button>
-                <button onclick="closeApiKeyModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveApiKey()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">저장하기</button>
-            </div>
-            <button onclick="clearAiWordCacheUI()" class="w-full text-center text-[11px] text-slate-400 hover:text-slate-600 underline pt-1">단어 추천 캐시 초기화 (예전에 저장된 추천 결과를 지워요)</button>
-        </div>
-    </div>
-
-    <!-- PRESET 3.5: SYNC PASSWORD MODAL -->
-    <div id="sync-password-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🔐</div>
-                <div>
-                    <h3 class="text-base font-bold text-slate-900">동기화 비밀번호</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">이 비밀번호로 내 데이터만 안전하게 동기화돼요</p>
-                </div>
-            </div>
-
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                이 비밀번호는 코드(GitHub)에는 절대 저장되지 않고, <b>이 기기에만</b> 저장돼요.
-                다른 기기(폰 등)에서도 똑같이 동기화하려면, 그 기기에서도 <b>똑같은 비밀번호</b>를 한 번 입력해 주세요.
-                비밀번호를 잊으면 데이터에 다시 접근하기 어려우니 어딘가에 적어두는 걸 추천해요!
-            </div>
-
-            <div class="space-y-1.5">
-                <label class="block text-xs font-bold text-slate-500">비밀번호 (아무 문자열이나 가능)</label>
-                <input type="password" id="sync-password-input" placeholder="예: nyanya-secret-2026" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
-            </div>
-
-            <div class="flex gap-2 pt-1">
-                <button onclick="closeSyncPasswordModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
-                <button onclick="saveSyncPassword()" class="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">저장하고 동기화</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PRESET 4: BACKUP / TRANSFER TO OTHER DEVICE MODAL -->
-    <!-- 질문 관리 모달 -->
-    <!-- 질문 수정 모달 -->
-    <div id="question-edit-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">✏️ 질문 수정</h3>
-                <button onclick="closeQuestionEditModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-3">
-                <input type="hidden" id="edit-question-id">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">주제</label>
-                    <input type="text" id="edit-question-topic-input" autocomplete="off" list="question-topics-datalist" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-500">질문</label>
-                    <input type="text" id="edit-question-input" autocomplete="off" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-                <button onclick="saveEditedQuestion()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 mt-2">수정 저장</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="question-manage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">💬 질문 관리</h3>
-                <button onclick="closeQuestionManageModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="px-6 pt-3 pb-6 space-y-5">
-                <!-- 질문 등록 -->
-                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
-                    <span class="text-xs font-bold text-violet-700">새 질문 등록</span>
-                    <div class="space-y-2">
-                        <input type="text" id="new-question-topic-input" placeholder="주제 (예: 일상, 음식, 날씨...)" autocomplete="off" list="question-topics-datalist" class="w-full bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                        <datalist id="question-topics-datalist"></datalist>
-                        <div class="flex gap-2">
-                            <input type="text" id="new-question-input" placeholder="질문 (예: ¿Qué tiempo hace hoy?)" autocomplete="off" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                            <button onclick="addCustomQuestion()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 shrink-0">추가</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 검색 -->
-                <div class="relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-                    <input type="text" id="question-search-input" oninput="renderCustomQuestionsList()" placeholder="질문/주제 검색..." autocomplete="off" class="w-full bg-slate-50 pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                </div>
-
-                <!-- 주제별 질문 목록 -->
-                <div id="question-list-box" class="space-y-3 max-h-72 overflow-y-auto"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 랜덤 질문 주제 선택 모달 -->
-    <div id="topic-picker-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl max-h-[80vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">🎯 랜덤 뽑기 주제 설정</h3>
-                <button onclick="closeTopicPickerModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <p class="px-5 pt-4 text-xs text-slate-400">선택한 주제에서만 랜덤 질문이 나와요. 이 설정은 저장되어 다음에도 유지돼요.</p>
-            <div id="topic-picker-list" class="p-5 space-y-2"></div>
-            <div class="p-5 border-t border-slate-100 sticky bottom-0 bg-white">
-                <button onclick="saveTopicSelection()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">설정 저장</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="backup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
-                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">📦 백업 (비상용 안전망)</h3>
-                <button onclick="closeBackupModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="p-6 space-y-6">
-                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 leading-relaxed">
-                    동기화 비밀번호를 설정했다면 데이터는 이미 자동으로 동기화되고 있어요.
-                    이 기능은 <b>비밀번호를 잊었거나, 동기화가 안 될 때</b> 데이터를 안전하게 옮기는 비상용 백업이에요.
-                </div>
-
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-500">① 이 기기에서: 내보내기</label>
-                        <button onclick="copyBackupExport()" class="text-xs font-bold text-violet-600 hover:text-violet-700"><i class="fa-solid fa-copy"></i> 복사하기</button>
-                    </div>
-                    <textarea id="backup-export-area" readonly rows="4" class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono"></textarea>
-                    <p class="text-[11px] text-slate-400">위 내용을 복사해서, 다른 기기로 (카카오톡 나에게 보내기, 메모앱 등으로) 전달해 주세요.</p>
-                </div>
-
-                <div class="space-y-2 pt-2 border-t border-slate-100">
-                    <label class="block text-xs font-bold text-slate-500">② 다른 기기에서: 붙여넣고 가져오기</label>
-                    <textarea id="backup-import-area" rows="4" placeholder="여기에 복사해 온 내용을 붙여넣으세요..." class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
-                    <button onclick="importBackupData()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">가져오기 (현재 기기 데이터를 덮어씁니다)</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <script src="js/dictionary-data.js"></script>
-    <script src="js/core.js"></script>
-    <script src="js/vocab.js"></script>
-    <script src="js/flashcards.js"></script>
-    <script src="js/quiz.js"></script>
-    <script src="js/games.js"></script>
-    <script src="js/ai-feedback.js"></script>
-</body>
-</html>
+            const todayStr = getLocalDateString();
+            document.getElementById('header-today-date').innerText = todayStr.slice(5).replace('-', '/'); // MM/DD
+            document.getElementById('header-today-date').title = todayStr;
+        }
