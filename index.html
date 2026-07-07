@@ -31,66 +31,41 @@
     <div id="app" class="flex-1 flex flex-col pb-16">
         <!-- Top Sticky Premium Header -->
         <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-            <!-- [냐냐 PATCH] 접을 수 있는 제목 영역 (기본 접힘) -->
-            <div id="header-full" class="hidden max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div id="header-logo" class="w-11 h-11 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-xl flex items-center justify-center text-2xl shadow-md shadow-violet-100 cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95" onclick="triggerPunchLogo()">
+            <!-- [냐냐 PATCH] 한 줄 헤더 (접기 없음) -->
+            <div class="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+                <!-- 왼쪽: 로고 + 제목 + 통계 -->
+                <div class="flex items-center gap-3 min-w-0">
+                    <div id="header-logo" class="w-10 h-10 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-xl flex items-center justify-center text-xl shadow-md shadow-violet-100 cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="triggerPunchLogo()">
                         📖
                     </div>
-                    <div>
-                        <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            냐냐의 스페인어 공부방
-                        </h1>
-                    </div>
-                </div>
-                
-                <!-- Right Stats -->
-                <div class="flex items-center gap-2">
-                    <div class="hidden sm:flex items-center gap-4 bg-slate-50 px-4 py-1.5 rounded-2xl border border-slate-200">
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">오늘</span>
-                            <span id="header-today-date" class="text-sm font-bold text-violet-600">-</span>
-                        </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">보유 단어</span>
+                    <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">냐냐의 스페인어 공부방</h1>
+                    <!-- 통계: 보유 단어 · 마스터 -->
+                    <div class="hidden sm:flex items-center gap-3 bg-slate-50 px-3 py-1 rounded-2xl border border-slate-200 ml-1 shrink-0">
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-[10px] text-slate-400 font-bold">보유</span>
                             <span id="header-total-vocab" class="text-sm font-bold text-slate-800">0개</span>
                         </div>
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        <div class="text-center px-1">
-                            <span class="block text-[10px] text-slate-400 font-bold">마스터함</span>
+                        <div class="h-4 w-px bg-slate-200"></div>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-[10px] text-slate-400 font-bold">마스터</span>
                             <span id="header-mastered-vocab" class="text-sm font-bold text-emerald-600">0개</span>
                         </div>
                     </div>
-                    
-                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>
-                    </button>
+                </div>
 
-                    <button id="sync-status-badge" onclick="openSyncPasswordModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 확인 중...</span>
-                    </button>
+                <!-- 오른쪽: 톱니바퀴(설정) + 모바일 메뉴 -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <!-- 숨은 상태 배지 (설정 팝업에서 상태 참조용, 화면엔 안 보임) -->
+                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="hidden items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span> AI 키 미등록</span></button>
+                    <button id="sync-status-badge" onclick="openSyncPasswordModal()" class="hidden items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span> 확인 중...</span></button>
 
-                    <button onclick="openBackupModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <i class="fa-solid fa-box-archive"></i><span class="hidden sm:inline"> 백업</span>
+                    <button onclick="openSettingsModal()" title="설정 (AI 연결 · 동기화 · 백업)" class="w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-violet-600 rounded-xl flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-gear"></i>
                     </button>
-
-                    <button onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
-                        <i id="menu-toggle-icon" class="fa-solid fa-chevron-up text-sm"></i>
+                    <button onclick="toggleMobileMenu()" class="md:hidden w-9 h-9 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
+                        <i id="menu-toggle-icon" class="fa-solid fa-bars text-sm"></i>
                     </button>
                 </div>
-            </div>
-
-            <!-- [냐냐 PATCH] 얇은 토글 바 (제목 접기/펼치기) -->
-            <div class="max-w-7xl mx-auto px-4 flex items-center justify-between" style="height: 40px;">
-                <button onclick="toggleHeader()" class="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-violet-600 transition-colors py-1.5">
-                    <span class="text-sm">📖</span>
-                    <span id="header-collapsed-title">냐냐의 스페인어 공부방</span>
-                    <i id="header-toggle-icon" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
-                </button>
-                <button onclick="toggleMobileMenu()" class="md:hidden w-8 h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-bars text-xs"></i>
-                </button>
             </div>
         </header>
 
@@ -177,7 +152,7 @@
                 <!-- TAB 1: WORD LIST & MANAGEMENT -->
                 <div id="tab-list" class="space-y-2">
                     <!-- Search & Action Bar -->
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
                         <div class="relative w-full sm:flex-1">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -345,7 +320,7 @@
 
                 <!-- TAB 3: VOCAB QUIZ -->
                 <div id="tab-quiz" class="hidden space-y-6">
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
@@ -482,7 +457,7 @@
 
                 <!-- TAB: 단어 복습 (깜빡이 방식) -->
                 <div id="tab-review" class="hidden space-y-6">
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
                         <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl">👁️</div>
                         <div>
@@ -541,7 +516,7 @@
 
                 <!-- TAB: 미니 게임 -->
                 <div id="tab-games" class="hidden space-y-6">
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
                         <div class="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center text-2xl">🎮</div>
                         <div>
@@ -578,7 +553,7 @@
 
                 <!-- TAB 4: AI 1:1 TRANSLATION RING -->
                 <div id="tab-ai-feedback" class="hidden space-y-6">
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                         <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div class="flex items-center gap-3">
@@ -1011,7 +986,7 @@
 
                 <!-- TAB: 문법 표 -->
                 <div id="tab-grammar" class="hidden space-y-4">
-                    <div class="sticky top-10 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
                     <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div>
@@ -1321,6 +1296,53 @@
     </div>
 
     <!-- PRESET 3: GEMINI API KEY SETUP MODAL -->
+    <!-- [냐냐 PATCH] 설정 모달 (AI 연결 · 동기화 · 백업) -->
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">⚙️ 설정</h3>
+                <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-2.5">
+                <!-- AI 연결 -->
+                <button onclick="closeSettingsModal(); openApiKeyModal();" class="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-[0.98]">
+                    <span class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center"><i class="fa-solid fa-robot"></i></span>
+                        <span class="text-left">
+                            <span class="block text-sm font-bold text-slate-800">AI 연결</span>
+                            <span id="settings-api-status" class="block text-[11px] text-slate-400">확인 중...</span>
+                        </span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>
+                </button>
+                <!-- 동기화 -->
+                <button onclick="closeSettingsModal(); openSyncPasswordModal();" class="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-[0.98]">
+                    <span class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-rotate"></i></span>
+                        <span class="text-left">
+                            <span class="block text-sm font-bold text-slate-800">기기 간 동기화</span>
+                            <span id="settings-sync-status" class="block text-[11px] text-slate-400">확인 중...</span>
+                        </span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>
+                </button>
+                <!-- 백업 -->
+                <button onclick="closeSettingsModal(); openBackupModal();" class="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-[0.98]">
+                    <span class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center"><i class="fa-solid fa-box-archive"></i></span>
+                        <span class="text-left">
+                            <span class="block text-sm font-bold text-slate-800">백업 / 복원</span>
+                            <span class="block text-[11px] text-slate-400">데이터를 파일로 저장하거나 불러오기</span>
+                        </span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="api-key-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
             <div class="flex items-center gap-3">
