@@ -122,13 +122,80 @@
             if (sel) { sel.value = 'presente'; sel.dataset.prevTense = 'presente'; }
         }
 
+        // [냐냐 PATCH] AI 추천 완료 여부 (완료 후 아무 칸에서 엔터 = 저장)
+        let aiAutofillCompleted = false;
+
+        // [냐냐 PATCH] 단어 모달 드래그 이동 + 위치 기억
+        let modalDragPos = null; // {left, top} — '계속 등록' 연속 창은 이 위치 유지, 직접 열면 null(중앙)
+        let _modalDrag = null;
+        function startModalDrag(e) {
+            // 닫기 버튼 등은 드래그 시작 제외
+            if (e.target.closest('button')) return;
+            const inner = document.getElementById('word-modal-inner');
+            if (!inner) return;
+            const rect = inner.getBoundingClientRect();
+            // 드래그 시작 시 flex 중앙정렬 해제하고 절대좌표로 고정
+            applyModalPosition(rect.left, rect.top);
+            _modalDrag = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
+            document.addEventListener('mousemove', onModalDrag);
+            document.addEventListener('mouseup', endModalDrag);
+            e.preventDefault();
+        }
+        function onModalDrag(e) {
+            if (!_modalDrag) return;
+            let newLeft = _modalDrag.origLeft + (e.clientX - _modalDrag.startX);
+            let newTop = _modalDrag.origTop + (e.clientY - _modalDrag.startY);
+            // 화면 밖으로 완전히 나가지 않게 살짝 제한
+            const inner = document.getElementById('word-modal-inner');
+            const w = inner.offsetWidth, h = 60; // 헤더 정도는 항상 보이게
+            newLeft = Math.max(-w + 100, Math.min(newLeft, window.innerWidth - 100));
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - h));
+            applyModalPosition(newLeft, newTop);
+        }
+        function endModalDrag() {
+            if (_modalDrag) {
+                const inner = document.getElementById('word-modal-inner');
+                const rect = inner.getBoundingClientRect();
+                modalDragPos = { left: rect.left, top: rect.top }; // 위치 기억
+            }
+            _modalDrag = null;
+            document.removeEventListener('mousemove', onModalDrag);
+            document.removeEventListener('mouseup', endModalDrag);
+        }
+        function applyModalPosition(left, top) {
+            const modal = document.getElementById('word-modal');
+            const inner = document.getElementById('word-modal-inner');
+            if (!modal || !inner) return;
+            // flex 중앙정렬 해제 → 절대좌표 배치
+            modal.classList.remove('items-center', 'justify-center');
+            inner.style.position = 'fixed';
+            inner.style.left = left + 'px';
+            inner.style.top = top + 'px';
+            inner.style.margin = '0';
+        }
+        function resetModalPosition() {
+            // 중앙 정렬로 복귀 (직접 '새 단어 등록'/'수정' 버튼으로 열 때)
+            const modal = document.getElementById('word-modal');
+            const inner = document.getElementById('word-modal-inner');
+            if (!modal || !inner) return;
+            modal.classList.add('items-center', 'justify-center');
+            inner.style.position = '';
+            inner.style.left = '';
+            inner.style.top = '';
+            inner.style.margin = '';
+            modalDragPos = null;
+        }
+
         function openWordModal(wordId = null) {
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
+            aiAutofillCompleted = false; // 모달 열 때 초기화
+            resetModalPosition(); // [냐냐 PATCH] 직접 열면 항상 중앙에서 시작
             
             if (wordId) {
                 const w = vocabulary.find(item => item.id === wordId);
                 if (!w) return;
+                aiAutofillCompleted = true; // [냐냐 PATCH] 수정 모드는 이미 내용이 있으니 바로 엔터 저장 가능
                 
                 document.getElementById('modal-title').innerHTML = `✏️ 단어 수정하기: <span class="text-indigo-600 font-extrabold">${w.word}</span>`;
                 document.getElementById('modal-word-id').value = w.id;
@@ -499,6 +566,7 @@
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
                 hideAiLoadingOverlay();
+                aiAutofillCompleted = true; // [냐냐 PATCH] AI 추천 완료 → 이제 엔터로 저장 가능
             }
         }
 
@@ -713,6 +781,7 @@
             // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
             applyAutofillResult(match, true);
             AudioFX.playSuccess();
+            aiAutofillCompleted = true; // [냐냐 PATCH] 오프라인 추천 완료 → 엔터로 저장 가능
 
             // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
             if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
@@ -852,6 +921,20 @@
             performSaveWord();
         }
 
+        // [냐냐 PATCH] 단어 등록/수정 모달: AI 추천 완료 후 아무 칸에서 엔터 = 저장 (Shift+엔터는 줄바꿈)
+        function handleWordModalKey(event) {
+            if (event.key !== 'Enter' || event.shiftKey) return;
+            if (!aiAutofillCompleted) return; // AI 추천 전에는 저장 안 함 (단어칸 엔터는 자체 핸들러가 추천 실행)
+            const el = event.target;
+            // 단어 입력칸은 자체 onkeydown이 처리하므로 건너뜀
+            if (el && el.id === 'input-word') return;
+            // input/textarea/select에서만 반응
+            const tag = (el && el.tagName) ? el.tagName.toLowerCase() : '';
+            if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
+            event.preventDefault();
+            saveWord();
+        }
+
         function performSaveWord() {
             const wordVal = document.getElementById('input-word').value.trim();
             const meaningVal = document.getElementById('input-meaning').value.trim();
@@ -899,7 +982,9 @@
                 const index = vocabulary.findIndex(item => item.id === modalId);
                 if (index !== -1) {
                     wordObj.mastered = vocabulary[index].mastered || false; // 수정 시 마스터 상태 보존 (기존엔 초기화되던 버그)
-                    vocabulary[index] = wordObj;
+                    // [냐냐 PATCH] 수정한 단어를 맨 앞으로 (최근순에서 바로 보이게)
+                    vocabulary.splice(index, 1);
+                    vocabulary.unshift(wordObj);
                     showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
                 }
                 logAction('snapshot');
@@ -965,6 +1050,7 @@
             if (ii) ii.className = "fa-solid fa-plus text-xs";
             document.getElementById('input-notes').value = '· ';
             document.getElementById('word-suggestions').classList.add('hidden');
+            aiAutofillCompleted = false; // [냐냐 PATCH] 다음 단어는 다시 AI 추천 후 저장
             togglePosFields();
             toggleNotesClearBtn();
             setTimeout(() => { const wi = document.getElementById('input-word'); if (wi) wi.focus(); }, 50);
@@ -1510,3 +1596,5 @@
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
         }
+
+        // TAB 2: FLASHCARD PLAYGROUND LOGICS
