@@ -450,7 +450,7 @@ let vocabulary = [];
         }
 
         // 부화에 필요한 포인트
-        const EGG_HATCH_GOAL = 200;
+        const EGG_HATCH_GOAL = 500;
 
         // 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
         const CREATURES = [
@@ -2142,6 +2142,17 @@ let vocabulary = [];
             );
         }
 
+        // [냐냐 PATCH] 메뉴별 아이콘 색 (선택 안 됐을 때)
+        const NAV_ICON_COLORS = {
+            'list': 'text-violet-500',
+            'grammar': 'text-teal-500',
+            'cards': 'text-cyan-500',
+            'review': 'text-indigo-500',
+            'quiz': 'text-amber-500',
+            'games': 'text-pink-500',
+            'ai-feedback': 'text-sky-500',
+            'records': 'text-emerald-500'
+        };
         function changeTab(tabId) {
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
@@ -2171,6 +2182,18 @@ let vocabulary = [];
                     el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
                 } else {
                     el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
+                }
+                // [냐냐 PATCH] 선택된 메뉴는 아이콘도 흰색, 아닌 건 각자 색 유지
+                const icon = el.querySelector('i');
+                if (icon) {
+                    const colorClass = NAV_ICON_COLORS[key] || '';
+                    if (key === tabId) {
+                        if (colorClass) icon.classList.remove(colorClass);
+                        icon.classList.add('text-white');
+                    } else {
+                        icon.classList.remove('text-white');
+                        if (colorClass) icon.classList.add(colorClass);
+                    }
                 }
             });
 
