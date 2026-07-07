@@ -124,6 +124,7 @@
 
         // [냐냐 PATCH] AI 추천 완료 여부 (완료 후 아무 칸에서 엔터 = 저장)
         let aiAutofillCompleted = false;
+        let _skipContinueRegisterPrompt = false; // [냐냐 PATCH] 첨삭에서 등록 시 '계속 등록?' 팝업 스킵
 
         // [냐냐 PATCH] 단어 모달 드래그 이동 + 위치 기억
         let modalDragPos = null; // {left, top} — '계속 등록' 연속 창은 이 위치 유지, 직접 열면 null(중앙)
@@ -190,6 +191,7 @@
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // 모달 열 때 초기화
+            _skipContinueRegisterPrompt = false; // [냐냐 PATCH] 기본은 계속등록 팝업 표시 (첨삭 등록만 스킵)
             resetModalPosition(); // [냐냐 PATCH] 직접 열면 항상 중앙에서 시작
             
             if (wordId) {
@@ -269,6 +271,21 @@
         }
 
         // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
+        // [냐냐 PATCH] 문법표 설명/팁에서 엔터 = 자동 · 기호 (단어장 노트처럼)
+        function handleGrammarNoteEnter(event, stateKey) {
+            if (event.key !== 'Enter' || event.shiftKey) return;
+            event.preventDefault();
+            const textarea = event.target;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const insertion = '\n· ';
+            textarea.value = value.slice(0, start) + insertion + value.slice(end);
+            const newPos = start + insertion.length;
+            textarea.selectionStart = textarea.selectionEnd = newPos;
+            if (grammarEditorState && stateKey) grammarEditorState[stateKey] = textarea.value;
+        }
+
         function handleNotesEnterKey(event) {
             if (event.key !== 'Enter') return;
             event.preventDefault();
@@ -456,6 +473,7 @@
             // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
+            - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
             - estudiante, artista, cantante처럼 남녀 형태가 같고 관사만 바뀌는 사람 명사는 isCommonGender=true, gender='none'으로 (앱이 el/la로 표시함).
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
@@ -485,7 +503,7 @@
                     usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
-                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 o ➡️ ue", "기타 변형"] },
+                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 e ➡️ i", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
                         type: "OBJECT",
                         description: "현재시제 6인칭 변형. 반드시 표준 스페인(카스티야) 스페인어 기준으로 작성할 것 — 'vos' 키는 아르헨티나식 단수 'vos'가 아니라 스페인의 2인칭 복수 'vosotros'를 의미함 (예: tener→vos:'tenéis', llevar→vos:'lleváis'). 절대 -ás/-és 같은 아르헨티나식 voseo 어미를 쓰지 말 것.",
@@ -807,19 +825,19 @@
 
         function showSuggestions(query) {
             const container = document.getElementById('word-suggestions');
-            const cleanQuery = query.toLowerCase().trim();
+            const cleanQuery = stripAccents(query.toLowerCase().trim()); // [냐냐 PATCH] 악센트 무시
             const results = [];
             const seenKeys = new Set();
 
             // [PATCH-16] 오프라인 사전뿐 아니라 내가 이미 등록한 단어장 전체에서도 검색
             vocabulary.forEach(item => {
-                if (item.word.toLowerCase().includes(cleanQuery)) {
+                if (stripAccents(item.word.toLowerCase()).includes(cleanQuery)) {
                     seenKeys.add(item.word.toLowerCase());
                     results.push({ key: item.word, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: item.id });
                 }
             });
             Object.keys(OFFLINE_DICT_DB).forEach(key => {
-                if (key.toLowerCase().includes(cleanQuery) && !seenKeys.has(key.toLowerCase())) {
+                if (stripAccents(key.toLowerCase()).includes(cleanQuery) && !seenKeys.has(key.toLowerCase())) {
                     const item = OFFLINE_DICT_DB[key];
                     results.push({ key: key, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: null });
                 }
@@ -831,7 +849,7 @@
             }
 
             // [냐냐 PATCH] 정렬 우선순위: ①정확히 일치 → ②그 단어로 시작 → ③포함, 각 그룹 안에서는 ABC순
-            const stripArt = (w) => (w || '').toLowerCase().trim().replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+            const stripArt = (w) => stripAccents((w || '').toLowerCase().trim().replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '').trim());
             const q = cleanQuery;
             const rank = (w) => {
                 const s = stripArt(w);
@@ -1000,32 +1018,29 @@
 
             // [냐냐 PATCH] 새 단어 등록이면 계속 등록할지 물어봄 (수정이면 그냥 닫기)
             if (!modalId) {
-                showConfirm(
-                    "단어를 등록했어요! 📚",
-                    "계속해서 다른 단어를 등록하시겠어요?",
-                    () => { prepareNextWordEntry(); }, // 예 → 폼 비우고 바로 다음 단어 입력
-                    {
-                        okLabel: '계속 등록',
-                        cancelLabel: '아니요',
-                        okStyle: 'primary',
-                        icon: 'happy', // [냐냐 PATCH] 경고 아이콘 대신 스마일
-                        onCancel: () => { closeWordModal(); } // 아니요 → 등록창 닫기
-                    }
-                );
+                // [냐냐 PATCH] 첨삭에서 등록한 경우엔 '계속 등록?' 팝업 없이 바로 닫기
+                if (_skipContinueRegisterPrompt) {
+                    _skipContinueRegisterPrompt = false;
+                    showToast("단어를 등록했어요! 📚", "success");
+                    closeWordModal();
+                } else {
+                    showConfirm(
+                        "단어를 등록했어요! 📚",
+                        "계속해서 다른 단어를 등록하시겠어요?",
+                        () => { prepareNextWordEntry(); }, // 예 → 폼 비우고 바로 다음 단어 입력
+                        {
+                            okLabel: '계속 등록',
+                            cancelLabel: '아니요',
+                            okStyle: 'primary',
+                            icon: 'happy', // [냐냐 PATCH] 경고 아이콘 대신 스마일
+                            onCancel: () => { closeWordModal(); } // 아니요 → 등록창 닫기
+                        }
+                    );
+                }
             } else {
-                // [냐냐 PATCH] 수정 저장 시에도 팝업 표시 (계속 등록 대신 '수정 완료' 확인)
-                showConfirm(
-                    "수정했어요! ✏️",
-                    "변경 사항이 저장되었어요.",
-                    () => { closeWordModal(); }, // 확인 → 닫기
-                    {
-                        okLabel: '확인',
-                        cancelLabel: '계속 수정',
-                        okStyle: 'primary',
-                        icon: 'happy',
-                        onCancel: () => { /* 계속 수정: 창 그대로 유지 */ }
-                    }
-                );
+                // [냐냐 PATCH] 수정 저장은 팝업 없이 바로 닫기 (토스트만)
+                showToast("수정했어요! ✏️", "success");
+                closeWordModal();
             }
         }
 
@@ -1080,12 +1095,23 @@
             if (event) event.stopPropagation();
             const w = vocabulary.find(item => item.id === wordId);
             if (w) {
-                w.weak = !w.weak;
-                if (w.weak) {
-                    if (!w.weakScore || w.weakScore < 6) w.weakScore = 6; // 수동 표시 시 6점 (한 번 맞혀도 안 풀리게)
+                // [냐냐 PATCH] 3단계 순환: 해제 → 약점(노랑, 3점) → 심화 약점(빨강, 8점) → 해제
+                const isWeak = w.weak;
+                const isSevere = w.weak && (w.weakScore || 0) >= 8;
+                if (!isWeak) {
+                    // 해제 → 노란 약점
+                    w.weak = true;
+                    w.weakScore = 3;
                     showToast(`"${w.word}" 약점 단어로 표시했어요 ⭐`, "success");
+                } else if (!isSevere) {
+                    // 노란 약점 → 빨간 심화 약점
+                    w.weak = true;
+                    w.weakScore = 8;
+                    showToast(`"${w.word}" 심화 약점으로 표시했어요 🔴`, "success");
                 } else {
-                    w.weakScore = 0; // 해제하면 점수도 리셋 (다시 쌓이게)
+                    // 빨간 심화 약점 → 해제
+                    w.weak = false;
+                    w.weakScore = 0;
                     showToast(`"${w.word}" 약점 표시를 해제했어요`, "info");
                 }
                 logAction('snapshot');
@@ -1265,8 +1291,14 @@
             pendingFilterMastery = 'not-mastered';
             pendingFilterWeak = 'all';
             pendingFilterSort = 'weak-score';
+            // [냐냐 PATCH] 활성 필터도 기본값으로 적용하고, 목록도 갱신 (단 패널은 열어둬서 확인 가능)
+            activeFilterPos = [];
+            activeFilterMastery = 'not-mastered';
+            activeFilterWeak = 'all';
+            activeFilterSort = 'weak-score';
             syncFilterPanelUI();
-            applyFilters(); // [냐냐 PATCH] 초기화 누르면 바로 기본세팅 적용
+            saveFilterPrefs();
+            renderWordList();
         }
 
         // [냐냐 PATCH] 현재 필터/정렬 한 줄 요약
@@ -1451,7 +1483,7 @@
 
                 const cardStyle = w.mastered 
                     ? 'border border-emerald-100 bg-emerald-50/40 shadow-xs' 
-                    : ((w.weak && (w.weakScore || 0) >= 10)
+                    : ((w.weak && (w.weakScore || 0) >= 8)
                         ? 'border-2 border-red-300 bg-red-50/60 shadow-xs'
                         : (w.weak
                             ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
@@ -1480,7 +1512,7 @@
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
-                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.weak ? ((w.weakScore || 0) >= 10 ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm') : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.weak ? ((w.weakScore || 0) >= 8 ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm') : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
                                     <i class="fa-solid fa-star text-xs"></i>
                                 </button>
                                 <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
@@ -1596,5 +1628,3 @@
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
         }
-
-        // TAB 2: FLASHCARD PLAYGROUND LOGICS
