@@ -1362,6 +1362,7 @@ function togglePosFields() {
                                 <span class="min-w-0 leading-tight" style="word-break:break-word;">
                                     <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
                                     <span class="inline-flex items-center gap-1.5 align-middle ml-2" style="transform: translateY(1px);">${badgeMarkup}</span>
+                                    <span class="block text-sm text-slate-500 font-semibold mt-0.5 ${expandedAll ? 'hidden' : ''}" data-card-meaning="${w.id}">${w.meaning}</span>
                                 </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
@@ -1467,9 +1468,12 @@ function togglePosFields() {
         function toggleWordCard(id) {
             const body = document.querySelector(`[data-card-body="${id}"]`);
             const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
+            const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
+            // [냐냐 PATCH] 접혔을 때만 헤더에 뜻 표시 (펼치면 본문에 뜻이 있으니 숨김)
+            if (meaning) meaning.classList.toggle('hidden', !nowHidden);
         }
 
         // [냐냐 PATCH] 전체 접기/펼치기
@@ -1477,6 +1481,7 @@ function togglePosFields() {
             wordListExpandedAll = expand;
             document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
+            document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
         }
 
         // TAB 2: FLASHCARD PLAYGROUND LOGICS
