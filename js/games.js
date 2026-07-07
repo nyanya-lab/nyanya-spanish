@@ -187,7 +187,7 @@
                 const timeEl = document.getElementById('rf-time');
                 const bar = document.getElementById('rf-timebar');
                 if (timeEl) timeEl.innerText = gameState.timeLeft;
-                if (bar) bar.style.width = (gameState.timeLeft / 60 * 100) + '%';
+                if (bar) bar.style.width = Math.min(100, gameState.timeLeft / 60 * 100) + '%';
                 if (gameState.timeLeft <= 0) rapidFireEnd();
             }, 1000);
         }
@@ -218,7 +218,11 @@
                 // 콤보 보너스: 기본 10점 + 콤보당 2점
                 const points = 10 + (gameState.combo - 1) * 2;
                 gameState.score += points;
-                if (fb) { fb.innerText = `+${points}점! ${gameState.combo >= 3 ? '🔥 ' + gameState.combo + ' 콤보!' : '✓'}`; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
+                // [냐냐 PATCH] 정답 시 시간 +3초 보너스
+                gameState.timeLeft += 3;
+                const timerEl = document.getElementById('rf-time');
+                if (timerEl) timerEl.innerText = gameState.timeLeft;
+                if (fb) { fb.innerText = `+${points}점! +3초 ⏱ ${gameState.combo >= 3 ? '🔥 ' + gameState.combo + ' 콤보!' : '✓'}`; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
                 AudioFX.playSuccess();
             } else {
                 gameState.combo = 0;
@@ -240,8 +244,8 @@
             const wrong = gameState.wrong;
             const maxCombo = gameState.maxCombo;
             stopCurrentGame();
-            // 학습일지에 게임도 학습 활동으로 기록 (퀴즈처럼)
-            try { if (typeof logAction === 'function') logAction('snapshot'); } catch (e) {}
+            // [냐냐 PATCH] 게임 1판 완료 = 학습 기록에 게임 +1
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
             // 마스터/약점 점수 변경사항 저장 + 최고기록 갱신
             const isNewRecord = setGameHighScore('rapidfire', finalScore);
             const highScore = getGameHighScore('rapidfire');
@@ -393,7 +397,7 @@
             const score = gameState.score;
             const correct = gameState.correct;
             stopCurrentGame();
-            try { if (typeof logAction === 'function') logAction('snapshot'); } catch (e) {}
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {} // [냐냐 PATCH] 게임 1판 완료
             const isNewRecord = setGameHighScore('falling', score);
             const highScore = getGameHighScore('falling');
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
@@ -448,7 +452,7 @@
                 return;
             }
             stopCurrentGame();
-            gameState = { type: 'listening', pool, index: 0, correct: 0, total: 0, current: null };
+            gameState = { type: 'listening', pool, index: 0, correct: 0, total: 0, current: null, goal: 5 }; // [냐냐 PATCH] 5문장 1세트
             listeningNext();
         }
 
@@ -460,7 +464,7 @@
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
                     <div class="flex items-center justify-between">
                         <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500">${gameState.total}번째 · 맞힌 문장 <span class="text-sky-600">${gameState.correct}</span></span>
+                        <span class="text-xs font-bold text-slate-500">${gameState.total}/${gameState.goal}문장 · 맞힌 문장 <span class="text-sky-600">${gameState.correct}</span></span>
                     </div>
                     <div class="text-center py-6 space-y-4">
                         <p class="text-xs font-bold text-sky-400">🎧 예문을 듣고 똑같이 써보세요!</p>
@@ -510,14 +514,32 @@
                 if (fb) { fb.innerHTML = `✗ 정답: <span class="text-slate-700">${correct}</span>`; fb.className = "text-sm font-bold h-5 text-rose-500"; }
                 AudioFX.playError();
             }
-            // 다음 문장 버튼 표시
+            // [냐냐 PATCH] 5문장 완료하면 세트 종료, 아니면 다음 문장
             const playArea = document.getElementById('game-play-area');
-            const nextBtnHtml = `
-                <div class="flex gap-2 justify-center pt-3">
-                    <button onclick="listeningNext()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다음 문장</button>
-                    <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
-                </div>`;
-            // 확인 버튼을 다음 버튼으로 교체
+            const isSetDone = gameState.total >= (gameState.goal || 5);
+            let nextBtnHtml;
+            if (isSetDone) {
+                const correctCount = gameState.correct;
+                const goalCount = gameState.goal || 5;
+                // 게임 1판(세트) 완료 기록
+                try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
+                try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+                nextBtnHtml = `
+                    <div class="text-center pt-3 space-y-3">
+                        <p class="text-sm font-black text-sky-600">🎧 5문장 완료! 맞힌 문장 ${correctCount}/${goalCount}</p>
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="startListeningQuiz()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">한 세트 더</button>
+                            <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                        </div>
+                    </div>`;
+            } else {
+                nextBtnHtml = `
+                    <div class="flex gap-2 justify-center pt-3">
+                        <button onclick="listeningNext()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다음 문장 (${gameState.total}/${gameState.goal || 5})</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                    </div>`;
+            }
+            // 확인 버튼을 다음/완료 버튼으로 교체
             const confirmBtn = playArea.querySelector('button[onclick="listeningSubmit()"]');
             if (confirmBtn) confirmBtn.outerHTML = nextBtnHtml;
             // 정답 뜻도 보여주기
@@ -687,6 +709,7 @@
                 AudioFX.playError();
             }
             reviewState.index++;
+            logAction('review'); // [냐냐 PATCH] 제출한 단어 1개 = 복습 1개 기록
             setTimeout(() => { if (reviewState) reviewShowWord(); }, 1200);
         }
 
