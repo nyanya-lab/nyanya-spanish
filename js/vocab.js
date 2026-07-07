@@ -1257,7 +1257,22 @@ function togglePosFields() {
             };
 
             let filteredSorted = filtered;
-            if (sortMode === 'oldest') {
+            if (isSearching) {
+                // [냐냐 PATCH] 검색 시: 완전 일치 → 검색어로 시작 → 포함, 그 안에서는 ABC순
+                const q = searchVal;
+                const rank = (w) => {
+                    const word = stripArticle(w.word);
+                    const meaning = (w.meaning || '').toLowerCase().trim();
+                    if (word === q || meaning === q) return 0;           // 단어나 뜻이 정확히 일치 → 맨 위
+                    if (word.startsWith(q)) return 1;                     // 검색어로 시작
+                    return 2;                                             // 포함
+                };
+                filteredSorted = [...filtered].sort((a, b) => {
+                    const ra = rank(a), rb = rank(b);
+                    if (ra !== rb) return ra - rb;
+                    return stripArticle(a.word).localeCompare(stripArticle(b.word));
+                });
+            } else if (sortMode === 'oldest') {
                 filteredSorted = [...filtered].reverse();
             } else if (sortMode === 'alpha-asc') {
                 filteredSorted = [...filtered].sort((a, b) => stripArticle(a.word).localeCompare(stripArticle(b.word)));
