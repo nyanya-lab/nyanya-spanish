@@ -1543,6 +1543,12 @@ let vocabulary = [];
         window.addEventListener('resize', syncSidebarPosition);
         window.addEventListener('load', syncSidebarPosition);
 
+        // [냐냐 PATCH] 맨 위로 버튼: 스크롤 내리면 나타남
+        window.addEventListener('scroll', () => {
+            const btn = document.getElementById('scroll-top-btn');
+            if (btn) btn.classList.toggle('hidden', window.scrollY < 300);
+        });
+
         function toggleHeader() {
             headerExpanded = !headerExpanded;
             const full = document.getElementById('header-full');
