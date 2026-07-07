@@ -1045,9 +1045,9 @@
     </div>
 
     <!-- PRESET 1: ADD & EDIT WORD MODAL (Improved with Real-time Predict and Dropdown) -->
-    <div id="word-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+    <div id="word-modal" onkeydown="handleWordModalKey(event)" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div id="word-modal-inner" class="bg-white w-full max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+            <div id="word-modal-header" onmousedown="startModalDrag(event)" class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10 cursor-move select-none">
                 <h3 id="modal-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
                     <span>📝 단어 정보 입력</span>
                 </h3>
@@ -1080,7 +1080,7 @@
                         <label class="block text-xs font-bold text-slate-500">스페인어 단어 <span class="text-violet-400">*</span></label>
                         <div class="flex gap-2">
                             <div class="relative flex-1">
-                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('word-suggestions').classList.add('hidden'); triggerAiAutofill();}" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
+                                <input type="text" id="input-word" oninput="handleWordInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('word-suggestions').classList.add('hidden'); if(aiAutofillCompleted){saveWord();}else{triggerAiAutofill();}}" placeholder="예: tener, el agua, con, porque" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold" autocomplete="off">
                                 <!-- Real-time Suggestions Dropdown -->
                                 <div id="word-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100"></div>
                             </div>
