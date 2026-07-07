@@ -21,10 +21,10 @@
 <body class="text-slate-800 min-h-screen flex flex-col antialiased">
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none"></div>
 
     <!-- [냐냐 PATCH] 맨 위로 가기 버튼 -->
-    <button id="scroll-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})" class="hidden fixed bottom-5 right-5 z-40 w-11 h-11 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center transition-all active:scale-90" title="맨 위로">
+    <button id="scroll-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})" class="hidden fixed bottom-5 right-5 z-[45] w-11 h-11 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center transition-all active:scale-90" title="맨 위로">
         <i class="fa-solid fa-chevron-up"></i>
     </button>
 
@@ -1257,7 +1257,7 @@
 
             <div class="space-y-1">
                 <label class="block text-xs font-bold text-slate-500">설명 (선택)</label>
-                <textarea id="ge-desc" oninput="if(grammarEditorState)grammarEditorState.desc=this.value" rows="2" placeholder="표에 대한 간단한 설명" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
+                <textarea id="ge-desc" onkeydown="handleGrammarNoteEnter(event, 'desc')" oninput="if(grammarEditorState)grammarEditorState.desc=this.value" rows="2" placeholder="표에 대한 간단한 설명" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
             </div>
 
             <div class="space-y-2">
@@ -1274,7 +1274,7 @@
 
             <div class="space-y-1">
                 <label class="block text-xs font-bold text-slate-500">💡 팁/예시 (선택)</label>
-                <textarea id="ge-note" oninput="if(grammarEditorState)grammarEditorState.note=this.value" rows="2" placeholder="예: mi libro (내 책), mis libros (내 책들)" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
+                <textarea id="ge-note" onkeydown="handleGrammarNoteEnter(event, 'note')" oninput="if(grammarEditorState)grammarEditorState.note=this.value" rows="2" placeholder="예: mi libro (내 책), mis libros (내 책들)" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
             </div>
 
             <div class="flex gap-2 pt-2">
