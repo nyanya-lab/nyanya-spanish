@@ -1,4 +1,15 @@
-function togglePosFields() {
+// [냐냐 PATCH] 악센트 제거 (á→a, ó→o, ñ→n 등) — 검색 시 악센트 무시용
+        function stripAccents(str) {
+            return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        // [냐냐 PATCH] 입력창 전체 지우기 (X 버튼)
+        function clearInputField(id) {
+            const el = document.getElementById(id);
+            if (el) { el.value = ''; el.focus(); }
+        }
+
+        function togglePosFields() {
             const pos = document.getElementById('input-pos').value;
             const nounDetails = document.getElementById('field-noun-details');
             const verbConjugations = document.getElementById('field-verb-conjugations');
@@ -1211,7 +1222,8 @@ function togglePosFields() {
             renderTodayReview();
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
-            const searchVal = document.getElementById('search-bar').value.trim().toLowerCase();
+            const rawSearchVal = document.getElementById('search-bar').value.trim().toLowerCase();
+            const searchVal = stripAccents(rawSearchVal); // [냐냐 PATCH] 악센트 무시 (o=ó)
             const isSearching = searchVal.length > 0; // [냐냐 PATCH] 검색 중이면 필터 무시하고 전체에서 검색
             const masteryFilter = isSearching ? 'all' : activeFilterMastery;
             const weakFilter = isSearching ? 'all' : activeFilterWeak;
@@ -1220,8 +1232,8 @@ function togglePosFields() {
             const expandedAll = (searchVal.length > 0 || todayWrongFilterActive) ? true : wordListExpandedAll;
             
             const filtered = vocabulary.filter(w => {
-                const queryInWord = w.word.toLowerCase().includes(searchVal);
-                const queryInMeaning = w.meaning.toLowerCase().includes(searchVal);
+                const queryInWord = stripAccents(w.word.toLowerCase()).includes(searchVal);
+                const queryInMeaning = stripAccents(w.meaning.toLowerCase()).includes(searchVal);
                 const matchesSearch = queryInWord || queryInMeaning; // [냐냐 PATCH] 메모 제외, 단어·뜻만 검색
                 const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
                 // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
@@ -1259,10 +1271,10 @@ function togglePosFields() {
             let filteredSorted = filtered;
             if (isSearching) {
                 // [냐냐 PATCH] 검색 시: 완전 일치 → 검색어로 시작 → 포함, 그 안에서는 ABC순
-                const q = searchVal;
+                const q = searchVal; // 이미 악센트 제거됨
                 const rank = (w) => {
-                    const word = stripArticle(w.word);
-                    const meaning = (w.meaning || '').toLowerCase().trim();
+                    const word = stripAccents(stripArticle(w.word));
+                    const meaning = stripAccents((w.meaning || '').toLowerCase().trim());
                     if (word === q || meaning === q) return 0;           // 단어나 뜻이 정확히 일치 → 맨 위
                     if (word.startsWith(q)) return 1;                     // 검색어로 시작
                     return 2;                                             // 포함
