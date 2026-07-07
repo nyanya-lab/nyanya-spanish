@@ -160,6 +160,7 @@ let vocabulary = [];
                 customGrammarTables: customGrammarTables,
                 pinnedGrammar: pinnedGrammar,
                 hiddenDefaultGrammar: hiddenDefaultGrammar,
+                masteredGrammar: masteredGrammar,
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 eggState: eggState
@@ -268,6 +269,7 @@ let vocabulary = [];
                 customGrammarTables = payload.customGrammarTables || [];
                 pinnedGrammar = payload.pinnedGrammar || {};
                 hiddenDefaultGrammar = payload.hiddenDefaultGrammar || [];
+                masteredGrammar = payload.masteredGrammar || {};
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 eggState = Object.assign(defaultEggState(), payload.eggState || {});
@@ -281,6 +283,7 @@ let vocabulary = [];
                 customGrammarTables = [];
                 pinnedGrammar = {};
                 hiddenDefaultGrammar = [];
+                masteredGrammar = {};
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 eggState = defaultEggState();
@@ -393,7 +396,7 @@ let vocabulary = [];
         function touchDiarySnapshot() {
             const today = getLocalDateString();
             if (!nyanyaDiary[today]) {
-                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0 };
+                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0, newGrammarCount: 0, newGrammarMasteredCount: 0 };
             }
             // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
             const d = nyanyaDiary[today];
@@ -1056,6 +1059,10 @@ let vocabulary = [];
                 nyanyaDiary[today].reviewCount = (nyanyaDiary[today].reviewCount || 0) + 1; // [냐냐 PATCH] 복습 제출 1개
             } else if (type === 'game') {
                 nyanyaDiary[today].gameCount = (nyanyaDiary[today].gameCount || 0) + 1; // [냐냐 PATCH] 게임 1판 완료
+            } else if (type === 'new-grammar') {
+                nyanyaDiary[today].newGrammarCount = (nyanyaDiary[today].newGrammarCount || 0) + 1; // [냐냐 PATCH] 문법표 등록
+            } else if (type === 'new-grammar-mastered') {
+                nyanyaDiary[today].newGrammarMasteredCount = (nyanyaDiary[today].newGrammarMasteredCount || 0) + 1; // [냐냐 PATCH] 문법표 마스터
             }
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
@@ -1081,6 +1088,8 @@ let vocabulary = [];
                 <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">
                     <div>등록 단어: <strong class="text-violet-600">${log.newWordsCount || 0}개</strong></div>
                     <div>마스터 단어: <strong class="text-emerald-600">${log.newMasteredCount || 0}개</strong></div>
+                    <div>등록 문법: <strong class="text-teal-600">${log.newGrammarCount || 0}개</strong></div>
+                    <div>마스터 문법: <strong class="text-teal-500">${log.newGrammarMasteredCount || 0}개</strong></div>
                     <div>퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
                     <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
                     <div>단어 복습: <strong class="text-sky-600">${log.reviewCount || 0}개</strong></div>
@@ -1259,7 +1268,11 @@ let vocabulary = [];
                     quizCorrect: (log && log.quizCorrect) || 0,
                     aiSessions: (log && log.aiSessions) || 0,
                     newWordsCount: newWords,
-                    newMasteredCount: newMastered
+                    newMasteredCount: newMastered,
+                    reviewCount: (log && log.reviewCount) || 0,
+                    gameCount: (log && log.gameCount) || 0,
+                    newGrammarCount: (log && log.newGrammarCount) || 0,
+                    newGrammarMasteredCount: (log && log.newGrammarMasteredCount) || 0
                 };
             });
 
@@ -1280,8 +1293,8 @@ let vocabulary = [];
 
             renderRecordLineChart(series);
             renderGrowthDailyChart(series);
-            renderQuizChart(series);
-            renderAiChart(series);
+            renderActivityChart(series); // [냐냐 PATCH] 퀴즈·AI·복습·게임 통합 그래프 (기존 퀴즈/AI 대체)
+            renderGrammarGrowthChart(series); // [냐냐 PATCH] 문법표 성장 그래프
             renderLearnerProfileDisplay();
         }
 
@@ -1340,17 +1353,32 @@ let vocabulary = [];
             return html;
         }
 
+        // [냐냐 PATCH] 오른쪽 축 라벨 (막대 그래프 기준선). 왼쪽=꺾은선 축, 오른쪽=막대 축
+        function recordChartRightAxis(maxVal, padding, chartH, width, suffix = '', color = '#94a3b8') {
+            const steps = 4;
+            let html = '';
+            const rx = width - padding.right + 6;
+            for (let i = 0; i <= steps; i++) {
+                const val = Math.round((maxVal / steps) * i);
+                const y = padding.top + chartH - (i / steps) * chartH;
+                html += `<text x="${rx.toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="${color}" text-anchor="start">${val}${suffix}</text>`;
+            }
+            return html;
+        }
+
         function renderRecordLineChart(series) {
             const container = document.getElementById('record-line-chart');
             if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
 
             const width = CHART_VIEW_WIDTH;
             const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 32 };
+            const padding = { top: 16, right: 30, bottom: 28, left: 32 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
 
-            // [냐냐 PATCH] 마스터 단어는 절대 갯수 대신 "총 단어 대비 비율(%)"로 표시
+            // [냐냐 PATCH] 마스터 비율(%) + 약점 비율(%) 표시. 약점 비율은 현재 전체 단어 대비 현재 약점 수(추정)
+            // 과거 일별 약점 수는 기록에 없으므로, 등록 단어 대비 '오늘 현재' 약점 비율을 참고선으로 표시
+            const currentWeakRatio = vocabulary.length > 0 ? (vocabulary.filter(w => w.weak).length / vocabulary.length) * 100 : 0;
             const withRatio = series.map(d => ({
                 ...d,
                 masteredRatio: d.registeredTotal > 0 ? (d.masteredTotal / d.registeredTotal) * 100 : 0
@@ -1361,10 +1389,11 @@ let vocabulary = [];
             const xOf = (i) => padding.left + i * xStep;
             const baseY = height - padding.bottom;
             const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const yOfPct = (pct) => padding.top + chartH - (pct / 100) * chartH; // 오른쪽 축 (0~100%)
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(8, groupWidth * 0.5);
 
-            // [냐냐 PATCH] 마스터 비율(%)은 막대그래프로 표시
+            // 마스터 비율(%)은 막대그래프 (오른쪽 % 축)
             let bars = '';
             withRatio.forEach((d, i) => {
                 const barH = (d.masteredRatio / 100) * chartH;
@@ -1373,7 +1402,7 @@ let vocabulary = [];
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             });
 
-            // 등록 단어 수는 꺾은선
+            // 등록 단어 수는 꺾은선 (왼쪽 개수 축)
             const linePath = withRatio.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(d.registeredTotal).toFixed(1)}`).join(' ');
             const lineDots = withRatio.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
@@ -1382,12 +1411,19 @@ let vocabulary = [];
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             }).join('');
 
+            // [냐냐 PATCH] 약점 비율(%) 참고선 (현재 기준, 점선) — 오른쪽 % 축
+            const weakY = yOfPct(currentWeakRatio).toFixed(1);
+            const weakLine = `<line x1="${padding.left}" y1="${weakY}" x2="${width - padding.right}" y2="${weakY}" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.7"/>` +
+                `<rect x="${padding.left}" y="${(weakY - 8)}" width="${chartW}" height="16" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '현재 약점 비율 ${Math.round(currentWeakRatio)}% (전체 ${vocabulary.length}개 중 약점 ${vocabulary.filter(w=>w.weak).length}개)')"/>`;
+
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
+                    ${weakLine}
                     <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
@@ -1407,7 +1443,14 @@ let vocabulary = [];
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
 
-            const maxVal = Math.max(1, ...series.map(d => Math.max(d.newWordsCount, d.newMasteredCount)));
+            // [냐냐 PATCH] 신규 등록/마스터 = 단어 + 문법 합산
+            series = series.map(d => ({
+                ...d,
+                _newTotal: (d.newWordsCount || 0) + (d.newGrammarCount || 0),
+                _newMasteredTotal: (d.newMasteredCount || 0) + (d.newGrammarMasteredCount || 0)
+            }));
+
+            const maxVal = Math.max(1, ...series.map(d => Math.max(d._newTotal, d._newMasteredTotal)));
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
             const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
@@ -1416,17 +1459,17 @@ let vocabulary = [];
 
             let bars = '';
             series.forEach((d, i) => {
-                const barH = (d.newWordsCount / maxVal) * chartH;
-                const text = `${d.date}: 신규 등록 ${d.newWordsCount}개`.replace(/'/g, "\\'");
+                const barH = (d._newTotal / maxVal) * chartH;
+                const text = `${d.date}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0} + 문법 ${d.newGrammarCount||0})`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#8b5cf6" opacity="0.7" rx="1.5"/>`;
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
 
-            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d.newMasteredCount).toFixed(1)}`).join(' ');
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d._newMasteredTotal).toFixed(1)}`).join(' ');
             const lineDots = series.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
-                const cy = yOf(d.newMasteredCount).toFixed(1);
-                const text = `${d.date}: 신규 마스터 ${d.newMasteredCount}개`.replace(/'/g, "\\'");
+                const cy = yOf(d._newMasteredTotal).toFixed(1);
+                const text = `${d.date}: 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0} + 문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#10b981"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             }).join('');
 
@@ -1537,6 +1580,124 @@ let vocabulary = [];
             `;
         }
 
+        // [냐냐 PATCH] 학습 활동 통합 그래프: 총합=꺾은선(왼쪽축), 퀴즈·AI·복습·게임=막대(오른쪽축)
+        // 색은 일지 숫자색과 맞춤: 퀴즈=amber, AI=indigo, 복습=sky, 게임=pink
+        function renderActivityChart(series) {
+            const container = document.getElementById('record-activity-chart');
+            if (!container) return;
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 200;
+            const padding = { top: 18, right: 30, bottom: 28, left: 30 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const cats = [
+                { key: 'quizTotal', label: '퀴즈', color: '#f59e0b' },   // amber
+                { key: 'aiSessions', label: 'AI', color: '#6366f1' },    // indigo
+                { key: 'reviewCount', label: '복습', color: '#0ea5e9' }, // sky
+                { key: 'gameCount', label: '게임', color: '#ec4899' },   // pink
+            ];
+            // 총합 (하루 활동 합계)
+            const withTotal = series.map(d => ({ ...d, _total: cats.reduce((s, c) => s + (d[c.key] || 0), 0) }));
+
+            const maxBar = Math.max(1, ...series.flatMap(d => cats.map(c => d[c.key] || 0)));
+            const maxTotal = Math.max(1, ...withTotal.map(d => d._total));
+
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const groupWidth = chartW / series.length;
+            const barW = Math.max(2, Math.min(6, (groupWidth * 0.7) / cats.length));
+
+            // 막대 (카테고리별로 나란히)
+            let bars = '';
+            withTotal.forEach((d, i) => {
+                const groupCenter = xOf(i);
+                const totalW = barW * cats.length;
+                cats.forEach((c, ci) => {
+                    const val = d[c.key] || 0;
+                    const barH = (val / maxBar) * chartH;
+                    const bx = groupCenter - totalW / 2 + ci * barW;
+                    if (barH > 0) {
+                        bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
+                    }
+                });
+                const text = `${d.date}: 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (합 ${d._total})`.replace(/'/g, "\\'");
+                bars += `<rect x="${(groupCenter - Math.max(totalW, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(totalW, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
+            });
+
+            // 총합 꺾은선 (왼쪽 축)
+            const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
+            const linePath = withTotal.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d._total).toFixed(1)}`).join(' ');
+            const lineDots = withTotal.map((d, i) => {
+                const cx = xOf(i).toFixed(1);
+                const cy = yOfTotal(d._total).toFixed(1);
+                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/>`;
+            }).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-activity-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width, '')}
+                    ${recordChartRightAxis(maxBar, padding, chartH, width, '', '#94a3b8')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+            `;
+        }
+
+        // [냐냐 PATCH] 문법표 성장 그래프: 일별 등록 문법(막대) + 마스터 문법(막대)
+        function renderGrammarGrowthChart(series) {
+            const container = document.getElementById('record-grammar-chart');
+            if (!container) return;
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 160;
+            const padding = { top: 16, right: 12, bottom: 28, left: 24 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const maxVal = Math.max(1, ...series.map(d => Math.max(d.newGrammarCount || 0, d.newGrammarMasteredCount || 0)));
+            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + i * xStep;
+            const groupWidth = chartW / series.length;
+            const barW = Math.max(2, Math.min(6, groupWidth * 0.3));
+
+            let bars = '';
+            series.forEach((d, i) => {
+                const gc = d.newGrammarCount || 0;
+                const gm = d.newGrammarMasteredCount || 0;
+                const c = xOf(i);
+                if (gc > 0) {
+                    const h = (gc / maxVal) * chartH;
+                    bars += `<rect x="${(c - barW - 1).toFixed(1)}" y="${(baseY - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#14b8a6" opacity="0.85" rx="1"/>`;
+                }
+                if (gm > 0) {
+                    const h = (gm / maxVal) * chartH;
+                    bars += `<rect x="${(c + 1).toFixed(1)}" y="${(baseY - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#5eead4" opacity="0.9" rx="1"/>`;
+                }
+                const text = `${d.date}: 등록 문법 ${gc}개 · 마스터 문법 ${gm}개`.replace(/'/g, "\\'");
+                bars += `<rect x="${(c - Math.max(barW*2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barW*2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
+            });
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
+                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+            `;
+        }
+
         // [냐냐 PATCH] 제목 헤더 접기/펼치기 (기본 접힘)
         let headerExpanded = false;
         // [냐냐 PATCH] 고정 사이드바의 좌우 위치를 실제 자리(aside)에 맞춰 동기화
@@ -1591,6 +1752,7 @@ let vocabulary = [];
         // ============================================================
         let grammarOpenState = {}; // 표별 펼침 상태 기억
         let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
+        let masteredGrammar = {}; // [냐냐 PATCH] 마스터한 문법 표 {tableId: true}
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
@@ -1722,6 +1884,15 @@ let vocabulary = [];
                 if (!GRAMMAR_TABLES.find(b => b.id === c.id)) result.push({ ...c, isCustom: true });
             });
             return result;
+        }
+
+        // [냐냐 PATCH] 문법표 통계 헬퍼
+        function getGrammarTotalCount() {
+            return getAllGrammarTables().length;
+        }
+        function getGrammarMasteredCount() {
+            const ids = new Set(getAllGrammarTables().map(t => t.id));
+            return Object.keys(masteredGrammar).filter(id => masteredGrammar[id] && ids.has(id)).length;
         }
 
         // [냐냐 PATCH] 문법표 정렬 모드 ('newest' | 'oldest'), 기본 최신순
@@ -2106,12 +2277,16 @@ let vocabulary = [];
 
             // 기존 사용자 표면 교체, 아니면 추가
             const existingIdx = customGrammarTables.findIndex(c => c.id === s.id);
+            const isDefaultId = GRAMMAR_TABLES.find(b => b.id === s.id);
+            const isBrandNew = existingIdx < 0 && !isDefaultId; // 완전히 새로 만든 표
             if (existingIdx >= 0) customGrammarTables[existingIdx] = tableData;
             else customGrammarTables.push(tableData);
 
             closeGrammarEditor();
             renderGrammarTables();
+            if (isBrandNew && typeof logAction === 'function') logAction('new-grammar'); // [냐냐 PATCH] 새 문법표 등록 기록
             await saveToStorage();
+            if (typeof updateStats === 'function') updateStats(); // 헤더 문법 개수 갱신
             showToast("문법 표가 저장됐어요! ✨", "success");
         }
 
@@ -2252,8 +2427,17 @@ let vocabulary = [];
         function updateStats() {
             const total = vocabulary.length;
             const mastered = vocabulary.filter(w => w.mastered).length;
-            
-            document.getElementById('header-total-vocab').innerText = `${total}개`;
-            document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
-            // [냐냐 PATCH] 오늘 날짜 표시 제거됨 (달력이 있어서 불필요)
+            const weak = vocabulary.filter(w => w.weak).length;
+            const grammarTotal = (typeof getGrammarTotalCount === 'function') ? getGrammarTotalCount() : 0;
+            const grammarMastered = (typeof getGrammarMasteredCount === 'function') ? getGrammarMasteredCount() : 0;
+
+            const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+            setTxt('header-total-vocab', `${total}개`);
+            setTxt('header-mastered-vocab', `${mastered}개`);
+            setTxt('header-weak-vocab', `${weak}개`);
+            setTxt('header-total-grammar', `${grammarTotal}개`);
+            setTxt('header-mastered-grammar', `${grammarMastered}개`);
+            // 모바일 핵심 통계
+            setTxt('header-total-vocab-m', `${total}`);
+            setTxt('header-mastered-vocab-m', `${mastered}`);
         }
