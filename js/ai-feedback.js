@@ -1346,6 +1346,7 @@
                "correctedText": "The corrected standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise grammatical analysis in Korean mentioning '냐냐님', 1-2 sentences max. No long essays.",
+               "interpretation": "A natural Korean translation of what the student's ORIGINAL sentence actually means (interpret their sentence as written, so they can check if it matches their intent). 1 sentence.",
                "breakdown": [
                   { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
@@ -1366,6 +1367,7 @@
                     correctedText: { type: "STRING" },
                     originalMarked: { type: "STRING" },
                     message: { type: "STRING" },
+                    interpretation: { type: "STRING", description: "학생이 쓴 원래 문장의 자연스러운 한국어 해석 (의도 확인용)" },
                     breakdown: {
                         type: "ARRAY",
                         items: {
@@ -1426,7 +1428,13 @@
                 }
 
                 coachVerdict.innerText = feedback.verdict;
-                coachMsg.innerHTML = feedback.message;
+                // [냐냐 PATCH] AI 코멘트 위에 '냐냐님 문장의 추정 해석' 표시 (의도 확인용)
+                let msgHtmlEsKo = '';
+                if (feedback.interpretation) {
+                    msgHtmlEsKo += `<div class="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 mb-2 text-sm"><span class="block text-[11px] text-sky-500 font-bold mb-0.5">📝 냐냐님 문장의 추정 해석</span><span class="text-slate-700 font-semibold">${feedback.interpretation}</span></div>`;
+                }
+                msgHtmlEsKo += `<span>${feedback.message}</span>`;
+                coachMsg.innerHTML = msgHtmlEsKo;
                 
                 breakdownGrid.innerHTML = '';
                 const seenWordsEs = new Set();
@@ -1661,7 +1669,7 @@
             contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 선생님으로서 상냥하고 정확하게 답변해 주세요.`;
 
             try {
-                const response = await callGemini(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely.", null, 'low');
+                const response = await callGemini(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely. IMPORTANT: Do NOT greet or start with phrases like '냐냐님 안녕하세요' — this is an ongoing conversation, so answer the question directly without any greeting.", null, 'low');
                 aiChatHistory.push({ role: "assistant", content: response.trim() });
                 AudioFX.playSuccess();
                 renderChatThread();
