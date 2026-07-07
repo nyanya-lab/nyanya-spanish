@@ -321,11 +321,19 @@ let vocabulary = [];
             const voices = window.speechSynthesis.getVoices() || [];
             const esVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('es'));
             if (esVoices.length === 0) return null;
-            // 여성 이름 힌트 (스페인어권 여성 음성들)
-            const femaleHints = ['mónica','monica','paulina','helena','laura','marisol','sabina','female','mujer','esperanza','lucia','lucía','conchita','penelope','penélope'];
-            let pick = esVoices.find(v => femaleHints.some(h => (v.name || '').toLowerCase().includes(h)));
-            // 스페인(es-ES) 여성 우선, 없으면 아무 스페인어 여성, 없으면 첫 스페인어 음성
-            if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es' && femaleHints.some(h => (v.name||'').toLowerCase().includes(h)));
+            // 여성 이름 힌트 (스페인어권 여성 음성들, 플랫폼별 다양)
+            const femaleHints = ['mónica','monica','paulina','helena','laura','marisol','sabina','female','mujer','esperanza','lucia','lucía','conchita','penelope','penélope','elvira','sofia','sofía','ximena','dalia','estrella','camila','isabela','google español','eva','carmen'];
+            // 남성 이름 힌트 (이건 피함)
+            const maleHints = ['jorge','pablo','diego','carlos','male','hombre','juan','miguel','raul','raúl','enrique','javier','male'];
+            const isFemale = (v) => femaleHints.some(h => (v.name || '').toLowerCase().includes(h));
+            const isMale = (v) => maleHints.some(h => (v.name || '').toLowerCase().includes(h));
+            // 1순위: 여성 이름 매칭 (es-ES 우선)
+            let pick = esVoices.find(v => (v.lang||'').toLowerCase() === 'es-es' && isFemale(v))
+                    || esVoices.find(v => isFemale(v));
+            // 2순위: 남성이 아닌 음성 (여성일 가능성)
+            if (!pick) pick = esVoices.find(v => (v.lang||'').toLowerCase() === 'es-es' && !isMale(v))
+                            || esVoices.find(v => !isMale(v));
+            // 3순위: 그래도 없으면 es-ES 또는 첫 음성
             if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es') || esVoices[0];
             _cachedEsVoice = pick;
             return pick;
@@ -1766,8 +1774,8 @@ let vocabulary = [];
                         const key = `${ri}-${ci}`;
                         const isHl = !!cellHl[key];
                         const cellBg = isHl ? 'bg-[#ffe0ec]' : '';
-                        // [냐냐 PATCH] 열 강조: 해당 열은 진한 파랑 두꺼운 글씨
-                        const colHl = hlCols.includes(ci) ? 'text-[#2c5578] font-extrabold' : 'text-slate-800 font-bold';
+                        // [냐냐 PATCH] 열 강조: 해당 열은 진한 보라 두꺼운 글씨
+                        const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                         // [냐냐 PATCH] 조회 화면에선 별표 없이 색 강조만 (별표는 수정 탭에서만)
                         return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${escapeHtml(c || '')}</td>`;
                     }).join('');
@@ -1799,7 +1807,7 @@ let vocabulary = [];
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<p class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">💡 ${escapeHtml(t.note).replace(/\n/g, '<br>')}</p>` : ''}
+                            ${t.note ? `<div class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1">${escapeHtml(t.note).replace(/\n/g, '<br>')}</span></div>` : ''}
                         </div>
                     </div>
                 `;
