@@ -78,6 +78,7 @@
                 // 게임은 객관식 성격이라 자동 마스터의 '주관식 통과' 조건은 못 채움 (subjectivePassed 안 건드림)
                 if (!w.mastered && w.masterScore >= 5 && w.subjectivePassed) {
                     w.mastered = true;
+                    logAction('new-mastered'); // [냐냐 PATCH] 게임 자동 마스터도 일지/그래프에 반영
                 }
             } else {
                 // [냐냐 PATCH] 정답률용 카운터
@@ -85,7 +86,7 @@
                 // 오답: 게임은 시간에 쫓겨 못 맞추기도 하니 약하게 감점 (약점 +1, 마스터 -1)
                 w.weakScore = (w.weakScore || 0) + 1;
                 w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
-                if (w.weakScore >= 5) w.weak = true;
+                if (w.weakScore >= 3) w.weak = true;
                 w.masterScore = Math.max(0, (w.masterScore || 0) - 1);
                 if (w.mastered && w.masterScore < 5) w.mastered = false;
             }
