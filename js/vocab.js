@@ -827,12 +827,15 @@
 
             const modalId = document.getElementById('modal-word-id').value;
 
-            // [냐냐 PATCH] 새 단어 등록 시 이미 같은 철자의 단어가 있으면 확인창 표시
+            // [냐냐 PATCH] 새 단어 등록 시 같은 철자 + 같은 품사면 중복 확인창 표시 (품사가 다르면 다른 단어로 취급)
             if (!modalId) {
-                const dup = vocabulary.find(item => item.word.toLowerCase().trim() === wordVal.toLowerCase());
+                const posVal = document.getElementById('input-pos').value;
+                const dup = vocabulary.find(item =>
+                    item.word.toLowerCase().trim() === wordVal.toLowerCase() && item.pos === posVal
+                );
                 if (dup) {
                     showConfirm(
-                        `"${dup.word}(${dup.meaning})" 단어가 이미 등록되어 있습니다.`,
+                        `"${dup.word}(${dup.meaning})" 단어가 이미 같은 품사로 등록되어 있습니다.`,
                         "그래도 중복으로 등록할까요? '등록취소'를 누르면 등록창이 그대로 열려있어요.",
                         () => performSaveWord(),
                         {
@@ -925,7 +928,19 @@
                     }
                 );
             } else {
-                closeWordModal();
+                // [냐냐 PATCH] 수정 저장 시에도 팝업 표시 (계속 등록 대신 '수정 완료' 확인)
+                showConfirm(
+                    "수정했어요! ✏️",
+                    "변경 사항이 저장되었어요.",
+                    () => { closeWordModal(); }, // 확인 → 닫기
+                    {
+                        okLabel: '확인',
+                        cancelLabel: '계속 수정',
+                        okStyle: 'primary',
+                        icon: 'happy',
+                        onCancel: () => { /* 계속 수정: 창 그대로 유지 */ }
+                    }
+                );
             }
         }
 
@@ -1495,5 +1510,3 @@
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
         }
-
-        // TAB 2: FLASHCARD PLAYGROUND LOGICS
