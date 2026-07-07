@@ -1590,6 +1590,7 @@
         function registerWordFromBreakdown(word, mean) {
             // [냐냐 PATCH] 탭을 옮기지 않고 현재 화면(AI 첨삭) 위에 등록 모달만 띄움
             openWordModal();
+            _skipContinueRegisterPrompt = true; // [냐냐 PATCH] 첨삭에서 등록하면 '계속 등록?' 팝업 안 뜨게
             setTimeout(() => {
                 const wordInput = document.getElementById('input-word');
                 const meanInput = document.getElementById('input-meaning');
