@@ -292,21 +292,20 @@ let vocabulary = [];
         }
 
         function updateSyncBadge(state) {
-            // [냐냐 PATCH] 헤더 배지 제거됨 → 설정 모달의 상태 텍스트만 갱신
-            const st = document.getElementById('settings-sync-status');
-            if (!st) return;
+            const badge = document.getElementById('sync-status-badge');
+            if (!badge) return;
             if (state === true) {
-                st.innerText = '모든 기기 동기화 중';
-                st.className = 'block text-[11px] text-emerald-500 font-semibold';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> 모든 기기 동기화 중</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
             } else if (state === 'claude-only') {
-                st.innerText = 'Claude 안에서만 동기화';
-                st.className = 'block text-[11px] text-amber-500 font-semibold';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span class="hidden sm:inline"> Claude 안에서만 동기화</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 cursor-pointer";
             } else if (state === 'no-password') {
-                st.innerText = '비밀번호 설정하면 기기 간 동기화';
-                st.className = 'block text-[11px] text-violet-500 font-semibold';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span><span class="hidden sm:inline"> 동기화 비밀번호 설정하기</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
             } else {
-                st.innerText = '이 기기에만 저장됨';
-                st.className = 'block text-[11px] text-slate-400';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 이 기기에만 저장됨</span>`;
+                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
             }
         }
 
@@ -386,7 +385,7 @@ let vocabulary = [];
         function touchDiarySnapshot() {
             const today = getLocalDateString();
             if (!nyanyaDiary[today]) {
-                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0 };
+                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0 };
             }
             // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
             const d = nyanyaDiary[today];
@@ -573,7 +572,7 @@ let vocabulary = [];
             let sum = 0;
             for (const k in nyanyaDiary) {
                 const d = nyanyaDiary[k];
-                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0);
             }
             return sum;
         }
@@ -759,7 +758,7 @@ let vocabulary = [];
         function dayActivity(dateStr) {
             const d = nyanyaDiary[dateStr];
             if (!d) return 0;
-            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0);
+            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0);
         }
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
@@ -1045,6 +1044,10 @@ let vocabulary = [];
                 nyanyaDiary[today].newWordsCount++;
             } else if (type === 'new-mastered') {
                 nyanyaDiary[today].newMasteredCount++;
+            } else if (type === 'review') {
+                nyanyaDiary[today].reviewCount = (nyanyaDiary[today].reviewCount || 0) + 1; // [냐냐 PATCH] 복습 제출 1개
+            } else if (type === 'game') {
+                nyanyaDiary[today].gameCount = (nyanyaDiary[today].gameCount || 0) + 1; // [냐냐 PATCH] 게임 1판 완료
             }
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
@@ -1072,6 +1075,8 @@ let vocabulary = [];
                     <div>마스터 단어: <strong class="text-emerald-600">${log.newMasteredCount || 0}개</strong></div>
                     <div>퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
                     <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
+                    <div>단어 복습: <strong class="text-sky-600">${log.reviewCount || 0}개</strong></div>
+                    <div>미니 게임: <strong class="text-pink-600">${log.gameCount || 0}판</strong></div>
                 </div>
             `;
         }
@@ -1550,15 +1555,7 @@ let vocabulary = [];
             if (btn) btn.classList.toggle('hidden', window.scrollY < 300);
         });
 
-        // [냐냐 PATCH] 헤더 접기 기능 제거됨. 설정 모달로 대체.
-        function openSettingsModal() {
-            updateApiKeyBadge();
-            if (typeof refreshSyncBadgeState === 'function') { refreshSyncBadgeState(); }
-            document.getElementById('settings-modal').classList.remove('hidden');
-        }
-        function closeSettingsModal() {
-            document.getElementById('settings-modal').classList.add('hidden');
-        }
+        // [냐냐 PATCH] 헤더 접기 기능 제거됨. AI연결·동기화·백업 버튼은 헤더에 직접 노출.
 
         function toggleMobileMenu() {
             if (isMenuCollapsed) expandMobileMenu();
@@ -2171,9 +2168,9 @@ let vocabulary = [];
                 // [냐냐 PATCH] 플래시카드 메뉴는 숨김 유지 (className 재설정 때 튀어나오는 것 방지)
                 const hiddenPrefix = (key === 'cards') ? 'hidden ' : '';
                 if (key === tabId) {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
                 }
             });
 
