@@ -292,20 +292,21 @@ let vocabulary = [];
         }
 
         function updateSyncBadge(state) {
-            const badge = document.getElementById('sync-status-badge');
-            if (!badge) return;
+            // [냐냐 PATCH] 헤더 배지 제거됨 → 설정 모달의 상태 텍스트만 갱신
+            const st = document.getElementById('settings-sync-status');
+            if (!st) return;
             if (state === true) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> 모든 기기 동기화 중</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
+                st.innerText = '모든 기기 동기화 중';
+                st.className = 'block text-[11px] text-emerald-500 font-semibold';
             } else if (state === 'claude-only') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span class="hidden sm:inline"> Claude 안에서만 동기화</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 cursor-pointer";
+                st.innerText = 'Claude 안에서만 동기화';
+                st.className = 'block text-[11px] text-amber-500 font-semibold';
             } else if (state === 'no-password') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span><span class="hidden sm:inline"> 동기화 비밀번호 설정하기</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
+                st.innerText = '비밀번호 설정하면 기기 간 동기화';
+                st.className = 'block text-[11px] text-violet-500 font-semibold';
             } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 이 기기에만 저장됨</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
+                st.innerText = '이 기기에만 저장됨';
+                st.className = 'block text-[11px] text-slate-400';
             }
         }
 
@@ -1549,15 +1550,14 @@ let vocabulary = [];
             if (btn) btn.classList.toggle('hidden', window.scrollY < 300);
         });
 
-        function toggleHeader() {
-            headerExpanded = !headerExpanded;
-            const full = document.getElementById('header-full');
-            const icon = document.getElementById('header-toggle-icon');
-            const collapsedTitle = document.getElementById('header-collapsed-title');
-            if (full) full.classList.toggle('hidden', !headerExpanded);
-            if (icon) icon.style.transform = headerExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
-            // 펼쳐지면 얇은 바의 제목은 숨겨서 중복 방지
-            if (collapsedTitle) collapsedTitle.classList.toggle('opacity-0', headerExpanded);
+        // [냐냐 PATCH] 헤더 접기 기능 제거됨. 설정 모달로 대체.
+        function openSettingsModal() {
+            updateApiKeyBadge();
+            if (typeof refreshSyncBadgeState === 'function') { refreshSyncBadgeState(); }
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
         }
 
         function toggleMobileMenu() {
@@ -2227,8 +2227,5 @@ let vocabulary = [];
             
             document.getElementById('header-total-vocab').innerText = `${total}개`;
             document.getElementById('header-mastered-vocab').innerText = `${mastered}개`;
-
-            const todayStr = getLocalDateString();
-            document.getElementById('header-today-date').innerText = todayStr.slice(5).replace('-', '/'); // MM/DD
-            document.getElementById('header-today-date').title = todayStr;
+            // [냐냐 PATCH] 오늘 날짜 표시 제거됨 (달력이 있어서 불필요)
         }
