@@ -219,22 +219,6 @@
                                             <button type="button" data-pos="phrase" onclick="toggleFilterPos(this)" class="filter-pos-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">구문</button>
                                         </div>
                                     </div>
-                                    <!-- [냐냐 PATCH] 표시할 시제 (동사 카드용, 여러 개 · 안 고르면 전부) -->
-                                    <div class="space-y-1.5">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">표시할 시제 <span class="text-slate-300 normal-case">(동사 · 안 고르면 전부)</span></label>
-                                        <div id="filter-tense-box" class="flex flex-wrap gap-1.5">
-                                            <button type="button" data-tense="presente" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">현재</button>
-                                            <button type="button" data-tense="indefinido" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">부정과거</button>
-                                            <button type="button" data-tense="imperfecto" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">불완료과거</button>
-                                            <button type="button" data-tense="futuro" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">미래</button>
-                                            <button type="button" data-tense="condicional" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">조건법</button>
-                                            <button type="button" data-tense="subjPresente" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">접속법 현재</button>
-                                            <button type="button" data-tense="subjImperfecto" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">접속법 불완료</button>
-                                            <button type="button" data-tense="imperativo" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">명령법</button>
-                                            <button type="button" data-tense="presProgresivo" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">현재진행</button>
-                                            <button type="button" data-tense="gerundio" onclick="toggleFilterTense(this)" class="filter-tense-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">현재분사</button>
-                                        </div>
-                                    </div>
                                     <!-- 마스터 상태 (하나만) -->
                                     <div class="space-y-1.5">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">마스터 상태</label>
@@ -1287,12 +1271,9 @@
                     <!-- [냐냐 PATCH] 시제 선택 (기본은 현재시제만, 버튼으로 다른 시제 펼침) -->
                     <div class="flex items-center justify-between gap-2">
                         <span id="conj-tense-label" class="text-[11px] font-bold text-indigo-600">직설법 현재 (presente)</span>
-                        <div class="flex items-center gap-1.5">
-                            <button type="button" id="conj-ai-btn" onclick="aiFillCurrentTense()" title="현재 선택된 시제만 AI가 추천 (빈칸만 채움)" class="text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-1 rounded-lg transition-all flex items-center gap-1"><i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i> 이 시제 AI</button>
-                            <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
-                                <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
-                            </button>
-                        </div>
+                        <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
+                            <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
+                        </button>
                     </div>
                     <div id="conj-tense-selector-box" class="hidden flex items-center gap-2">
                         <span class="text-[10px] font-bold text-slate-400 shrink-0">시제</span>
@@ -1305,11 +1286,9 @@
                             <option value="subjPresente">접속법 현재 (subjuntivo presente)</option>
                             <option value="subjImperfecto">접속법 불완료과거 (subj. imperfecto)</option>
                             <option value="imperativo">명령법 (imperativo)</option>
-                            <option value="presProgresivo">현재진행 (estar + gerundio)</option>
-                            <option value="gerundio">현재분사 (gerundio · 1칸)</option>
                         </select>
                     </div>
-                    <div id="conj-grid-6" class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-3 gap-2">
                         <div class="space-y-1">
                             <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
                             <input type="text" id="conj-yo" placeholder="tengo" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
@@ -1334,11 +1313,6 @@
                             <span class="text-[10px] font-bold text-slate-400">ellos/ellas (그들)</span>
                             <input type="text" id="conj-ellos" placeholder="tienen" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
                         </div>
-                    </div>
-                    <!-- [냐냐 PATCH] 현재분사(gerundio) — 1칸 특수 시제 (선택 시 위 6칸 대신 이게 보임) -->
-                    <div id="conj-single" class="hidden space-y-1">
-                        <span class="text-[10px] font-bold text-slate-400">현재분사 (gerundio)</span>
-                        <input type="text" id="conj-gerundio" placeholder="teniendo" autocomplete="off" class="w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-bold text-blue-600">
                     </div>
                 </div>
 
