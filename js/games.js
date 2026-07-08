@@ -570,6 +570,7 @@
             selectReviewRepeat(reviewRepeat || 1);
             // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
             if (typeof resetFillSetup === 'function') resetFillSetup();
+            if (typeof resetGrammarFillSetup === 'function') resetGrammarFillSetup();
             if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'blink');
         }
 
@@ -755,17 +756,16 @@
 
         function selectReviewMode(mode) {
             reviewMode = mode;
-            const blink = document.getElementById('review-mode-blink');
-            const fill = document.getElementById('review-mode-fill');
-            if (blink) blink.classList.toggle('hidden', mode !== 'blink');
-            if (fill) fill.classList.toggle('hidden', mode !== 'fill');
-            const bBtn = document.getElementById('review-mode-blink-btn');
-            const fBtn = document.getElementById('review-mode-fill-btn');
+            const containers = { blink: 'review-mode-blink', fill: 'review-mode-fill', gfill: 'review-mode-gfill' };
+            Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
+            const btns = { blink: 'review-mode-blink-btn', fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
-            [bBtn, fBtn].forEach(b => { if (b) b.className = b.className.replace(on, '').replace(off, ''); });
-            if (bBtn) bBtn.className += ' ' + (mode === 'blink' ? on : off);
-            if (fBtn) fBtn.className += ' ' + (mode === 'fill' ? on : off);
+            Object.entries(btns).forEach(([m, id]) => {
+                const b = document.getElementById(id); if (!b) return;
+                b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
+                b.className += ' ' + (m === mode ? on : off);
+            });
         }
 
         function resetFillSetup() {
@@ -1073,4 +1073,297 @@ Return JSON only, no markdown.`;
             if (typeof renderWordList === 'function') renderWordList();
             showToast(`${n}개 마스터 완료! 🏆`, "success");
             document.getElementById('fill-mastery-box')?.classList.add('hidden');
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 3차-② 문법표 빈칸 채우기 복습 (AI 채점)
+        //   제목·설명·팁·열제목·강조열 전체는 공개, 나머지 (비어있지 않은) 칸을 빈칸으로.
+        // ============================================================
+        let gfillCount = 10;
+        let gfillState = null;
+
+        function resetGrammarFillSetup() {
+            gfillState = null;
+            const setup = document.getElementById('gfill-setup');
+            const play = document.getElementById('gfill-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            selectGfillCount(gfillCount || 10);
+            // 사용 가능한 표 개수 안내
+            const el = document.getElementById('gfill-scope-count');
+            if (el) el.innerText = `복습 가능한 표: ${getGrammarFillPool().length}개`;
+        }
+
+        function selectGfillCount(n) {
+            gfillCount = n;
+            document.querySelectorAll('.gfill-count-btn').forEach(btn => {
+                const active = parseInt(btn.dataset.gfillCount) === n;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+        }
+
+        // 빈칸 낼 칸이 하나라도 있는 표만 대상
+        function getGrammarFillPool() {
+            const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            return all.filter(t => countGrammarBlanks(t) > 0);
+        }
+        function countGrammarBlanks(t) {
+            const hlCols = t.highlightCols || [0];
+            let n = 0;
+            (t.rows || []).forEach(r => r.forEach((c, ci) => { if (!hlCols.includes(ci) && (c || '').toString().trim()) n++; }));
+            return n;
+        }
+
+        function startGrammarFillReview() {
+            const pool = getGrammarFillPool();
+            if (pool.length < 1) { showToast("빈칸 낼 문법표가 없어요! (강조 열만 있는 표는 제외돼요)", "error"); return; }
+            const shuffled = pool.slice().sort(() => Math.random() - 0.5).slice(0, gfillCount);
+            gfillState = { pool: shuffled, index: 0, total: shuffled.length, results: [], current: null, phase: 'input' };
+            document.getElementById('gfill-setup').classList.add('hidden');
+            document.getElementById('gfill-play-area').classList.remove('hidden');
+            renderGrammarFillProblem();
+        }
+
+        function buildGrammarFillProblem(t) {
+            const hlCols = t.highlightCols || [0];
+            const blanks = [];
+            (t.rows || []).forEach((r, ri) => {
+                r.forEach((c, ci) => {
+                    if (hlCols.includes(ci)) return;         // 강조 열은 공개
+                    if (!(c || '').toString().trim()) return; // 빈 칸은 스킵
+                    blanks.push({ ri, ci, expected: c });
+                });
+            });
+            return { table: t, blanks };
+        }
+
+        function renderGrammarFillProblem() {
+            if (!gfillState) return;
+            if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
+            gfillState.phase = 'input';
+            const t = gfillState.pool[gfillState.index];
+            const problem = buildGrammarFillProblem(t);
+            gfillState.current = problem;
+            const hlCols = t.highlightCols || [0];
+            // 빈칸 key → input index
+            const blankIndexOf = {};
+            problem.blanks.forEach((b, i) => { blankIndexOf[`${b.ri}-${b.ci}`] = i; });
+
+            const headerRow = (t.headers || []).map(h => `<th class="text-center px-2 py-2 text-xs font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`).join('');
+            const bodyRows = (t.rows || []).map((r, ri) => {
+                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
+                const cells = r.map((c, ci) => {
+                    const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800';
+                    const key = `${ri}-${ci}`;
+                    if (key in blankIndexOf) {
+                        const bi = blankIndexOf[key];
+                        return `<td class="px-1 py-1 border border-[#e1edf7] ${rowBg}"><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                    }
+                    return `<td class="px-2 py-1.5 text-xs text-center border border-[#e1edf7] ${colHl}">${escapeHtml(c || '')}</td>`;
+                }).join('');
+                return `<tr class="${rowBg}">${cells}</tr>`;
+            }).join('');
+
+            const play = document.getElementById('gfill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGrammarFillSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${gfillState.index + 1} / ${gfillState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(gfillState.index / gfillState.total * 100)}%"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg shrink-0">${t.icon || '📋'}</span>
+                        <h3 class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</h3>
+                    </div>
+                    ${t.desc ? `<p class="text-xs text-slate-600 leading-relaxed">${escapeHtml(t.desc).replace(/\n/g, '<br>')}</p>` : ''}
+                    <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
+                    <div class="overflow-x-auto rounded-xl border border-slate-100">
+                        <table class="w-full border-collapse">
+                            ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
+                            <tbody>${bodyRows}</tbody>
+                        </table>
+                    </div>
+                    ${t.note ? `<div class="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1">${escapeHtml(t.note).replace(/\n/g, '<br>')}</span></div>` : ''}
+                    <div id="gfill-feedback" class="hidden space-y-1"></div>
+                    <div class="flex justify-end">
+                        <button id="gfill-action-btn" onclick="submitGrammarFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { const first = document.getElementById('gfill-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        function gfillInputKeydown(e, idx) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (gfillState && gfillState.phase === 'graded') { nextGrammarFillProblem(); return; }
+            const total = gfillState && gfillState.current ? gfillState.current.blanks.length : 0;
+            if (idx < total - 1) {
+                const next = document.getElementById('gfill-input-' + (idx + 1));
+                if (next) next.focus();
+            } else {
+                submitGrammarFillProblem();
+            }
+        }
+
+        async function submitGrammarFillProblem() {
+            if (!gfillState || !gfillState.current || gfillState.phase !== 'input') return;
+            const t = gfillState.current.table;
+            const hlCols = t.highlightCols || [0];
+            const blanks = gfillState.current.blanks;
+            const answers = blanks.map((b, i) => { const el = document.getElementById('gfill-input-' + i); return el ? el.value.trim() : ''; });
+            gfillState.phase = 'grading';
+            const actionBtn = document.getElementById('gfill-action-btn');
+            if (actionBtn) { actionBtn.disabled = true; actionBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`; }
+
+            // 각 빈칸에 문맥(행 대표값=강조열, 열 제목) 부여
+            const ctxItems = blanks.map((b, i) => {
+                const rowLabel = (t.rows[b.ri] && hlCols.length) ? (t.rows[b.ri][hlCols[0]] || '') : '';
+                const colHeader = (t.headers && t.headers[b.ci]) ? t.headers[b.ci] : '';
+                return { index: i, rowLabel, column: colHeader, expected: b.expected, studentAnswer: answers[i] };
+            });
+
+            let graded = null;
+            if (typeof hasGeminiApiKey === 'function' && hasGeminiApiKey()) {
+                try {
+                    const system = `You grade fill-in-the-blank answers in a Spanish grammar table for a Korean student. Be fair but NOT lenient.
+Rules:
+- Spanish text: accents/tildes MATTER (á é í ó ú ñ ü). Missing/wrong accent = INCORRECT. Ignore only capitalization and surrounding punctuation/whitespace.
+- Cells may be TEMPLATE PATTERNS with placeholders/variables, e.g. "Hay [숫자] [algo/alguien]" or "verbo + -ando". For these, accept the student's answer if it expresses the SAME structure/pattern; equivalent placeholder wording is OK (e.g., brackets vs no brackets, "algo" vs "[algo]").
+- Korean text: accept if the meaning matches in substance (paraphrases OK); ignore particles/spacing/punctuation.
+- Empty answer = incorrect.
+Return JSON only, no markdown.`;
+                    const prompt = `Grammar table: "${t.title || ''}". Grade each blank cell. "rowLabel" is the row's key column, "column" is the column header, "expected" is the correct cell text, "studentAnswer" is what the student typed.\n${JSON.stringify(ctxItems)}\nReturn JSON: { "results": [ { "index": number, "correct": boolean, "correctAnswer": string } ] }`;
+                    const schema = { type: "OBJECT", properties: { results: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "NUMBER" }, correct: { type: "BOOLEAN" }, correctAnswer: { type: "STRING" } }, required: ["index", "correct", "correctAnswer"] } } }, required: ["results"] };
+                    const resp = await callGemini(prompt, system, schema, 'low');
+                    const data = extractAndParseJson(resp);
+                    graded = blanks.map((b, i) => {
+                        const r = (data.results || []).find(x => x.index === i) || {};
+                        return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showToast("AI 채점 실패 — 기본 채점으로 진행할게요", "error");
+                }
+            }
+            if (!graded) {
+                graded = blanks.map((b, i) => ({ correct: fillLocalGrade({ language: 'es', expected: b.expected }, answers[i]), correctAnswer: b.expected }));
+            }
+
+            const detail = blanks.map((b, i) => ({
+                ri: b.ri, ci: b.ci,
+                rowLabel: ctxItems[i].rowLabel, column: ctxItems[i].column,
+                expected: b.expected, userAnswer: answers[i],
+                correct: graded[i].correct, correctAnswer: graded[i].correctAnswer
+            }));
+            const allCorrect = detail.every(d => d.correct);
+            gfillState.results.push({ table: t, blanks: detail, allCorrect });
+            if (typeof logAction === 'function') logAction('review');
+
+            applyGrammarFillResults(detail);
+            gfillState.phase = 'graded';
+        }
+
+        function applyGrammarFillResults(detail) {
+            detail.forEach((d, i) => {
+                const el = document.getElementById('gfill-input-' + i);
+                if (!el) return;
+                el.disabled = true;
+                el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
+                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600');
+            });
+            const fb = document.getElementById('gfill-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                fb.innerHTML = detail.map(d => {
+                    const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
+                    const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-[11px] flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${label || '칸'}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                }).join('');
+            }
+            const btn = document.getElementById('gfill-action-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = (gfillState.index + 1 >= gfillState.total) ? '결과 보기 →' : '다음 →';
+                btn.setAttribute('onclick', 'nextGrammarFillProblem()');
+                setTimeout(() => btn.focus(), 40);
+            }
+        }
+
+        function nextGrammarFillProblem() {
+            if (!gfillState) return;
+            gfillState.index++;
+            if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
+            renderGrammarFillProblem();
+        }
+
+        function endGrammarFillReview() {
+            const results = gfillState ? gfillState.results : [];
+            const total = results.length;
+            const correct = results.filter(r => r.allCorrect).length;
+            const masterCandidates = results.filter(r => r.allCorrect && r.table && !masteredGrammar[r.table.id]).map(r => r.table);
+            gfillState = null;
+
+            let listHtml = '';
+            results.forEach(r => {
+                const icon = r.allCorrect ? '<span class="text-emerald-500">✓</span>' : '<span class="text-red-400">✗</span>';
+                const wrongN = r.blanks.filter(b => !b.correct).length;
+                const sub = r.allCorrect ? '<span class="text-emerald-600 text-xs">다 맞힘</span>' : `<span class="text-slate-400 text-xs">${wrongN}칸 틀림</span>`;
+                listHtml += `<div class="flex items-baseline justify-between bg-white rounded-xl px-3 py-2 border border-slate-100"><span class="font-bold text-slate-800">${icon} ${escapeHtml(r.table.icon || '📋')} ${escapeHtml(r.table.title || '')}</span>${sub}</div>`;
+            });
+
+            let masteryHtml = '';
+            if (masterCandidates.length > 0) {
+                masteryHtml = `
+                    <div id="gfill-mastery-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-left">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-black text-emerald-700">🏆 다 맞힌 표, 마스터로 등록할까요?</p>
+                            <label class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 cursor-pointer"><input type="checkbox" id="gfill-master-all" onchange="gfillMasterToggleAll(this)"> 전체</label>
+                        </div>
+                        <div class="space-y-1">${masterCandidates.map(t => `<label class="flex items-center gap-2 bg-white/70 rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" class="gfill-master-chk" data-id="${t.id}"><span class="text-xs font-bold text-slate-700">${escapeHtml(t.icon || '📋')} ${escapeHtml(t.title || '')}</span></label>`).join('')}</div>
+                        <button onclick="applyGrammarFillMastery()" class="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all">선택 표 마스터하기</button>
+                    </div>`;
+            }
+
+            const play = document.getElementById('gfill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">${correct === total ? '🎉' : '💪'}</div>
+                    <h3 class="text-xl font-black text-slate-900">문법표 복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}개 표 중 <b class="text-emerald-600">${correct}개</b> 완벽하게 채웠어요! (${total ? Math.round(correct / total * 100) : 0}%)</p>
+                    ${masteryHtml}
+                    <div class="text-left space-y-1.5 max-h-72 overflow-y-auto">
+                        <p class="text-xs font-bold text-slate-500 mb-1">복습한 문법표</p>
+                        ${listHtml}
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetGrammarFillSetup()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        function gfillMasterToggleAll(cb) {
+            document.querySelectorAll('.gfill-master-chk').forEach(c => { c.checked = cb.checked; });
+        }
+        function applyGrammarFillMastery() {
+            const ids = [...document.querySelectorAll('.gfill-master-chk:checked')].map(c => c.dataset.id);
+            if (ids.length === 0) { showToast("선택된 표가 없어요", "error"); return; }
+            let n = 0;
+            ids.forEach(id => { if (!masteredGrammar[id]) { masteredGrammar[id] = true; if (typeof logAction === 'function') logAction('new-grammar-mastered'); n++; } });
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            showToast(`${n}개 표 마스터 완료! 🏆`, "success");
+            document.getElementById('gfill-mastery-box')?.classList.add('hidden');
         }
