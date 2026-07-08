@@ -1244,76 +1244,16 @@
 
                 <!-- Dynamic Verb Conjugation Grid -->
                 <div id="field-verb-conjugations" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center justify-between gap-2">
                         <span class="text-xs font-bold text-indigo-600 flex items-center gap-1">
                             <i class="fa-solid fa-sliders"></i>
-                            <span>동사 변형</span>
+                            <span>동사 변형 (시제)</span>
                         </span>
-                        <div class="flex items-center gap-1.5">
-                            <select id="input-verb-class" onchange="toggleVerbTypeDetails()" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium">
-                                <option value="regular">규칙</option>
-                                <option value="irregular">불규칙</option>
-                            </select>
-                            <select id="input-verb-irregular-type" class="bg-white px-2 py-1 rounded-lg border border-slate-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500 font-medium" disabled>
-                                <option value="none">- 형태 -</option>
-                                <option value="1인칭">1인칭</option>
-                                <option value="e ➡️ ie">e ➡️ ie</option>
-                                <option value="o ➡️ ue">o ➡️ ue</option>
-                                <option value="e ➡️ i">e ➡️ i</option>
-                                <option value="완전 불규칙">완전 불규칙</option>
-                                <option value="1인칭 및 e ➡️ ie">1인칭 및 e ➡️ ie</option>
-                                <option value="1인칭 및 e ➡️ i">1인칭 및 e ➡️ i</option>
-                                <option value="1인칭 및 o ➡️ ue">1인칭 및 o ➡️ ue</option>
-                                <option value="기타 변형">기타 변형</option>
-                            </select>
-                        </div>
+                        <span class="text-[10px] text-slate-400">시제마다 규칙/불규칙·유형 선택</span>
                     </div>
-                    <!-- [냐냐 PATCH] 시제 선택 (기본은 현재시제만, 버튼으로 다른 시제 펼침) -->
-                    <div class="flex items-center justify-between gap-2">
-                        <span id="conj-tense-label" class="text-[11px] font-bold text-indigo-600">직설법 현재 (presente)</span>
-                        <button type="button" id="conj-tense-toggle-btn" onclick="toggleTenseSelector()" class="text-[10px] font-bold text-indigo-500 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-all flex items-center gap-1">
-                            <i class="fa-solid fa-plus text-[9px]"></i> 다른 시제
-                        </button>
-                    </div>
-                    <div id="conj-tense-selector-box" class="hidden flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-400 shrink-0">시제</span>
-                        <select id="input-verb-tense" onchange="switchConjTense()" class="flex-1 bg-white px-2 py-1.5 rounded-lg border border-indigo-200 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700">
-                            <option value="presente">직설법 현재 (presente)</option>
-                            <option value="indefinido">직설법 부정과거 (pretérito indefinido)</option>
-                            <option value="imperfecto">직설법 불완료과거 (imperfecto)</option>
-                            <option value="futuro">직설법 미래 (futuro)</option>
-                            <option value="condicional">조건법 (condicional)</option>
-                            <option value="subjPresente">접속법 현재 (subjuntivo presente)</option>
-                            <option value="subjImperfecto">접속법 불완료과거 (subj. imperfecto)</option>
-                            <option value="imperativo">명령법 (imperativo)</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">yo (나)</span>
-                            <input type="text" id="conj-yo" placeholder="tengo" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-bold text-blue-600">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">tú (너)</span>
-                            <input type="text" id="conj-tu" placeholder="tienes" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">él/ella (그/그녀)</span>
-                            <input type="text" id="conj-el" placeholder="tiene" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">nosotros (우리)</span>
-                            <input type="text" id="conj-nos" placeholder="tenemos" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">vosotros (너희)</span>
-                            <input type="text" id="conj-vos" placeholder="tenéis" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                        <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-400">ellos/ellas (그들)</span>
-                            <input type="text" id="conj-ellos" placeholder="tienen" autocomplete="off" class="w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold">
-                        </div>
-                    </div>
+                    <!-- [냐냐 PATCH] 관용구처럼 시제 블록을 +/− 로 추가/삭제 -->
+                    <div id="conj-tense-blocks" class="space-y-2"></div>
+                    <button type="button" onclick="addTenseBlock()" class="w-full py-2 border border-dashed border-indigo-300 rounded-xl text-xs font-bold text-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-1"><i class="fa-solid fa-plus text-[10px]"></i> 시제 추가</button>
                 </div>
 
                 <div class="space-y-1.5">
