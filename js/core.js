@@ -1115,7 +1115,7 @@ let vocabulary = [];
                     <div>마스터 문법: <strong class="text-teal-500">${log.newGrammarMasteredCount || 0}개</strong></div>
                     <div>퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
                     <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
-                    <div>단어 복습: <strong class="text-sky-600">${log.reviewCount || 0}개</strong></div>
+                    <div>복습: <strong class="text-sky-600">${log.reviewCount || 0}개</strong></div>
                     <div>미니 게임: <strong class="text-pink-600">${log.gameCount || 0}판</strong></div>
                 </div>
             `;
@@ -1313,6 +1313,20 @@ let vocabulary = [];
             document.getElementById('record-stat-new-mastered').innerText = `${totalNewMastered}개`;
             document.getElementById('record-stat-quiz').innerText = `${totalQuizCorrect}/${totalQuiz}`;
             document.getElementById('record-stat-ai').innerText = `${totalAi}회`;
+            // [냐냐 PATCH] 문법(단어와 동일 항목) + 복습 + 게임 요약
+            const totalReview = series.reduce((sum, d) => sum + (d.reviewCount || 0), 0);
+            const totalGame = series.reduce((sum, d) => sum + (d.gameCount || 0), 0);
+            const totalNewGrammar = series.reduce((sum, d) => sum + (d.newGrammarCount || 0), 0);
+            const totalNewGrammarMastered = series.reduce((sum, d) => sum + (d.newGrammarMasteredCount || 0), 0);
+            const grammarTotal = (typeof getGrammarTotalCount === 'function') ? getGrammarTotalCount() : 0;
+            const grammarMastered = (typeof getGrammarMasteredCount === 'function') ? getGrammarMasteredCount() : 0;
+            const setStat = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+            setStat('record-stat-grammar', `${grammarTotal}개`);
+            setStat('record-stat-grammar-mastered', `${grammarMastered}개`);
+            setStat('record-stat-new-grammar', `${totalNewGrammar}개`);
+            setStat('record-stat-new-grammar-mastered', `${totalNewGrammarMastered}개`);
+            setStat('record-stat-review', `${totalReview}개`);
+            setStat('record-stat-game', `${totalGame}판`);
 
             renderRecordLineChart(series);
             renderGrowthDailyChart(series);
@@ -1958,9 +1972,11 @@ let vocabulary = [];
 
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
-            // [냐냐 PATCH] 최신순/오래된순 정렬 (natural order = 오래된순, reverse = 최신순)
+            // [냐냐 PATCH] 정렬: 최신순 / 오래된순 / 주제순(오름차순)
             if (grammarSortMode === 'newest') {
                 tables = [...tables].reverse();
+            } else if (grammarSortMode === 'topic') {
+                tables = [...tables].sort((a, b) => grammarTopicLabel(grammarTopicKey(a)).localeCompare(grammarTopicLabel(grammarTopicKey(b)), 'ko'));
             }
             // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 정렬된 순서 유지)
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
@@ -2001,9 +2017,13 @@ let vocabulary = [];
                         <div class="w-full flex items-center justify-between gap-2 px-5 py-4">
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-lg shrink-0">${t.icon || '📋'}</span>
-                                ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? `<span class="shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 px-1.5 py-0.5 rounded-md border border-violet-100">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>` : ''}
-                                <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
-                                ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
+                                <div class="min-w-0 flex-1">
+                                    ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-0.5 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md border ${c.r}">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
+                                        ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
+                                    </div>
+                                </div>
                             </button>
                             ${editBtns}
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
@@ -2118,6 +2138,24 @@ let vocabulary = [];
             const g = (typeof GRAMMAR_ICONS !== 'undefined') ? GRAMMAR_ICONS.find(x => x.icon === key) : null;
             return g ? g.label : '기타';
         }
+        // [냐냐 PATCH] 주제별 색상 (GRAMMAR_ICONS 순서대로 팔레트 순환)
+        const GRAMMAR_TOPIC_COLORS = [
+            { t: 'text-violet-600', b: 'bg-violet-50', r: 'border-violet-200' },
+            { t: 'text-sky-600', b: 'bg-sky-50', r: 'border-sky-200' },
+            { t: 'text-emerald-600', b: 'bg-emerald-50', r: 'border-emerald-200' },
+            { t: 'text-amber-600', b: 'bg-amber-50', r: 'border-amber-200' },
+            { t: 'text-rose-600', b: 'bg-rose-50', r: 'border-rose-200' },
+            { t: 'text-teal-600', b: 'bg-teal-50', r: 'border-teal-200' },
+            { t: 'text-indigo-600', b: 'bg-indigo-50', r: 'border-indigo-200' },
+            { t: 'text-pink-600', b: 'bg-pink-50', r: 'border-pink-200' },
+            { t: 'text-cyan-600', b: 'bg-cyan-50', r: 'border-cyan-200' },
+            { t: 'text-orange-600', b: 'bg-orange-50', r: 'border-orange-200' },
+        ];
+        function grammarTopicColor(key) {
+            if (key === GRAMMAR_OTHER_TOPIC) return { t: 'text-slate-500', b: 'bg-slate-50', r: 'border-slate-200' };
+            const idx = (typeof GRAMMAR_ICONS !== 'undefined') ? GRAMMAR_ICONS.findIndex(g => g.icon === key) : -1;
+            return GRAMMAR_TOPIC_COLORS[(idx >= 0 ? idx : 0) % GRAMMAR_TOPIC_COLORS.length];
+        }
 
         // 현재 표들에 실제로 존재하는 주제만 필터 버튼으로 렌더 (기타는 맨 뒤)
         function renderGrammarTopicFilterButtons() {
@@ -2204,7 +2242,7 @@ let vocabulary = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
-            const sortLabel = grammarSortMode === 'newest' ? '최신순' : '오래된순';
+            const sortLabel = grammarSortMode === 'newest' ? '최신순' : (grammarSortMode === 'topic' ? '주제순' : '오래된순');
             const filterPart = chips.length > 0
                 ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${escapeHtml(c)}</span>`).join('')
                 : `<span class="text-slate-400">전체 표</span>`;
@@ -2328,17 +2366,21 @@ let vocabulary = [];
             { icon: '⭐', label: '기타' },
         ];
         let GRAMMAR_ICONS = DEFAULT_GRAMMAR_ICONS.map(x => ({ ...x })); // 로드 시 저장된 목록으로 덮어씀
-        function renderGeIconPicker() {
-            const box = document.getElementById('ge-icon-picker');
-            if (!box) return;
-            const cur = document.getElementById('ge-icon').value || '📘';
-            box.innerHTML = GRAMMAR_ICONS.map(g => {
-                const sel = g.icon === cur;
-                return `<button type="button" onclick="selectGeIcon('${g.icon}')" title="${g.label}" class="w-10 h-10 rounded-xl border text-lg flex items-center justify-center transition-all ${sel ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}">${g.icon}</button>`;
-            }).join('');
+        function renderGeIconPicker(desired) {
+            const sel = document.getElementById('ge-icon');
+            if (!sel || sel.tagName !== 'SELECT') return;
+            const cur = desired || sel.value || '📘';
+            let opts = GRAMMAR_ICONS.map(g => `<option value="${g.icon}">${g.icon} ${escapeHtml(g.label)}</option>`).join('');
+            // 현재 아이콘이 주제 목록에 없으면(구버전 기본표 등) 임시 옵션 추가
+            if (cur && !GRAMMAR_ICONS.some(g => g.icon === cur)) {
+                opts = `<option value="${cur}">${cur} (주제 미지정)</option>` + opts;
+            }
+            sel.innerHTML = opts;
+            sel.value = cur; // 옵션 채운 뒤 값 지정 (빈 select에 미리 넣으면 안 먹힘)
         }
         function selectGeIcon(icon) {
-            document.getElementById('ge-icon').value = icon;
+            const sel = document.getElementById('ge-icon');
+            if (sel) sel.value = icon;
             renderGeIconPicker();
         }
 
@@ -2424,8 +2466,7 @@ let vocabulary = [];
         function renderGrammarEditorFields() {
             const s = grammarEditorState;
             if (!s) return;
-            document.getElementById('ge-icon').value = s.icon || '📘';
-            renderGeIconPicker(); // [냐냐 PATCH] 아이콘 선택 UI
+            renderGeIconPicker(s.icon || '📘'); // [냐냐 PATCH] 주제 콤보박스 채우고 현재 값 선택
             document.getElementById('ge-title').value = s.title;
             document.getElementById('ge-desc').value = s.desc;
             document.getElementById('ge-note').value = s.note;
