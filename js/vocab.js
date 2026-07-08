@@ -35,91 +35,166 @@
         }
 
         function toggleVerbTypeDetails() {
-            const verbClass = document.getElementById('input-verb-class').value;
-            const irrSelect = document.getElementById('input-verb-irregular-type');
-            if (verbClass === 'irregular') {
-                irrSelect.disabled = false;
-                irrSelect.value = "1인칭";
-            } else {
-                irrSelect.disabled = true;
-                irrSelect.value = "none";
-            }
+            // [냐냐 PATCH] 규칙/불규칙·불규칙유형은 이제 각 시제 블록마다 있음 (전역 콤보박스 제거) — 호환용 빈 함수
         }
 
-        // [냐냐 PATCH] 다중 시제 동사 변형 관리
-        const CONJ_TENSE_KEYS = ['presente','indefinido','imperfecto','futuro','condicional','subjPresente','subjImperfecto','imperativo'];
+        // [냐냐 PATCH] 동사 시제: 관용구처럼 '시제 블록'을 +/− 로 추가/삭제.
+        //   각 블록 = 시제종류 select + 규칙/불규칙 select + 불규칙유형 select + AI추천 + 삭제 + 입력칸(6인칭 또는 현재분사 1칸)
         const CONJ_PERSON_KEYS = ['yo','tu','el','nos','vos','ellos'];
-        let conjWorkingData = {}; // 모달 열려있는 동안 시제별 변형 임시 저장
+        const CONJ_PERSON_LABELS = ['yo (나)','tú (너)','él/ella','nosotros','vosotros','ellos/ellas'];
+        const SINGLE_TENSES = ['gerundio']; // 6인칭이 아니라 1칸만 있는 특수 시제
+        // 시제 종류 (틀 — 나중에 자유롭게 추가/수정 가능)
+        const TENSE_TYPE_OPTIONS = [
+            { key: 'presente', label: '직설법 현재' },
+            { key: 'indefinido', label: '직설법 부정과거' },
+            { key: 'imperfecto', label: '직설법 불완료과거' },
+            { key: 'futuro', label: '직설법 미래' },
+            { key: 'condicional', label: '조건법' },
+            { key: 'subjPresente', label: '접속법 현재' },
+            { key: 'subjImperfecto', label: '접속법 불완료과거' },
+            { key: 'imperativo', label: '명령법' },
+            { key: 'presProgresivo', label: '현재진행 (estar+gerundio)' },
+            { key: 'gerundio', label: '현재분사 (gerundio · 1칸)' },
+        ];
+        // 불규칙 유형 (틀 — 학습하며 나중에 채우기)
+        const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
 
-        function switchConjTense() {
-            const sel = document.getElementById('input-verb-tense');
-            const newTense = sel.value;
-            const prev = sel.dataset.prevTense || 'presente';
-            if (prev !== newTense) {
-                const data = {};
-                CONJ_PERSON_KEYS.forEach(p => {
-                    const el = document.getElementById('conj-' + p);
-                    data[p] = el ? el.value.trim() : '';
-                });
-                conjWorkingData[prev] = data;
+        function isSingleTense(t) { return SINGLE_TENSES.includes(t); }
+
+        // 블록 하나의 입력칸을 시제 종류에 맞게 렌더 (기존 입력값 최대한 보존)
+        function renderBlockInputs(block) {
+            const tense = block.querySelector('.conj-block-tense').value;
+            const box = block.querySelector('.conj-block-inputs');
+            const prev = readBlockConj(block);
+            if (isSingleTense(tense)) {
+                box.innerHTML = `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">현재분사 (gerundio)</span><input type="text" data-person="form" placeholder="teniendo" autocomplete="off" class="conj-cell w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-bold text-blue-600"></div>`;
+                const el = box.querySelector('[data-person="form"]'); if (el && prev.form) el.value = prev.form;
+            } else {
+                box.innerHTML = `<div class="grid grid-cols-3 gap-2">` + CONJ_PERSON_KEYS.map((p, i) =>
+                    `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${CONJ_PERSON_LABELS[i]}</span><input type="text" data-person="${p}" autocomplete="off" class="conj-cell w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none ${i === 0 ? 'font-bold text-blue-600' : 'font-semibold'}"></div>`
+                ).join('') + `</div>`;
+                CONJ_PERSON_KEYS.forEach(p => { const el = box.querySelector(`[data-person="${p}"]`); if (el && prev[p]) el.value = prev[p]; });
             }
-            const d = conjWorkingData[newTense] || {};
-            CONJ_PERSON_KEYS.forEach(p => {
-                const el = document.getElementById('conj-' + p);
-                if (el) el.value = d[p] || '';
-            });
-            sel.dataset.prevTense = newTense;
-            const ph = { presente: ['tengo','tienes','tiene','tenemos','tenéis','tienen'] }[newTense] || ['','','','','',''];
-            CONJ_PERSON_KEYS.forEach((p, i) => {
-                const el = document.getElementById('conj-' + p);
-                if (el) el.placeholder = ph[i] || '';
-            });
-            // 라벨 갱신 (선택된 시제 이름 표시)
-            const labelEl = document.getElementById('conj-tense-label');
-            if (labelEl) labelEl.innerText = sel.options[sel.selectedIndex].text;
+        }
+        function readBlockConj(block) {
+            const d = {};
+            block.querySelectorAll('.conj-block-inputs .conj-cell').forEach(el => { d[el.dataset.person] = el.value.trim(); });
+            return d;
+        }
+        function fillBlockConj(block, data) {
+            data = data || {};
+            block.querySelectorAll('.conj-block-inputs .conj-cell').forEach(el => { const k = el.dataset.person; if (data[k]) el.value = data[k]; });
         }
 
-        // [냐냐 PATCH] 시제 선택 드롭다운 펼치기/접기 (기본은 현재시제만 보임)
-        function toggleTenseSelector() {
-            const box = document.getElementById('conj-tense-selector-box');
-            const btn = document.getElementById('conj-tense-toggle-btn');
+        function addTenseBlock(tenseKey, data, vcVal, irrVal) {
+            const box = document.getElementById('conj-tense-blocks');
             if (!box) return;
-            const willShow = box.classList.contains('hidden');
-            box.classList.toggle('hidden');
-            if (btn) btn.innerHTML = willShow
-                ? '<i class="fa-solid fa-minus text-[9px]"></i> 접기'
-                : '<i class="fa-solid fa-plus text-[9px]"></i> 다른 시제';
+            if (!tenseKey) { // '+ 시제 추가' 버튼: 아직 안 쓴 시제 중 첫 번째로
+                const used = [...box.querySelectorAll('.conj-block-tense')].map(s => s.value);
+                tenseKey = TENSE_TYPE_OPTIONS.map(o => o.key).find(k => !used.includes(k)) || 'presente';
+                data = {}; vcVal = 'regular'; irrVal = 'none';
+            }
+            const isRegular = (vcVal !== 'irregular');
+            const block = document.createElement('div');
+            block.className = 'conj-tense-block bg-white rounded-xl border border-slate-200 p-2.5 space-y-2';
+            const tenseOpts = TENSE_TYPE_OPTIONS.map(o => `<option value="${o.key}" ${o.key === tenseKey ? 'selected' : ''}>${o.label}</option>`).join('');
+            const irrOpts = IRREGULAR_TYPE_OPTIONS.map(o => `<option value="${o}" ${o === irrVal ? 'selected' : ''}>${o === 'none' ? '- 형태 -' : o}</option>`).join('');
+            block.innerHTML = `
+                <div class="flex items-center gap-1 flex-wrap">
+                    <select class="conj-block-tense flex-1 min-w-[104px] bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 text-[11px] font-bold text-indigo-700 focus:outline-none" onchange="onBlockTenseChange(this)">${tenseOpts}</select>
+                    <select class="conj-block-class bg-white px-1.5 py-1 rounded-lg border border-slate-200 text-[11px] font-medium focus:outline-none" onchange="onBlockClassChange(this)">
+                        <option value="regular" ${isRegular ? 'selected' : ''}>규칙</option>
+                        <option value="irregular" ${!isRegular ? 'selected' : ''}>불규칙</option>
+                    </select>
+                    <select class="conj-block-irr bg-white px-1.5 py-1 rounded-lg border border-slate-200 text-[11px] font-medium focus:outline-none" ${isRegular ? 'disabled' : ''}>${irrOpts}</select>
+                    <button type="button" onclick="aiFillBlock(this)" title="이 시제만 AI 추천 (빈칸만 채움)" class="w-7 h-7 shrink-0 rounded-lg bg-violet-500 hover:bg-violet-600 text-white flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i></button>
+                    <button type="button" onclick="removeTenseBlock(this)" title="이 시제 삭제" class="w-7 h-7 shrink-0 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                </div>
+                <div class="conj-block-inputs"></div>
+            `;
+            box.appendChild(block);
+            renderBlockInputs(block);
+            fillBlockConj(block, data);
         }
 
+        function onBlockTenseChange(sel) { renderBlockInputs(sel.closest('.conj-tense-block')); }
+        function onBlockClassChange(sel) {
+            const block = sel.closest('.conj-tense-block');
+            const irr = block.querySelector('.conj-block-irr');
+            if (sel.value === 'irregular') { irr.disabled = false; if (irr.value === 'none') irr.value = '1인칭'; }
+            else { irr.disabled = true; irr.value = 'none'; }
+        }
+        function removeTenseBlock(btn) { const b = btn.closest('.conj-tense-block'); if (b) b.remove(); }
+
+        // 모든 블록에서 시제별 변형 수집 (같은 시제 중복 시 마지막 블록 우선)
         function collectConjByTense() {
-            // 현재 보고 있는 시제 저장
-            const sel = document.getElementById('input-verb-tense');
-            const cur = sel ? sel.value : 'presente';
-            const data = {};
-            CONJ_PERSON_KEYS.forEach(p => {
-                const el = document.getElementById('conj-' + p);
-                data[p] = el ? el.value.trim() : '';
-            });
-            conjWorkingData[cur] = data;
             const result = {};
-            CONJ_TENSE_KEYS.forEach(t => {
-                const d = conjWorkingData[t];
-                if (d && CONJ_PERSON_KEYS.some(p => d[p])) result[t] = d;
+            document.querySelectorAll('#conj-tense-blocks .conj-tense-block').forEach(block => {
+                const tense = block.querySelector('.conj-block-tense').value;
+                const d = readBlockConj(block);
+                if (isSingleTense(tense)) { if ((d.form || '').trim()) result[tense] = { form: d.form.trim() }; }
+                else if (CONJ_PERSON_KEYS.some(p => (d[p] || '').trim())) result[tense] = d;
             });
             return result;
         }
+        // 시제별 규칙/불규칙 + 불규칙유형 수집
+        function collectVerbInfoByTense() {
+            const irregularByTense = {}, verbClassByTense = {};
+            document.querySelectorAll('#conj-tense-blocks .conj-tense-block').forEach(block => {
+                const tense = block.querySelector('.conj-block-tense').value;
+                const cls = block.querySelector('.conj-block-class').value;
+                const it = block.querySelector('.conj-block-irr').value;
+                verbClassByTense[tense] = cls;
+                if (cls === 'irregular' && it && it !== 'none') irregularByTense[tense] = it;
+            });
+            return { irregularByTense, verbClassByTense };
+        }
 
-        function initConjWorkingData(word) {
-            conjWorkingData = {};
-            if (word && word.conjugationsByTense) {
-                CONJ_TENSE_KEYS.forEach(t => {
-                    if (word.conjugationsByTense[t]) conjWorkingData[t] = { ...word.conjugationsByTense[t] };
-                });
-            } else if (word && word.conjugations) {
-                conjWorkingData.presente = { ...word.conjugations };
-            }
-            const sel = document.getElementById('input-verb-tense');
-            if (sel) { sel.value = 'presente'; sel.dataset.prevTense = 'presente'; }
+        // 단어의 저장된 시제들로 블록을 다시 그림 (현재시제는 항상 하나 보장)
+        function initConjBlocks(word) {
+            const box = document.getElementById('conj-tense-blocks');
+            if (!box) return;
+            box.innerHTML = '';
+            const byTense = (word && word.conjugationsByTense && Object.keys(word.conjugationsByTense).length) ? word.conjugationsByTense : (word && word.conjugations ? { presente: word.conjugations } : {});
+            const irrByTense = (word && word.irregularByTense) || {};
+            const vcByTense = (word && word.verbClassByTense) || {};
+            let tenses = TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => byTense[k]);
+            if (!tenses.includes('presente')) tenses.unshift('presente'); // 현재시제 블록은 항상 하나
+            tenses.forEach(t => {
+                const vc = vcByTense[t] || ((t === 'presente' && word && word.verbClass) ? word.verbClass : (irrByTense[t] ? 'irregular' : 'regular'));
+                const irr = irrByTense[t] || ((t === 'presente' && word && word.irregularType) ? word.irregularType : 'none');
+                addTenseBlock(t, byTense[t] || {}, vc, irr);
+            });
+        }
+
+        // AI로 현재 블록 시제만 추천 (빈칸만 채움, 기존 입력 보존)
+        async function aiFillBlock(btn) {
+            const block = btn.closest('.conj-tense-block');
+            const wordInput = document.getElementById('input-word');
+            const infinitive = (wordInput ? wordInput.value : '').trim().replace(/^(el|la|los|las)\s+/, '');
+            if (!infinitive) { showToast("먼저 동사 원형을 입력해 주세요!", "error"); return; }
+            if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
+            const tenseSel = block.querySelector('.conj-block-tense');
+            const tense = tenseSel.value;
+            const label = tenseSel.selectedOptions[0].text;
+            const orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i>';
+            try {
+                if (isSingleTense(tense)) {
+                    const schema = { type: "OBJECT", properties: { form: { type: "STRING" } }, required: ["form"] };
+                    const resp = await callGemini(`Give the gerundio (현재분사, present participle) of the Spanish verb "${infinitive}". JSON: {"form":"..."} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
+                    const data = extractAndParseJson(resp);
+                    const el = block.querySelector('[data-person="form"]'); if (el && !el.value.trim()) el.value = (data.form || '').trim();
+                } else {
+                    const schema = { type: "OBJECT", properties: { yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" }, nos: { type: "STRING" }, vos: { type: "STRING" }, ellos: { type: "STRING" } }, required: ["yo", "tu", "el", "nos", "vos", "ellos"] };
+                    const resp = await callGemini(`Conjugate the Spanish verb "${infinitive}" in this tense: ${label} (internal key: ${tense}), all 6 persons. For 현재진행(presProgresivo) give full "estar + gerundio" forms (e.g. "estoy comiendo"). Return JSON: {"yo","tu","el","nos","vos","ellos"} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
+                    const data = extractAndParseJson(resp);
+                    CONJ_PERSON_KEYS.forEach(p => { const el = block.querySelector(`[data-person="${p}"]`); if (el && !el.value.trim()) el.value = (data[p] || '').trim(); });
+                }
+                showToast(`${label} 추천 완료! (빈칸만 채웠어요)`, "success");
+            } catch (e) {
+                console.error(e);
+                showToast((typeof describeGeminiError === 'function') ? describeGeminiError(e) : "AI 추천 실패", "error");
+            } finally { btn.disabled = false; btn.innerHTML = orig; }
         }
 
         // [냐냐 PATCH] AI 추천 완료 여부 (완료 후 아무 칸에서 엔터 = 저장)
@@ -207,20 +282,9 @@
                 
                 document.getElementById('input-gender').value = w.gender || 'none';
                 document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
-                document.getElementById('input-verb-class').value = w.verbClass || 'regular';
-                const irrSelect = document.getElementById('input-verb-irregular-type');
-                irrSelect.value = w.irregularType || 'none';
-                irrSelect.disabled = (w.verbClass !== 'irregular');
 
-                // [냐냐 PATCH] 다중 시제 초기화 (구버전 conjugations도 자동 호환)
-                initConjWorkingData(w);
-                const presenteData = (w.conjugationsByTense && w.conjugationsByTense.presente) || w.conjugations || {};
-                document.getElementById('conj-yo').value = presenteData.yo || '';
-                document.getElementById('conj-tu').value = presenteData.tu || '';
-                document.getElementById('conj-el').value = presenteData.el || '';
-                document.getElementById('conj-nos').value = presenteData.nos || '';
-                document.getElementById('conj-vos').value = presenteData.vos || '';
-                document.getElementById('conj-ellos').value = presenteData.ellos || '';
+                // [냐냐 PATCH] 시제 블록으로 로드 (규칙/불규칙·불규칙유형도 시제별)
+                initConjBlocks(w);
 
                 document.getElementById('input-example').value = w.example || '';
                 document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
@@ -247,10 +311,7 @@
                 document.getElementById('input-pos').value = 'noun';
                 document.getElementById('input-gender').value = 'none';
                 document.getElementById('input-adj-agreement').value = 'full';
-                document.getElementById('input-verb-class').value = 'regular';
-                document.getElementById('input-verb-irregular-type').value = 'none';
-                document.getElementById('input-verb-irregular-type').disabled = true;
-                
+
                 clearConjugationFields();
                 
                 document.getElementById('input-example').value = '';
@@ -367,22 +428,9 @@
         }
 
         function clearConjugationFields() {
-            document.getElementById('conj-yo').value = '';
-            document.getElementById('conj-tu').value = '';
-            document.getElementById('conj-el').value = '';
-            document.getElementById('conj-nos').value = '';
-            document.getElementById('conj-vos').value = '';
-            document.getElementById('conj-ellos').value = '';
-            // [냐냐 PATCH] 시제 작업 데이터도 초기화
-            conjWorkingData = {};
-            const tsel = document.getElementById('input-verb-tense');
-            if (tsel) { tsel.value = 'presente'; tsel.dataset.prevTense = 'presente'; }
-            const tlabel = document.getElementById('conj-tense-label');
-            if (tlabel) tlabel.innerText = '직설법 현재 (presente)';
-            const tbox = document.getElementById('conj-tense-selector-box');
-            if (tbox) tbox.classList.add('hidden');
-            const tbtn = document.getElementById('conj-tense-toggle-btn');
-            if (tbtn) tbtn.innerHTML = '<i class="fa-solid fa-plus text-[9px]"></i> 다른 시제';
+            // [냐냐 PATCH] 시제 블록 초기화 — 빈 현재시제 블록 하나만 남김
+            const box = document.getElementById('conj-tense-blocks');
+            if (box) { box.innerHTML = ''; addTenseBlock('presente', {}, 'regular', 'none'); }
         }
 
         function closeWordModal() {
@@ -675,32 +723,28 @@
                     adjAgreementInput.value = result.adjAgreement || 'full';
                 }
             } else if (result.pos === 'verb') {
-                const verbClassInput = document.getElementById('input-verb-class');
-                if (forceOverwrite || verbClassInput.value === 'regular') {
-                    verbClassInput.value = result.verbClass || 'regular';
+                // [냐냐 PATCH] AI 자동완성은 현재시제 블록을 채움 (없으면 만들고, 빈칸만 채움)
+                const box = document.getElementById('conj-tense-blocks');
+                let presenteBlock = box ? [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'presente') : null;
+                if (!presenteBlock && box) {
+                    addTenseBlock('presente', {}, result.verbClass || 'regular', result.irregularType || 'none');
+                    presenteBlock = [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'presente');
                 }
-                toggleVerbTypeDetails();
-                
-                if (result.verbClass === 'irregular') {
-                    const irrTypeInput = document.getElementById('input-verb-irregular-type');
-                    if (forceOverwrite || irrTypeInput.value === 'none') {
-                        irrTypeInput.value = result.irregularType || "1인칭";
+                if (presenteBlock) {
+                    // 규칙/불규칙 + 유형: 비어(규칙)있을 때만 또는 강제일 때만 반영
+                    const clsSel = presenteBlock.querySelector('.conj-block-class');
+                    const irrSel = presenteBlock.querySelector('.conj-block-irr');
+                    if (forceOverwrite || clsSel.value === 'regular') {
+                        clsSel.value = result.verbClass || 'regular';
+                        onBlockClassChange(clsSel);
+                        if (result.verbClass === 'irregular' && (forceOverwrite || irrSel.value === 'none')) irrSel.value = result.irregularType || '1인칭';
                     }
-                }
-                
-                if (result.conjugations) {
-                    const conjKeys = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
-                    const tsel = document.getElementById('input-verb-tense');
-                    if (tsel) { tsel.value = 'presente'; tsel.dataset.prevTense = 'presente'; } // AI 자동완성은 현재시제
-                    conjKeys.forEach(key => {
-                        const conjInput = document.getElementById(`conj-${key}`);
-                        if (forceOverwrite || !conjInput.value.trim()) {
-                            conjInput.value = result.conjugations[key] || '';
-                        }
-                    });
-                    // 현재시제 작업 데이터에도 반영
-                    conjWorkingData.presente = {};
-                    conjKeys.forEach(key => { conjWorkingData.presente[key] = (document.getElementById(`conj-${key}`).value || '').trim(); });
+                    if (result.conjugations) {
+                        CONJ_PERSON_KEYS.forEach(key => {
+                            const cell = presenteBlock.querySelector(`[data-person="${key}"]`);
+                            if (cell && (forceOverwrite || !cell.value.trim())) cell.value = result.conjugations[key] || '';
+                        });
+                    }
                 }
             }
 
@@ -980,20 +1024,16 @@
             } else if (pos === 'adjective') {
                 wordObj.adjAgreement = document.getElementById('input-adj-agreement').value;
             } else if (pos === 'verb') {
-                const verbClass = document.getElementById('input-verb-class').value;
-                wordObj.verbClass = verbClass;
-                wordObj.irregularType = (verbClass === 'irregular') ? document.getElementById('input-verb-irregular-type').value : 'none';
-                // [냐냐 PATCH] 다중 시제 저장 + 구버전 호환(conjugations = 현재시제)
+                // [냐냐 PATCH] 시제 블록에서 수집 (시제별 규칙/불규칙·유형 포함)
+                const info = collectVerbInfoByTense();
                 const byTense = collectConjByTense();
                 wordObj.conjugationsByTense = byTense;
-                wordObj.conjugations = byTense.presente || {
-                    yo: document.getElementById('conj-yo').value.trim(),
-                    tu: document.getElementById('conj-tu').value.trim(),
-                    el: document.getElementById('conj-el').value.trim(),
-                    nos: document.getElementById('conj-nos').value.trim(),
-                    vos: document.getElementById('conj-vos').value.trim(),
-                    ellos: document.getElementById('conj-ellos').value.trim()
-                };
+                wordObj.irregularByTense = info.irregularByTense;
+                wordObj.verbClassByTense = info.verbClassByTense;
+                // 구버전 호환 (현재시제 기준)
+                wordObj.verbClass = info.verbClassByTense.presente || (Object.keys(info.irregularByTense).length ? 'irregular' : 'regular');
+                wordObj.irregularType = info.irregularByTense.presente || 'none';
+                wordObj.conjugations = byTense.presente || {};
             }
 
             if (modalId) {
@@ -1052,9 +1092,6 @@
             document.getElementById('input-pos').value = 'noun';
             document.getElementById('input-gender').value = 'none';
             document.getElementById('input-adj-agreement').value = 'full';
-            document.getElementById('input-verb-class').value = 'regular';
-            document.getElementById('input-verb-irregular-type').value = 'none';
-            document.getElementById('input-verb-irregular-type').disabled = true;
             clearConjugationFields();
             document.getElementById('input-example').value = '';
             document.getElementById('input-example-meaning').value = '';
