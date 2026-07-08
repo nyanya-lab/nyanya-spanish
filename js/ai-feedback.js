@@ -1497,15 +1497,17 @@
 
         // [냐냐 PATCH] 핵심 분석 한 줄 — 단어장에 없는 단어면 등록 버튼 추가 (item 4)
         // [냐냐 PATCH] 단어가 이미 등록됐는지 스마트 확인 (동사 변형·형용사 성수변화 포함)
-        function wordExistsInVocab(rawWord) {
+        // [냐냐 PATCH] 입력 단어와 일치하는 단어장 항목을 찾아 반환 (없으면 null)
+        //   동사 변형·형용사 성수·명사 단복수까지 관대하게 매칭 — task 7: 등록됨→수정창 열기용
+        function findVocabWordByForm(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
-            if (!target) return false;
-            // [냐냐 PATCH] 재귀동사 대응: 앞의 재귀대명사(me/te/se/nos/os)를 뗀 형태도 준비
+            if (!target) return null;
+            // 재귀동사 대응: 앞의 재귀대명사(me/te/se/nos/os)를 뗀 형태도 준비
             //   예: "me llamo" → "llamo", "se llama" → "llama"
             const targetNoReflexive = target.replace(/^(me|te|se|nos|os)\s+/, '');
             for (const v of vocabulary) {
                 // 1) 원형/사전형 그대로 일치
-                if (normalizeSpanishAnswer(v.word) === target) return true;
+                if (normalizeSpanishAnswer(v.word) === target) return v;
                 // 2) 동사: 등록된 모든 시제/인칭 변형과 대조
                 if (v.pos === 'verb') {
                     const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
@@ -1519,7 +1521,7 @@
                             const formNoReflexive = formN.replace(/^(me|te|se|nos|os)\s+/, '');
                             if (formN === target || formN === targetNoReflexive
                                 || formNoReflexive === target || formNoReflexive === targetNoReflexive) {
-                                return true;
+                                return v;
                             }
                         }
                     }
@@ -1530,7 +1532,7 @@
                     const stem = base.replace(/(o|a|os|as|e|es)$/, '');
                     // 어간이 충분히 길고, 대상이 같은 어간으로 시작하며 형용사 어미로 끝나면 같은 단어
                     if (stem.length >= 2 && target.startsWith(stem) && /^(o|a|os|as|e|es)?$/.test(target.slice(stem.length))) {
-                        return true;
+                        return v;
                     }
                 }
                 // 4) 명사: 단수형 등록됐으면 복수형도 같은 단어로 취급 (그 반대도)
@@ -1539,7 +1541,7 @@
                     const stripArt = (s) => s.replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '');
                     const vn = stripArt(normalizeSpanishAnswer(v.word));
                     const tn = stripArt(target);
-                    if (vn === tn) return true;
+                    if (vn === tn) return v;
                     // 스페인어 복수 규칙: +s / +es / z→ces
                     const plurals = (s) => {
                         const arr = [s + 's', s + 'es'];
@@ -1547,10 +1549,14 @@
                         return arr;
                     };
                     // 단수→복수 또는 복수→단수 매칭
-                    if (plurals(vn).includes(tn) || plurals(tn).includes(vn)) return true;
+                    if (plurals(vn).includes(tn) || plurals(tn).includes(vn)) return v;
                 }
             }
-            return false;
+            return null;
+        }
+
+        function wordExistsInVocab(rawWord) {
+            return !!findVocabWordByForm(rawWord);
         }
 
         function buildBreakdownRow(word, mean) {
@@ -1558,11 +1564,11 @@
             const m = (mean || '').trim();
             if (!w) return '';
             // 단어장에 이미 있는지 확인 (동사 변형·형용사 성수변화까지 고려)
-            const exists = wordExistsInVocab(w);
+            const existing = findVocabWordByForm(w);
             const wEsc = w.replace(/'/g, "\\'");
             const mEsc = m.replace(/'/g, "\\'");
-            const registerBtn = exists
-                ? '<span class="breakdown-reg text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>'
+            const registerBtn = existing
+                ? `<button class="breakdown-reg text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full shrink-0 transition-all" title="이 단어 수정하기" onclick="openWordModal('${existing.id}')">✓ 등록됨</button>`
                 : `<button class="breakdown-reg text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all" onclick="registerWordFromBreakdown('${wEsc}', '${mEsc}')">+ 등록</button>`;
             return `
                 <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm" data-breakdown-word="${w.replace(/"/g, '&quot;')}">
@@ -1573,14 +1579,16 @@
             `;
         }
 
-        // [냐냐 PATCH] 단어 등록 후 핵심분석의 등록 버튼을 '✓ 등록됨'으로 갱신 (AI item 1)
+        // [냐냐 PATCH] 단어 등록 후 핵심분석의 등록 버튼을 '✓ 등록됨'(수정창으로 이동)으로 갱신 (AI item 1)
         function refreshBreakdownRegisterButtons() {
             document.querySelectorAll('[data-breakdown-word]').forEach(row => {
                 const w = row.getAttribute('data-breakdown-word');
-                if (w && wordExistsInVocab(w)) {
+                const match = w ? findVocabWordByForm(w) : null;
+                if (match) {
                     const regEl = row.querySelector('.breakdown-reg');
-                    if (regEl && regEl.tagName === 'BUTTON') {
-                        regEl.outerHTML = '<span class="breakdown-reg text-[10px] text-emerald-500 font-bold shrink-0">✓ 등록됨</span>';
+                    // 아직 '+ 등록' 버튼 상태(=위에 아직 안 바뀐 것)면 '✓ 등록됨'(수정 링크)으로 교체
+                    if (regEl && regEl.tagName === 'BUTTON' && /\+ 등록/.test(regEl.textContent)) {
+                        regEl.outerHTML = `<button class="breakdown-reg text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full shrink-0 transition-all" title="이 단어 수정하기" onclick="openWordModal('${match.id}')">✓ 등록됨</button>`;
                     }
                 }
             });
