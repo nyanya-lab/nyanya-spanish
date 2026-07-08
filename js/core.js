@@ -34,6 +34,7 @@ let vocabulary = [];
             checkStatsReset(); // [냐냐 PATCH] 정답률 통계 월별 초기화 확인
             if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
             if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
+            if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
             renderWordList();
             updateStats();
             renderDiary();
@@ -95,6 +96,11 @@ let vocabulary = [];
                 const filterPanel = document.getElementById('filter-panel');
                 if (filterPanel && !filterPanel.classList.contains('hidden') && !filterPanel.contains(e.target)) {
                     filterPanel.classList.add('hidden');
+                }
+                // [냐냐 PATCH] 문법표 필터 패널도 바깥 클릭하면 닫힘
+                const gFilterPanel = document.getElementById('grammar-filter-panel');
+                if (gFilterPanel && !gFilterPanel.classList.contains('hidden') && !gFilterPanel.contains(e.target)) {
+                    gFilterPanel.classList.add('hidden');
                 }
             });
         };
@@ -1922,6 +1928,12 @@ let vocabulary = [];
                 });
             }
 
+            // [냐냐 PATCH] 마스터 상태 필터
+            if (grammarFilterMastery === 'mastered') tables = tables.filter(t => masteredGrammar[t.id]);
+            else if (grammarFilterMastery === 'not-mastered') tables = tables.filter(t => !masteredGrammar[t.id]);
+            // [냐냐 PATCH] 아이콘 주제 필터 (여러 개 선택 가능, 빈 배열=전체)
+            if (grammarFilterTopics.length > 0) tables = tables.filter(t => grammarFilterTopics.includes(grammarTopicKey(t)));
+
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
             // [냐냐 PATCH] 최신순/오래된순 정렬 (natural order = 오래된순, reverse = 최신순)
@@ -1954,8 +1966,10 @@ let vocabulary = [];
                 }).join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
+                const isMastered = !!masteredGrammar[t.id]; // [냐냐 PATCH] 문법표 마스터 여부
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
+                        <button onclick="toggleMasterGrammar('${t.id}')" title="${isMastered ? '마스터 해제' : '마스터 표시'}" class="w-7 h-7 rounded-lg transition-colors ${isMastered ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}"><i class="fa-solid fa-circle-check text-xs"></i></button>
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
                         <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -1966,6 +1980,7 @@ let vocabulary = [];
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-lg shrink-0">${t.icon || '📋'}</span>
                                 <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</span>
+                                ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
                             </button>
                             ${editBtns}
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
@@ -1983,6 +1998,10 @@ let vocabulary = [];
                     </div>
                 `;
             }).join('');
+
+            // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
+            if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
+            if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
         }
 
         function escapeHtml(s) {
@@ -2035,6 +2054,154 @@ let vocabulary = [];
             const input = document.getElementById('grammar-search');
             if (input) { input.value = ''; input.focus(); }
             renderGrammarTables();
+        }
+
+        // [냐냐 PATCH] 문법표 마스터 토글 (헤더 문법 마스터 통계 + 일지 기록 연동)
+        function toggleMasterGrammar(id) {
+            if (masteredGrammar[id]) {
+                delete masteredGrammar[id];
+                showToast("마스터를 해제했어요", "info");
+            } else {
+                masteredGrammar[id] = true;
+                if (typeof logAction === 'function') logAction('new-grammar-mastered'); // 일지 기록
+                showToast("문법표를 마스터했어요! 🎉", "success");
+            }
+            renderGrammarTables();
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats(); // 헤더 마스터 문법 개수 갱신
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 문법표 필터/정렬 패널 (단어장 필터 패널과 동일한 패턴)
+        // - 주제(아이콘) 다중선택 + 마스터 상태 단일선택 + 정렬 단일선택, '확인' 눌러야 적용
+        // ============================================================
+        let grammarFilterTopics = [];       // [] = 전체, 아니면 아이콘 문자열(또는 '__other__') 목록
+        let grammarFilterMastery = 'all';   // all | mastered | not-mastered
+        // 정렬은 기존 grammarSortMode('newest'|'oldest') 재사용
+        let pendingGrammarTopics = [];
+        let pendingGrammarMastery = 'all';
+        let pendingGrammarSort = 'newest';
+
+        const GRAMMAR_OTHER_TOPIC = '__other__'; // 아이콘 목록에 없는 표는 전부 '기타'로
+
+        // 표 하나의 주제 키: 아이콘이 GRAMMAR_ICONS에 있으면 그 아이콘, 없으면 '기타'
+        function grammarTopicKey(t) {
+            const icon = t.icon || '';
+            return (typeof GRAMMAR_ICONS !== 'undefined' && GRAMMAR_ICONS.find(g => g.icon === icon)) ? icon : GRAMMAR_OTHER_TOPIC;
+        }
+        function grammarTopicLabel(key) {
+            if (key === GRAMMAR_OTHER_TOPIC) return '기타';
+            const g = (typeof GRAMMAR_ICONS !== 'undefined') ? GRAMMAR_ICONS.find(x => x.icon === key) : null;
+            return g ? g.label : '기타';
+        }
+
+        // 현재 표들에 실제로 존재하는 주제만 필터 버튼으로 렌더 (기타는 맨 뒤)
+        function renderGrammarTopicFilterButtons() {
+            const box = document.getElementById('grammar-filter-topic-box');
+            if (!box) return;
+            const present = new Set(getAllGrammarTables().map(grammarTopicKey));
+            const ordered = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(ic => present.has(ic));
+            if (present.has(GRAMMAR_OTHER_TOPIC)) ordered.push(GRAMMAR_OTHER_TOPIC);
+            if (ordered.length === 0) {
+                box.innerHTML = '<span class="text-[11px] text-slate-400">표가 없어요</span>';
+                return;
+            }
+            box.innerHTML = ordered.map(key => {
+                const on = pendingGrammarTopics.includes(key);
+                const label = key === GRAMMAR_OTHER_TOPIC ? '⭐ 기타' : `${key} ${grammarTopicLabel(key)}`;
+                const cls = on ? 'border-violet-500 bg-violet-50 text-violet-600' : 'border-slate-200 bg-slate-50 text-slate-500';
+                return `<button type="button" data-gtopic="${key}" onclick="toggleGrammarFilterTopic(this)" class="grammar-topic-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${label}</button>`;
+            }).join('');
+        }
+
+        function toggleGrammarFilterTopic(btn) {
+            const key = btn.dataset.gtopic;
+            const i = pendingGrammarTopics.indexOf(key);
+            if (i >= 0) pendingGrammarTopics.splice(i, 1);
+            else pendingGrammarTopics.push(key);
+            styleFilterPill(btn, i < 0); // vocab.js의 공용 헬퍼 재사용
+        }
+        function setGrammarFilterMastery(btn) {
+            pendingGrammarMastery = btn.dataset.gmastery;
+            document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b === btn));
+        }
+        function setGrammarFilterSort(btn) {
+            pendingGrammarSort = btn.dataset.gsort;
+            document.querySelectorAll('.grammar-sort-btn').forEach(b => styleFilterPill(b, b === btn));
+        }
+
+        function syncGrammarFilterPanelUI() {
+            pendingGrammarTopics = [...grammarFilterTopics];
+            pendingGrammarMastery = grammarFilterMastery;
+            pendingGrammarSort = grammarSortMode;
+            renderGrammarTopicFilterButtons();
+            document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.gmastery === pendingGrammarMastery));
+            document.querySelectorAll('.grammar-sort-btn').forEach(b => styleFilterPill(b, b.dataset.gsort === pendingGrammarSort));
+        }
+        function toggleGrammarFilterPanel() {
+            const panel = document.getElementById('grammar-filter-panel');
+            if (!panel) return;
+            const willOpen = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            if (willOpen) syncGrammarFilterPanelUI();
+        }
+        function closeGrammarFilterPanel() {
+            document.getElementById('grammar-filter-panel')?.classList.add('hidden');
+        }
+        function applyGrammarFilters() {
+            grammarFilterTopics = [...pendingGrammarTopics];
+            grammarFilterMastery = pendingGrammarMastery;
+            grammarSortMode = pendingGrammarSort;
+            saveGrammarFilterPrefs();
+            closeGrammarFilterPanel();
+            renderGrammarTables();
+        }
+        function resetGrammarFilters() {
+            pendingGrammarTopics = [];
+            pendingGrammarMastery = 'all';
+            pendingGrammarSort = 'newest';
+            grammarFilterTopics = [];
+            grammarFilterMastery = 'all';
+            grammarSortMode = 'newest';
+            syncGrammarFilterPanelUI();
+            saveGrammarFilterPrefs();
+            renderGrammarTables();
+        }
+        function updateGrammarFilterBadge() {
+            const badge = document.getElementById('grammar-filter-badge');
+            if (!badge) return;
+            const active = grammarFilterTopics.length > 0 || grammarFilterMastery !== 'all' || grammarSortMode !== 'newest';
+            badge.classList.toggle('hidden', !active);
+        }
+        function renderGrammarFilterSummary() {
+            const box = document.getElementById('grammar-filter-summary');
+            if (!box) return;
+            const chips = [];
+            if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
+            if (grammarFilterMastery === 'mastered') chips.push('마스터만');
+            else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
+            const sortLabel = grammarSortMode === 'newest' ? '최신순' : '오래된순';
+            const filterPart = chips.length > 0
+                ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${escapeHtml(c)}</span>`).join('')
+                : `<span class="text-slate-400">전체 표</span>`;
+            box.innerHTML = `<i class="fa-solid fa-filter text-[9px]"></i>${filterPart}<span class="text-slate-300">·</span><span class="text-slate-500">${sortLabel}</span>`;
+        }
+        function saveGrammarFilterPrefs() {
+            try {
+                localStorage.setItem('nyanya_grammar_filters', JSON.stringify({
+                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode
+                }));
+            } catch (e) {}
+        }
+        function loadGrammarFilterPrefs() {
+            try {
+                const raw = localStorage.getItem('nyanya_grammar_filters');
+                if (!raw) return;
+                const f = JSON.parse(raw);
+                if (Array.isArray(f.topics)) grammarFilterTopics = f.topics;
+                if (f.mastery) grammarFilterMastery = f.mastery;
+                if (f.sort) grammarSortMode = f.sort;
+            } catch (e) {}
         }
 
         // ---- 문법 표 편집기 ----
