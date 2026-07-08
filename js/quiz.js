@@ -697,6 +697,7 @@ let quizSession = null;
                     vocabItem.masterScore = Math.max(0, (vocabItem.masterScore || 0) - 3);
                     if (vocabItem.mastered && vocabItem.masterScore < 5) {
                         vocabItem.mastered = false;
+                        if (typeof logAction === 'function') logAction('undo-new-mastered'); // [냐냐 PATCH] 자동 마스터 해제도 감소
                     }
                 }
                 coach.innerText = "🤔💭";
