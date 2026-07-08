@@ -39,31 +39,33 @@
                         📖
                     </div>
                     <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">냐냐의 스페인어 공부방</h1>
-                    <!-- 통계: 단어 보유·마스터·약점 + 문법 보유·마스터 (PC만) -->
-                    <div class="hidden lg:flex items-center gap-3 bg-slate-50 px-3 py-1 rounded-2xl border border-slate-200 ml-1 shrink-0">
-                        <div class="flex items-baseline gap-1">
-                            <span class="text-[10px] text-slate-400 font-bold">보유</span>
-                            <span id="header-total-vocab" class="text-sm font-bold text-slate-800">0개</span>
+                    <!-- 통계: 단어 그룹 / 문법 그룹 시각적 분리 (PC · 한 줄) -->
+                    <div class="hidden lg:flex items-center gap-2 ml-1 shrink-0">
+                        <div class="flex items-center gap-2.5 bg-slate-50 px-3 py-1 rounded-2xl border border-slate-200">
+                            <span class="text-[9px] font-black text-slate-400 tracking-widest">단어</span>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] text-slate-400 font-bold">보유</span>
+                                <span id="header-total-vocab" class="text-sm font-bold text-slate-800">0개</span>
+                            </div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] text-slate-400 font-bold">마스터</span>
+                                <span id="header-mastered-vocab" class="text-sm font-bold text-emerald-600">0개</span>
+                            </div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] text-slate-400 font-bold">약점</span>
+                                <span id="header-weak-vocab" class="text-sm font-bold text-rose-500">0개</span>
+                            </div>
                         </div>
-                        <div class="h-4 w-px bg-slate-200"></div>
-                        <div class="flex items-baseline gap-1">
-                            <span class="text-[10px] text-slate-400 font-bold">마스터</span>
-                            <span id="header-mastered-vocab" class="text-sm font-bold text-emerald-600">0개</span>
-                        </div>
-                        <div class="h-4 w-px bg-slate-200"></div>
-                        <div class="flex items-baseline gap-1">
-                            <span class="text-[10px] text-slate-400 font-bold">약점</span>
-                            <span id="header-weak-vocab" class="text-sm font-bold text-rose-500">0개</span>
-                        </div>
-                        <div class="h-4 w-px bg-slate-300"></div>
-                        <div class="flex items-baseline gap-1">
-                            <span class="text-[10px] text-slate-400 font-bold">문법</span>
-                            <span id="header-total-grammar" class="text-sm font-bold text-teal-600">0개</span>
-                        </div>
-                        <div class="h-4 w-px bg-slate-200"></div>
-                        <div class="flex items-baseline gap-1">
-                            <span class="text-[10px] text-slate-400 font-bold">문법마스터</span>
-                            <span id="header-mastered-grammar" class="text-sm font-bold text-teal-500">0개</span>
+                        <div class="flex items-center gap-2.5 bg-teal-50/70 px-3 py-1 rounded-2xl border border-teal-100">
+                            <span class="text-[9px] font-black text-teal-500 tracking-widest">문법</span>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] text-teal-500/70 font-bold">보유</span>
+                                <span id="header-total-grammar" class="text-sm font-bold text-teal-600">0개</span>
+                            </div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[10px] text-teal-500/70 font-bold">마스터</span>
+                                <span id="header-mastered-grammar" class="text-sm font-bold text-teal-500">0개</span>
+                            </div>
                         </div>
                     </div>
                     <!-- 모바일: 핵심만 (보유·마스터) -->
