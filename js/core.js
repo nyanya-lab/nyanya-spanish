@@ -1406,15 +1406,19 @@ let vocabulary = [];
             const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
             const yOfPct = (pct) => padding.top + chartH - (pct / 100) * chartH; // 오른쪽 축 (0~100%)
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
-            const barWidth = Math.min(8, groupWidth * 0.5);
+            const barWidth = Math.min(5, groupWidth * 0.32);
 
-            // 마스터 비율(%)은 막대그래프 (오른쪽 % 축)
+            // [냐냐 PATCH] 마스터 비율(초록) + 약점 비율(빨강) 둘 다 막대 (오른쪽 % 축). 약점은 현재 기준(일별 기록 없음)
+            const weakBarH = (currentWeakRatio / 100) * chartH;
             let bars = '';
             withRatio.forEach((d, i) => {
-                const barH = (d.masteredRatio / 100) * chartH;
-                const text = `${d.date}: 마스터 비율 ${Math.round(d.masteredRatio)}%`.replace(/'/g, "\\'");
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#10b981" opacity="0.7" rx="1.5"/>`;
-                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
+                const gx = xOf(i) - barWidth - 1;   // 마스터(초록) 왼쪽
+                const rx = xOf(i) + 1;              // 약점(빨강) 오른쪽
+                const mBarH = (d.masteredRatio / 100) * chartH;
+                bars += `<rect x="${gx.toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#10b981" opacity="0.75" rx="1.5"/>`;
+                bars += `<rect x="${rx.toFixed(1)}" y="${(baseY - weakBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${weakBarH.toFixed(1)}" fill="#f43f5e" opacity="0.6" rx="1.5"/>`;
+                const text = `${d.date}: 마스터 비율 ${Math.round(d.masteredRatio)}% · 약점 비율 ${Math.round(currentWeakRatio)}%(현재)`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth * 2 + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth * 2 + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             });
 
             // 등록 단어 수는 꺾은선 (왼쪽 개수 축)
@@ -1426,10 +1430,7 @@ let vocabulary = [];
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             }).join('');
 
-            // [냐냐 PATCH] 약점 비율(%) 참고선 (현재 기준, 점선) — 오른쪽 % 축
-            const weakY = yOfPct(currentWeakRatio).toFixed(1);
-            const weakLine = `<line x1="${padding.left}" y1="${weakY}" x2="${width - padding.right}" y2="${weakY}" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.7"/>` +
-                `<rect x="${padding.left}" y="${(weakY - 8)}" width="${chartW}" height="16" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '현재 약점 비율 ${Math.round(currentWeakRatio)}% (전체 ${vocabulary.length}개 중 약점 ${vocabulary.filter(w=>w.weak).length}개)')"/>`;
+            // [냐냐 PATCH] 약점 비율은 위 막대로 표시 (참고선 제거)
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
@@ -1438,7 +1439,6 @@ let vocabulary = [];
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    ${weakLine}
                     <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
@@ -1465,25 +1465,28 @@ let vocabulary = [];
                 _newMasteredTotal: (d.newMasteredCount || 0) + (d.newGrammarMasteredCount || 0)
             }));
 
-            const maxVal = Math.max(1, ...series.map(d => Math.max(d._newTotal, d._newMasteredTotal)));
+            // [냐냐 PATCH] 등록(막대)=왼쪽축, 마스터(선)=오른쪽축 (스케일 분리)
+            const leftMax = Math.max(1, ...series.map(d => d._newTotal));
+            const rightMax = Math.max(1, ...series.map(d => d._newMasteredTotal));
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
-            const yOf = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const yOf = (val) => padding.top + chartH - (val / leftMax) * chartH;        // 등록 (왼쪽)
+            const yOfRight = (val) => padding.top + chartH - (val / rightMax) * chartH;  // 마스터 (오른쪽)
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(8, groupWidth * 0.5);
 
             let bars = '';
             series.forEach((d, i) => {
-                const barH = (d._newTotal / maxVal) * chartH;
+                const barH = (d._newTotal / leftMax) * chartH;
                 const text = `${d.date}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0} + 문법 ${d.newGrammarCount||0})`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#8b5cf6" opacity="0.7" rx="1.5"/>`;
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
 
-            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d._newMasteredTotal).toFixed(1)}`).join(' ');
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfRight(d._newMasteredTotal).toFixed(1)}`).join(' ');
             const lineDots = series.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
-                const cy = yOf(d._newMasteredTotal).toFixed(1);
+                const cy = yOfRight(d._newMasteredTotal).toFixed(1);
                 const text = `${d.date}: 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0} + 문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#10b981"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             }).join('');
@@ -1491,7 +1494,8 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    ${recordChartGridlines(leftMax, padding, chartW, chartH, width, '개')}
+                    ${recordChartRightAxis(rightMax, padding, chartH, width, '개', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     <path d="${linePath}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
@@ -1620,20 +1624,22 @@ let vocabulary = [];
 
             const maxBar = Math.max(1, ...series.flatMap(d => cats.map(c => d[c.key] || 0)));
             const maxTotal = Math.max(1, ...withTotal.map(d => d._total));
+            // [냐냐 PATCH] 막대와 총합 같은 축 사용 (총합이 항상 제일 크므로 maxTotal로 통일)
+            const maxAll = maxTotal;
 
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
             const groupWidth = chartW / series.length;
             const barW = Math.max(2, Math.min(6, (groupWidth * 0.7) / cats.length));
 
-            // 막대 (카테고리별로 나란히)
+            // 막대 (카테고리별로 나란히) — 통일 축
             let bars = '';
             withTotal.forEach((d, i) => {
                 const groupCenter = xOf(i);
                 const totalW = barW * cats.length;
                 cats.forEach((c, ci) => {
                     const val = d[c.key] || 0;
-                    const barH = (val / maxBar) * chartH;
+                    const barH = (val / maxAll) * chartH;
                     const bx = groupCenter - totalW / 2 + ci * barW;
                     if (barH > 0) {
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
@@ -1643,8 +1649,8 @@ let vocabulary = [];
                 bars += `<rect x="${(groupCenter - Math.max(totalW, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(totalW, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
 
-            // 총합 꺾은선 (왼쪽 축)
-            const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
+            // 총합 꺾은선 (점선, 같은 축)
+            const yOfTotal = (val) => padding.top + chartH - (val / maxAll) * chartH;
             const linePath = withTotal.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d._total).toFixed(1)}`).join(' ');
             const lineDots = withTotal.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
@@ -1655,11 +1661,10 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-activity-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width, '')}
-                    ${recordChartRightAxis(maxBar, padding, chartH, width, '', '#94a3b8')}
+                    ${recordChartGridlines(maxAll, padding, chartW, chartH, width, '')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
