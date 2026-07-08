@@ -818,46 +818,50 @@
         // 단어 하나에서 빈칸 낼 후보를 모아 랜덤 1~2곳 선택
         function buildFillProblem(w) {
             const idiomList = (w.idioms && w.idioms.length) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-            const sources = [];
+            const blanks = [];
+            // [냐냐 PATCH] 단어/뜻 — 한쪽만 빈칸 (다른 쪽이 힌트)
             if (w.word && w.meaning) {
                 const side = Math.random() < 0.5 ? 'word' : 'meaning';
-                sources.push(side === 'word'
+                blanks.push(side === 'word'
                     ? { key: 'word', label: '단어', language: 'es', expected: w.word }
                     : { key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
-            }
+            } else if (w.word) blanks.push({ key: 'word', label: '단어', language: 'es', expected: w.word });
+            else if (w.meaning) blanks.push({ key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            // 관용구 — 있는 것 전부, 각 한쪽만
             idiomList.forEach((id, i) => {
                 const sp = (id.idiom || '').trim(); const me = (id.idiomMeaning || '').trim();
                 if (sp && me) {
                     const side = Math.random() < 0.5 ? 'sp' : 'me';
-                    sources.push(side === 'sp'
+                    blanks.push(side === 'sp'
                         ? { key: 'idiom-sp-' + i, label: '관용구', language: 'es', expected: sp }
                         : { key: 'idiom-me-' + i, label: '관용구 뜻', language: 'ko', expected: me });
                 }
             });
+            // 예문 — 한쪽만
             const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
             if (exSp && exMe) {
                 const side = Math.random() < 0.5 ? 'sp' : 'me';
-                sources.push(side === 'sp'
+                blanks.push(side === 'sp'
                     ? { key: 'ex-sp', label: '예문', language: 'es', expected: exSp }
                     : { key: 'ex-me', label: '예문 뜻', language: 'ko', expected: exMe });
             }
-            // 후보가 하나도 없으면(뜻/단어 한쪽만 있는 특수 케이스) 있는 쪽이라도 빈칸
-            if (sources.length === 0) {
-                if (w.word) sources.push({ key: 'word', label: '단어', language: 'es', expected: w.word });
-                else if (w.meaning) sources.push({ key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            // [냐냐 PATCH] 동사 변형(현재시제) — 값 있는 칸 전부 빈칸
+            if (w.pos === 'verb') {
+                const conj = (w.conjugationsByTense && w.conjugationsByTense.presente) || w.conjugations || {};
+                ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'].forEach(p => {
+                    const v = (conj[p] || '').toString().trim();
+                    if (v) blanks.push({ key: 'conj-' + p, label: p, language: 'es', expected: v });
+                });
             }
-            const shuffled = sources.slice().sort(() => Math.random() - 0.5);
-            let n = 1;
-            if (shuffled.length >= 2) n = Math.random() < 0.5 ? 1 : 2;
-            const blanks = shuffled.slice(0, Math.max(1, Math.min(n, shuffled.length)));
             return { word: w, blanks };
         }
 
-        function fillFieldHtml(problem, key, text, extraClass) {
+        function fillFieldHtml(problem, key, text, extraClass, inputClass) {
             // 해당 key가 빈칸이면 input, 아니면 텍스트로 렌더
             const bi = problem.blanks.findIndex(b => b.key === key);
             if (bi >= 0) {
-                return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input inline-block min-w-[120px] w-auto px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
+                const cls = inputClass || 'inline-block min-w-[120px] w-auto';
+                return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input ${cls} px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
             }
             return `<span class="${extraClass || ''}">${escapeHtml(text || '')}</span>`;
         }
@@ -886,6 +890,20 @@
             const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
             if (exSp || exMe) {
                 rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-sky-400 w-16 shrink-0">예문</span><div class="flex-1 space-y-0.5"><div class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'ex-sp', exSp)}</div><div class="text-xs text-slate-500">${fillFieldHtml(problem, 'ex-me', exMe)}</div></div></div>`;
+            }
+            // [냐냐 PATCH] 동사 변형 (현재시제) — 등록폼처럼 6칸 그리드, 전부 빈칸 (규칙/불규칙 표시 없음)
+            if (w.pos === 'verb') {
+                const conj = (w.conjugationsByTense && w.conjugationsByTense.presente) || w.conjugations || {};
+                const persons = [['yo', 'yo (나)'], ['tu', 'tú (너)'], ['el', 'él/ella'], ['nos', 'nosotros'], ['vos', 'vosotros'], ['ellos', 'ellos/ellas']];
+                const hasConj = persons.some(([p]) => (conj[p] || '').toString().trim());
+                if (hasConj) {
+                    const cells = persons.map(([p, lbl]) => {
+                        const val = (conj[p] || '').toString().trim();
+                        const inner = val ? fillFieldHtml(problem, 'conj-' + p, val, '', 'w-full text-center text-xs') : '<span class="text-slate-300 text-xs">–</span>';
+                        return `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${lbl}</span><div>${inner}</div></div>`;
+                    }).join('');
+                    rows += `<div class="pt-2"><span class="text-[11px] font-bold text-blue-400 block mb-1.5">동사 변형 (현재시제)</span><div class="grid grid-cols-3 gap-2 bg-white/60 rounded-xl p-2 border border-slate-100">${cells}</div></div>`;
+                }
             }
             // 노트 (문맥용, 빈칸 아님)
             if ((w.notes || '').trim()) {
@@ -1079,7 +1097,7 @@ Return JSON only, no markdown.`;
         // [냐냐 PATCH] 3차-② 문법표 빈칸 채우기 복습 (AI 채점)
         //   제목·설명·팁·열제목·강조열 전체는 공개, 나머지 (비어있지 않은) 칸을 빈칸으로.
         // ============================================================
-        let gfillCount = 10;
+        let gfillMastery = 'not-mastered'; // [냐냐 PATCH] 마스터 필터: all | not-mastered | mastered (갯수 선택 제거)
         let gfillState = null;
 
         function resetGrammarFillSetup() {
@@ -1088,28 +1106,33 @@ Return JSON only, no markdown.`;
             const play = document.getElementById('gfill-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            selectGfillCount(gfillCount || 10);
-            // 사용 가능한 표 개수 안내
-            const el = document.getElementById('gfill-scope-count');
-            if (el) el.innerText = `복습 가능한 표: ${getGrammarFillPool().length}개`;
+            selectGfillMastery(gfillMastery || 'not-mastered');
         }
 
-        function selectGfillCount(n) {
-            gfillCount = n;
-            document.querySelectorAll('.gfill-count-btn').forEach(btn => {
-                const active = parseInt(btn.dataset.gfillCount) === n;
+        function selectGfillMastery(m) {
+            gfillMastery = m;
+            document.querySelectorAll('.gfill-mastery-btn').forEach(btn => {
+                const active = btn.dataset.gfillMastery === m;
                 btn.classList.toggle('border-indigo-500', active);
                 btn.classList.toggle('bg-indigo-50', active);
                 btn.classList.toggle('text-indigo-700', active);
                 btn.classList.toggle('border-slate-200', !active);
                 btn.classList.toggle('text-slate-600', !active);
             });
+            const el = document.getElementById('gfill-scope-count');
+            if (el) el.innerText = `복습할 표: ${getGrammarFillPool().length}개`;
         }
 
-        // 빈칸 낼 칸이 하나라도 있는 표만 대상
+        // 빈칸 낼 칸이 있고, 마스터 필터에 맞는 표만
         function getGrammarFillPool() {
             const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
-            return all.filter(t => countGrammarBlanks(t) > 0);
+            return all.filter(t => {
+                if (countGrammarBlanks(t) <= 0) return false;
+                const mastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[t.id];
+                if (gfillMastery === 'mastered') return mastered;
+                if (gfillMastery === 'not-mastered') return !mastered;
+                return true; // all
+            });
         }
         function countGrammarBlanks(t) {
             const hlCols = t.highlightCols || [0];
@@ -1120,24 +1143,28 @@ Return JSON only, no markdown.`;
 
         function startGrammarFillReview() {
             const pool = getGrammarFillPool();
-            if (pool.length < 1) { showToast("빈칸 낼 문법표가 없어요! (강조 열만 있는 표는 제외돼요)", "error"); return; }
-            const shuffled = pool.slice().sort(() => Math.random() - 0.5).slice(0, gfillCount);
+            if (pool.length < 1) { showToast("복습할 문법표가 없어요! (마스터 필터/강조열 조건 확인)", "error"); return; }
+            const shuffled = pool.slice().sort(() => Math.random() - 0.5); // [냐냐 PATCH] 갯수 제한 없이 전부
             gfillState = { pool: shuffled, index: 0, total: shuffled.length, results: [], current: null, phase: 'input' };
             document.getElementById('gfill-setup').classList.add('hidden');
             document.getElementById('gfill-play-area').classList.remove('hidden');
             renderGrammarFillProblem();
         }
 
+        // [냐냐 PATCH] 열 우선(세로) 순서로 빈칸 수집 → 엔터가 한 열을 쭉 내려간 뒤 다음 열로
         function buildGrammarFillProblem(t) {
             const hlCols = t.highlightCols || [0];
+            const rows = t.rows || [];
+            const numCols = Math.max((t.headers || []).length, ...rows.map(r => r.length), 0);
             const blanks = [];
-            (t.rows || []).forEach((r, ri) => {
-                r.forEach((c, ci) => {
-                    if (hlCols.includes(ci)) return;         // 강조 열은 공개
-                    if (!(c || '').toString().trim()) return; // 빈 칸은 스킵
+            for (let ci = 0; ci < numCols; ci++) {
+                if (hlCols.includes(ci)) continue;         // 강조 열은 공개
+                for (let ri = 0; ri < rows.length; ri++) {
+                    const c = rows[ri][ci];
+                    if (!(c || '').toString().trim()) continue; // 빈 칸은 스킵
                     blanks.push({ ri, ci, expected: c });
-                });
-            });
+                }
+            }
             return { table: t, blanks };
         }
 
