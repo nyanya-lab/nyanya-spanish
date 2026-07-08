@@ -1305,7 +1305,11 @@
     <!-- PRESET 2: CUSTOM CONFIRM MODAL -->
     <!-- 문법 표 편집기 모달 -->
     <div id="grammar-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div id="grammar-editor-box" class="relative bg-white w-full max-w-[95vw] rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <!-- [냐냐 PATCH] 오른쪽 가장자리 드래그해서 너비 조절 (PC 전용, 표 열이 많을 때 넓게) -->
+            <div id="grammar-editor-resize" onmousedown="startGrammarEditorResize(event)" class="hidden sm:flex items-center justify-center absolute top-0 bottom-0 right-0 w-3 cursor-ew-resize group z-10" title="드래그해서 표 편집창 너비 조절">
+                <div class="w-1.5 h-14 rounded-full bg-slate-200 group-hover:bg-violet-400 transition-colors"></div>
+            </div>
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-extrabold text-slate-900" id="grammar-editor-title">새 표 만들기</h3>
                 <button onclick="closeGrammarEditor()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
