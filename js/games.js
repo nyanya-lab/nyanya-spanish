@@ -88,7 +88,7 @@
                 w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
                 if (w.weakScore >= 3) w.weak = true;
                 w.masterScore = Math.max(0, (w.masterScore || 0) - 1);
-                if (w.mastered && w.masterScore < 5) w.mastered = false;
+                if (w.mastered && w.masterScore < 5) { w.mastered = false; if (typeof logAction === 'function') logAction('undo-new-mastered'); } // [냐냐 PATCH] 자동 해제도 감소
             }
         }
 
