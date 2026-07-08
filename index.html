@@ -1028,9 +1028,12 @@
                                 </h2>
                                 <p class="text-xs text-slate-400 mt-1">자주 쓰는 스페인어 문법 표를 모아뒀어요. 직접 표를 만들거나 수정할 수도 있어요!</p>
                             </div>
-                            <button onclick="openGrammarEditor()" class="shrink-0 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-violet-100">
-                                <i class="fa-solid fa-plus"></i> 새 표 만들기
-                            </button>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="openTopicManager()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-3 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95"><i class="fa-solid fa-tags text-violet-500"></i> 주제 관리</button>
+                                <button onclick="openGrammarEditor()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-md shadow-violet-100">
+                                    <i class="fa-solid fa-plus"></i> 새 표 만들기
+                                </button>
+                            </div>
                         </div>
                         <div class="flex items-center gap-2 mt-4 flex-wrap">
                             <div class="relative flex-1 min-w-[180px]">
@@ -1346,6 +1349,24 @@
             <div class="flex gap-2 pt-2">
                 <button onclick="closeGrammarEditor()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
                 <button onclick="saveGrammarEditor()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [냐냐 PATCH] 주제 관리 모달 (아이콘 + 주제 이름 목록 편집) -->
+    <div id="topic-manager-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-extrabold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-tags text-violet-500"></i> 주제 관리</h3>
+                <button onclick="closeTopicManager()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">표에 붙일 <b>아이콘</b>과 <b>주제 이름</b>을 직접 정할 수 있어요. 여기서 만든 주제는 표 만들 때 아이콘 선택지, 필터의 <b>주제</b> 버튼, 조회 화면 표시에 모두 쓰여요. (표는 아이콘으로 주제와 연결돼요 — 표 수정에서 같은 아이콘을 고르면 그 주제로 분류돼요.)</p>
+            <div id="topic-manager-list" class="space-y-2"></div>
+            <button type="button" onclick="topicMgrAdd()" class="w-full py-2.5 border border-dashed border-slate-300 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 hover:border-violet-300 transition-all"><i class="fa-solid fa-plus mr-1"></i> 주제 추가</button>
+            <div class="flex gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="topicMgrReset()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-sm transition-all active:scale-95">기본값</button>
+                <button type="button" onclick="closeTopicManager()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
+                <button type="button" onclick="saveTopicManager()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
             </div>
         </div>
     </div>
