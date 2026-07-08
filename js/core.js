@@ -1078,6 +1078,14 @@ let vocabulary = [];
                 nyanyaDiary[today].newGrammarCount = (nyanyaDiary[today].newGrammarCount || 0) + 1; // [냐냐 PATCH] 문법표 등록
             } else if (type === 'new-grammar-mastered') {
                 nyanyaDiary[today].newGrammarMasteredCount = (nyanyaDiary[today].newGrammarMasteredCount || 0) + 1; // [냐냐 PATCH] 문법표 마스터
+            } else if (type === 'undo-new-word') {
+                nyanyaDiary[today].newWordsCount = Math.max(0, (nyanyaDiary[today].newWordsCount || 0) - 1); // [냐냐 PATCH] 단어 삭제 시 오늘 등록 취소
+            } else if (type === 'undo-new-mastered') {
+                nyanyaDiary[today].newMasteredCount = Math.max(0, (nyanyaDiary[today].newMasteredCount || 0) - 1); // [냐냐 PATCH] 단어 마스터 해제/삭제
+            } else if (type === 'undo-new-grammar') {
+                nyanyaDiary[today].newGrammarCount = Math.max(0, (nyanyaDiary[today].newGrammarCount || 0) - 1); // [냐냐 PATCH] 문법표 삭제
+            } else if (type === 'undo-new-grammar-mastered') {
+                nyanyaDiary[today].newGrammarMasteredCount = Math.max(0, (nyanyaDiary[today].newGrammarMasteredCount || 0) - 1); // [냐냐 PATCH] 문법표 마스터 해제/삭제
             }
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
@@ -2075,6 +2083,7 @@ let vocabulary = [];
         function toggleMasterGrammar(id) {
             if (masteredGrammar[id]) {
                 delete masteredGrammar[id];
+                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); // [냐냐 PATCH] 일지/그래프도 감소
                 showToast("마스터를 해제했어요", "info");
             } else {
                 masteredGrammar[id] = true;
@@ -2608,6 +2617,9 @@ let vocabulary = [];
                     if (isDefault && !hiddenDefaultGrammar.includes(id)) hiddenDefaultGrammar.push(id); // [냐냐 PATCH] 기본 표는 숨김 목록에 추가
                     delete grammarOpenState[id];
                     delete pinnedGrammar[id];
+                    // [냐냐 PATCH] 일지/그래프 감소 — 삭제 시 등록/마스터 카운트도 취소
+                    if (masteredGrammar[id]) { delete masteredGrammar[id]; if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); }
+                    if (typeof logAction === 'function') logAction('undo-new-grammar');
                     renderGrammarTables();
                     await saveToStorage();
                     showToast("표를 삭제했어요", "success");
