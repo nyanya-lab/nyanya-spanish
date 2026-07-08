@@ -169,6 +169,7 @@ let vocabulary = [];
                 masteredGrammar: masteredGrammar,
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
+                grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState
             };
             const json = JSON.stringify(payload);
@@ -278,6 +279,13 @@ let vocabulary = [];
                 masteredGrammar = payload.masteredGrammar || {};
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
+                // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
+                if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
+                    GRAMMAR_ICONS = payload.grammarTopics
+                        .filter(t => t && (t.icon || '').trim())
+                        .map(t => ({ icon: String(t.icon).trim(), label: (t.label ? String(t.label).trim() : String(t.icon).trim()) }));
+                    if (GRAMMAR_ICONS.length === 0) GRAMMAR_ICONS = DEFAULT_GRAMMAR_ICONS.map(x => ({ ...x }));
+                }
                 eggState = Object.assign(defaultEggState(), payload.eggState || {});
                 if (!Array.isArray(eggState.collection)) eggState.collection = [];
             } else {
@@ -1979,7 +1987,8 @@ let vocabulary = [];
                         <div class="w-full flex items-center justify-between gap-2 px-5 py-4">
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-lg shrink-0">${t.icon || '📋'}</span>
-                                <span class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</span>
+                                ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? `<span class="shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 px-1.5 py-0.5 rounded-md border border-violet-100">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>` : ''}
+                                <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
                                 ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
                             </button>
                             ${editBtns}
@@ -2245,8 +2254,8 @@ let vocabulary = [];
             grammarEditorState = null;
         }
 
-        // [냐냐 PATCH] 문법 종류별 아이콘 목록
-        const GRAMMAR_ICONS = [
+        // [냐냐 PATCH] 문법 종류별 아이콘 목록 — 냐냐가 '주제 관리'에서 직접 편집 가능(저장키 grammarTopics)
+        const DEFAULT_GRAMMAR_ICONS = [
             { icon: '📘', label: '기본' },
             { icon: '🔢', label: '숫자' },
             { icon: '👤', label: '인칭/대명사' },
@@ -2258,6 +2267,7 @@ let vocabulary = [];
             { icon: '💬', label: '회화' },
             { icon: '⭐', label: '기타' },
         ];
+        let GRAMMAR_ICONS = DEFAULT_GRAMMAR_ICONS.map(x => ({ ...x })); // 로드 시 저장된 목록으로 덮어씀
         function renderGeIconPicker() {
             const box = document.getElementById('ge-icon-picker');
             if (!box) return;
@@ -2270,6 +2280,85 @@ let vocabulary = [];
         function selectGeIcon(icon) {
             document.getElementById('ge-icon').value = icon;
             renderGeIconPicker();
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 주제 관리 — 아이콘+주제 이름 목록을 직접 편집
+        //   여기서 만든 주제로 필터(주제)·아이콘 피커·조회 표시가 전부 연동됨
+        // ============================================================
+        let topicEditorState = null; // 편집 중 임시 복사본 [{icon,label}]
+
+        function openTopicManager() {
+            topicEditorState = GRAMMAR_ICONS.map(x => ({ icon: x.icon, label: x.label }));
+            renderTopicManagerList();
+            document.getElementById('topic-manager-modal').classList.remove('hidden');
+        }
+        function closeTopicManager() {
+            document.getElementById('topic-manager-modal').classList.add('hidden');
+            topicEditorState = null;
+        }
+        function renderTopicManagerList() {
+            const box = document.getElementById('topic-manager-list');
+            if (!box || !topicEditorState) return;
+            if (topicEditorState.length === 0) {
+                box.innerHTML = '<p class="text-center text-sm text-slate-400 py-6">주제가 없어요. 아래 버튼으로 추가해 주세요!</p>';
+                return;
+            }
+            box.innerHTML = topicEditorState.map((t, i) => `
+                <div class="flex items-center gap-2">
+                    <input type="text" value="${escapeHtml(t.icon || '').replace(/"/g, '&quot;')}" oninput="topicMgrUpdate(${i}, 'icon', this.value)" maxlength="8" placeholder="🙂" class="w-12 shrink-0 text-center bg-slate-50 px-1 py-2 rounded-lg border border-slate-200 text-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <input type="text" value="${escapeHtml(t.label || '').replace(/"/g, '&quot;')}" oninput="topicMgrUpdate(${i}, 'label', this.value)" placeholder="주제 이름 (예: 시제)" class="flex-1 min-w-0 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <button type="button" onclick="topicMgrMove(${i}, -1)" title="위로" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 ${i === 0 ? 'opacity-30 pointer-events-none' : ''}"><i class="fa-solid fa-chevron-up text-xs"></i></button>
+                    <button type="button" onclick="topicMgrMove(${i}, 1)" title="아래로" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 ${i === topicEditorState.length - 1 ? 'opacity-30 pointer-events-none' : ''}"><i class="fa-solid fa-chevron-down text-xs"></i></button>
+                    <button type="button" onclick="topicMgrDelete(${i})" title="삭제" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
+            `).join('');
+        }
+        function topicMgrUpdate(i, field, value) {
+            if (!topicEditorState || !topicEditorState[i]) return;
+            topicEditorState[i][field] = value; // input 값은 실시간 반영 (재렌더 안 함 → 포커스 유지)
+        }
+        function topicMgrAdd() {
+            if (!topicEditorState) return;
+            topicEditorState.push({ icon: '⭐', label: '' });
+            renderTopicManagerList();
+            // 방금 추가한 주제 이름 칸에 포커스
+            const box = document.getElementById('topic-manager-list');
+            const inputs = box ? box.querySelectorAll('input[type="text"]') : [];
+            if (inputs.length >= 1) inputs[inputs.length - 1].focus();
+        }
+        function topicMgrDelete(i) {
+            if (!topicEditorState) return;
+            topicEditorState.splice(i, 1);
+            renderTopicManagerList();
+        }
+        function topicMgrMove(i, dir) {
+            if (!topicEditorState) return;
+            const j = i + dir;
+            if (j < 0 || j >= topicEditorState.length) return;
+            [topicEditorState[i], topicEditorState[j]] = [topicEditorState[j], topicEditorState[i]];
+            renderTopicManagerList();
+        }
+        function topicMgrReset() {
+            showConfirm("주제 목록을 기본값으로?", "지금 편집 중인 내용이 기본 주제 목록으로 바뀌어요. (저장을 눌러야 실제로 적용돼요)", () => {
+                topicEditorState = DEFAULT_GRAMMAR_ICONS.map(x => ({ ...x }));
+                renderTopicManagerList();
+            });
+        }
+        function saveTopicManager() {
+            if (!topicEditorState) return;
+            // 아이콘 비어있는 행은 제외, 주제 이름 없으면 아이콘으로 대체
+            const cleaned = topicEditorState
+                .map(t => ({ icon: (t.icon || '').trim(), label: (t.label || '').trim() }))
+                .filter(t => t.icon)
+                .map(t => ({ icon: t.icon, label: t.label || t.icon }));
+            if (cleaned.length === 0) { showToast("주제를 하나 이상 남겨 주세요!", "error"); return; }
+            GRAMMAR_ICONS = cleaned;
+            closeTopicManager();
+            saveToStorage();
+            renderGrammarTables();          // 조회 화면 주제 칩 갱신
+            if (typeof renderGeIconPicker === 'function') renderGeIconPicker(); // 아이콘 피커 갱신
+            showToast("주제 목록을 저장했어요! ✨", "success");
         }
 
         function renderGrammarEditorFields() {
