@@ -568,6 +568,9 @@
             selectReviewScope(reviewScope || 'today-wrong');
             selectReviewCount(reviewCount || 20);
             selectReviewRepeat(reviewRepeat || 1);
+            // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
+            if (typeof resetFillSetup === 'function') resetFillSetup();
+            if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'blink');
         }
 
         function selectReviewCount(n) {
@@ -739,4 +742,335 @@
                     </div>
                 </div>
             `;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 3차-① 단어 빈칸 채우기 복습 (AI 채점)
+        //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
+        // ============================================================
+        let reviewMode = 'blink';          // 'blink' | 'fill'
+        let fillScope = 'today-wrong';
+        let fillCount = 10;
+        let fillState = null;
+
+        function selectReviewMode(mode) {
+            reviewMode = mode;
+            const blink = document.getElementById('review-mode-blink');
+            const fill = document.getElementById('review-mode-fill');
+            if (blink) blink.classList.toggle('hidden', mode !== 'blink');
+            if (fill) fill.classList.toggle('hidden', mode !== 'fill');
+            const bBtn = document.getElementById('review-mode-blink-btn');
+            const fBtn = document.getElementById('review-mode-fill-btn');
+            const on = 'bg-indigo-600 text-white shadow-sm';
+            const off = 'text-slate-500 hover:bg-slate-50';
+            [bBtn, fBtn].forEach(b => { if (b) b.className = b.className.replace(on, '').replace(off, ''); });
+            if (bBtn) bBtn.className += ' ' + (mode === 'blink' ? on : off);
+            if (fBtn) fBtn.className += ' ' + (mode === 'fill' ? on : off);
+        }
+
+        function resetFillSetup() {
+            fillState = null;
+            const setup = document.getElementById('fill-setup');
+            const play = document.getElementById('fill-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            selectFillScope(fillScope || 'today-wrong');
+            selectFillCount(fillCount || 10);
+        }
+
+        function selectFillScope(scope) {
+            fillScope = scope;
+            document.querySelectorAll('.fill-scope-btn').forEach(btn => {
+                const active = btn.dataset.fillScope === scope;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+            const cnt = getReviewPool(scope).length;
+            const el = document.getElementById('fill-scope-count');
+            if (el) el.innerText = `복습할 단어: ${cnt}개`;
+        }
+
+        function selectFillCount(n) {
+            fillCount = n;
+            document.querySelectorAll('.fill-count-btn').forEach(btn => {
+                const active = parseInt(btn.dataset.fillCount) === n;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+        }
+
+        function startFillReview() {
+            const pool = getReviewPool(fillScope);
+            if (pool.length < 1) { showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
+            let shuffled = pool.slice().sort(() => Math.random() - 0.5).slice(0, fillCount);
+            fillState = { pool: shuffled, index: 0, total: shuffled.length, results: [], current: null, phase: 'input' };
+            document.getElementById('fill-setup').classList.add('hidden');
+            document.getElementById('fill-play-area').classList.remove('hidden');
+            renderFillProblem();
+        }
+
+        // 단어 하나에서 빈칸 낼 후보를 모아 랜덤 1~2곳 선택
+        function buildFillProblem(w) {
+            const idiomList = (w.idioms && w.idioms.length) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+            const sources = [];
+            if (w.word && w.meaning) {
+                const side = Math.random() < 0.5 ? 'word' : 'meaning';
+                sources.push(side === 'word'
+                    ? { key: 'word', label: '단어', language: 'es', expected: w.word }
+                    : { key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            }
+            idiomList.forEach((id, i) => {
+                const sp = (id.idiom || '').trim(); const me = (id.idiomMeaning || '').trim();
+                if (sp && me) {
+                    const side = Math.random() < 0.5 ? 'sp' : 'me';
+                    sources.push(side === 'sp'
+                        ? { key: 'idiom-sp-' + i, label: '관용구', language: 'es', expected: sp }
+                        : { key: 'idiom-me-' + i, label: '관용구 뜻', language: 'ko', expected: me });
+                }
+            });
+            const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
+            if (exSp && exMe) {
+                const side = Math.random() < 0.5 ? 'sp' : 'me';
+                sources.push(side === 'sp'
+                    ? { key: 'ex-sp', label: '예문', language: 'es', expected: exSp }
+                    : { key: 'ex-me', label: '예문 뜻', language: 'ko', expected: exMe });
+            }
+            // 후보가 하나도 없으면(뜻/단어 한쪽만 있는 특수 케이스) 있는 쪽이라도 빈칸
+            if (sources.length === 0) {
+                if (w.word) sources.push({ key: 'word', label: '단어', language: 'es', expected: w.word });
+                else if (w.meaning) sources.push({ key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            }
+            const shuffled = sources.slice().sort(() => Math.random() - 0.5);
+            let n = 1;
+            if (shuffled.length >= 2) n = Math.random() < 0.5 ? 1 : 2;
+            const blanks = shuffled.slice(0, Math.max(1, Math.min(n, shuffled.length)));
+            return { word: w, blanks };
+        }
+
+        function fillFieldHtml(problem, key, text, extraClass) {
+            // 해당 key가 빈칸이면 input, 아니면 텍스트로 렌더
+            const bi = problem.blanks.findIndex(b => b.key === key);
+            if (bi >= 0) {
+                return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input inline-block min-w-[120px] w-auto px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
+            }
+            return `<span class="${extraClass || ''}">${escapeHtml(text || '')}</span>`;
+        }
+
+        function renderFillProblem() {
+            if (!fillState) return;
+            if (fillState.index >= fillState.pool.length) { endFillReview(); return; }
+            fillState.phase = 'input';
+            const w = fillState.pool[fillState.index];
+            const problem = buildFillProblem(w);
+            fillState.current = problem;
+            const idiomList = (w.idioms && w.idioms.length) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+
+            const posLabel = (typeof getPosAbbreviation === 'function') ? getPosAbbreviation(w.pos, w.gender) : (w.pos || '');
+            let rows = '';
+            // 단어 / 뜻
+            rows += `<div class="flex items-baseline gap-2"><span class="text-[11px] font-bold text-slate-400 w-16 shrink-0">단어</span><span class="text-base font-extrabold text-slate-900">${fillFieldHtml(problem, 'word', w.word)}</span><span class="text-[10px] font-bold text-slate-400">${escapeHtml(posLabel)}</span></div>`;
+            rows += `<div class="flex items-baseline gap-2"><span class="text-[11px] font-bold text-slate-400 w-16 shrink-0">뜻</span><span class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'meaning', w.meaning)}</span></div>`;
+            // 관용구
+            idiomList.forEach((id, i) => {
+                const sp = (id.idiom || '').trim(); const me = (id.idiomMeaning || '').trim();
+                if (!sp && !me) return;
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-violet-400 w-16 shrink-0">관용구</span><div class="flex-1 space-y-0.5"><div class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'idiom-sp-' + i, sp)}</div><div class="text-xs text-slate-500">${fillFieldHtml(problem, 'idiom-me-' + i, me)}</div></div></div>`;
+            });
+            // 예문
+            const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
+            if (exSp || exMe) {
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-sky-400 w-16 shrink-0">예문</span><div class="flex-1 space-y-0.5"><div class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'ex-sp', exSp)}</div><div class="text-xs text-slate-500">${fillFieldHtml(problem, 'ex-me', exMe)}</div></div></div>`;
+            }
+            // 노트 (문맥용, 빈칸 아님)
+            if ((w.notes || '').trim()) {
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-slate-300 w-16 shrink-0">메모</span><span class="text-xs text-slate-400 whitespace-pre-line">${escapeHtml(w.notes)}</span></div>`;
+            }
+
+            const play = document.getElementById('fill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetFillSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${fillState.index + 1} / ${fillState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(fillState.index / fillState.total * 100)}%"></div>
+                    </div>
+                    <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
+                    <div class="bg-slate-50 rounded-2xl p-4 space-y-2">${rows}</div>
+                    <div id="fill-feedback" class="hidden space-y-2"></div>
+                    <div class="flex justify-end">
+                        <button id="fill-action-btn" onclick="submitFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { const first = document.getElementById('fill-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        function fillInputKeydown(e, idx) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (fillState && fillState.phase === 'graded') { nextFillProblem(); return; }
+            const total = fillState && fillState.current ? fillState.current.blanks.length : 0;
+            if (idx < total - 1) {
+                const next = document.getElementById('fill-input-' + (idx + 1));
+                if (next) next.focus();
+            } else {
+                submitFillProblem();
+            }
+        }
+
+        function fillLocalGrade(blank, ans) {
+            const clean = s => (s || '').toString().toLowerCase().replace(/[\s.,!¡?¿;:"'()¿¡]/g, '');
+            const u = clean(ans), ex = clean(blank.expected);
+            if (!u) return false;
+            if (blank.language === 'ko') return u === ex || ex.includes(u) || u.includes(ex);
+            return u === ex; // 스페인어는 악센트 유지한 채 비교 (엄격)
+        }
+
+        async function submitFillProblem() {
+            if (!fillState || !fillState.current || fillState.phase !== 'input') return;
+            const blanks = fillState.current.blanks;
+            const answers = blanks.map((b, i) => { const el = document.getElementById('fill-input-' + i); return el ? el.value.trim() : ''; });
+            fillState.phase = 'grading';
+            const actionBtn = document.getElementById('fill-action-btn');
+            if (actionBtn) { actionBtn.disabled = true; actionBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`; }
+
+            let graded = null;
+            if (typeof hasGeminiApiKey === 'function' && hasGeminiApiKey()) {
+                try {
+                    const items = blanks.map((b, i) => ({ index: i, language: b.language === 'es' ? 'Spanish' : 'Korean', field: b.label, expected: b.expected, studentAnswer: answers[i] }));
+                    const system = `You grade fill-in-the-blank answers for a Korean student learning Spanish. Be fair but NOT lenient.
+Rules:
+- Spanish answers: accents and tildes MATTER (á é í ó ú ñ ü). Missing/wrong accent = INCORRECT. Ignore capitalization and surrounding punctuation/whitespace only.
+- Korean (meaning) answers: accept if the meaning matches in substance (synonyms/paraphrases OK). Ignore particles, spacing, and punctuation. Do not demand exact wording.
+- An empty answer is incorrect.
+Return JSON only, no markdown.`;
+                    const prompt = `Grade each blank. For each, the "expected" is the correct value from the flashcard and "studentAnswer" is what the student typed.\n${JSON.stringify(items)}\nReturn JSON: { "results": [ { "index": number, "correct": boolean, "correctAnswer": string } ] }`;
+                    const schema = { type: "OBJECT", properties: { results: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "NUMBER" }, correct: { type: "BOOLEAN" }, correctAnswer: { type: "STRING" } }, required: ["index", "correct", "correctAnswer"] } } }, required: ["results"] };
+                    const resp = await callGemini(prompt, system, schema, 'low');
+                    const data = extractAndParseJson(resp);
+                    graded = blanks.map((b, i) => {
+                        const r = (data.results || []).find(x => x.index === i) || {};
+                        return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showToast("AI 채점 실패 — 기본 채점으로 진행할게요", "error");
+                }
+            }
+            if (!graded) {
+                // API 키 없거나 실패 시 로컬 채점
+                graded = blanks.map(b => ({ correct: fillLocalGrade(b, answers[blanks.indexOf(b)]), correctAnswer: b.expected }));
+            }
+
+            // 결과 저장 + 표시
+            const detail = blanks.map((b, i) => ({ label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
+            const allCorrect = detail.every(d => d.correct);
+            fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
+            if (typeof logAction === 'function') logAction('review'); // 복습 1개 기록
+
+            applyFillGradeResults(detail);
+            fillState.phase = 'graded';
+        }
+
+        function applyFillGradeResults(detail) {
+            detail.forEach((d, i) => {
+                const el = document.getElementById('fill-input-' + i);
+                if (!el) return;
+                el.disabled = true;
+                el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
+                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through');
+            });
+            const fb = document.getElementById('fill-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                fb.innerHTML = detail.map(d => {
+                    const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-xs flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${escapeHtml(d.label)}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                }).join('');
+            }
+            const btn = document.getElementById('fill-action-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = (fillState.index + 1 >= fillState.total) ? '결과 보기 →' : '다음 →';
+                btn.setAttribute('onclick', 'nextFillProblem()');
+                setTimeout(() => btn.focus(), 40); // 엔터 한 번 더 = 다음
+            }
+        }
+
+        function nextFillProblem() {
+            if (!fillState) return;
+            fillState.index++;
+            if (fillState.index >= fillState.pool.length) { endFillReview(); return; }
+            renderFillProblem();
+        }
+
+        function endFillReview() {
+            const results = fillState ? fillState.results : [];
+            const total = results.length;
+            const correct = results.filter(r => r.allCorrect).length;
+            const studied = results.map(r => r.word);
+            const masterCandidates = results.filter(r => r.allCorrect && r.word && !r.word.mastered).map(r => r.word);
+            fillState = null;
+
+            let listHtml = '';
+            results.forEach(r => {
+                const icon = r.allCorrect ? '<span class="text-emerald-500">✓</span>' : '<span class="text-red-400">✗</span>';
+                listHtml += `<div class="flex items-baseline justify-between bg-white rounded-xl px-3 py-2 border border-slate-100"><span class="font-bold text-slate-800">${icon} ${escapeHtml(r.word.word)}</span><span class="text-slate-500 text-sm">${escapeHtml(r.word.meaning)}</span></div>`;
+            });
+
+            let masteryHtml = '';
+            if (masterCandidates.length > 0) {
+                masteryHtml = `
+                    <div id="fill-mastery-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-left">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-black text-emerald-700">🏆 다 맞힌 단어, 마스터로 등록할까요?</p>
+                            <label class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 cursor-pointer"><input type="checkbox" id="fill-master-all" onchange="fillMasterToggleAll(this)"> 전체</label>
+                        </div>
+                        <div class="space-y-1">${masterCandidates.map(w => `<label class="flex items-center gap-2 bg-white/70 rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" class="fill-master-chk" data-id="${w.id}"><span class="text-xs font-bold text-slate-700">${escapeHtml(w.word)}</span><span class="text-[11px] text-slate-400">${escapeHtml(w.meaning)}</span></label>`).join('')}</div>
+                        <button onclick="applyFillMastery()" class="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all">선택 단어 마스터하기</button>
+                    </div>`;
+            }
+
+            const play = document.getElementById('fill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">${correct === total ? '🎉' : '💪'}</div>
+                    <h3 class="text-xl font-black text-slate-900">빈칸 복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}문제 중 <b class="text-emerald-600">${correct}개</b> 다 맞혔어요! (정답률 ${total ? Math.round(correct / total * 100) : 0}%)</p>
+                    ${masteryHtml}
+                    <div class="text-left space-y-1.5 max-h-72 overflow-y-auto">
+                        <p class="text-xs font-bold text-slate-500 mb-1">복습한 단어들</p>
+                        ${listHtml}
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetFillSetup()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        function fillMasterToggleAll(cb) {
+            document.querySelectorAll('.fill-master-chk').forEach(c => { c.checked = cb.checked; });
+        }
+        function applyFillMastery() {
+            const ids = [...document.querySelectorAll('.fill-master-chk:checked')].map(c => c.dataset.id);
+            if (ids.length === 0) { showToast("선택된 단어가 없어요", "error"); return; }
+            let n = 0;
+            ids.forEach(id => { const w = vocabulary.find(v => v.id === id); if (w && !w.mastered) { w.mastered = true; if (typeof logAction === 'function') logAction('new-mastered'); n++; } });
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats();
+            if (typeof renderWordList === 'function') renderWordList();
+            showToast(`${n}개 마스터 완료! 🏆`, "success");
+            document.getElementById('fill-mastery-box')?.classList.add('hidden');
         }
