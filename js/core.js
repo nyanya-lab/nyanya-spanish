@@ -35,6 +35,7 @@ let vocabulary = [];
             if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
             if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
             if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
+            if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
             renderWordList();
             updateStats();
             renderDiary();
@@ -2216,6 +2217,50 @@ let vocabulary = [];
         // ---- 문법 표 편집기 ----
         let grammarEditorState = null; // { id, icon, title, desc, note, headers:[], rows:[[]] }
 
+        // [냐냐 PATCH] 편집창(등록/수정) 너비 드래그 조절 — 열이 많은 표를 넓게 보기 위함. 조회 화면과 무관.
+        let grammarEditorWidth = null; // px (null=기본 672)
+        let _geResize = null;
+        function loadGrammarEditorWidth() {
+            try {
+                const v = parseInt(localStorage.getItem('nyanya_grammar_editor_width') || '', 10);
+                if (!isNaN(v)) grammarEditorWidth = v;
+            } catch (e) {}
+        }
+        function clampGrammarEditorWidth(w) {
+            const maxW = Math.round((window.innerWidth || 1200) * 0.95);
+            return Math.max(480, Math.min(w, maxW, 1600));
+        }
+        function applyGrammarEditorWidth() {
+            const box = document.getElementById('grammar-editor-box');
+            if (!box) return;
+            box.style.width = clampGrammarEditorWidth(grammarEditorWidth || 672) + 'px';
+        }
+        function startGrammarEditorResize(e) {
+            const box = document.getElementById('grammar-editor-box');
+            if (!box) return;
+            e.preventDefault();
+            _geResize = { startX: e.clientX, startW: box.getBoundingClientRect().width };
+            document.addEventListener('mousemove', onGrammarEditorResize);
+            document.addEventListener('mouseup', endGrammarEditorResize);
+            document.body.style.userSelect = 'none';
+        }
+        function onGrammarEditorResize(e) {
+            if (!_geResize) return;
+            const box = document.getElementById('grammar-editor-box');
+            if (!box) return;
+            // 모달이 가운데 정렬이라 오른쪽으로 끈 만큼 좌우로 같이 늘어남 → ×2 해야 핸들이 커서를 따라감
+            const w = clampGrammarEditorWidth(_geResize.startW + (e.clientX - _geResize.startX) * 2);
+            box.style.width = w + 'px';
+            grammarEditorWidth = w;
+        }
+        function endGrammarEditorResize() {
+            _geResize = null;
+            document.removeEventListener('mousemove', onGrammarEditorResize);
+            document.removeEventListener('mouseup', endGrammarEditorResize);
+            document.body.style.userSelect = '';
+            try { if (grammarEditorWidth) localStorage.setItem('nyanya_grammar_editor_width', String(grammarEditorWidth)); } catch (e) {}
+        }
+
         function openGrammarEditor(id) {
             if (id) {
                 const existing = getAllGrammarTables().find(t => t.id === id);
@@ -2245,6 +2290,7 @@ let vocabulary = [];
                 };
             }
             document.getElementById('grammar-editor-modal').classList.remove('hidden');
+            applyGrammarEditorWidth(); // [냐냐 PATCH] 저장된/기본 너비 적용
             document.getElementById('grammar-editor-title').innerText = id ? '표 수정' : '새 표 만들기';
             renderGrammarEditorFields();
         }
