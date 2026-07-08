@@ -1117,8 +1117,13 @@
                 `"${w.word}" 단어를 삭제할까요?`,
                 "삭제한 데이터는 다시 꺼낼 수 없습니다.",
                 () => {
+                    const wasMastered = w.mastered; // [냐냐 PATCH] 삭제 전 마스터 여부
                     vocabulary = vocabulary.filter(item => item.id !== wordId);
-                    logAction('snapshot');
+                    // [냐냐 PATCH] 일지/그래프 감소 — 등록/마스터 카운트 취소
+                    if (typeof logAction === 'function') {
+                        if (wasMastered) logAction('undo-new-mastered');
+                        logAction('undo-new-word');
+                    }
                     renderWordList();
                     updateStats();
                     showToast("단어를 삭제했습니다. 🗑️", "success");
@@ -1171,7 +1176,7 @@
                     logAction('new-mastered'); // [냐냐 PATCH] 오늘 새로 마스터한 단어 수 추적
                 } else {
                     w.masterScore = 0; // 수동 해제하면 점수도 0
-                    logAction('snapshot');
+                    logAction('undo-new-mastered'); // [냐냐 PATCH] 마스터 해제 시 일지/그래프도 감소
                 }
                 renderWordList();
                 updateStats();
