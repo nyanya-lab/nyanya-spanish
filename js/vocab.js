@@ -333,6 +333,16 @@
 
         // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
         // [냐냐 PATCH] 문법표 설명/팁에서 엔터 = 자동 · 기호 (단어장 노트처럼)
+        // [냐냐 PATCH] 설명/팁 입력 시작할 때 비어있으면 기본 기호(· ) 넣기
+        function grammarNoteFocusDefault(event, stateKey) {
+            const ta = event.target;
+            if ((ta.value || '').trim() === '') {
+                ta.value = '· ';
+                ta.selectionStart = ta.selectionEnd = ta.value.length;
+                if (grammarEditorState && stateKey) grammarEditorState[stateKey] = ta.value;
+            }
+        }
+
         function handleGrammarNoteEnter(event, stateKey) {
             if (event.key !== 'Enter' || event.shiftKey) return;
             event.preventDefault();
