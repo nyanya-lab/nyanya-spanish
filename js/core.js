@@ -1475,7 +1475,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
+            const padding = { top: 16, right: 34, bottom: 28, left: 28 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -1495,23 +1495,20 @@ let vocabulary = [];
             const yOf = (val) => padding.top + chartH - (val / leftMax) * chartH;        // 등록 (왼쪽)
             const yOfRight = (val) => padding.top + chartH - (val / rightMax) * chartH;  // 마스터 (오른쪽)
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
-            const barWidth = Math.min(8, groupWidth * 0.5);
+            const barWidth = Math.min(5, groupWidth * 0.32);
 
+            // [냐냐 PATCH] 등록(보라, 왼쪽축) + 마스터(초록, 오른쪽축) 둘 다 막대 (나란히)
             let bars = '';
             series.forEach((d, i) => {
-                const barH = (d._newTotal / leftMax) * chartH;
-                const text = `${d.date}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0} + 문법 ${d.newGrammarCount||0})`.replace(/'/g, "\\'");
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#8b5cf6" opacity="0.7" rx="1.5"/>`;
-                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
+                const rH = (d._newTotal / leftMax) * chartH;
+                const mH = (d._newMasteredTotal / rightMax) * chartH;
+                const gx = xOf(i) - barWidth - 1;
+                const rx = xOf(i) + 1;
+                bars += `<rect x="${gx.toFixed(1)}" y="${(baseY - rH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${rH.toFixed(1)}" fill="#8b5cf6" opacity="0.75" rx="1.5"/>`;
+                bars += `<rect x="${rx.toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mH.toFixed(1)}" fill="#10b981" opacity="0.75" rx="1.5"/>`;
+                const text = `${d.date}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0}+문법 ${d.newGrammarCount||0}) · 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0}+문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth * 2 + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth * 2 + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
-
-            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfRight(d._newMasteredTotal).toFixed(1)}`).join(' ');
-            const lineDots = series.map((d, i) => {
-                const cx = xOf(i).toFixed(1);
-                const cy = yOfRight(d._newMasteredTotal).toFixed(1);
-                const text = `${d.date}: 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0} + 문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
-                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#10b981"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
-            }).join('');
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
@@ -1520,8 +1517,6 @@ let vocabulary = [];
                     ${recordChartRightAxis(rightMax, padding, chartH, width, '개', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-                    ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
@@ -1693,7 +1688,7 @@ let vocabulary = [];
             `;
         }
 
-        // [냐냐 PATCH] 문법표 성장 그래프: 일별 등록 문법(막대) + 마스터 문법(막대)
+        // [냐냐 PATCH] 문법표 성장: 등록 문법(꺾은선) + 마스터 비율(막대) — 단어장 성장과 동일 형식
         function renderGrammarGrowthChart(series) {
             const container = document.getElementById('record-grammar-chart');
             if (!container) return;
@@ -1701,40 +1696,51 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 160;
-            const padding = { top: 16, right: 12, bottom: 28, left: 24 };
+            const padding = { top: 16, right: 34, bottom: 28, left: 24 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
 
-            const maxVal = Math.max(1, ...series.map(d => Math.max(d.newGrammarCount || 0, d.newGrammarMasteredCount || 0)));
+            // 문법은 일별 누적 스냅샷이 없으므로 현재 총계에서 역산해 일별 누적 만들기
+            const grammarTotalNow = (typeof getGrammarTotalCount === 'function') ? getGrammarTotalCount() : 0;
+            const grammarMasteredNow = (typeof getGrammarMasteredCount === 'function') ? getGrammarMasteredCount() : 0;
+            const regByDay = new Array(series.length), masByDay = new Array(series.length);
+            let regRun = grammarTotalNow, masRun = grammarMasteredNow;
+            for (let i = series.length - 1; i >= 0; i--) {
+                regByDay[i] = regRun;
+                masByDay[i] = masRun;
+                regRun = Math.max(0, regRun - (series[i].newGrammarCount || 0));
+                masRun = Math.max(0, masRun - (series[i].newGrammarMasteredCount || 0));
+            }
+            const masteredRatioOf = (i) => regByDay[i] > 0 ? (masByDay[i] / regByDay[i]) * 100 : 0;
+
+            const maxVal = Math.max(1, ...regByDay);
             const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
             const xOf = (i) => padding.left + i * xStep;
+            const yOfCount = (v) => padding.top + chartH - (v / maxVal) * chartH;
             const groupWidth = chartW / series.length;
-            const barW = Math.max(2, Math.min(6, groupWidth * 0.3));
+            const barWidth = Math.min(6, groupWidth * 0.4);
 
             let bars = '';
             series.forEach((d, i) => {
-                const gc = d.newGrammarCount || 0;
-                const gm = d.newGrammarMasteredCount || 0;
-                const c = xOf(i);
-                if (gc > 0) {
-                    const h = (gc / maxVal) * chartH;
-                    bars += `<rect x="${(c - barW - 1).toFixed(1)}" y="${(baseY - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#14b8a6" opacity="0.85" rx="1"/>`;
-                }
-                if (gm > 0) {
-                    const h = (gm / maxVal) * chartH;
-                    bars += `<rect x="${(c + 1).toFixed(1)}" y="${(baseY - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="#5eead4" opacity="0.9" rx="1"/>`;
-                }
-                const text = `${d.date}: 등록 문법 ${gc}개 · 마스터 문법 ${gm}개`.replace(/'/g, "\\'");
-                bars += `<rect x="${(c - Math.max(barW*2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barW*2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
+                const mBarH = (masteredRatioOf(i) / 100) * chartH;
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
+                const text = `${d.date}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
             });
+
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(regByDay[i]).toFixed(1)}`).join(' ');
+            const lineDots = series.map((d, i) => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfCount(regByDay[i]).toFixed(1)}" r="2.5" fill="#5896cb"/>`).join('');
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    ${recordChartRightAxis(100, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
+                    <path d="${linePath}" fill="none" stroke="#5896cb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
             `;
