@@ -537,6 +537,7 @@
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
             - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
+            - adjMasculineBase: 형용사인데 입력이 여성형/복수형이면 사전 표제형인 남성 단수형을 여기에(관사 없이). 이미 남성 단수형이거나 성별로 안 변하는 형용사(feliz, azul 등)면 빈 문자열. 오타 교정(correctedSpelling)과는 별개로, 형태만 여성→남성으로 바꾸는 용도임.
             - idioms에는 (1) 진짜 흔한 관용구/숙어뿐 아니라 (2) 이 단어의 "핵심 문형/구문 패턴"도 넣을 것.
               구문 패턴 예시:
                 · 특정 전치사와 자주 쓰이면: idiom "enfadado con [사람]", idiomMeaning "~에게 화가 난" 처럼 패턴+뜻으로.
@@ -560,6 +561,7 @@
                     isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true, 단수형이면 false. 명사가 아니면 false. 예: casas/libros는 true, casa/libro는 false" },
                     usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
+                    adjMasculineBase: { type: "STRING", description: "형용사이고 입력이 여성형(또는 복수형)이면, 사전 표제형인 '남성 단수형'을 여기에 (관사 없이). 예: 입력이 'buena'/'buenas'/'buenos'면 'bueno', 'roja'면 'rojo'. 이미 남성 단수형이거나(bueno) 성별로 안 변하는 형용사(feliz, azul, tolerante)이거나 형용사가 아니면 빈 문자열." },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
                     irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 e ➡️ i", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
@@ -604,6 +606,11 @@
                 const bareInput = rawWord.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').trim().toLowerCase();
                 const isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
 
+                // [냐냐 PATCH] 형용사 여성형/복수형 → 남성 단수 기본형 건의 (오타와 별개)
+                const mascBase = (result.adjMasculineBase || '').trim();
+                const isFeminineAdj = !isRealCorrection && result.pos === 'adjective' && mascBase
+                    && mascBase.toLowerCase() !== bareInput && mascBase.toLowerCase() !== rawWord.toLowerCase();
+
                 if (isRealCorrection) {
                     showConfirm(
                         `혹시 "${corrected}"를 쓰려던 거였나요?`,
@@ -625,6 +632,29 @@
                                 applyAutofillResult(result, true);
                                 saveAiWordCache(rawWord, result);
                                 showToast("입력한 철자 그대로 정보를 적용했어요", "info");
+                            }
+                        }
+                    );
+                } else if (isFeminineAdj) {
+                    showConfirm(
+                        `혹시 여성형인가요? 남성형 "${mascBase}"로 바꿀까요?`,
+                        `형용사는 보통 사전형인 남성 단수형으로 등록해요. 입력하신 "${rawWord}"는 여성형/복수형 같아서, 남성형 "${mascBase}"(으)로 바꿔서 등록할지 여쭤봐요. (그대로를 누르면 입력한 형태로 둡니다)`,
+                        () => {
+                            document.getElementById('input-word').value = mascBase;
+                            applyAutofillResult(result, true);
+                            saveAiWordCache(mascBase, result);
+                            AudioFX.playSuccess();
+                            showToast(`남성형 "${mascBase}"(으)로 바꿔서 적용했어요 ✨`, "success");
+                        },
+                        {
+                            okLabel: '남성형으로',
+                            cancelLabel: '그대로',
+                            okStyle: 'primary',
+                            onCancel: () => {
+                                applyAutofillResult(result, true);
+                                saveAiWordCache(rawWord, result);
+                                AudioFX.playSuccess();
+                                showToast("입력하신 형태 그대로 적용했어요 ✨", "info");
                             }
                         }
                     );
