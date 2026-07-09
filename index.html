@@ -968,26 +968,39 @@
                     </div>
 
                     <!-- 단어장 성장 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                    <div class="bg-violet-50/50 p-5 rounded-3xl border border-violet-100 shadow-sm">
                         <button onclick="toggleChartCard('chart-body-growth', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-4 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">단어장 성장</span>
                                 <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>등록 단어(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>마스터 비율(%)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-rose-500 inline-block" style="border-top:2px dashed #f43f5e; background:none;"></span>약점 비율(%)</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-emerald-500"></span>마스터 비율(%)</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-rose-500"></span>약점 비율(%)</span>
                             </div>
                             <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
                         </button>
                         <div id="chart-body-growth"><div id="record-line-chart" class="w-full relative"></div></div>
                     </div>
 
+                    <!-- 문법표 성장 그래프 (단어장 성장 아래) -->
+                    <div class="bg-teal-50/50 p-5 rounded-3xl border border-teal-100 shadow-sm">
+                        <button onclick="toggleChartCard('chart-body-grammar', this)" class="w-full flex items-center justify-between gap-4 mb-3">
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <span class="text-xs font-bold text-slate-700">문법표 성장</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-[#5896cb] inline-block"></span>등록 문법(개)</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-teal-500"></span>마스터 비율(%)</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                        </button>
+                        <div id="chart-body-grammar"><div id="record-grammar-chart" class="w-full relative"></div></div>
+                    </div>
+
                     <!-- 일별 신규 등록/마스터 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                    <div class="bg-amber-50/50 p-5 rounded-3xl border border-amber-100 shadow-sm">
                         <button onclick="toggleChartCard('chart-body-daily', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-4 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">일별 신규 등록 / 마스터 (단어+문법)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-full bg-violet-500"></span>신규 등록(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-emerald-500 inline-block" style="border-top: 2px dashed #10b981; background:none;"></span>신규 마스터(개)</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-violet-500"></span>신규 등록(개)</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-emerald-500"></span>신규 마스터(개)</span>
                             </div>
                             <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
                         </button>
@@ -995,11 +1008,11 @@
                     </div>
 
                     <!-- 학습 활동 통합 그래프 (퀴즈·AI·복습·게임) -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                    <div class="bg-sky-50/50 p-5 rounded-3xl border border-sky-100 shadow-sm">
                         <button onclick="toggleChartCard('chart-body-activity', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-3 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">학습 활동</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>총합</span>
+                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-3 h-0.5 bg-violet-500 inline-block" style="border-top:2px dashed #8b5cf6; background:none;"></span>총합</span>
                                 <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-amber-500"></span>퀴즈</span>
                                 <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-indigo-500"></span>AI</span>
                                 <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-sky-500"></span>복습</span>
@@ -1008,19 +1021,6 @@
                             <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
                         </button>
                         <div id="chart-body-activity"><div id="record-activity-chart" class="w-full relative"></div></div>
-                    </div>
-
-                    <!-- 문법표 성장 그래프 -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('chart-body-grammar', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <span class="text-xs font-bold text-slate-700">문법표 성장</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-teal-500"></span>등록 문법(개)</span>
-                                <span class="flex items-center gap-1 text-[10px] text-slate-400"><span class="w-2 h-2 rounded-sm bg-teal-300"></span>마스터 문법(개)</span>
-                            </div>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="chart-body-grammar"><div id="record-grammar-chart" class="w-full relative"></div></div>
                     </div>
 
                     <!-- [냐냐 PATCH] 숫자 요약 + 학습 수준 (맨 아래로 이동) -->
