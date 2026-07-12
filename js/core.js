@@ -1747,7 +1747,7 @@ let vocabulary = [];
             let html = '';
             series.forEach((d, i) => {
                 if (i % labelEvery === 0 || i === series.length - 1) {
-                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="9" fill="#94a3b8" text-anchor="middle">${d.date.slice(5)}</text>`;
+                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">${d.date.slice(5)}</text>`;
                 }
             });
             return html;
@@ -1792,7 +1792,7 @@ let vocabulary = [];
                 const val = Math.round((maxVal / steps) * i);
                 const y = padding.top + chartH - (i / steps) * chartH;
                 html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
-                html += `<text x="${(padding.left - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="#94a3b8" text-anchor="end">${val}${suffix}</text>`;
+                html += `<text x="${(padding.left - 8).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="9" font-weight="700" fill="#475569" text-anchor="end">${val}${suffix}</text>`;
             }
             return html;
         }
@@ -1805,7 +1805,7 @@ let vocabulary = [];
             for (let i = 0; i <= steps; i++) {
                 const val = Math.round((maxVal / steps) * i);
                 const y = padding.top + chartH - (i / steps) * chartH;
-                html += `<text x="${rx.toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="8" fill="${color}" text-anchor="start">${val}${suffix}</text>`;
+                html += `<text x="${rx.toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="9" font-weight="700" fill="${color}" text-anchor="start">${val}${suffix}</text>`;
             }
             return html;
         }
@@ -1829,8 +1829,11 @@ let vocabulary = [];
             }));
 
             const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
+            // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const baseY = height - padding.bottom;
             const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
             const yOfPct = (pct) => padding.top + chartH - (pct / 100) * chartH; // 오른쪽 축 (0~100%)
@@ -1897,8 +1900,11 @@ let vocabulary = [];
             // [냐냐 PATCH] 등록(막대)=왼쪽축, 마스터(선)=오른쪽축 (스케일 분리)
             const leftMax = Math.max(1, ...series.map(d => d._newTotal));
             const rightMax = Math.max(1, ...series.map(d => d._newMasteredTotal));
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
+            // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const yOf = (val) => padding.top + chartH - (val / leftMax) * chartH;        // 등록 (왼쪽)
             const yOfRight = (val) => padding.top + chartH - (val / rightMax) * chartH;  // 마스터 (오른쪽)
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
@@ -1947,8 +1953,11 @@ let vocabulary = [];
             }));
 
             const maxTotal = Math.max(1, ...withRate.map(d => d.quizTotal));
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
+            // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(8, groupWidth * 0.5);
 
@@ -2025,9 +2034,21 @@ let vocabulary = [];
 
         // [냐냐 PATCH] 학습 활동 통합 그래프: 총합=꺾은선(왼쪽축), 퀴즈·AI·복습·게임=막대(오른쪽축)
         // 색은 일지 숫자색과 맞춤: 퀴즈=amber, AI=indigo, 복습=sky, 게임=pink
+        // [냐냐 PATCH] 신규등록은 값이 워낙 커서 막대만 1/10 축소 표시 (총합·툴팁은 실제 갯수 그대로)
+        const ACT_REG_SCALE = 10;
+        let activityHidden = []; // 숨긴 카테고리 key 목록 ('_total' 포함 가능)
+
+        function toggleActivityCat(key) {
+            const i = activityHidden.indexOf(key);
+            if (i >= 0) activityHidden.splice(i, 1); else activityHidden.push(key);
+            if (_lastActivitySeries) renderActivityChart(_lastActivitySeries); // 활동 그래프만 다시 그림
+        }
+        let _lastActivitySeries = null;
+
         function renderActivityChart(series) {
             const container = document.getElementById('record-activity-chart');
             if (!container) return;
+            _lastActivitySeries = series; // 범례 토글 시 다시 그리기 위해 보관
             if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
 
             const width = CHART_VIEW_WIDTH;
@@ -2037,64 +2058,84 @@ let vocabulary = [];
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
 
-            const cats = [
-                { key: '_newReg', label: '신규등록', color: '#8b5cf6' },  // violet [냐냐 PATCH] 단어+문법 신규 등록
-                { key: 'quizTotal', label: '퀴즈', color: '#f59e0b' },   // amber
-                { key: 'aiSessions', label: 'AI', color: '#6366f1' },    // indigo
-                { key: 'reviewCount', label: '복습', color: '#0ea5e9' }, // sky
-                { key: 'gameCount', label: '게임', color: '#ec4899' },   // pink
+            const allCats = [
+                { key: '_newReg', label: '신규등록', color: '#8b5cf6', scale: ACT_REG_SCALE },
+                { key: 'quizTotal', label: '퀴즈', color: '#f59e0b', scale: 1 },
+                { key: 'aiSessions', label: 'AI', color: '#6366f1', scale: 1 },
+                { key: 'reviewCount', label: '복습', color: '#0ea5e9', scale: 1 },
+                { key: 'gameCount', label: '게임', color: '#ec4899', scale: 1 },
             ];
-            // [냐냐 PATCH] 신규등록(단어+문법)을 카테고리로 추가 → 총합에도 포함
+            // 신규등록(단어+문법) 합산 — 총합엔 실제 갯수 그대로 반영
             series = series.map(d => ({ ...d, _newReg: (d.newWordsCount || 0) + (d.newGrammarCount || 0) }));
-            // 총합 (하루 활동 합계)
-            const withTotal = series.map(d => ({ ...d, _total: cats.reduce((s, c) => s + (d[c.key] || 0), 0) }));
+            const withTotal = series.map(d => ({ ...d, _total: allCats.reduce((s, c) => s + (d[c.key] || 0), 0) }));
 
-            const maxBar = Math.max(1, ...series.flatMap(d => cats.map(c => d[c.key] || 0)));
-            const maxTotal = Math.max(1, ...withTotal.map(d => d._total));
-            // [냐냐 PATCH] 막대와 총합 같은 축 사용 (총합이 항상 제일 크므로 maxTotal로 통일)
-            const maxAll = maxTotal;
+            // 보이는 카테고리만 (범례 클릭으로 토글)
+            const cats = allCats.filter(c => !activityHidden.includes(c.key));
+            const showTotal = !activityHidden.includes('_total');
 
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
+            // 축 최대값: 표시되는 것들 기준 (등록은 축소값으로)
+            const barVals = withTotal.flatMap(d => cats.map(c => (d[c.key] || 0) / c.scale));
+            const totalVals = showTotal ? withTotal.map(d => d._total) : [];
+            const maxAll = Math.max(1, ...barVals, ...totalVals);
+
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const groupWidth = chartW / series.length;
-            const barW = Math.max(2, Math.min(6, (groupWidth * 0.7) / cats.length));
+            const barW = cats.length ? Math.max(2, Math.min(6, (groupWidth * 0.7) / cats.length)) : 4;
 
-            // 막대 (카테고리별로 나란히) — 통일 축
             let bars = '';
             withTotal.forEach((d, i) => {
                 const groupCenter = xOf(i);
                 const totalW = barW * cats.length;
                 cats.forEach((c, ci) => {
-                    const val = d[c.key] || 0;
-                    const barH = (val / maxAll) * chartH;
+                    const shown = (d[c.key] || 0) / c.scale; // 등록은 1/10로 그림
+                    const barH = (shown / maxAll) * chartH;
                     const bx = groupCenter - totalW / 2 + ci * barW;
                     if (barH > 0) {
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
                     }
                 });
-                const text = `${d.date}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (합 ${d._total})`.replace(/'/g, "\\'");
-                bars += `<rect x="${(groupCenter - Math.max(totalW, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(totalW, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
+                const text = `${d.date}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
+                const hitW = Math.max(totalW, 14);
+                bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
 
-            // 총합 꺾은선 (점선, 같은 축)
-            const yOfTotal = (val) => padding.top + chartH - (val / maxAll) * chartH;
-            const linePath = withTotal.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d._total).toFixed(1)}`).join(' ');
-            const lineDots = withTotal.map((d, i) => {
-                const cx = xOf(i).toFixed(1);
-                const cy = yOfTotal(d._total).toFixed(1);
-                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/>`;
+            // 총합 꺾은선 (실제 갯수 기준, 점선)
+            let totalLine = '';
+            if (showTotal) {
+                const yOfTotal = (val) => padding.top + chartH - (val / maxAll) * chartH;
+                const linePath = withTotal.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d._total).toFixed(1)}`).join(' ');
+                const lineDots = withTotal.map((d, i) => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfTotal(d._total).toFixed(1)}" r="2.5" fill="#8b5cf6"/>`).join('');
+                totalLine = `<path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" opacity="0.8"/>${lineDots}`;
+            }
+
+            // 범례 (클릭해서 켜고 끄기)
+            const legendItems = [...allCats, { key: '_total', label: '총합', color: '#8b5cf6', isLine: true }].map(c => {
+                const on = !activityHidden.includes(c.key);
+                const mark = c.isLine
+                    ? `<span class="w-3 h-0 inline-block" style="border-top:2px dashed ${c.color};"></span>`
+                    : `<span class="w-2 h-2 rounded-sm inline-block" style="background:${c.color};"></span>`;
+                const note = (c.key === '_newReg') ? ` <span class="text-[9px] text-slate-400">(막대 ÷${ACT_REG_SCALE})</span>` : '';
+                return `<button type="button" onclick="toggleActivityCat('${c.key}')" class="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-all ${on ? 'text-slate-600 bg-white/70' : 'text-slate-300 line-through'}">${mark}${c.label}${note}</button>`;
             }).join('');
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-activity-chart-tooltip')}
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">${legendItems}</div>
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
                     ${recordChartGridlines(maxAll, padding, chartW, chartH, width, '')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" opacity="0.8"/>
-                    ${lineDots}
+                    ${totalLine}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
+                <p class="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                    하루에 뭘 얼마나 했는지 보여줘요. <b>총합(점선)</b>은 그날 한 활동을 <b>실제 갯수 그대로</b> 다 더한 값이에요.
+                    신규등록은 갯수가 많아 다른 활동이 안 보여서 <b>막대만 ${ACT_REG_SCALE}개당 1칸</b>으로 줄여 그렸어요 (총합·설명엔 실제 갯수).
+                    범례를 눌러 보고 싶은 것만 골라 볼 수 있어요.
+                </p>
             `;
         }
 
@@ -2125,8 +2166,11 @@ let vocabulary = [];
             const masteredRatioOf = (i) => regByDay[i] > 0 ? (masByDay[i] / regByDay[i]) * 100 : 0;
 
             const maxVal = Math.max(1, ...regByDay);
-            const xStep = series.length > 1 ? chartW / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + i * xStep;
+            // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const yOfCount = (v) => padding.top + chartH - (v / maxVal) * chartH;
             const groupWidth = chartW / series.length;
             const barWidth = Math.min(6, groupWidth * 0.4);
