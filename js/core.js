@@ -2769,16 +2769,16 @@ let vocabulary = [];
                 // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
                 const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-600', shadow: 'shadow-violet-100' };
                 if (key === tabId) {
-                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
+                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-900 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50";
                 }
                 const icon = el.querySelector('i');
                 if (icon) {
                     // 모든 개별 색 클래스 제거 → 통일된 회색 or 선택 시 흰색
                     Object.values(NAV_ICON_COLORS).forEach(c => icon.classList.remove(c));
                     icon.classList.remove('text-white', 'text-slate-400', 'text-slate-600', 'text-slate-900');
-                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-900');
+                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-600');
                 }
             });
 
