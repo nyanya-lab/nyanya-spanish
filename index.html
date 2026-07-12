@@ -103,37 +103,37 @@
             <!-- Sidebar Drawer / Column -->
             <aside id="sidebar-menu" class="md:w-56 flex-shrink-0 flex flex-col gap-2">
                 <div id="sidebar-inner" class="flex flex-col gap-2 md:fixed md:top-[70px] md:bottom-2 md:w-56 md:overflow-y-auto no-scrollbar">
-                <div class="space-y-0.5 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
-                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all bg-violet-600 text-white shadow-md shadow-violet-100">
-                        <i class="fa-solid fa-book-bookmark text-base w-5 flex items-center justify-center shrink-0"></i>
+                <div class="space-y-1 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+                    <button onclick="changeTab('list')" id="nav-list" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-bold transition-all bg-violet-50 text-violet-700">
+                        <i class="fa-solid fa-book-bookmark text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">내 단어장</span>
                     </button>
-                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-table-list text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('grammar')" id="nav-grammar" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-table-list text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">문법 표</span>
                     </button>
-                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-clone text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('cards')" id="nav-cards" class="hidden w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-clone text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">플래시 카드 복습</span>
                     </button>
-                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-eye text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-eye text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">복습</span>
                     </button>
-                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-bullseye text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-bullseye text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">퀴즈</span>
                     </button>
-                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-gamepad text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('games')" id="nav-games" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-gamepad text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">미니 게임</span>
                     </button>
-                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-robot text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('ai-feedback')" id="nav-ai" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-robot text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">AI 1:1 번역 첨삭</span>
                     </button>
-                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50">
-                        <i class="fa-solid fa-chart-line text-base w-5 flex items-center justify-center shrink-0 text-slate-600"></i>
+                    <button onclick="changeTab('records')" id="nav-records" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                        <i class="fa-solid fa-chart-line text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">학습기록</span>
                     </button>
                 </div>
