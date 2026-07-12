@@ -742,6 +742,37 @@ let vocabulary = [];
             return steps[idx];
         }
 
+        // [냐냐 PATCH] 달력 날짜 클릭 → 그날 상세 기록 (툴팁이 안 보일 때도 확실히 보이게)
+        function showCalendarDayDetail(ds) {
+            const box = document.getElementById('calendar-day-detail');
+            if (!box) return;
+            const log = (nyanyaDiary && nyanyaDiary[ds]) || {};
+            const items = [
+                ['등록 단어', log.newWordsCount || 0, '개', 'text-violet-600'],
+                ['마스터 단어', log.newMasteredCount || 0, '개', 'text-emerald-600'],
+                ['등록 문법', log.newGrammarCount || 0, '개', 'text-[#5896cb]'],
+                ['마스터 문법', log.newGrammarMasteredCount || 0, '개', 'text-emerald-600'],
+                ['퀴즈', log.quizTotal || 0, '문제', 'text-amber-600'],
+                ['AI 첨삭', log.aiSessions || 0, '회', 'text-indigo-600'],
+                ['복습', log.reviewCount || 0, '개', 'text-sky-600'],
+                ['게임', log.gameCount || 0, '판', 'text-pink-600'],
+            ];
+            const total = items.reduce((s, x) => s + x[1], 0);
+            const grid = items.map(([label, val, unit, color]) =>
+                `<div class="flex items-center justify-between bg-white/70 rounded-lg px-2 py-1">
+                    <span class="text-slate-500">${label}</span>
+                    <span class="font-bold ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
+                </div>`).join('');
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-black text-slate-700">${fmtDateSlash(ds)} ${total > 0 ? `<span class="text-violet-600">· 총 ${total}개 활동</span>` : '<span class="text-slate-400 font-bold">· 학습 기록 없음</span>'}</span>
+                    <button onclick="document.getElementById('calendar-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                ${total > 0 ? `<div class="grid grid-cols-2 gap-1">${grid}</div>` : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>'}
+            `;
+        }
+
         function renderCalendar() {
             const container = document.getElementById('learning-calendar');
             const titleEl = document.getElementById('cal-title');
@@ -773,7 +804,7 @@ let vocabulary = [];
                     const inner = showX
                         ? `<span class="relative flex items-center justify-center w-full h-full"><span class="text-slate-300">${d}</span><i class="fa-solid fa-xmark absolute text-slate-300/60 text-[13px]"></i></span>`
                         : `${d}`;
-                    cells += `<div class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${ds} · ${showX ? '학습 없음' : n + '개 학습'}">${inner}</div>`;
+                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
             } else if (calView === 'year') {
@@ -1268,12 +1299,16 @@ let vocabulary = [];
             renderLearnerProfileDisplay();
         }
 
+        // [냐냐 PATCH] 날짜 표시 형식: 2026-07-09 → 2026/07/09, 축 라벨은 07/09
+        function fmtDateSlash(ds) { return (ds || '').replace(/-/g, '/'); }
+        function fmtDateShort(ds) { return (ds || '').slice(5).replace('-', '/'); }
+
         function recordChartXLabels(series, xOf, height) {
             const labelEvery = Math.max(1, Math.ceil(series.length / 7));
             let html = '';
             series.forEach((d, i) => {
                 if (i % labelEvery === 0 || i === series.length - 1) {
-                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">${d.date.slice(5)}</text>`;
+                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">${fmtDateShort(d.date)}</text>`;
                 }
             });
             return html;
@@ -1378,7 +1413,7 @@ let vocabulary = [];
                 const mBarH = (d.masteredRatio / 100) * chartH;
                 bars += `<rect x="${gx.toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#10b981" opacity="0.75" rx="1.5"/>`;
                 bars += `<rect x="${rx.toFixed(1)}" y="${(baseY - weakBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${weakBarH.toFixed(1)}" fill="#f43f5e" opacity="0.6" rx="1.5"/>`;
-                const text = `${d.date}: 마스터 비율 ${Math.round(d.masteredRatio)}% · 약점 비율 ${Math.round(currentWeakRatio)}%(현재)`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 마스터 비율 ${Math.round(d.masteredRatio)}% · 약점 비율 ${Math.round(currentWeakRatio)}%(현재)`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth * 2 + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth * 2 + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             });
 
@@ -1387,7 +1422,7 @@ let vocabulary = [];
             const lineDots = withRatio.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
                 const cy = yOfCount(d.registeredTotal).toFixed(1);
-                const text = `${d.date}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${text}')"/>`;
             }).join('');
 
@@ -1448,7 +1483,7 @@ let vocabulary = [];
                 const rx = xOf(i) + 1;
                 bars += `<rect x="${gx.toFixed(1)}" y="${(baseY - rH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${rH.toFixed(1)}" fill="#8b5cf6" opacity="0.75" rx="1.5"/>`;
                 bars += `<rect x="${rx.toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mH.toFixed(1)}" fill="#10b981" opacity="0.75" rx="1.5"/>`;
-                const text = `${d.date}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0}+문법 ${d.newGrammarCount||0}) · 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0}+문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0}+문법 ${d.newGrammarCount||0}) · 신규 마스터 ${d._newMasteredTotal}개 (단어 ${d.newMasteredCount||0}+문법 ${d.newGrammarMasteredCount||0})`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth * 2 + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth * 2 + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
 
@@ -1496,7 +1531,7 @@ let vocabulary = [];
                 const barH = (d.wrongRate / 100) * chartH;
                 const barX = (xOf(i) - barWidth / 2).toFixed(1);
                 const barY = (baseY - barH).toFixed(1);
-                const text = `${d.date}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
                 bars += `<rect x="${barX}" y="${barY}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
                 // 막대가 너무 얇아서 탭하기 어려우므로, 막대 전체 높이를 덮는 투명한 클릭 영역을 따로 추가
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
@@ -1508,7 +1543,7 @@ let vocabulary = [];
             const lineDots = withRate.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
                 const cy = yOfTotal(d.quizTotal).toFixed(1);
-                const text = `${d.date}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
             }).join('');
 
@@ -1545,7 +1580,7 @@ let vocabulary = [];
             let bars = '';
             series.forEach((d, i) => {
                 const barH = (d.aiSessions / maxVal) * chartH;
-                const text = `${d.date}: ${d.aiSessions}회`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: ${d.aiSessions}회`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
                 bars += `<rect x="${(xOfGroup(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-ai-chart-tooltip', '${text}')"/>`;
             });
@@ -1631,7 +1666,7 @@ let vocabulary = [];
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
                     }
                 });
-                const text = `${d.date}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
                 const hitW = Math.max(totalW, 14);
                 bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
@@ -1718,7 +1753,7 @@ let vocabulary = [];
             series.forEach((d, i) => {
                 const mBarH = (masteredRatioOf(i) / 100) * chartH;
                 bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
-                const text = `${d.date}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%`.replace(/'/g, "\\'");
+                const text = `${fmtDateSlash(d.date)}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
             });
 
