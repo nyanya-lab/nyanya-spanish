@@ -1788,11 +1788,14 @@ let vocabulary = [];
         function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
             const steps = 4;
             let html = '';
+            // [냐냐 PATCH] 라벨이 길면(자릿수 많으면) 글씨 크기를 줄여 잘림 방지
+            const longest = Math.max(...Array.from({ length: steps + 1 }, (_, i) => `${Math.round((maxVal / steps) * i)}${suffix}`.length));
+            const fs = longest >= 6 ? 7 : (longest >= 5 ? 8 : 9);
             for (let i = 0; i <= steps; i++) {
                 const val = Math.round((maxVal / steps) * i);
                 const y = padding.top + chartH - (i / steps) * chartH;
                 html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
-                html += `<text x="${(padding.left - 8).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="9" font-weight="700" fill="#475569" text-anchor="end">${val}${suffix}</text>`;
+                html += `<text x="${(padding.left - 5).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="${fs}" font-weight="700" fill="#475569" text-anchor="end">${val}${suffix}</text>`;
             }
             return html;
         }
@@ -1816,7 +1819,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 180;
-            const padding = { top: 16, right: 30, bottom: 28, left: 32 };
+            const padding = { top: 16, right: 30, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
 
@@ -1867,7 +1870,7 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
@@ -1885,7 +1888,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 180;
-            const padding = { top: 16, right: 34, bottom: 28, left: 28 };
+            const padding = { top: 16, right: 34, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -1926,8 +1929,8 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(leftMax, padding, chartW, chartH, width, '개')}
-                    ${recordChartRightAxis(rightMax, padding, chartH, width, '개', '#10b981')}
+                    ${recordChartGridlines(leftMax, padding, chartW, chartH, width, '')}
+                    ${recordChartRightAxis(rightMax, padding, chartH, width, '', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     ${recordChartXLabels(series, xOf, height)}
@@ -1942,7 +1945,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 28 };
+            const padding = { top: 16, right: 12, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -2003,7 +2006,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 140;
-            const padding = { top: 16, right: 12, bottom: 28, left: 24 };
+            const padding = { top: 16, right: 12, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -2045,6 +2048,12 @@ let vocabulary = [];
         }
         let _lastActivitySeries = null;
 
+        // [냐냐 PATCH] 범례 전체 선택 / 전체 해제
+        function setAllActivityCats(showAll) {
+            activityHidden = showAll ? [] : ['_total', '_newReg', 'quizTotal', 'aiSessions', 'reviewCount', 'gameCount'];
+            if (_lastActivitySeries) renderActivityChart(_lastActivitySeries);
+        }
+
         function renderActivityChart(series) {
             const container = document.getElementById('record-activity-chart');
             if (!container) return;
@@ -2053,7 +2062,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 200;
-            const padding = { top: 18, right: 30, bottom: 28, left: 30 };
+            const padding = { top: 18, right: 30, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -2073,10 +2082,9 @@ let vocabulary = [];
             const cats = allCats.filter(c => !activityHidden.includes(c.key));
             const showTotal = !activityHidden.includes('_total');
 
-            // 축 최대값: 표시되는 것들 기준 (등록은 축소값으로)
-            const barVals = withTotal.flatMap(d => cats.map(c => (d[c.key] || 0) / c.scale));
-            const totalVals = showTotal ? withTotal.map(d => d._total) : [];
-            const maxAll = Math.max(1, ...barVals, ...totalVals);
+            // [냐냐 PATCH] 축 분리 — 총합=왼쪽 축(실제 갯수), 활동 막대=오른쪽 축(등록은 ÷10)
+            const barMax = Math.max(1, ...withTotal.flatMap(d => cats.map(c => (d[c.key] || 0) / c.scale)));
+            const totalMax = Math.max(1, ...withTotal.map(d => d._total));
 
             const xInset = Math.min(14, chartW * 0.06);
             const xSpan = chartW - xInset * 2;
@@ -2091,7 +2099,7 @@ let vocabulary = [];
                 const totalW = barW * cats.length;
                 cats.forEach((c, ci) => {
                     const shown = (d[c.key] || 0) / c.scale; // 등록은 1/10로 그림
-                    const barH = (shown / maxAll) * chartH;
+                    const barH = (shown / barMax) * chartH;
                     const bx = groupCenter - totalW / 2 + ci * barW;
                     if (barH > 0) {
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
@@ -2102,17 +2110,17 @@ let vocabulary = [];
                 bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
 
-            // 총합 꺾은선 (실제 갯수 기준, 점선)
+            // 총합 꺾은선 (왼쪽 축, 실제 갯수 기준, 점선)
             let totalLine = '';
             if (showTotal) {
-                const yOfTotal = (val) => padding.top + chartH - (val / maxAll) * chartH;
+                const yOfTotal = (val) => padding.top + chartH - (val / totalMax) * chartH;
                 const linePath = withTotal.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d._total).toFixed(1)}`).join(' ');
                 const lineDots = withTotal.map((d, i) => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfTotal(d._total).toFixed(1)}" r="2.5" fill="#8b5cf6"/>`).join('');
                 totalLine = `<path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" opacity="0.8"/>${lineDots}`;
             }
 
-            // 범례 (클릭해서 켜고 끄기)
-            const legendItems = [...allCats, { key: '_total', label: '총합', color: '#8b5cf6', isLine: true }].map(c => {
+            // 범례 (클릭해서 켜고 끄기) + 전체 선택/해제
+            const legendItems = [{ key: '_total', label: '총합', color: '#8b5cf6', isLine: true }, ...allCats].map(c => {
                 const on = !activityHidden.includes(c.key);
                 const mark = c.isLine
                     ? `<span class="w-3 h-0 inline-block" style="border-top:2px dashed ${c.color};"></span>`
@@ -2120,20 +2128,25 @@ let vocabulary = [];
                 const note = (c.key === '_newReg') ? ` <span class="text-[9px] text-slate-400">(막대 ÷${ACT_REG_SCALE})</span>` : '';
                 return `<button type="button" onclick="toggleActivityCat('${c.key}')" class="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-all ${on ? 'text-slate-600 bg-white/70' : 'text-slate-300 line-through'}">${mark}${c.label}${note}</button>`;
             }).join('');
+            const bulkBtns = `
+                <span class="w-px h-3 bg-slate-200 mx-0.5"></span>
+                <button type="button" onclick="setAllActivityCats(true)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md text-slate-500 bg-white/70 hover:bg-white transition-all">전체 선택</button>
+                <button type="button" onclick="setAllActivityCats(false)" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md text-slate-500 bg-white/70 hover:bg-white transition-all">전체 해제</button>`;
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-activity-chart-tooltip')}
-                <div class="flex flex-wrap items-center gap-1.5 mb-2">${legendItems}</div>
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">${legendItems}${bulkBtns}</div>
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxAll, padding, chartW, chartH, width, '')}
+                    ${recordChartGridlines(totalMax, padding, chartW, chartH, width, '')}
+                    ${cats.length ? recordChartRightAxis(barMax, padding, chartH, width, '', '#94a3b8') : ''}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     ${totalLine}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
                 <p class="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                    하루에 뭘 얼마나 했는지 보여줘요. <b>총합(점선)</b>은 그날 한 활동을 <b>실제 갯수 그대로</b> 다 더한 값이에요.
-                    신규등록은 갯수가 많아 다른 활동이 안 보여서 <b>막대만 ${ACT_REG_SCALE}개당 1칸</b>으로 줄여 그렸어요 (총합·설명엔 실제 갯수).
+                    하루에 뭘 얼마나 했는지 보여줘요. <b>총합(점선)</b>은 그날 한 활동을 <b>실제 갯수 그대로</b> 다 더한 값이고 <b>왼쪽 축</b> 기준이에요.
+                    활동별 <b>막대는 오른쪽 축</b> 기준이고, 신규등록은 갯수가 많아 다른 활동이 안 보여서 <b>막대만 ${ACT_REG_SCALE}개당 1칸</b>으로 줄여 그렸어요.
                     범례를 눌러 보고 싶은 것만 골라 볼 수 있어요.
                 </p>
             `;
@@ -2147,7 +2160,7 @@ let vocabulary = [];
 
             const width = CHART_VIEW_WIDTH;
             const height = 160;
-            const padding = { top: 16, right: 34, bottom: 28, left: 24 };
+            const padding = { top: 16, right: 34, bottom: 28, left: 36 };
             const chartW = width - padding.left - padding.right;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
@@ -2189,7 +2202,7 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '개')}
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
@@ -3195,9 +3208,9 @@ let vocabulary = [];
                 // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
                 const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-600', shadow: 'shadow-violet-100' };
                 if (key === tabId) {
-                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
+                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all text-slate-600 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50";
                 }
                 const icon = el.querySelector('i');
                 if (icon) {
