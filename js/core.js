@@ -3153,7 +3153,7 @@ let vocabulary = [];
                 if (key === tabId) {
                     el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all text-slate-600 hover:bg-slate-50";
                 }
                 const icon = el.querySelector('i');
                 if (icon) {
