@@ -2732,14 +2732,14 @@ let vocabulary = [];
         };
         // [냐냐 PATCH] 선택된 메뉴의 배경색 = 그 메뉴의 색 (아이콘은 통일, 선택으로 색 구분)
         const NAV_SELECT_STYLES = {
-            'list': { bg: 'bg-violet-600', shadow: 'shadow-violet-100' },
-            'grammar': { bg: 'bg-teal-600', shadow: 'shadow-teal-100' },
-            'cards': { bg: 'bg-cyan-600', shadow: 'shadow-cyan-100' },
-            'review': { bg: 'bg-indigo-600', shadow: 'shadow-indigo-100' },
-            'quiz': { bg: 'bg-amber-500', shadow: 'shadow-amber-100' },
-            'games': { bg: 'bg-pink-600', shadow: 'shadow-pink-100' },
-            'ai-feedback': { bg: 'bg-sky-600', shadow: 'shadow-sky-100' },
-            'records': { bg: 'bg-emerald-600', shadow: 'shadow-emerald-100' }
+            'list': { bg: 'bg-violet-50', text: 'text-violet-700' },
+            'grammar': { bg: 'bg-teal-50', text: 'text-teal-700' },
+            'cards': { bg: 'bg-cyan-50', text: 'text-cyan-700' },
+            'review': { bg: 'bg-indigo-50', text: 'text-indigo-700' },
+            'quiz': { bg: 'bg-amber-50', text: 'text-amber-700' },
+            'games': { bg: 'bg-pink-50', text: 'text-pink-700' },
+            'ai-feedback': { bg: 'bg-sky-50', text: 'text-sky-700' },
+            'records': { bg: 'bg-emerald-50', text: 'text-emerald-700' }
         };
         function changeTab(tabId) {
             activeTab = tabId;
@@ -2767,18 +2767,19 @@ let vocabulary = [];
                 // [냐냐 PATCH] 플래시카드 메뉴는 숨김 유지 (className 재설정 때 튀어나오는 것 방지)
                 const hiddenPrefix = (key === 'cards') ? 'hidden ' : '';
                 // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
-                const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-600', shadow: 'shadow-violet-100' };
+                const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-50', text: 'text-violet-700' };
                 if (key === tabId) {
-                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
+                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-bold transition-all ${sel.bg} ${sel.text}`;
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700";
                 }
                 const icon = el.querySelector('i');
                 if (icon) {
                     // 모든 개별 색 클래스 제거 → 통일된 회색 or 선택 시 흰색
                     Object.values(NAV_ICON_COLORS).forEach(c => icon.classList.remove(c));
                     icon.classList.remove('text-white', 'text-slate-400', 'text-slate-600', 'text-slate-900');
-                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-600');
+                    // 선택 시 글씨 색을 그대로 따라감(색 클래스 없음), 미선택은 옅은 회색
+                    if (key !== tabId) icon.classList.add('text-slate-400');
                 }
             });
 
