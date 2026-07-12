@@ -439,8 +439,8 @@ let quizSession = null;
             if (opts.idiomIntro) {
                 sections.push(`
                     <div>
-                        <span class="block text-xs font-black text-rose-500 mb-0.5">📌 관용구 안내</span>
-                        <span class="block text-sm text-slate-700">"${word.word}" (${word.meaning}) 단어의 관용구예요.</span>
+                        <span class="block text-xs font-black text-rose-500 mb-1.5">📌 관용구 안내</span>
+                        <span class="block text-sm text-slate-700 leading-relaxed">"${word.word}" (${word.meaning}) 단어의 관용구예요.</span>
                     </div>`);
             }
             // 성·수 변화 (형용사)
@@ -448,25 +448,25 @@ let quizSession = null;
             if (agr) {
                 sections.push(`
                     <div>
-                        <span class="block text-xs font-black text-fuchsia-500 mb-0.5">🔤 성·수 변화</span>
-                        <span class="block text-sm text-slate-700">${agr}</span>
+                        <span class="block text-xs font-black text-fuchsia-500 mb-1.5">🔤 성·수 변화</span>
+                        <span class="block text-sm text-slate-700 leading-relaxed">${agr}</span>
                     </div>`);
             }
             // 노트
             if (word.notes) {
                 sections.push(`
                     <div>
-                        <span class="block text-xs font-black text-amber-600 mb-0.5">📝 노트</span>
-                        <span class="block text-sm text-slate-700">${escapeHtml(word.notes)}</span>
+                        <span class="block text-xs font-black text-amber-600 mb-1.5">📝 노트</span>
+                        <span class="block text-sm text-slate-700 leading-relaxed">${escapeHtml(word.notes)}</span>
                     </div>`);
             }
             // 관용구
             const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
             if (idiomList.length > 0) {
-                const items = idiomList.map(x => `<span class="block text-sm text-slate-700">· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>`).join('');
+                const items = idiomList.map(x => `<span class="block text-sm text-slate-700 leading-relaxed">· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>`).join('');
                 sections.push(`
                     <div>
-                        <span class="block text-xs font-black text-emerald-600 mb-0.5">💬 관용구</span>
+                        <span class="block text-xs font-black text-emerald-600 mb-1.5">💬 관용구</span>
                         ${items}
                     </div>`);
             }
@@ -474,41 +474,67 @@ let quizSession = null;
             if (word.example) {
                 sections.push(`
                     <div>
-                        <span class="block text-xs font-black text-sky-600 mb-0.5">✍️ 예문</span>
-                        <span class="block text-sm text-slate-700 italic">${escapeHtml(word.example)}</span>
-                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500">${escapeHtml(word.exampleMeaning)}</span>` : ''}
+                        <span class="block text-xs font-black text-sky-600 mb-1.5">✍️ 예문</span>
+                        <span class="block text-sm text-slate-700 italic leading-relaxed">${escapeHtml(word.example)}</span>
+                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
                     </div>`);
             }
-            return sections.join('<div class="border-t border-slate-100 my-2"></div>');
+            return sections.join('<div class="border-t border-slate-100 my-3"></div>');
         }
 
-        // [냐냐 PATCH] 퀴즈 정답 확인 화면에 동사 현재시제 활용표 표시
-        function renderQuizConjugation(word) {
+        // [냐냐 PATCH] 퀴즈 정답 화면 동사 활용표 — 시제 + 불규칙 유형 표시 + 불규칙 칸 색상 강조(단어장과 동일)
+        function renderQuizConjugation(word, q) {
             const box = document.getElementById('quiz-review-conj-box');
             if (!box) return;
-            const c = word.conjugations;
+            // 출제된 시제 우선, 없으면 현재시제
+            const tenseKey = (q && q.tenseKey) || 'presente';
+            const byTense = word.conjugationsByTense || {};
+            const c = byTense[tenseKey] || (tenseKey === 'presente' ? word.conjugations : null) || word.conjugations;
             const hasConj = word.pos === 'verb' && c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos);
             if (!hasConj) {
                 box.classList.add('hidden');
                 box.innerHTML = '';
                 return;
             }
+            const tenseLabel = (q && q.tenseLabel) || '현재시제';
+            // 시제별 불규칙 유형 (없으면 구버전 irregularType = 현재시제)
+            const irrByTense = word.irregularByTense || {};
+            const vcByTense = word.verbClassByTense || {};
+            const irrType = irrByTense[tenseKey] || ((tenseKey === 'presente') ? (word.irregularType || '') : '');
+            const verbClass = vcByTense[tenseKey] || ((irrType && irrType !== 'none') ? 'irregular' : (tenseKey === 'presente' ? (word.verbClass || 'regular') : 'regular'));
+            const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
+
             const rows = [
                 ['yo', c.yo], ['tú', c.tu], ['él/ella', c.el],
                 ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]
             ];
-            const cells = rows.map(([label, val]) => `
-                <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center">
+            // 단어장과 동일 규칙: 해당 인칭이 불규칙이면 파란색 강조
+            const isIrregularCell = (person) => {
+                if (!isIrr) return false;
+                const p = person.split('/')[0]; // 'él/ella' → 'él'
+                if (irrType.includes('완전 불규칙')) return true;
+                if (irrType.includes('1인칭') && p === 'yo') return true;
+                const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i');
+                if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
+                return false;
+            };
+            const cells = rows.map(([label, val]) => {
+                const hl = val && isIrregularCell(label);
+                return `
+                <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5">
                     <span class="text-[11px] text-slate-400 font-medium">${label}</span>
-                    <span class="text-sm font-bold text-slate-800">${val || '-'}</span>
-                </div>`).join('');
+                    <span class="text-sm ${hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold'}">${val || '-'}</span>
+                </div>`;
+            }).join('');
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center justify-center gap-1.5">
-                        <span>🔀</span> 현재시제 활용 ${word.verbClass === 'irregular' ? '<span class="text-rose-500 ml-1">(불규칙)</span>' : ''}
+                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center justify-center gap-1.5 flex-wrap">
+                        <span>🔀</span> ${tenseLabel} 활용
+                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${irrType})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
+                    ${isIrr ? '<p class="text-[10px] text-slate-400 text-center py-1.5 border-t border-slate-100">파란 글씨가 불규칙으로 바뀌는 부분이에요</p>' : ''}
                 </div>`;
         }
 
@@ -756,7 +782,7 @@ let quizSession = null;
             }
 
             // [냐냐 PATCH] 동사 문제면 현재시제 활용표를 보여줌
-            renderQuizConjugation(q.word);
+            renderQuizConjugation(q.word, q);
 
             document.getElementById('quiz-review-panel').classList.remove('hidden');
             window._quizReviewShownAt = Date.now(); // 엔터 가드용 (방금 제출한 엔터로 바로 안 넘어가게)
