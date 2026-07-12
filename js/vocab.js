@@ -1585,10 +1585,10 @@
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
                             <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
-                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-1.5" data-card-chevron="${w.id}"></i>
+                                <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-2" data-card-chevron="${w.id}"></i>
                                 <span class="min-w-0 leading-tight" style="word-break:break-word;">
                                     <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
-                                    <span class="inline-flex items-center gap-1.5 align-middle ml-2" style="transform: translateY(1px);">${badgeMarkup}</span>
+                                    <span class="inline-flex items-center gap-1.5 align-middle ml-1" style="transform: translateY(1px);">${badgeMarkup}</span>
                                     <span class="block text-sm text-slate-500 font-semibold mt-0.5 ${expandedAll ? 'hidden' : ''}" data-card-meaning="${w.id}">${w.meaning}</span>
                                 </span>
                             </button>
