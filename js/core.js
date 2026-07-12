@@ -674,15 +674,15 @@ let vocabulary = [];
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
                         <span class="text-3xl">${c.emoji}</span>
-                        <span class="text-[11px] font-black ${info.color} leading-tight">${c.name}</span>
-                        <span class="text-[9px] text-slate-400 leading-snug">${c.desc}</span>
+                        <span class="text-[13px] font-black ${info.color} leading-tight">${c.name}</span>
+                        <span class="text-[10px] text-slate-600 leading-snug">${c.desc}</span>
                     </div>`;
                 } else {
                     return `<div class="relative flex flex-col items-center justify-center gap-1 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
                         <span class="absolute top-1 left-1.5 text-[9px] opacity-50">${info.star}</span>
                         <span class="text-3xl grayscale">❔</span>
-                        <span class="text-[11px] font-bold text-slate-300 leading-tight">???</span>
-                        <span class="text-[9px] text-slate-300">아직 못 만났어요</span>
+                        <span class="text-[13px] font-bold text-slate-300 leading-tight">???</span>
+                        <span class="text-[10px] text-slate-400">아직 못 만났어요</span>
                     </div>`;
                 }
             }).join('');
@@ -1608,7 +1608,7 @@ let vocabulary = [];
             const cats = allCats.filter(c => !activityHidden.includes(c.key));
             const showTotal = !activityHidden.includes('_total');
 
-            // [냐냐 PATCH] 축 분리 — 총합=왼쪽 축(실제 갯수), 활동 막대=오른쪽 축(등록은 ÷10)
+            // [냐냐 PATCH] 축 — 왼쪽=개별 활동 막대(등록은 ÷10), 오른쪽=총합(실제 갯수)
             const barMax = Math.max(1, ...withTotal.flatMap(d => cats.map(c => (d[c.key] || 0) / c.scale)));
             const totalMax = Math.max(1, ...withTotal.map(d => d._total));
 
@@ -1625,7 +1625,7 @@ let vocabulary = [];
                 const totalW = barW * cats.length;
                 cats.forEach((c, ci) => {
                     const shown = (d[c.key] || 0) / c.scale; // 등록은 1/10로 그림
-                    const barH = (shown / barMax) * chartH;
+                    const barH = (shown / barMax) * chartH;  // 왼쪽 축 기준
                     const bx = groupCenter - totalW / 2 + ci * barW;
                     if (barH > 0) {
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
@@ -1636,7 +1636,7 @@ let vocabulary = [];
                 bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
 
-            // 총합 꺾은선 (왼쪽 축, 실제 갯수 기준, 점선)
+            // 총합 꺾은선 (오른쪽 축, 실제 갯수 기준, 점선)
             let totalLine = '';
             if (showTotal) {
                 const yOfTotal = (val) => padding.top + chartH - (val / totalMax) * chartH;
@@ -1645,8 +1645,8 @@ let vocabulary = [];
                 totalLine = `<path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" opacity="0.8"/>${lineDots}`;
             }
 
-            // 범례 (클릭해서 켜고 끄기) + 전체 선택/해제
-            const legendItems = [{ key: '_total', label: '총합', color: '#8b5cf6', isLine: true }, ...allCats].map(c => {
+            // 범례 (클릭해서 켜고 끄기) — 총합은 맨 뒤 + 전체 선택/해제
+            const legendItems = [...allCats, { key: '_total', label: '총합', color: '#8b5cf6', isLine: true }].map(c => {
                 const on = !activityHidden.includes(c.key);
                 const mark = c.isLine
                     ? `<span class="w-3 h-0 inline-block" style="border-top:2px dashed ${c.color};"></span>`
@@ -1663,16 +1663,16 @@ let vocabulary = [];
                 ${recordChartTooltipDiv('record-activity-chart-tooltip')}
                 <div class="flex flex-wrap items-center gap-1.5 mb-2">${legendItems}${bulkBtns}</div>
                 <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-                    ${recordChartGridlines(totalMax, padding, chartW, chartH, width, '')}
-                    ${cats.length ? recordChartRightAxis(barMax, padding, chartH, width, '', '#94a3b8') : ''}
+                    ${recordChartGridlines(barMax, padding, chartW, chartH, width, '')}
+                    ${showTotal ? recordChartRightAxis(totalMax, padding, chartH, width, '', '#8b5cf6') : ''}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     ${totalLine}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
                 <p class="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                    하루에 뭘 얼마나 했는지 보여줘요. <b>총합(점선)</b>은 그날 한 활동을 <b>실제 갯수 그대로</b> 다 더한 값이고 <b>왼쪽 축</b> 기준이에요.
-                    활동별 <b>막대는 오른쪽 축</b> 기준이고, 신규등록은 갯수가 많아 다른 활동이 안 보여서 <b>막대만 ${ACT_REG_SCALE}개당 1칸</b>으로 줄여 그렸어요.
+                    하루에 뭘 얼마나 했는지 보여줘요. 활동별 <b>막대는 왼쪽 축</b>, <b>총합(점선)은 오른쪽 축</b> 기준이에요.
+                    총합은 그날 한 활동을 <b>실제 갯수 그대로</b> 다 더한 값이고, 신규등록은 갯수가 많아 다른 활동이 안 보여서 <b>막대만 ${ACT_REG_SCALE}개당 1칸</b>으로 줄여 그렸어요.
                     범례를 눌러 보고 싶은 것만 골라 볼 수 있어요.
                 </p>
             `;
@@ -2734,16 +2734,16 @@ let vocabulary = [];
                 // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
                 const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-600', shadow: 'shadow-violet-100' };
                 if (key === tabId) {
-                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
+                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
                 } else {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-semibold transition-all text-slate-600 hover:bg-slate-50";
+                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-900 hover:bg-slate-50";
                 }
                 const icon = el.querySelector('i');
                 if (icon) {
                     // 모든 개별 색 클래스 제거 → 통일된 회색 or 선택 시 흰색
                     Object.values(NAV_ICON_COLORS).forEach(c => icon.classList.remove(c));
-                    icon.classList.remove('text-white', 'text-slate-400', 'text-slate-600');
-                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-600');
+                    icon.classList.remove('text-white', 'text-slate-400', 'text-slate-600', 'text-slate-900');
+                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-900');
                 }
             });
 
