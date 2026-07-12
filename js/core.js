@@ -1681,7 +1681,7 @@ let vocabulary = [];
                     ${recordChartGridlines(maxAll, padding, chartW, chartH, width, '')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3"/>
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" opacity="0.8"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
@@ -2024,7 +2024,7 @@ let vocabulary = [];
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-2xl shrink-0">${t.icon || '📋'}</span>
                                 <div class="min-w-0 flex-1">
-                                    ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-0.5 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md border ${c.r}">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
+                                    ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="block mb-1 text-[10px] font-bold ${c.t}">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
                                         ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
@@ -2702,6 +2702,17 @@ let vocabulary = [];
             'ai-feedback': 'text-sky-500',
             'records': 'text-emerald-500'
         };
+        // [냐냐 PATCH] 선택된 메뉴의 배경색 = 그 메뉴의 색 (아이콘은 통일, 선택으로 색 구분)
+        const NAV_SELECT_STYLES = {
+            'list': { bg: 'bg-violet-600', shadow: 'shadow-violet-100' },
+            'grammar': { bg: 'bg-teal-600', shadow: 'shadow-teal-100' },
+            'cards': { bg: 'bg-cyan-600', shadow: 'shadow-cyan-100' },
+            'review': { bg: 'bg-indigo-600', shadow: 'shadow-indigo-100' },
+            'quiz': { bg: 'bg-amber-500', shadow: 'shadow-amber-100' },
+            'games': { bg: 'bg-pink-600', shadow: 'shadow-pink-100' },
+            'ai-feedback': { bg: 'bg-sky-600', shadow: 'shadow-sky-100' },
+            'records': { bg: 'bg-emerald-600', shadow: 'shadow-emerald-100' }
+        };
         function changeTab(tabId) {
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
@@ -2727,22 +2738,19 @@ let vocabulary = [];
                 if (!el) return;
                 // [냐냐 PATCH] 플래시카드 메뉴는 숨김 유지 (className 재설정 때 튀어나오는 것 방지)
                 const hiddenPrefix = (key === 'cards') ? 'hidden ' : '';
+                // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
+                const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-600', shadow: 'shadow-violet-100' };
                 if (key === tabId) {
-                    el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all bg-violet-600 text-white shadow-md shadow-violet-100";
+                    el.className = hiddenPrefix + `w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-bold transition-all ${sel.bg} text-white shadow-md ${sel.shadow}`;
                 } else {
                     el.className = hiddenPrefix + "w-full flex items-center gap-3 px-4 py-2 rounded-xl text-left text-sm font-medium transition-all text-slate-600 hover:bg-slate-50";
                 }
-                // [냐냐 PATCH] 선택된 메뉴는 아이콘도 흰색, 아닌 건 각자 색 유지
                 const icon = el.querySelector('i');
                 if (icon) {
-                    const colorClass = NAV_ICON_COLORS[key] || '';
-                    if (key === tabId) {
-                        if (colorClass) icon.classList.remove(colorClass);
-                        icon.classList.add('text-white');
-                    } else {
-                        icon.classList.remove('text-white');
-                        if (colorClass) icon.classList.add(colorClass);
-                    }
+                    // 모든 개별 색 클래스 제거 → 통일된 회색 or 선택 시 흰색
+                    Object.values(NAV_ICON_COLORS).forEach(c => icon.classList.remove(c));
+                    icon.classList.remove('text-white', 'text-slate-400');
+                    icon.classList.add(key === tabId ? 'text-white' : 'text-slate-400');
                 }
             });
 
