@@ -1430,7 +1430,7 @@ let vocabulary = [];
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
@@ -1489,7 +1489,7 @@ let vocabulary = [];
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-growth-daily-chart-tooltip')}
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(leftMax, padding, chartW, chartH, width, '')}
                     ${recordChartRightAxis(rightMax, padding, chartH, width, '', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
@@ -1549,7 +1549,7 @@ let vocabulary = [];
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-quiz-chart-tooltip')}
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
@@ -1587,7 +1587,7 @@ let vocabulary = [];
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-ai-chart-tooltip')}
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
@@ -1697,7 +1697,7 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-activity-chart-tooltip')}
                 <div class="flex flex-wrap items-center gap-1.5 mb-2">${legendItems}${bulkBtns}</div>
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(barMax, padding, chartW, chartH, width, '')}
                     ${showTotal ? recordChartRightAxis(totalMax, padding, chartH, width, '', '#8b5cf6') : ''}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
@@ -1762,7 +1762,7 @@ let vocabulary = [];
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
-                <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
