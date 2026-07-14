@@ -42,7 +42,7 @@
         //   각 블록 = 시제종류 select + 규칙/불규칙 select + 불규칙유형 select + AI추천 + 삭제 + 입력칸(6인칭 또는 현재분사 1칸)
         const CONJ_PERSON_KEYS = ['yo','tu','el','nos','vos','ellos'];
         const CONJ_PERSON_LABELS = ['yo (나)','tú (너)','él/ella','nosotros','vosotros','ellos/ellas'];
-        const SINGLE_TENSES = ['gerundio', 'interrogativo']; // 6인칭이 아니라 1칸만 있는 특수 항목
+        const SINGLE_TENSES = ['gerundio']; // 6인칭이 아니라 1칸만 있는 특수 시제
         // 시제 종류 (틀 — 나중에 자유롭게 추가/수정 가능)
         const TENSE_TYPE_OPTIONS = [
             { key: 'presente', label: '직설법 현재' },
@@ -55,7 +55,6 @@
             { key: 'imperativo', label: '명령법' },
             { key: 'presProgresivo', label: '현재진행 (estar+gerundio)' },
             { key: 'gerundio', label: '현재분사 (gerundio · 1칸)' },
-            { key: 'interrogativo', label: '의문문 · 의문사 구문 (1칸)' }, // [냐냐 PATCH] 시제는 아니지만 같은 블록으로 관리
         ];
         // 불규칙 유형 (틀 — 학습하며 나중에 채우기)
         const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
