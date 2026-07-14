@@ -1232,6 +1232,190 @@
         }
 
         // Save Word Action
+        // ============================================================
+        // [냐냐 PATCH-3차] 중복 단어 반반 비교 편집창
+        //   중복 판정 = 단어 + 품사가 둘 다 같을 때 (el poder 명사 ≠ poder 동사)
+        //   좌 = 기존 / 우 = 신규. 양쪽 각각 편집 가능. 최종 하나만 선택.
+        //   ⚠️ 단어 모달은 전역 상태를 쓰므로, 여기선 폼 상태를 "스냅샷 객체"로 분리해서 다룸
+        // ============================================================
+        let dupState = null; // { oldWord, newWord, oldId }
+
+        // 현재 등록 폼의 모든 값을 하나의 단어 객체(스냅샷)로 뽑아냄
+        function snapshotWordForm() {
+            const val = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+            return {
+                word: val('input-word'),
+                meaning: val('input-meaning'),
+                pos: val('input-pos'),
+                gender: val('input-gender'),
+                adjAgreement: val('input-adj-agreement'),
+                notes: val('input-notes'),
+                example: val('input-example'),
+                exampleMeaning: val('input-example-meaning'),
+                idioms: getIdiomRowsData(),
+                _synRows: getSynonymRowsData(),
+                conjugationsByTense: collectConjByTense(),
+                irregularByTense: collectVerbInfoByTense().irregularByTense,
+                verbClassByTense: collectVerbInfoByTense().verbClassByTense
+            };
+        }
+
+        // 스냅샷 → 화면에 보여줄 읽기/편집 카드 HTML
+        function buildDupSideHtml(side, w) {
+            const isOld = side === 'old';
+            const title = isOld ? '기존 단어' : '신규 입력';
+            const badge = isOld ? 'bg-slate-100 text-slate-600' : 'bg-violet-100 text-violet-700';
+            const border = isOld ? 'border-slate-300' : 'border-violet-400';
+            const inp = (field, label, value, ph = '') => `
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">${label}</label>
+                    <input type="text" data-dup="${side}" data-field="${field}" value="${String(value || '').replace(/"/g, '&quot;')}" placeholder="${ph}" class="w-full bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                </div>`;
+
+            // 관용구·유의어·시제는 편집 대신 "요약 표시" (편집하려면 창 닫고 원래 폼에서)
+            const idiomTxt = (w.idioms && w.idioms.length)
+                ? w.idioms.map(it => `${escapeHtml(it.idiom)} <span class="text-slate-400">— ${escapeHtml(it.idiomMeaning || '')}</span>`).join('<br>')
+                : '<span class="text-slate-300">없음</span>';
+            const synRows = w._synRows || [];
+            const synTxt = synRows.length
+                ? synRows.map(r => `<span class="${r.type === 'antonym' ? 'text-rose-600' : 'text-sky-600'} font-bold">${r.type === 'antonym' ? '반의어' : '유의어'}</span> ${escapeHtml(r.word)} <span class="text-slate-400">${escapeHtml(r.meaning || '')}</span>`).join('<br>')
+                : '<span class="text-slate-300">없음</span>';
+            const tenseKeys = Object.keys(w.conjugationsByTense || {}).filter(k => {
+                const c = w.conjugationsByTense[k];
+                return c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
+            });
+            const tenseTxt = tenseKeys.length
+                ? tenseKeys.map(k => {
+                    const o = TENSE_TYPE_OPTIONS.find(t => t.key === k);
+                    return `<span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-bold">${escapeHtml(o ? o.label : k)}</span>`;
+                  }).join(' ')
+                : '<span class="text-slate-300">없음</span>';
+
+            const scoreTxt = isOld && dupState && dupState.oldWord && typeof dupState.oldWord.score === 'number'
+                ? `<div class="text-[11px] font-bold text-slate-500">현재 점수: <span class="text-slate-800">${formatScore(dupState.oldWord)}</span> · 정답 ${dupState.oldWord.correctTotal || 0} / 오답 ${dupState.oldWord.wrongTotal || 0}</div>`
+                : '';
+
+            return `
+            <div class="border-2 ${border} rounded-2xl p-4 space-y-3 bg-white">
+                <div class="flex items-center justify-between">
+                    <span class="px-2.5 py-1 rounded-lg text-[11px] font-black ${badge}">${title}</span>
+                    ${scoreTxt}
+                </div>
+                ${inp('word', '단어', w.word)}
+                ${inp('meaning', '뜻', w.meaning)}
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="space-y-1">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">품사</label>
+                        <select data-dup="${side}" data-field="pos" class="w-full bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                            ${ALL_POS_LIST.map(p => `<option value="${p}" ${w.pos === p ? 'selected' : ''}>${POS_LABELS[p] || p}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">성별</label>
+                        <select data-dup="${side}" data-field="gender" class="w-full bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400">
+                            <option value="none" ${(!w.gender || w.gender === 'none') ? 'selected' : ''}>없음/공용</option>
+                            <option value="masculine" ${w.gender === 'masculine' ? 'selected' : ''}>남성 (el)</option>
+                            <option value="feminine" ${w.gender === 'feminine' ? 'selected' : ''}>여성 (la)</option>
+                        </select>
+                    </div>
+                </div>
+                ${inp('example', '예문', w.example)}
+                ${inp('exampleMeaning', '예문 뜻', w.exampleMeaning)}
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">메모</label>
+                    <textarea data-dup="${side}" data-field="notes" rows="2" class="w-full bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">${escapeHtml(w.notes || '')}</textarea>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-2.5 space-y-2 text-[12px] leading-relaxed">
+                    <div><span class="text-[10px] font-black text-violet-600 uppercase">관용구</span><div class="mt-0.5">${idiomTxt}</div></div>
+                    <div class="border-t border-slate-200 pt-2"><span class="text-[10px] font-black text-sky-600 uppercase">유의어·반의어</span><div class="mt-0.5">${synTxt}</div></div>
+                    <div class="border-t border-slate-200 pt-2"><span class="text-[10px] font-black text-indigo-600 uppercase">등록된 시제</span><div class="mt-0.5 flex flex-wrap gap-1">${tenseTxt}</div></div>
+                </div>
+            </div>`;
+        }
+
+        function openDupModal(oldWord, newSnapshot) {
+            dupState = {
+                oldId: oldWord.id,
+                oldWord,
+                // 기존 단어 → 스냅샷 형태로 변환 (링크는 폼 행 형태로)
+                oldSnap: {
+                    word: oldWord.word, meaning: oldWord.meaning, pos: oldWord.pos,
+                    gender: oldWord.gender || 'none', adjAgreement: oldWord.adjAgreement || 'full',
+                    notes: oldWord.notes || '', example: oldWord.example || '', exampleMeaning: oldWord.exampleMeaning || '',
+                    idioms: (oldWord.idioms && oldWord.idioms.length) ? oldWord.idioms : (oldWord.idiom ? [{ idiom: oldWord.idiom, idiomMeaning: oldWord.idiomMeaning || '' }] : []),
+                    _synRows: (oldWord.synonyms || []).map(l => {
+                        const t = vocabulary.find(v => v.id === l.id);
+                        return t ? { id: t.id, word: t.word, pos: t.pos, meaning: t.meaning, difference: l.difference || '', type: l.type } : null;
+                    }).filter(Boolean),
+                    conjugationsByTense: oldWord.conjugationsByTense || (oldWord.conjugations ? { presente: oldWord.conjugations } : {}),
+                    irregularByTense: oldWord.irregularByTense || {},
+                    verbClassByTense: oldWord.verbClassByTense || {}
+                },
+                newSnap: newSnapshot
+            };
+            const sub = document.getElementById('dup-modal-sub');
+            if (sub) sub.innerText = `"${newSnapshot.word}" (${POS_LABELS[newSnapshot.pos] || newSnapshot.pos}) — 양쪽 다 고칠 수 있어요. 남길 쪽을 골라주세요.`;
+            document.getElementById('dup-side-old').innerHTML = buildDupSideHtml('old', dupState.oldSnap);
+            document.getElementById('dup-side-new').innerHTML = buildDupSideHtml('new', dupState.newSnap);
+            document.getElementById('dup-modal').classList.remove('hidden');
+        }
+
+        function closeDupModal() {
+            document.getElementById('dup-modal').classList.add('hidden');
+            dupState = null;
+        }
+
+        // 비교창의 편집 내용을 스냅샷에 다시 반영
+        function collectDupSide(side) {
+            const base = (side === 'old') ? { ...dupState.oldSnap } : { ...dupState.newSnap };
+            document.querySelectorAll(`[data-dup="${side}"]`).forEach(el => {
+                base[el.dataset.field] = el.value.trim();
+            });
+            return base;
+        }
+
+        // 최종 선택 — 고른 쪽만 남기고 나머지는 버림
+        function resolveDuplicate(side) {
+            if (!dupState) return;
+            const chosen = collectDupSide(side);
+            if (!chosen.word || !chosen.meaning) {
+                showToast("단어와 뜻은 비워둘 수 없어요!", "error");
+                return;
+            }
+            const target = vocabulary.find(v => v.id === dupState.oldId);
+            if (!target) { closeDupModal(); return; }
+
+            // 기존 단어 객체를 덮어씀 → 점수/학습기록은 그대로 유지됨 (중복 단어가 새로 안 생김)
+            target.word = chosen.word;
+            target.meaning = chosen.meaning;
+            target.pos = chosen.pos;
+            target.gender = chosen.gender;
+            target.notes = chosen.notes || '';
+            target.example = chosen.example || '';
+            target.exampleMeaning = chosen.exampleMeaning || '';
+            target.idioms = chosen.idioms || [];
+            target.conjugationsByTense = chosen.conjugationsByTense || {};
+            target.irregularByTense = chosen.irregularByTense || {};
+            target.verbClassByTense = chosen.verbClassByTense || {};
+            if (target.conjugationsByTense.presente) target.conjugations = target.conjugationsByTense.presente;
+
+            // 유의어 링크도 고른 쪽 기준으로 다시 연결
+            const synResult = applySynonymLinks(target, chosen._synRows || []);
+            if (synResult.newIds.length > 0) _synonymFillQueue = [...synResult.newIds];
+
+            closeDupModal();
+            closeWordModal();
+            logAction('snapshot');
+            renderWordList();
+            updateStats();
+            saveToStorage();
+            showToast(side === 'old'
+                ? `기존 "${target.word}" 를 남겼어요 (점수·기록 유지) ✅`
+                : `신규 내용으로 "${target.word}" 를 덮어썼어요 (점수·기록 유지) ✅`, "success");
+
+            if (_synonymFillQueue.length > 0) setTimeout(() => processSynonymQueue(), 250);
+        }
+
         function saveWord() {
             const wordVal = document.getElementById('input-word').value.trim();
             const meaningVal = document.getElementById('input-meaning').value.trim();
@@ -1243,24 +1427,13 @@
 
             const modalId = document.getElementById('modal-word-id').value;
 
-            // [냐냐 PATCH] 새 단어 등록 시 같은 철자 + 같은 품사면 중복 확인창 표시 (품사가 다르면 다른 단어로 취급)
+            // [냐냐 PATCH-3차] 새 단어 등록 시 "단어 + 품사"가 둘 다 같으면 → 반반 비교 편집창
+            //   (품사가 다르면 다른 단어로 취급: el poder(명사) vs poder(동사))
             if (!modalId) {
                 const posVal = document.getElementById('input-pos').value;
-                const dup = vocabulary.find(item =>
-                    item.word.toLowerCase().trim() === wordVal.toLowerCase() && item.pos === posVal
-                );
+                const dup = findExistingWord(wordVal, posVal);
                 if (dup) {
-                    showConfirm(
-                        `"${dup.word}(${dup.meaning})" 단어가 이미 같은 품사로 등록되어 있습니다.`,
-                        "그래도 중복으로 등록할까요? '등록취소'를 누르면 등록창이 그대로 열려있어요.",
-                        () => performSaveWord(),
-                        {
-                            okLabel: '중복등록',
-                            cancelLabel: '등록취소',
-                            okStyle: 'primary'
-                            // 취소 시 아무 동작 없음 → 확인창만 닫히고 단어 등록창은 그대로 유지됨
-                        }
-                    );
+                    openDupModal(dup, snapshotWordForm());
                     return;
                 }
             }
