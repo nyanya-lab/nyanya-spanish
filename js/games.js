@@ -64,32 +64,19 @@
             return clean.slice(0, n);
         }
 
-        // [냐냐 PATCH] 게임 결과를 단어의 마스터/약점 점수에 반영 (퀴즈 객관식과 동일한 강도)
-        function applyGameScore(wordId, isCorrect) {
-            const w = vocabulary.find(v => v.id === wordId);
-            if (!w) return;
-            if (isCorrect) {
-                // [냐냐 PATCH] 정답률용 카운터
-                w.correctTotal = (w.correctTotal || 0) + 1;
-                // 정답: 약점 점수 -2, 마스터 점수 +1 (상한 8)
-                w.weakScore = Math.max(0, (w.weakScore || 0) - 2);
-                if (w.weakScore < 5) w.weak = false;
-                w.masterScore = Math.min(8, (w.masterScore || 0) + 1);
-                // 게임은 객관식 성격이라 자동 마스터의 '주관식 통과' 조건은 못 채움 (subjectivePassed 안 건드림)
-                if (!w.mastered && w.masterScore >= 5 && w.subjectivePassed) {
-                    w.mastered = true;
-                    logAction('new-mastered'); // [냐냐 PATCH] 게임 자동 마스터도 일지/그래프에 반영
-                }
-            } else {
-                // [냐냐 PATCH] 정답률용 카운터
-                w.wrongTotal = (w.wrongTotal || 0) + 1;
-                // 오답: 게임은 시간에 쫓겨 못 맞추기도 하니 약하게 감점 (약점 +1, 마스터 -1)
-                w.weakScore = (w.weakScore || 0) + 1;
-                w.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
-                if (w.weakScore >= 3) w.weak = true;
-                w.masterScore = Math.max(0, (w.masterScore || 0) - 1);
-                if (w.mastered && w.masterScore < 5) { w.mastered = false; if (typeof logAction === 'function') logAction('undo-new-mastered'); } // [냐냐 PATCH] 자동 해제도 감소
-            }
+        // [냐냐 PATCH-0배치] 게임 결과를 통합 점수(score)에 반영
+        //   속사포: 정답 +0.5 / 오답 -1
+        //   떨어지는 단어: 정답 +1 (오답 판정 없음)
+        //   듣기 받아쓰기: 문장 단위라 단어 점수 반영 없음
+        //   게임 정답만으로는 마스터 못 뚫음 (주관식 정답 경험이 있어야 마스터)
+        const GAME_SCORE = {
+            rapid: { correct: 0.5, wrong: -1 },
+            fall:  { correct: 1,   wrong: 0 }
+        };
+        function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
+            const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
+            const delta = isCorrect ? rule.correct : rule.wrong;
+            addWordScore(wordId, delta, { correct: !!isCorrect });
         }
 
         // [냐냐 PATCH] 게임 최고기록 — 역대 + 이번 주 (localStorage)
@@ -211,7 +198,7 @@
             // [냐냐 PATCH] 빈칸으로 엔터쳐도 넘어감 (오답 처리)
 
             const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
-            applyGameScore(gameState.current.id, isCorrect); // 마스터/약점 점수 반영
+            applyGameScore(gameState.current.id, isCorrect, 'rapid'); // [0배치] 속사포: 정답 +0.5 / 오답 -1
             if (isCorrect) {
                 gameState.combo++;
                 gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
@@ -379,7 +366,7 @@
             }
             if (matchIdx >= 0) {
                 const it = items[matchIdx];
-                applyGameScore(it.id, true); // 맞힌 단어 점수 반영
+                applyGameScore(it.id, true, 'fall'); // [0배치] 떨어지는 단어: 정답 +1
                 gameState.score += 10;
                 gameState.correct++;
                 it.el.remove();
@@ -704,6 +691,10 @@
             input.disabled = true;
             const w = reviewState.current;
             const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, w.word) : false;
+            // [냐냐 PATCH-0배치] 깜박이 복습 점수: 정답 +0.2 / 오답 -2
+            if (typeof addWordScore === 'function') {
+                addWordScore(w.id, isCorrect ? 0.2 : -2, { correct: isCorrect });
+            }
             const fb = document.getElementById('review-feedback');
             if (isCorrect) {
                 reviewState.correct++;
@@ -992,6 +983,15 @@ Return JSON only, no markdown.`;
             const detail = blanks.map((b, i) => ({ label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
             const allCorrect = detail.every(d => d.correct);
             fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
+
+            // [냐냐 PATCH-0배치] 단어 빈칸 복습 점수: 정답 칸당 +0.7 / 오답 칸당 -0.5
+            if (typeof addWordScore === 'function' && fillState.current.word) {
+                const nRight = detail.filter(d => d.correct).length;
+                const nWrong = detail.length - nRight;
+                const delta = (nRight * 0.7) + (nWrong * -0.5);
+                addWordScore(fillState.current.word.id, delta, { correct: allCorrect });
+            }
+
             if (typeof logAction === 'function') logAction('review'); // 복습 1개 기록
 
             applyFillGradeResults(detail);
@@ -1292,6 +1292,17 @@ Return JSON only, no markdown.`;
             }));
             const allCorrect = detail.every(d => d.correct);
             gfillState.results.push({ table: t, blanks: detail, allCorrect });
+
+            // [냐냐 PATCH-0배치] 마스터된 문법표를 틀리면 → 마스터 자동 해제
+            let unmastered = false;
+            if (!allCorrect && typeof masteredGrammar !== 'undefined' && masteredGrammar[t.id]) {
+                delete masteredGrammar[t.id];
+                unmastered = true;
+                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered');
+                showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");
+            }
+            gfillState.lastUnmastered = unmastered;
+
             if (typeof logAction === 'function') logAction('review');
 
             applyGrammarFillResults(detail);
@@ -1310,7 +1321,11 @@ Return JSON only, no markdown.`;
             const fb = document.getElementById('gfill-feedback');
             if (fb) {
                 fb.classList.remove('hidden');
-                fb.innerHTML = detail.map(d => {
+                // [냐냐 PATCH-0배치] 마스터 해제 알림 배너
+                const unmasterBanner = (gfillState && gfillState.lastUnmastered)
+                    ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-triangle-exclamation"></i> 마스터했던 표라서 <b>마스터가 해제됐어요.</b> 다시 정복해봐요!</div>`
+                    : '';
+                fb.innerHTML = unmasterBanner + detail.map(d => {
                     const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
                     const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
