@@ -208,6 +208,17 @@ const OFFLINE_DICT_DB = {
             }
         };
 
+        // [냐냐 PATCH-0배치] 전역 음소거 — play* 메서드를 감싸서 음소거 시 소리를 내지 않음
+        Object.keys(AudioFX).forEach(k => {
+            if (typeof AudioFX[k] === 'function' && k.indexOf('play') === 0) {
+                const _orig = AudioFX[k];
+                AudioFX[k] = function (...args) {
+                    try { if (localStorage.getItem('nyanya_muted') === '1') return; } catch (e) {}
+                    return _orig.apply(this, args);
+                };
+            }
+        });
+
         // JSON 추출 및 파싱 안전 처리 (불필요한 텍스트 우회용)
         function extractAndParseJson(text) {
             const firstBrace = text.indexOf('{');
