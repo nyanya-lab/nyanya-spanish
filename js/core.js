@@ -41,6 +41,7 @@ let vocabulary = [];
             renderDiary();
             resetKoEsMissionState();
             updateApiKeyBadge();
+            if (typeof updateMuteBadge === 'function') updateMuteBadge(); // [냐냐 PATCH-0배치] 음소거 배지
 
             // [냐냐 PATCH] 주관식 퀴즈: 제출 후 정답 확인 화면에서 엔터 한 번 더 치면 다음 문제로
             document.addEventListener('keydown', function(e) {
@@ -304,6 +305,9 @@ let vocabulary = [];
                 eggState = defaultEggState();
             }
 
+            // [냐냐 PATCH-0배치] 통합 점수(score)로 1회 마이그레이션 (기존 약점/마스터 점수 합산)
+            if (typeof migrateWordScores === 'function') migrateWordScores();
+
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
             // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
             saveToStorage();
@@ -361,6 +365,8 @@ let vocabulary = [];
             window.speechSynthesis.onvoiceschanged = () => { _cachedEsVoice = null; pickSpanishVoice(); };
         }
         function speakSpanishVoice(text, rate) {
+            // [냐냐 PATCH-0배치] 전역 음소거 시 발음도 나가지 않음
+            if (typeof isMuted === 'function' && isMuted()) return;
             if (!('speechSynthesis' in window)) {
                 showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
                 return;
@@ -422,9 +428,14 @@ let vocabulary = [];
             if (d.aiSessions === undefined) d.aiSessions = 0;
             if (d.newWordsCount === undefined) d.newWordsCount = 0;
             if (d.newMasteredCount === undefined) d.newMasteredCount = 0;
+            if (d.newPerfectCount === undefined) d.newPerfectCount = 0; // [냐냐 PATCH-0배치]
 
             d.registeredTotal = vocabulary.length;
             d.masteredTotal = vocabulary.filter(w => w.mastered).length;
+            // [냐냐 PATCH-0배치] 등급별 총계 스냅샷 (단어장 성장 그래프의 비율용) — 오늘부터 쌓임
+            d.perfectTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'perfect').length;
+            d.weakTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'weak').length;
+            d.criticalTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'critical').length;
         }
 
         // ============================================================
@@ -930,13 +941,12 @@ let vocabulary = [];
             }
         }
 
-        // [냐냐 PATCH] 오늘 복습하면 좋은 단어 = 약점 점수(weakScore) 1점 이상. 점수 높은 순.
+        // [냐냐 PATCH-0배치] 오늘 복습하면 좋은 단어 = 오늘 틀린 단어. 통합 점수 낮은(=약한) 순.
         function getTodayReviewWords() {
             const today = getLocalDateString();
-            // [냐냐 PATCH] 오늘 틀린 단어만 (아직 마스터 안 된 것)
             return vocabulary
                 .filter(w => w.lastWrongDate === today && !w.mastered)
-                .sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+                .sort((a, b) => getScore(a) - getScore(b));
         }
 
         // [냐냐 PATCH] 단어별 정답률 (이번 통계 기간 동안). 시도 3회 미만이면 null(표시 안 함)
@@ -989,7 +999,7 @@ let vocabulary = [];
                 const d = daysSince(w.lastWrongDate);
                 // 오늘(0일) 또는 복습 주기(1,3,7,14,30일)에 해당
                 return d === 0 || REVIEW_INTERVALS.includes(d);
-            }).sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+            }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
         }
 
         // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
@@ -1021,6 +1031,263 @@ let vocabulary = [];
             }
         }
 
+        // ============================================================
+        // [냐냐 PATCH-0배치] 점수 통합 — 약점점수/마스터점수 두 축을 하나(score)로
+        //   score: -10 ~ +10 (0.1 단위)
+        //     +8 이상  = 완벽 (찐초록)
+        //     +5 ~ +7  = 마스터 (연초록)  ※ 주관식 정답 경험(subjectivePassed) 필요
+        //     -2 ~ +4  = 일반 (회색)
+        //     -3 ~ -7  = 약점 (노랑)
+        //     -8 이하  = 치명적 약점 (빨강)
+        // ============================================================
+        const SCORE_MIN = -10;
+        const SCORE_MAX = 10;
+        const SCORE_MASTER = 5;   // 마스터 기준선
+        const SCORE_PERFECT = 8;  // 완벽 기준선
+        const SCORE_WEAK = -3;    // 약점 기준선
+        const SCORE_CRITICAL = -8; // 치명적 약점 기준선
+
+        function clampScore(n) {
+            const v = Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
+            return Math.round(v * 10) / 10; // 소수 첫째자리까지
+        }
+
+        // 단어의 현재 점수 (없으면 0)
+        function getScore(w) {
+            return (w && typeof w.score === 'number') ? w.score : 0;
+        }
+
+        // 점수 → 등급
+        function getWordGrade(w) {
+            const s = getScore(w);
+            if (s >= SCORE_PERFECT && w.subjectivePassed) return 'perfect';
+            if (s >= SCORE_MASTER && w.subjectivePassed) return 'mastered';
+            if (s <= SCORE_CRITICAL) return 'critical';
+            if (s <= SCORE_WEAK) return 'weak';
+            return 'normal';
+        }
+
+        const GRADE_INFO = {
+            perfect:  { label: '완벽',        emoji: '🟢', badge: 'bg-emerald-600 text-white border-emerald-700' },
+            mastered: { label: '마스터',      emoji: '🟩', badge: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+            normal:   { label: '일반',        emoji: '⬜', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+            weak:     { label: '약점',        emoji: '🟨', badge: 'bg-amber-100 text-amber-700 border-amber-300' },
+            critical: { label: '치명적 약점', emoji: '🟥', badge: 'bg-red-100 text-red-600 border-red-300' }
+        };
+
+        // 점수 표시용 문자열 (+5 / -3.5 / 0)
+        function formatScore(w) {
+            const s = getScore(w);
+            const txt = (Math.round(s * 10) / 10).toString();
+            return s > 0 ? '+' + txt : txt;
+        }
+
+        // 점수 → mastered / weak 플래그 동기화 (+ 일지 카운트 증감)
+        function syncWordFlags(w, opts = {}) {
+            const silent = !!opts.silent; // 마이그레이션 등에서는 일지를 건드리지 않음
+            const grade = getWordGrade(w);
+            const shouldMaster = (grade === 'perfect' || grade === 'mastered');
+            const shouldWeak = (grade === 'weak' || grade === 'critical');
+            const wasMastered = !!w.mastered;
+            const wasPerfect = !!w.perfect;
+            const isPerfect = (grade === 'perfect');
+
+            w.mastered = shouldMaster;
+            w.weak = shouldWeak;
+            w.perfect = isPerfect;
+
+            if (!silent) {
+                if (!wasMastered && shouldMaster) logAction('new-mastered');
+                else if (wasMastered && !shouldMaster) logAction('undo-new-mastered');
+                if (!wasPerfect && isPerfect) logAction('new-perfect');
+                else if (wasPerfect && !isPerfect) logAction('undo-new-perfect');
+            }
+        }
+
+        // ⭐핵심⭐ 모든 점수 변동은 이 함수를 통해서만!
+        //   addWordScore(wordId또는단어객체, 증감점수, { correct: true|false|null, subjective: true })
+        function addWordScore(wordOrId, delta, opts = {}) {
+            const w = (typeof wordOrId === 'string')
+                ? vocabulary.find(v => v.id === wordOrId)
+                : wordOrId;
+            if (!w) return null;
+
+            if (typeof w.score !== 'number') w.score = 0;
+
+            // 정답률 카운터 + 틀린 날짜
+            if (opts.correct === true) {
+                w.correctTotal = (w.correctTotal || 0) + 1;
+                if (opts.subjective) w.subjectivePassed = true; // 마스터 필수 조건
+            } else if (opts.correct === false) {
+                w.wrongTotal = (w.wrongTotal || 0) + 1;
+                w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
+            }
+
+            w.score = clampScore(w.score + (delta || 0));
+            syncWordFlags(w);
+            return w.score;
+        }
+
+        // 수동 설정 (별표/마스터 버튼용) — 점수를 특정 값으로 못박음
+        function setWordScore(wordOrId, value, opts = {}) {
+            const w = (typeof wordOrId === 'string')
+                ? vocabulary.find(v => v.id === wordOrId)
+                : wordOrId;
+            if (!w) return null;
+            w.score = clampScore(value);
+            if (opts.subjectivePassed === true) w.subjectivePassed = true;
+            if (opts.subjectivePassed === false) w.subjectivePassed = false;
+            syncWordFlags(w);
+            return w.score;
+        }
+
+        // 기존 데이터 → 통합 점수로 1회 변환 (score = 마스터점수 - 약점점수)
+        function migrateWordScores() {
+            if (!Array.isArray(vocabulary)) return;
+            vocabulary.forEach(w => {
+                if (typeof w.score !== 'number') {
+                    const oldMaster = (typeof w.masterScore === 'number') ? w.masterScore : 0;
+                    const oldWeak = (typeof w.weakScore === 'number') ? w.weakScore : 0;
+                    // 예전에 수동 마스터였던 단어는 만점 유지
+                    if (w.mastered && oldMaster >= 8) w.score = SCORE_MAX;
+                    else w.score = clampScore(oldMaster - oldWeak);
+                    // 예전에 마스터였는데 점수가 낮게 나오면 마스터 유지선까지 올려줌 (상태 보존)
+                    if (w.mastered && w.score < SCORE_MASTER) w.score = SCORE_MASTER;
+                    if (w.mastered) w.subjectivePassed = true;
+                }
+                syncWordFlags(w, { silent: true }); // 일지 카운트는 건드리지 않음
+            });
+        }
+
+        // [냐냐 PATCH-0배치] 전역 음소거
+        function isMuted() { return localStorage.getItem('nyanya_muted') === '1'; }
+        function toggleMute() {
+            const next = !isMuted();
+            localStorage.setItem('nyanya_muted', next ? '1' : '0');
+            if (next && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+            updateMuteBadge();
+            showToast(next ? "소리를 껐어요 🔇" : "소리를 켰어요 🔊", "info");
+        }
+        function updateMuteBadge() {
+            const btn = document.getElementById('mute-badge');
+            if (!btn) return;
+            const muted = isMuted();
+            btn.innerHTML = muted
+                ? `<i class="fa-solid fa-volume-xmark"></i><span class="hidden sm:inline"> 소리 꺼짐</span>`
+                : `<i class="fa-solid fa-volume-high"></i><span class="hidden sm:inline"> 소리 켜짐</span>`;
+            btn.className = muted
+                ? "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer"
+                : "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
+        }
+
+        // ============================================================
+        // [냐냐 PATCH-0배치] 사이트 설명 모달 — 점수/등급 규칙 한 눈에
+        // ============================================================
+        function openHelpModal() {
+            const body = document.getElementById('help-modal-body');
+            if (body) body.innerHTML = buildHelpHtml();
+            document.getElementById('help-modal').classList.remove('hidden');
+        }
+        function closeHelpModal() {
+            document.getElementById('help-modal').classList.add('hidden');
+        }
+
+        function buildHelpHtml() {
+            const gradeRows = [
+                ['+8 ~ +10', '완벽', 'bg-emerald-600 text-white', '찐초록 — 확실히 내 것'],
+                ['+5 ~ +7', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
+                ['-2 ~ +4', '일반', 'bg-slate-100 text-slate-600', '아직 연습 중'],
+                ['-3 ~ -7', '약점', 'bg-amber-100 text-amber-700', '자주 틀리는 단어'],
+                ['-10 ~ -8', '치명적 약점', 'bg-red-100 text-red-600', '집중 공략 대상']
+            ].map(([range, name, cls, desc]) => `
+                <tr class="border-b border-slate-100 last:border-0">
+                    <td class="py-2.5 px-3 font-black text-slate-700 whitespace-nowrap">${range}</td>
+                    <td class="py-2.5 px-3"><span class="px-2.5 py-1 rounded-lg text-[11px] font-black ${cls}">${name}</span></td>
+                    <td class="py-2.5 px-3 text-slate-500 font-semibold">${desc}</td>
+                </tr>`).join('');
+
+            const scoreRows = [
+                ['퀴즈 · 객관식', '+1', '−2'],
+                ['퀴즈 · 주관식', '+2', '−1'],
+                ['　└ 유의어 쓴 뒤 다시 정답', '+2', '−2 (그래도 오답)'],
+                ['　└ 오타 고쳐서 다시 정답', '+1', '−2 (그래도 오답)'],
+                ['미니게임 · 속사포', '+0.5', '−1'],
+                ['미니게임 · 떨어지는 단어', '+1', '판정 없음'],
+                ['미니게임 · 듣기 받아쓰기', '문장 단위라 점수 없음', '—'],
+                ['복습 · 깜박이', '+0.2', '−2'],
+                ['복습 · 단어 빈칸', '맞힌 칸당 +0.7', '틀린 칸당 −0.5'],
+                ['복습 · 문법표 빈칸', '단어 점수와 무관', '마스터한 표를 틀리면 마스터 해제']
+            ].map(([act, ok, no]) => `
+                <tr class="border-b border-slate-100 last:border-0">
+                    <td class="py-2.5 px-3 font-bold text-slate-700">${act}</td>
+                    <td class="py-2.5 px-3 font-black text-emerald-600 whitespace-nowrap">${ok}</td>
+                    <td class="py-2.5 px-3 font-black text-rose-500 whitespace-nowrap">${no}</td>
+                </tr>`).join('');
+
+            const manualRows = [
+                ['⭐ 별표 1번 클릭', '−3점 (약점)'],
+                ['⭐ 별표 2번 클릭', '−8점 (치명적 약점)'],
+                ['⭐ 별표 3번 클릭', '0점 (해제)'],
+                ['✅ 마스터 버튼 켜기', '+10점 (완벽) + 마스터 조건 통과 처리'],
+                ['✅ 마스터 버튼 끄기', '0점']
+            ].map(([act, res]) => `
+                <tr class="border-b border-slate-100 last:border-0">
+                    <td class="py-2.5 px-3 font-bold text-slate-700">${act}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-600">${res}</td>
+                </tr>`).join('');
+
+            return `
+            <div class="space-y-2">
+                <p class="text-sm text-slate-600 font-semibold leading-relaxed">
+                    모든 단어는 <b class="text-violet-600">점수 하나(−10 ~ +10)</b>로 관리돼요.
+                    맞히면 오르고 틀리면 내려가요. 점수에 따라 등급이 자동으로 바뀌어요.
+                </p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-violet-500"></i> 등급 5단계</h4>
+                <table class="w-full text-xs"><tbody>${gradeRows}</tbody></table>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed pt-1">
+                    ⚠️ <b>마스터·완벽은 점수만으로는 안 돼요.</b> <b class="text-violet-600">주관식으로 한 번은 맞혀야</b> 마스터가 열려요.
+                    (미니게임만 돌려서는 마스터를 못 뚫습니다)
+                </p>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-calculator text-indigo-500"></i> 활동별 점수</h4>
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr class="border-b-2 border-slate-200 text-[11px] text-slate-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">활동</th>
+                            <th class="py-2 px-3 text-left">정답</th>
+                            <th class="py-2 px-3 text-left">오답</th>
+                        </tr>
+                    </thead>
+                    <tbody>${scoreRows}</tbody>
+                </table>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-hand-pointer text-amber-500"></i> 직접 누르는 버튼</h4>
+                <table class="w-full text-xs"><tbody>${manualRows}</tbody></table>
+            </div>
+
+            <div class="bg-violet-50 rounded-2xl border border-violet-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 복습 주기</h4>
+                <p class="text-xs text-violet-900 font-semibold leading-relaxed">
+                    틀린 단어는 <b>그날 · 1일 · 3일 · 7일 · 14일 · 30일 뒤</b>에 '오늘 복습' 목록에 자동으로 올라와요.
+                    (복습·게임·퀴즈 어디서 틀려도 똑같이 기록돼요)
+                </p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-percent text-teal-500"></i> 정답률 배지</h4>
+                <p class="text-xs text-slate-600 font-semibold leading-relaxed">
+                    카드에 뜨는 <b>%</b> 배지는 <b>시도 3회 이상</b>일 때만 보여요. 최근 실력만 반영하려고 <b>한 달마다 초기화</b>됩니다.
+                </p>
+            </div>`;
+        }
+
         function logAction(type, extra) {
             touchDiarySnapshot();
             const today = getLocalDateString();
@@ -1034,6 +1301,10 @@ let vocabulary = [];
                 nyanyaDiary[today].newWordsCount++;
             } else if (type === 'new-mastered') {
                 nyanyaDiary[today].newMasteredCount++;
+            } else if (type === 'new-perfect') {
+                nyanyaDiary[today].newPerfectCount = (nyanyaDiary[today].newPerfectCount || 0) + 1; // [냐냐 PATCH-0배치] 오늘 새로 완벽 달성
+            } else if (type === 'undo-new-perfect') {
+                nyanyaDiary[today].newPerfectCount = Math.max(0, (nyanyaDiary[today].newPerfectCount || 0) - 1);
             } else if (type === 'review') {
                 nyanyaDiary[today].reviewCount = (nyanyaDiary[today].reviewCount || 0) + 1; // [냐냐 PATCH] 복습 제출 1개
             } else if (type === 'game') {
