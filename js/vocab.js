@@ -289,6 +289,8 @@
                 document.getElementById('input-example').value = w.example || '';
                 document.getElementById('input-example-meaning').value = w.exampleMeaning || '';
 
+                fillSynonymRows(w); // [냐냐 PATCH-5배치] 저장된 유의어/반의어 링크 복원
+
                 // [냐냐 PATCH] 관용구 여러 개 지원 — 예전 단일 idiom/idiomMeaning 데이터도 자동 변환
                 clearIdiomRows();
                 const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
@@ -321,6 +323,12 @@
                 const idiomIconNew = document.getElementById('idiom-toggle-icon');
                 if (idiomBoxNew) idiomBoxNew.classList.add('hidden');
                 if (idiomIconNew) idiomIconNew.className = "fa-solid fa-plus text-xs";
+                // [냐냐 PATCH-5배치] 유의어 칸도 초기화
+                clearSynonymRows();
+                const synBoxNew = document.getElementById('syn-fields-box');
+                const synIconNew = document.getElementById('syn-toggle-icon');
+                if (synBoxNew) synBoxNew.classList.add('hidden');
+                if (synIconNew) synIconNew.className = "fa-solid fa-plus text-xs";
                 document.getElementById('input-notes').value = '· ';
             }
             togglePosFields();
@@ -435,6 +443,209 @@
                 }
             });
             return result;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH-5배치] 유의어 / 반의어 블록 (관용구와 동일한 +/- 방식)
+        //   유의어 = 스카이(하늘색) · 반의어 = 로즈(빨강)
+        //   저장 시: 미등록 유의어는 자동 등록 + 상대 단어에도 양방향 자동 연결
+        // ============================================================
+        const SYN_TYPES = { synonym: { label: '유의어', chip: 'bg-sky-50 text-sky-600', dot: 'text-sky-500' },
+                            antonym: { label: '반의어', chip: 'bg-rose-50 text-rose-600', dot: 'text-rose-500' } };
+
+        function toggleSynonymSection() {
+            const box = document.getElementById('syn-fields-box');
+            const icon = document.getElementById('syn-toggle-icon');
+            if (!box || !icon) return;
+            const isHidden = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            icon.className = isHidden ? "fa-solid fa-minus text-xs" : "fa-solid fa-plus text-xs";
+            const entriesBox = document.getElementById('syn-entries-box');
+            if (isHidden && entriesBox && entriesBox.children.length === 0) addSynonymRow();
+        }
+
+        let synRowCounter = 0;
+        function addSynonymRow(data = {}) {
+            const box = document.getElementById('syn-entries-box');
+            if (!box) return;
+            const rowId = 'syn-row-' + (synRowCounter++);
+            const esc = (v) => String(v || '').replace(/"/g, '&quot;');
+            const type = data.type === 'antonym' ? 'antonym' : 'synonym';
+            const posOpts = ALL_POS_LIST.map(p =>
+                `<option value="${p}" ${data.pos === p ? 'selected' : ''}>${POS_LABELS[p] || p}</option>`).join('');
+
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.className = 'bg-slate-50/60 border border-slate-200 rounded-xl p-2.5 space-y-2';
+            row.innerHTML = `
+                <div class="flex gap-2 items-center">
+                    <select data-syn-field="type" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
+                        <option value="synonym" ${type === 'synonym' ? 'selected' : ''}>유의어</option>
+                        <option value="antonym" ${type === 'antonym' ? 'selected' : ''}>반의어</option>
+                    </select>
+                    <input type="text" data-syn-field="word" placeholder="단어 (예: alegre)" autocomplete="off" value="${esc(data.word)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <select data-syn-field="pos" class="shrink-0 bg-white px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">${posOpts}</select>
+                    <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-8 h-8 shrink-0 rounded-lg bg-white hover:bg-rose-50 hover:text-rose-500 text-slate-400 border border-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" data-syn-field="meaning" placeholder="뜻 (예: 즐거운)" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <input type="text" data-syn-field="difference" placeholder="차이·뉘앙스 (선택)" autocomplete="off" value="${esc(data.difference)}" class="flex-[1.4] min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                </div>
+                <input type="hidden" data-syn-field="id" value="${esc(data.id)}">
+            `;
+            box.appendChild(row);
+            styleSynonymRow(rowId);
+        }
+
+        // 종류(유의어/반의어)에 따라 블록 테두리 색을 바꿔줌
+        function styleSynonymRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const sel = row.querySelector('[data-syn-field="type"]');
+            const isAnt = sel && sel.value === 'antonym';
+            row.className = isAnt
+                ? 'bg-rose-50/50 border border-rose-200 rounded-xl p-2.5 space-y-2'
+                : 'bg-sky-50/50 border border-sky-200 rounded-xl p-2.5 space-y-2';
+        }
+
+        function clearSynonymRows() {
+            const box = document.getElementById('syn-entries-box');
+            if (box) box.innerHTML = '';
+        }
+
+        // 폼에서 유의어 입력값 수집 (단어가 비어있는 줄은 무시)
+        function getSynonymRowsData() {
+            const rows = document.querySelectorAll('#syn-entries-box > div');
+            const out = [];
+            rows.forEach(row => {
+                const get = (f) => { const el = row.querySelector(`[data-syn-field="${f}"]`); return el ? el.value.trim() : ''; };
+                const word = get('word');
+                if (!word) return;
+                out.push({
+                    id: get('id') || null,
+                    word,
+                    pos: get('pos') || 'noun',
+                    meaning: get('meaning'),
+                    difference: get('difference'),
+                    type: get('type') === 'antonym' ? 'antonym' : 'synonym'
+                });
+            });
+            return out;
+        }
+
+        // 저장된 링크(id 기반)를 폼에 다시 채우기
+        function fillSynonymRows(word) {
+            clearSynonymRows();
+            const links = (word && Array.isArray(word.synonyms)) ? word.synonyms : [];
+            const box = document.getElementById('syn-fields-box');
+            const icon = document.getElementById('syn-toggle-icon');
+            links.forEach(link => {
+                const target = vocabulary.find(v => v.id === link.id);
+                if (!target) return; // 삭제된 단어는 건너뜀
+                addSynonymRow({ id: target.id, word: target.word, pos: target.pos, meaning: target.meaning, difference: link.difference || '', type: link.type });
+            });
+            if (links.length > 0 && box && icon) {
+                box.classList.remove('hidden');
+                icon.className = "fa-solid fa-minus text-xs";
+            }
+        }
+
+        // [냐냐 PATCH-5배치] 명사면 관사를 붙여서 표시형으로 (복수면 los/las)
+        function buildNounDisplayForm(word, gender, isPlural, pos) {
+            const raw = String(word || '').trim();
+            if (!raw || pos !== 'noun') return raw;
+            if (/^(el|la|los|las|un|una|unos|unas|el\/la|los\/las)\s+/i.test(raw)) return raw; // 이미 관사 있음
+            let art;
+            if (gender === 'feminine') art = isPlural ? 'las' : 'la';
+            else if (gender === 'masculine') art = isPlural ? 'los' : 'el';
+            else art = isPlural ? 'los/las' : 'el/la'; // 남녀공용
+            return `${art} ${raw}`;
+        }
+
+        // 중복 판정: 단어 + 품사가 둘 다 같을 때만 같은 단어 (el poder 명사 ≠ poder 동사)
+        function findExistingWord(wordText, pos) {
+            const norm = (t) => String(t || '').toLowerCase().trim()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+            const target = norm(wordText);
+            return vocabulary.find(w => norm(w.word) === target && w.pos === pos) || null;
+        }
+
+        // ⭐ 유의어/반의어 저장 — 자동 등록 + 양방향 연결 + 삭제된 링크 정리
+        //   반환: { links, newIds, linkedNames }
+        function applySynonymLinks(wordObj, rows) {
+            const prevLinks = Array.isArray(wordObj.synonyms) ? wordObj.synonyms : [];
+            const links = [];
+            const newIds = [];      // 이번에 자동 등록된 단어들
+            const linkedNames = []; // 자동 연결된 상대 단어 이름 (토스트용)
+
+            rows.forEach(r => {
+                // 1) 이미 링크된 단어(id 있음) → 그대로 사용
+                let target = r.id ? vocabulary.find(v => v.id === r.id) : null;
+                // 2) 단어+품사로 기존 단어 찾기 (중복 등록 방지)
+                if (!target) target = findExistingWord(r.word, r.pos);
+                // 3) 그래도 없으면 → 자동 등록 (단어·품사·뜻이 다 있으니 등록 요건 충족)
+                if (!target) {
+                    target = {
+                        id: 'word-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                        word: r.word,
+                        meaning: r.meaning || '',
+                        pos: r.pos || 'noun',
+                        idioms: [],
+                        example: '',
+                        exampleMeaning: '',
+                        notes: '',
+                        mastered: false,
+                        score: 0,
+                        synonyms: []
+                    };
+                    if (target.pos === 'noun') target.gender = r.gender || 'none';
+                    vocabulary.unshift(target);
+                    newIds.push(target.id);
+                    logAction('new-word'); // 자동 등록도 오늘 신규등록 카운트에 포함
+                }
+                if (target.id === wordObj.id) return; // 자기 자신은 링크 안 함
+
+                links.push({ id: target.id, type: r.type, difference: r.difference || '' });
+
+                // 4) 양방향 자동 연결 — 상대 단어에도 나를 걸어줌 (차이 설명은 그대로 공유)
+                if (!Array.isArray(target.synonyms)) target.synonyms = [];
+                const already = target.synonyms.find(l => l.id === wordObj.id);
+                if (already) {
+                    already.type = r.type;
+                    already.difference = r.difference || '';
+                } else {
+                    target.synonyms.push({ id: wordObj.id, type: r.type, difference: r.difference || '' });
+                    if (!newIds.includes(target.id)) linkedNames.push(target.word); // 새로 등록한 건 토스트에서 제외
+                }
+            });
+
+            // 5) 내가 뺀(−) 링크는 상대 쪽에서도 제거 (양방향 해제)
+            const keptIds = links.map(l => l.id);
+            prevLinks.forEach(old => {
+                if (keptIds.includes(old.id)) return;
+                const other = vocabulary.find(v => v.id === old.id);
+                if (other && Array.isArray(other.synonyms)) {
+                    other.synonyms = other.synonyms.filter(l => l.id !== wordObj.id);
+                }
+            });
+
+            wordObj.synonyms = links;
+            return { links, newIds, linkedNames };
+        }
+
+        // [냐냐 PATCH-5배치] 자동 등록된 단어들의 상세정보를 차례로 채우기 (한 번에 한 창씩)
+        let _synonymFillQueue = [];
+        function processSynonymQueue() {
+            if (!_synonymFillQueue || _synonymFillQueue.length === 0) return;
+            const nextId = _synonymFillQueue.shift();
+            const w = vocabulary.find(v => v.id === nextId);
+            if (!w) { processSynonymQueue(); return; }
+            openWordModal(nextId);
+            _skipContinueRegisterPrompt = true; // '계속 등록?' 팝업 없이
+            setTimeout(() => {
+                if (typeof triggerAiAutofill === 'function') triggerAiAutofill(); // AI 자동완성 자동 실행
+            }, 250);
         }
 
         function clearConjugationFields() {
@@ -590,6 +801,23 @@
                         }
                     },
                     exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
+                    synonyms: {
+                        type: "ARRAY",
+                        description: "[냐냐 PATCH-5배치] 이 단어의 유의어(synonym)와 반의어(antonym). 학습에 정말 도움되는 것만 0~4개. 없으면 []. 억지로 만들지 말 것",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "유의어/반의어 (스페인어, 관사 없이 단어만. 명사도 관사 빼고)" },
+                                pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"], description: "그 단어의 품사" },
+                                gender: { type: "STRING", enum: ["none", "masculine", "feminine"], description: "명사일 때만. 아니면 none" },
+                                isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true" },
+                                meaning: { type: "STRING", description: "그 단어의 핵심 한글 뜻" },
+                                difference: { type: "STRING", description: "원래 단어와의 차이·뉘앙스를 학습자가 구분할 수 있게 구체적으로 (예: ser=본질/영구적, estar=상태/일시적). 차이가 거의 없으면 빈 문자열" },
+                                type: { type: "STRING", enum: ["synonym", "antonym"], description: "synonym=유의어, antonym=반의어" }
+                            },
+                            required: ["word", "pos", "meaning", "type"]
+                        }
+                    },
                     notes: { type: "STRING", description: "정말 도움되는 특이사항(혼동 단어 차이, 불규칙, ser/estar 구분, 뉘앙스, 예외 용법)만 · 불릿 2줄 이내로. 없으면 빈 문자열. 금지: 뻔한 품사/뜻 분류('사람의 성품 묘사' 등), 형용사 성·수 변화 여부, 성별/관사, 전치사 콜로케이션(이건 idioms로). 명사형으로 끝낼 것" }
                 },
                 required: ["meaning", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
@@ -797,6 +1025,23 @@
             const exampleMeaningInput = document.getElementById('input-example-meaning');
             if (forceOverwrite || !exampleMeaningInput.value.trim()) {
                 exampleMeaningInput.value = result.exampleMeaning || '';
+            }
+
+            // [냐냐 PATCH-5배치] AI가 유의어/반의어를 찾아줬으면 자동으로 채우고 섹션을 펼침
+            if (result.synonyms && result.synonyms.length > 0) {
+                clearSynonymRows();
+                result.synonyms.forEach(item => addSynonymRow({
+                    word: buildNounDisplayForm(item.word, item.gender, item.isPlural, item.pos),
+                    pos: item.pos || 'noun',
+                    meaning: item.meaning || '',
+                    difference: item.difference || '',
+                    type: item.type === 'antonym' ? 'antonym' : 'synonym',
+                    gender: item.gender || 'none'
+                }));
+                const synBoxAi = document.getElementById('syn-fields-box');
+                const synIconAi = document.getElementById('syn-toggle-icon');
+                if (synBoxAi) synBoxAi.classList.remove('hidden');
+                if (synIconAi) synIconAi.className = "fa-solid fa-minus text-xs";
             }
 
             // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
@@ -1079,7 +1324,17 @@
             if (modalId) {
                 const index = vocabulary.findIndex(item => item.id === modalId);
                 if (index !== -1) {
-                    wordObj.mastered = vocabulary[index].mastered || false; // 수정 시 마스터 상태 보존 (기존엔 초기화되던 버그)
+                    // [냐냐 PATCH-0배치] 수정해도 점수·학습기록은 그대로 보존 (안 그러면 수정할 때마다 점수가 0으로 리셋됨)
+                    const prev = vocabulary[index];
+                    wordObj.score = (typeof prev.score === 'number') ? prev.score : 0;
+                    wordObj.mastered = prev.mastered || false;
+                    wordObj.perfect = prev.perfect || false;
+                    wordObj.weak = prev.weak || false;
+                    wordObj.subjectivePassed = prev.subjectivePassed || false;
+                    wordObj.correctTotal = prev.correctTotal || 0;
+                    wordObj.wrongTotal = prev.wrongTotal || 0;
+                    if (prev.lastWrongDate) wordObj.lastWrongDate = prev.lastWrongDate;
+                    wordObj.synonyms = Array.isArray(prev.synonyms) ? prev.synonyms : [];
                     // [냐냐 PATCH] 수정한 단어를 맨 앞으로 (최근순에서 바로 보이게)
                     vocabulary.splice(index, 1);
                     vocabulary.unshift(wordObj);
@@ -1092,9 +1347,46 @@
                 logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
+            // [냐냐 PATCH-5배치] 유의어/반의어 — 미등록 단어 자동 등록 + 상대 단어에 양방향 연결
+            const synResult = applySynonymLinks(wordObj, getSynonymRowsData());
+            if (synResult.linkedNames.length > 0) {
+                showToast(`${synResult.linkedNames.join(', ')}에도 자동으로 연결했어요 🔗`, "info");
+            }
+            if (synResult.newIds.length > 0) {
+                _synonymFillQueue = [...synResult.newIds];
+            }
+
             renderWordList();
             updateStats();
             if (typeof refreshBreakdownRegisterButtons === 'function') refreshBreakdownRegisterButtons();
+
+            // [냐냐 PATCH-5배치] 유의어 때문에 자동 등록된 단어가 있으면 → 상세정보 채울지 먼저 물어봄
+            const autoCount = synResult.newIds.length;
+            if (autoCount > 0) {
+                closeWordModal();
+                showConfirm(
+                    `유의어 ${autoCount}개를 자동으로 등록했어요! 📚`,
+                    `방금 등록한 ${autoCount}개 단어에 자세한 정보를 채울까요? (한 창씩 차례로 열려요)`,
+                    () => { processSynonymQueue(); },
+                    {
+                        okLabel: '네, 채울게요',
+                        cancelLabel: '나중에',
+                        okStyle: 'primary',
+                        icon: 'happy',
+                        onCancel: () => { _synonymFillQueue = []; }
+                    }
+                );
+                return;
+            }
+
+            // 유의어 상세 채우기 큐가 남아있으면 → 다음 단어 창으로
+            if (modalId && _synonymFillQueue.length > 0) {
+                _skipContinueRegisterPrompt = false;
+                showToast("저장했어요! 다음 단어로 넘어갈게요 ✏️", "success");
+                closeWordModal();
+                setTimeout(() => processSynonymQueue(), 200);
+                return;
+            }
 
             // [냐냐 PATCH] 새 단어 등록이면 계속 등록할지 물어봄 (수정이면 그냥 닫기)
             if (!modalId) {
@@ -1158,6 +1450,12 @@
                 "삭제한 데이터는 다시 꺼낼 수 없습니다.",
                 () => {
                     const wasMastered = w.mastered; // [냐냐 PATCH] 삭제 전 마스터 여부
+                    // [냐냐 PATCH-5배치] 이 단어를 유의어/반의어로 걸어둔 모든 단어에서 링크 자동 제거
+                    vocabulary.forEach(other => {
+                        if (Array.isArray(other.synonyms) && other.synonyms.some(l => l.id === wordId)) {
+                            other.synonyms = other.synonyms.filter(l => l.id !== wordId);
+                        }
+                    });
                     vocabulary = vocabulary.filter(item => item.id !== wordId);
                     // [냐냐 PATCH] 일지/그래프 감소 — 등록/마스터 카운트 취소
                     if (typeof logAction === 'function') {
@@ -1300,6 +1598,160 @@
             } catch (e) {}
         }
 
+        // ============================================================
+        // [냐냐 PATCH-6배치] 카드 표시 설정 — 어떤 정보를 보여줄지 (뜻·품사·점수는 항상 표시)
+        // ============================================================
+        const DISPLAY_SECTIONS = [
+            { key: 'conj',    label: '동사 시제' },
+            { key: 'idioms',  label: '관용구' },
+            { key: 'example', label: '예문' },
+            { key: 'notes',   label: '노트' },
+            { key: 'synonyms',label: '유의어·반의어' }
+        ];
+        const DEFAULT_DISPLAY = {
+            sections: DISPLAY_SECTIONS.map(s => s.key),          // 기본: 전부 표시
+            tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
+        };
+        let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+
+        function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
+        function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
+
+        function isDisplayDefault() {
+            return displayPrefs.sections.length === DEFAULT_DISPLAY.sections.length
+                && displayPrefs.tenses.length === DEFAULT_DISPLAY.tenses.length;
+        }
+
+        function saveDisplayPrefs() {
+            try { localStorage.setItem('nyanya_word_display', JSON.stringify(displayPrefs)); } catch (e) {}
+        }
+        function loadDisplayPrefs() {
+            try {
+                const raw = localStorage.getItem('nyanya_word_display');
+                if (raw) {
+                    const d = JSON.parse(raw);
+                    if (Array.isArray(d.sections)) displayPrefs.sections = d.sections;
+                    if (Array.isArray(d.tenses)) displayPrefs.tenses = d.tenses;
+                }
+            } catch (e) {}
+        }
+
+        function toggleDisplayPanel() {
+            const panel = document.getElementById('display-panel');
+            if (!panel) return;
+            const willOpen = panel.classList.contains('hidden');
+            closeFilterPanel();
+            panel.classList.toggle('hidden');
+            if (willOpen) renderDisplayPanel();
+        }
+        function closeDisplayPanel() {
+            const panel = document.getElementById('display-panel');
+            if (panel) panel.classList.add('hidden');
+        }
+
+        function renderDisplayPanel() {
+            const secBox = document.getElementById('display-section-box');
+            const tenseBox = document.getElementById('display-tense-box');
+            if (secBox) {
+                secBox.innerHTML = DISPLAY_SECTIONS.map(s => {
+                    const on = isDisplayOn(s.key);
+                    const cls = on ? 'border-violet-500 bg-violet-50 text-violet-600' : 'border-slate-200 bg-slate-50 text-slate-500';
+                    return `<button type="button" onclick="toggleDisplaySection('${s.key}')" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${s.label}</button>`;
+                }).join('');
+            }
+            if (tenseBox) {
+                const conjOn = isDisplayOn('conj');
+                tenseBox.innerHTML = TENSE_TYPE_OPTIONS.map(t => {
+                    const on = isTenseOn(t.key) && conjOn;
+                    const cls = !conjOn ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                              : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-500');
+                    return `<button type="button" ${conjOn ? '' : 'disabled'} onclick="toggleDisplayTense('${t.key}')" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${t.label}</button>`;
+                }).join('');
+            }
+            const allBtn = document.getElementById('display-all-btn');
+            if (allBtn) allBtn.innerText = (displayPrefs.sections.length === 0) ? '전부 선택' : '전부 해제';
+        }
+
+        function toggleDisplaySection(key) {
+            const i = displayPrefs.sections.indexOf(key);
+            if (i >= 0) displayPrefs.sections.splice(i, 1);
+            else displayPrefs.sections.push(key);
+            saveDisplayPrefs();
+            renderDisplayPanel();
+            renderWordList();
+        }
+        function toggleDisplayTense(key) {
+            const i = displayPrefs.tenses.indexOf(key);
+            if (i >= 0) displayPrefs.tenses.splice(i, 1);
+            else displayPrefs.tenses.push(key);
+            saveDisplayPrefs();
+            renderDisplayPanel();
+            renderWordList();
+        }
+        function toggleAllDisplay() {
+            if (displayPrefs.sections.length === 0) {
+                displayPrefs.sections = [...DEFAULT_DISPLAY.sections];
+                displayPrefs.tenses = [...DEFAULT_DISPLAY.tenses];
+            } else {
+                displayPrefs.sections = [];
+            }
+            saveDisplayPrefs();
+            renderDisplayPanel();
+            renderWordList();
+        }
+        function resetDisplayPrefs() {
+            displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+            saveDisplayPrefs();
+            renderDisplayPanel();
+            renderWordList();
+        }
+
+        // [냐냐 PATCH-6배치] 카드 안의 동사 변형표 — 등록된 시제 중 "설정에서 켠 시제"만 전부 표시
+        function buildCardConjHtml(w) {
+            const byTense = w.conjugationsByTense || {};
+            const irrByTense = w.irregularByTense || {};
+            const vcByTense = w.verbClassByTense || {};
+            const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
+
+            let keys = Object.keys(byTense).filter(k => hasValues(byTense[k]));
+            if (!keys.includes('presente') && hasValues(w.conjugations)) keys.unshift('presente');
+            keys = keys.filter(k => isTenseOn(k));
+            if (keys.length === 0) return '';
+
+            const orderOf = (k) => { const i = TENSE_TYPE_OPTIONS.findIndex(t => t.key === k); return i < 0 ? 99 : i; };
+            keys.sort((a, b) => orderOf(a) - orderOf(b));
+            const labelOf = (k) => { const o = TENSE_TYPE_OPTIONS.find(t => t.key === k); return o ? o.label : k; };
+
+            return keys.map(k => {
+                const c = byTense[k] || (k === 'presente' ? w.conjugations : null);
+                if (!hasValues(c)) return '';
+                const irrType = irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : '');
+                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular'));
+                const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`;
+
+                const body = (c.form && !c.yo)
+                    ? `<div class="text-center py-1"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`
+                    : `<div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                            ${getConjugationCellMarkup('yo', c.yo, verbClass, irrType)}
+                            ${getConjugationCellMarkup('tú', c.tu, verbClass, irrType)}
+                            ${getConjugationCellMarkup('él', c.el, verbClass, irrType)}
+                            ${getConjugationCellMarkup('nos', c.nos, verbClass, irrType)}
+                            ${getConjugationCellMarkup('vos', c.vos, verbClass, irrType)}
+                            ${getConjugationCellMarkup('ellos', c.ellos, verbClass, irrType)}
+                        </div>`;
+
+                return `
+                <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="block text-[9px] font-bold text-indigo-500 tracking-wider uppercase">
+                            ${escapeHtml(labelOf(k))} <span class="text-indigo-600 font-extrabold ml-1">(${escapeHtml(clsText)})</span>
+                        </span>
+                    </div>
+                    ${body}
+                </div>`;
+            }).filter(Boolean).join('<div class="h-2"></div>');
+        }
+
         function toggleFilterPos(btn) {
             const pos = btn.dataset.pos;
             const i = pendingFilterPos.indexOf(pos);
@@ -1429,6 +1881,7 @@
         function toggleFilterPanel() {
             const panel = document.getElementById('filter-panel');
             const willOpen = panel.classList.contains('hidden');
+            closeDisplayPanel(); // [6배치] 두 패널이 동시에 열리지 않게
             panel.classList.toggle('hidden');
             if (willOpen) syncFilterPanelUI();
         }
@@ -1487,6 +1940,9 @@
             const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered' || activeFilterWeak !== 'all' || sortModeForBadge !== 'weak-score';
             const badge = document.getElementById('filter-active-badge');
             if (badge) badge.classList.toggle('hidden', !hasActiveFilter);
+            // [냐냐 PATCH-6배치] 표시 설정이 기본값과 다르면 톱니 버튼에 점 표시
+            const dBadge = document.getElementById('display-active-badge');
+            if (dBadge) dBadge.classList.toggle('hidden', isDisplayDefault());
 
             // [냐냐 PATCH] 단어 목록은 항상 ABC순(정관사 제외) — 검색 결과도 정렬
             const sortMode = isSearching ? 'alpha-asc' : activeFilterSort;
@@ -1647,27 +2103,12 @@
                             </p>
                         </div>
 
-                        <!-- 동사 변형표 개편 -->
-                        ${isVerb && w.conjugations && Object.values(w.conjugations).some(v => v) ? `
-                        <div class="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 space-y-1.5">
-                            <div class="flex items-center justify-between">
-                                <span class="block text-[9px] font-bold text-indigo-500 tracking-wider uppercase">
-                                    현재시제 <span class="text-indigo-600 font-extrabold ml-1">(${verbClassText})</span>
-                                </span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
-                                ${getConjugationCellMarkup('yo', w.conjugations.yo, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('tú', w.conjugations.tu, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('él', w.conjugations.el, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('nos', w.conjugations.nos, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('vos', w.conjugations.vos, w.verbClass, w.irregularType)}
-                                ${getConjugationCellMarkup('ellos', w.conjugations.ellos, w.verbClass, w.irregularType)}
-                            </div>
-                        </div>
-                        ` : ''}
+                        <!-- [냐냐 PATCH-6배치] 동사 변형표 — 설정에서 체크된 시제만, 등록된 시제 전부 -->
+                        ${(isVerb && isDisplayOn('conj')) ? buildCardConjHtml(w) : ''}
 
                         <!-- 관용구 먼저, 예문 나중 (순서 변경) -->
                         ${(() => {
+                            if (!isDisplayOn('idioms')) return '';
                             const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                             if (idiomList.length === 0) return '';
                             const rows = idiomList.map((item, idx) => `
@@ -1683,7 +2124,7 @@
                         </div>
                             `;
                         })()}
-                        ${w.example ? `
+                        ${(w.example && isDisplayOn('example')) ? `
                         <div class="bg-teal-50/40 border-l-2 border-teal-400 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-teal-600 uppercase">Ejemplo (예문)</span>
                             <p class="font-bold text-slate-800 mt-0.5 select-all">${w.example}</p>
@@ -1692,7 +2133,8 @@
                         ` : ''}
 
                         <!-- 핵심만 정리된 노트 -->
-                        ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        ${isDisplayOn('synonyms') ? buildSynonymChipsHtml(w) : ''}
                         </div>
                     </div>
                 </div>
@@ -1712,9 +2154,10 @@
             const willExpand = !wordListExpandedAll;
             setAllWordCards(willExpand);
             if (btn) {
-                btn.querySelector('span').innerText = willExpand ? '전체 접기' : '전체 펼치기';
+                // [냐냐 PATCH-6배치] 아이콘만 남겨서 span이 없음 → 툴팁(title)과 아이콘만 바꿔줌
+                btn.title = willExpand ? '전체 접기' : '전체 펼치기';
                 const icon = btn.querySelector('i');
-                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center text-[10px]' : 'fa-solid fa-up-right-and-down-left-from-center text-[10px]';
+                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center';
             }
         }
 
