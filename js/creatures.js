@@ -1,4 +1,4 @@
-        // 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
+// 생물 도감 (스페인/스페인어권 테마 + 정체불명 몬스터). rarity: common/rare/epic/legendary
         const CREATURES = [
             // ===== common (일반) =====
             { id: "chick", emoji: "🐤", name: "pollito (병아리)", rarity: "common", desc: "갓 태어난 노란 병아리예요!" },
