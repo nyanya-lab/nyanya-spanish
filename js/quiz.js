@@ -344,8 +344,23 @@ let quizSession = null;
                 };
             }
 
-            // 4) 입력한 단어가 단어장에 없음 → 등록 추천 표시 (오답)
-            if (!userWordInVocab && userRaw.trim().length >= 2) {
+            // 4) [냐냐 PATCH-1배치] 오타 감지 — 정답과 1~2글자 차이면 새 단어가 아니라 그냥 오타
+            //    (예: hblar → hablar). 등록 버튼 띄우지 않음.
+            const dist = levenshtein(userNorm, correctNorm);
+            if (correctNorm.length >= 4 && dist > 0 && dist <= 2) {
+                return {
+                    isCorrect: false,
+                    hint: `✏️ 철자가 살짝 틀렸어요! 정답은 <b>${correct}</b> 예요.`,
+                    isTypo: true
+                };
+            }
+
+            // 5) [냐냐 PATCH-1배치] 활용형·복수형 등 "변형된 형태"도 이미 등록된 단어로 인정
+            //    (예: hablo → hablar가 단어장에 있음). 등록 버튼 띄우지 않음.
+            const formInVocab = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userRaw) : null;
+
+            // 6) 입력한 단어가 단어장에 정말 없음 → 등록 추천 표시 (오답)
+            if (!userWordInVocab && !formInVocab && userRaw.trim().length >= 2) {
                 return {
                     isCorrect: false,
                     hint: `❌ 정답은 <b>${correct}</b> 예요.`,
@@ -353,8 +368,28 @@ let quizSession = null;
                 };
             }
 
-            // 5) 그 외 (단어장엔 있지만 뜻이 다른 경우 등) → 일반 오답
+            // 7) 그 외 (단어장엔 있지만 뜻이 다른 경우 등) → 일반 오답
             return { isCorrect: false, hint: `❌ 정답은 <b>${correct}</b> 예요.` };
+        }
+
+        // [냐냐 PATCH-1배치] 두 단어의 편집 거리 (오타 판정용)
+        function levenshtein(a, b) {
+            if (a === b) return 0;
+            if (!a.length) return b.length;
+            if (!b.length) return a.length;
+            let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+            for (let i = 1; i <= a.length; i++) {
+                const cur = [i];
+                for (let j = 1; j <= b.length; j++) {
+                    cur[j] = Math.min(
+                        prev[j] + 1,
+                        cur[j - 1] + 1,
+                        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+                    );
+                }
+                prev = cur;
+            }
+            return prev[b.length];
         }
 
         // 두 뜻 문자열이 겹치는지 (동의어 판정용) — 쉼표/슬래시로 나눠 하나라도 겹치면 true
@@ -376,7 +411,7 @@ let quizSession = null;
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // 채점은 악센트 관용 처리
                 .replace(/[¿?¡!.,;:"'()]/g, '') // [냐냐 PATCH] 문장부호 무시 (¿dónde? = dónde)
                 .replace(/\s+/g, ' ').trim()
-                .replace(/^(el|la|los|las)\s+/, '');
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, ''); // [1배치] "el/la estudiante" 같은 슬래시 관사도 제거
         }
 
         function submitMcAnswer(choice, btnEl) {
@@ -396,20 +431,19 @@ let quizSession = null;
             finishQuizQuestion(isCorrect, q);
         }
 
-        // [냐냐 PATCH] 퀴즈에서 입력한 미등록 단어를 단어장에 등록
+        // [냐냐 PATCH-1배치] 퀴즈에서 입력한 미등록 단어를 단어장에 등록
+        //   ⚠️ 예전엔 changeTab('list')로 단어장 탭으로 넘어가버려서 퀴즈 기록이 날아갔음.
+        //      단어 모달은 화면 전체를 덮는 오버레이라 탭을 옮길 필요가 없음 → 모달만 띄움.
         function registerUnknownFromQuiz() {
             const word = quizSession && quizSession._pendingRegisterWord;
             if (!word) return;
-            changeTab('list');
-            setTimeout(() => {
-                openWordModal();
-                const input = document.getElementById('input-word');
-                if (input) {
-                    input.value = word;
-                    handleWordInput(word);
-                }
-                showToast(`"${word}" 등록 화면을 열었어요. AI 자동완성을 눌러보세요!`, "info");
-            }, 100);
+            openWordModal();
+            const input = document.getElementById('input-word');
+            if (input) {
+                input.value = word;
+                if (typeof handleWordInput === 'function') handleWordInput(word);
+            }
+            showToast(`"${word}" 등록 창을 열었어요. 닫으면 퀴즈로 돌아와요!`, "info");
         }
 
         // [냐냐 PATCH] 형용사 성·수 변화 설명 텍스트 생성
@@ -432,6 +466,25 @@ let quizSession = null;
         }
 
         // [냐냐 PATCH] 노트/관용구/예문/성수를 색 구분된 HTML로 (제목색 ≠ 내용색)
+        // [냐냐 PATCH-1배치] 결과 화면 상단 배지 — 품사 · 성별 · 통합 점수
+        function buildWordBadgesHtml(word) {
+            if (!word) return '';
+            const chips = [];
+            const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[word.pos]) ? POS_LABELS[word.pos] : word.pos;
+            if (posLabel) chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black bg-indigo-50 text-indigo-600">${escapeHtml(posLabel)}</span>`);
+            if (word.pos === 'noun' && word.gender) {
+                const g = word.gender === 'f' ? ['여성 (la)', 'bg-rose-50 text-rose-600']
+                        : word.gender === 'm' ? ['남성 (el)', 'bg-blue-50 text-blue-600']
+                        : ['남녀공용 (el/la)', 'bg-violet-50 text-violet-600'];
+                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${g[1]}">${g[0]}</span>`);
+            }
+            if (typeof getWordGrade === 'function' && typeof GRADE_INFO !== 'undefined') {
+                const gi = GRADE_INFO[getWordGrade(word)];
+                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label}">${formatScore(word)}</span>`);
+            }
+            return chips.length ? `<div class="flex items-center justify-center gap-1.5 flex-wrap">${chips.join('')}</div>` : '';
+        }
+
         function buildNotesHtml(word, opts) {
             opts = opts || {};
             const sections = [];
@@ -482,60 +535,83 @@ let quizSession = null;
             return sections.join('<div class="border-t border-slate-100 my-3"></div>');
         }
 
-        // [냐냐 PATCH] 퀴즈 정답 화면 동사 활용표 — 시제 + 불규칙 유형 표시 + 불규칙 칸 색상 강조(단어장과 동일)
-        function renderQuizConjugation(word, q) {
-            const box = document.getElementById('quiz-review-conj-box');
+        // [냐냐 PATCH-1배치] 퀴즈 정답 화면 동사 활용표 — 등록된 "모든 시제"를 다 보여줌
+        //   (예전엔 출제된 시제 하나만 보여줬음. 출제된 시제는 맨 위 + 보라 테두리로 강조)
+        function renderQuizConjugation(word, q, boxId) {
+            const box = document.getElementById(boxId || 'quiz-review-conj-box'); // [3배치] 복습 화면에서도 재사용
             if (!box) return;
-            // 출제된 시제 우선, 없으면 현재시제
-            const tenseKey = (q && q.tenseKey) || 'presente';
+            if (!word || word.pos !== 'verb') { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
             const byTense = word.conjugationsByTense || {};
-            const c = byTense[tenseKey] || (tenseKey === 'presente' ? word.conjugations : null) || word.conjugations;
-            const hasConj = word.pos === 'verb' && c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos);
-            if (!hasConj) {
-                box.classList.add('hidden');
-                box.innerHTML = '';
-                return;
-            }
-            const tenseLabel = (q && q.tenseLabel) || '현재시제';
-            // 시제별 불규칙 유형 (없으면 구버전 irregularType = 현재시제)
             const irrByTense = word.irregularByTense || {};
             const vcByTense = word.verbClassByTense || {};
-            const irrType = irrByTense[tenseKey] || ((tenseKey === 'presente') ? (word.irregularType || '') : '');
-            const verbClass = vcByTense[tenseKey] || ((irrType && irrType !== 'none') ? 'irregular' : (tenseKey === 'presente' ? (word.verbClass || 'regular') : 'regular'));
-            const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
+            const askedKey = (q && q.tenseKey) || null;
 
-            const rows = [
-                ['yo', c.yo], ['tú', c.tu], ['él/ella', c.el],
-                ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]
-            ];
-            // 단어장과 동일 규칙: 해당 인칭이 불규칙이면 파란색 강조
-            const isIrregularCell = (person) => {
-                if (!isIrr) return false;
-                const p = person.split('/')[0]; // 'él/ella' → 'él'
-                if (irrType.includes('완전 불규칙')) return true;
-                if (irrType.includes('1인칭') && p === 'yo') return true;
-                const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i');
-                if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
-                return false;
-            };
-            const cells = rows.map(([label, val]) => {
-                const hl = val && isIrregularCell(label);
+            const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
+            const tenseOpts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
+            const labelOf = (k) => { const o = tenseOpts.find(t => t.key === k); return o ? o.label : k; };
+
+            // 등록된 시제 모으기 (구버전 호환: conjugations = 현재시제)
+            let keys = Object.keys(byTense).filter(k => hasValues(byTense[k]));
+            if (!keys.includes('presente') && hasValues(word.conjugations)) keys.unshift('presente');
+            if (keys.length === 0) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            // 정렬: 출제된 시제 먼저 → 나머지는 등록 폼의 시제 순서대로
+            const orderOf = (k) => { const i = tenseOpts.findIndex(t => t.key === k); return i < 0 ? 99 : i; };
+            keys.sort((a, b) => {
+                if (a === askedKey) return -1;
+                if (b === askedKey) return 1;
+                return orderOf(a) - orderOf(b);
+            });
+
+            const blocks = keys.map(k => {
+                const c = byTense[k] || (k === 'presente' ? word.conjugations : null);
+                if (!hasValues(c)) return '';
+                const irrType = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
+                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
+                const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
+                const isAsked = (k === askedKey);
+
+                const isIrregularCell = (person) => {
+                    if (!isIrr) return false;
+                    const p = person.split('/')[0];
+                    if (irrType.includes('완전 불규칙')) return true;
+                    if (irrType.includes('1인칭') && p === 'yo') return true;
+                    const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i');
+                    if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
+                    return false;
+                };
+
+                let cells;
+                if (c.form && !c.yo) {
+                    // 1칸짜리 특수 시제 (gerundio 등)
+                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`;
+                } else {
+                    const rows = [['yo', c.yo], ['tú', c.tu], ['él/ella', c.el], ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]];
+                    cells = rows.map(([label, val]) => {
+                        const hl = val && isIrregularCell(label);
+                        return `
+                        <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5">
+                            <span class="text-[11px] text-slate-400 font-medium">${label}</span>
+                            <span class="text-sm ${hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold'}">${val ? escapeHtml(val) : '-'}</span>
+                        </div>`;
+                    }).join('');
+                }
+
                 return `
-                <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5">
-                    <span class="text-[11px] text-slate-400 font-medium">${label}</span>
-                    <span class="text-sm ${hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold'}">${val || '-'}</span>
-                </div>`;
-            }).join('');
-            box.classList.remove('hidden');
-            box.innerHTML = `
-                <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 flex items-center justify-center gap-1.5 flex-wrap">
-                        <span>🔀</span> ${tenseLabel} 활용
-                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${irrType})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
+                <div class="bg-white border ${isAsked ? 'border-2 border-violet-400' : 'border-slate-200'} rounded-xl overflow-hidden">
+                    <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
+                        <span>🔀</span> ${escapeHtml(labelOf(k))}
+                        ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
+                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
                     ${isIrr ? '<p class="text-[10px] text-slate-400 text-center py-1.5 border-t border-slate-100">파란 글씨가 불규칙으로 바뀌는 부분이에요</p>' : ''}
                 </div>`;
+            }).filter(Boolean).join('');
+
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="space-y-2">${blocks}</div>`;
         }
 
         // [냐냐 PATCH] 관용구 뜻풀이 채점 — 먼저 로컬(부분일치) 확인, 애매하면 AI가 유연하게 판단
@@ -601,53 +677,150 @@ let quizSession = null;
             }
         }
 
-        function submitSubjectiveAnswer() {
-            const q = quizSession.questions[quizSession.currentIndex];
-            const userAnswer = document.getElementById('quiz-subjective-input').value.trim();
+        // [냐냐 PATCH-2배치] AI 주관식 채점
+        //   AI가 4가지로 분류: correct(정답) / synonym(유의어) / typo(오타) / wrong(오답)
+        //   - 유의어  → 점수 없이 재입력 1회 (앞글자 힌트 공개)
+        //   - 오타    → 점수 없이 재입력 1회 (단, 3글자 초과로 틀리면 바로 오답)
+        //   - AI 키 없거나 실패 → 기존 로컬 채점(analyzeSubjectiveAnswer)으로 폴백
+        async function aiGradeSubjective(userAnswer, q) {
+            if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return null;
+            try {
+                const system = `You grade a Korean learner's Spanish vocabulary answer. Classify into exactly one verdict.
+- "correct": the answer IS the target word (ignore capitalization, surrounding punctuation, and a leading article el/la/los/las/un/una).
+- "synonym": a DIFFERENT, real Spanish word that means the same or nearly the same thing as the target (e.g. target "televisor", answer "televisión"). It must be a real word, not a misspelling.
+- "typo": clearly an attempt at the TARGET word but misspelled (including a wrong/missing accent), i.e. within about 3 characters of the target.
+- "wrong": anything else (different meaning, gibberish, blank).
+Prefer "typo" over "synonym" when the answer is not a real Spanish word.
+Return JSON only.`;
+                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).
+Student answered: "${userAnswer}".
+Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)" }`;
+                const schema = { type: "OBJECT", properties: { verdict: { type: "STRING" }, comment: { type: "STRING" } }, required: ["verdict"] };
+                const resp = await callGemini(prompt, system, schema, 'low');
+                const data = extractAndParseJson(resp);
+                if (data && data.verdict) return data;
+            } catch (e) {
+                console.warn('AI 주관식 채점 실패, 로컬 채점으로 대체', e);
+            }
+            return null;
+        }
 
-            // [냐냐 PATCH] 활용형 문제는 정답(활용형)과 직접 비교
+        async function submitSubjectiveAnswer() {
+            const q = quizSession.questions[quizSession.currentIndex];
+            const inputEl = document.getElementById('quiz-subjective-input');
+            const submitBtn = document.getElementById('quiz-subjective-submit-btn');
+            if (!inputEl || inputEl.disabled) return;
+            const userAnswer = inputEl.value.trim();
+
+            // 활용형 문제는 정답(활용형)과 직접 비교
             if (q.type === 'conjugation') {
-                document.getElementById('quiz-subjective-input').disabled = true;
-                document.getElementById('quiz-subjective-submit-btn').disabled = true;
+                inputEl.disabled = true;
+                submitBtn.disabled = true;
                 const isCorrect = userAnswer && (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer));
                 q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word} = ${q.word.meaning} · ${q.tenseLabel || '현재'} ${q.conjLabel})`;
                 finishQuizQuestion(isCorrect, q);
                 return;
             }
 
-            // [냐냐 PATCH] 관용구 뜻풀이는 AI가 유연하게 채점 (똑같이 안 써도 뜻 맞으면 정답)
+            // 관용구 뜻풀이는 AI가 유연하게 채점
             if (q.type === 'idiom-subjective') {
                 gradeIdiomSubjective(q, userAnswer);
                 return;
             }
 
-            // [냐냐 PATCH] 스마트 분석 (동의어 힌트 / 성수틀림 / 등록추천)
-            const analysis = analyzeSubjectiveAnswer(userAnswer, q);
+            const correct = q.word.word;
+            const correctNorm = normalizeSpanishAnswer(correct);
+            const userNorm = normalizeSpanishAnswer(userAnswer);
+            const synHintBox = document.getElementById('quiz-synonym-hint');
 
-            // [냐냐 PATCH] 동의어를 입력한 경우: 오답 처리하지 않고 힌트를 보여준 뒤 다시 입력받음
-            // (동의어는 '틀린 답'이 아니라 '정답으로 가는 길목'이라는 관점)
-            if (analysis.isSynonym) {
-                const synHintBox = document.getElementById('quiz-synonym-hint');
+            const gradeNow = (isCorrect, hint, unknownWord) => {
+                inputEl.disabled = true;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '확인';
+                if (synHintBox) synHintBox.classList.add('hidden');
+                q._subjectiveHint = hint || '';
+                q._userAnswer = userAnswer;
+                if (unknownWord) q._unknownWord = unknownWord;
+                finishQuizQuestion(isCorrect, q);
+            };
+
+            // 한 번 더 쓰게 하기 (점수 반영 없음)
+            const askRetry = (reason, hintHtml) => {
+                q._retryReason = reason;   // 'synonym' | 'typo' → 재입력 후 점수에 반영됨
                 if (synHintBox) {
                     synHintBox.classList.remove('hidden');
-                    synHintBox.innerHTML = analysis.hint;
+                    synHintBox.innerHTML = hintHtml;
                 }
-                // 입력칸 비우고 다시 활성화 (재입력)
-                const input = document.getElementById('quiz-subjective-input');
-                input.value = '';
-                input.focus();
-                return; // 채점 보류, 다음 문제로 안 넘어감
+                inputEl.disabled = false;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '확인';
+                inputEl.value = '';
+                inputEl.focus();
+            };
+
+            // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자 (televisión → televiso)
+            const prefixHint = () => correct.slice(0, sharedPrefixLen(userNorm, correctNorm) + 1);
+
+            // 0) 빈칸이면 바로 오답
+            if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }
+            // 1) 정답이면 AI 안 부르고 바로 통과 (빠름)
+            if (userNorm === correctNorm) { gradeNow(true, ''); return; }
+
+            // 2) AI 채점 (키 있을 때만) — 채점 중 표시
+            submitBtn.disabled = true;
+            inputEl.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...';
+            const ai = await aiGradeSubjective(userAnswer, q);
+            inputEl.disabled = false;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '확인';
+
+            if (!ai) {
+                // 3) 폴백 — AI 키가 없거나 실패하면 기존 로컬 채점
+                const analysis = analyzeSubjectiveAnswer(userAnswer, q);
+                if (analysis.isSynonym && !q._retryReason) { askRetry('synonym', analysis.hint); return; }
+                if (analysis.isTypo && !q._retryReason) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
+                gradeNow(analysis.isCorrect, analysis.hint, analysis.unknownWord);
+                return;
             }
 
-            // 동의어가 아니면 정상 채점
-            document.getElementById('quiz-subjective-input').disabled = true;
-            document.getElementById('quiz-subjective-submit-btn').disabled = true;
-            const synHintBox = document.getElementById('quiz-synonym-hint');
-            if (synHintBox) synHintBox.classList.add('hidden');
-            q._subjectiveHint = analysis.hint || '';
-            q._userAnswer = userAnswer;
-            if (analysis.unknownWord) q._unknownWord = analysis.unknownWord;
-            finishQuizQuestion(analysis.isCorrect, q);
+            const verdict = String(ai.verdict || '').toLowerCase();
+
+            if (verdict === 'correct') { gradeNow(true, ''); return; }
+
+            // 이미 재입력 기회를 한 번 썼으면 → 더는 안 봐주고 채점
+            if (q._retryReason) {
+                const unknown = (verdict === 'wrong' && !isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
+                gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
+                return;
+            }
+
+            if (verdict === 'synonym') {
+                askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.`);
+                return;
+            }
+
+            if (verdict === 'typo') {
+                // 오타가 3글자를 넘으면 봐주지 않고 바로 오답
+                if (levenshtein(userNorm, correctNorm) > 3) {
+                    gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.`);
+                    return;
+                }
+                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
+                return;
+            }
+
+            // wrong — 미등록 단어면 등록 추천
+            const unknown = (!isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
+            gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
+        }
+
+        // [냐냐 PATCH-2배치] 이 단어가 단어장에 이미 있나? (원형·활용형·관사 전부 고려)
+        function isWordKnown(raw) {
+            const n = normalizeSpanishAnswer(raw);
+            if (vocabulary.some(w => normalizeSpanishAnswer(w.word) === n)) return true;
+            if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return true;
+            return false;
         }
 
         function finishQuizQuestion(isCorrect, q) {
@@ -739,28 +912,30 @@ let quizSession = null;
                 }
             }
 
-            if (q.type === 'idiom-mc' || q.type === 'idiom-subjective') {
-                // 관용구 문제: 관용구 자체 + 뜻 + 부모 단어의 전체 정보(노트/관용구/예문)
+            // [냐냐 PATCH-1배치] 정답이든 오답이든 단어장 정보를 "항상 전부" 보여줌
+            //   (배지: 품사·성별·점수 / 성수변화 / 노트 / 관용구 / 예문 / 등록된 시제 전부)
+            const notesBox = document.getElementById('quiz-review-notes-box');
+            const isIdiomQ = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
+
+            if (isIdiomQ) {
                 const it = q.idiomData || {};
                 document.getElementById('quiz-review-word').innerText = it.idiom || q.answer;
                 document.getElementById('quiz-review-meaning').innerText = it.idiomMeaning || '';
-
-                const notesBox = document.getElementById('quiz-review-notes-box');
-                notesBox.classList.remove('hidden');
-                notesBox.innerHTML = buildNotesHtml(q.word, { idiomIntro: true });
             } else {
                 document.getElementById('quiz-review-word').innerText = q.word.word;
                 document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
+            }
 
-                // 단어 문제: 성수변화 + 노트 + 관용구 + 예문 (색 구분 HTML)
-                const notesBox = document.getElementById('quiz-review-notes-box');
-                const html = buildNotesHtml(q.word, {});
-                if (html.trim()) {
-                    notesBox.classList.remove('hidden');
-                    notesBox.innerHTML = html;
-                } else {
-                    notesBox.classList.add('hidden');
-                }
+            const badges = buildWordBadgesHtml(q.word);
+            const notes = buildNotesHtml(q.word, { idiomIntro: isIdiomQ });
+            const combined = [badges, notes].filter(x => x && x.trim())
+                .join('<div class="border-t border-slate-100 my-3"></div>');
+
+            if (combined.trim()) {
+                notesBox.classList.remove('hidden');
+                notesBox.innerHTML = combined;
+            } else {
+                notesBox.classList.add('hidden');
             }
 
             // [냐냐 PATCH] 동사 문제면 현재시제 활용표를 보여줌
@@ -929,8 +1104,8 @@ let quizSession = null;
                 const id = cb.getAttribute('data-master-id');
                 const w = vocabulary.find(x => x.id === id);
                 if (w && !w.mastered) {
-                    // [냐냐 PATCH-0배치] 수동 마스터 = 만점(+10) + 주관식 조건 통과 처리
-                    setWordScore(w, SCORE_MAX, { subjectivePassed: true });
+                    // [냐냐 PATCH-0배치] 수동 마스터 = 8점(완벽) + 주관식 조건 통과 처리
+                    setWordScore(w, SCORE_PERFECT, { subjectivePassed: true });
                     count++;
                 }
             });
