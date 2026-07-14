@@ -128,9 +128,10 @@
                     </button>
                     <button onclick="changeTab('review')" id="nav-review" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
                         <i class="fa-solid fa-eye text-sm w-4 flex items-center justify-center shrink-0"></i>
-                        <span class="leading-none">복습</span>
+                        <span class="leading-none">복습 · 퀴즈</span>
                     </button>
-                    <button onclick="changeTab('quiz')" id="nav-quiz" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
+                    <!-- [냐냐 PATCH-4배치] 퀴즈는 '복습 · 퀴즈' 안의 서브탭으로 통합됨 (메뉴에서는 숨김) -->
+                    <button onclick="changeTab('quiz')" id="nav-quiz" class="hidden w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700">
                         <i class="fa-solid fa-bullseye text-sm w-4 flex items-center justify-center shrink-0"></i>
                         <span class="leading-none">퀴즈</span>
                     </button>
@@ -253,13 +254,11 @@
                                     </div>
                                     <!-- 정렬 기준 (하나만) -->
                                     <div class="space-y-1.5">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준</label>
+                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준 <span class="text-slate-300 normal-case font-semibold">(같은 버튼 한 번 더 누르면 ↕ 방향 전환)</span></label>
                                         <div id="filter-sort-box" class="flex flex-wrap gap-1.5">
-                                            <button type="button" data-sort="recent" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">최근순</button>
-                                            <button type="button" data-sort="oldest" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">오래된순</button>
-                                            <button type="button" data-sort="weak-score" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">⭐ 약점순</button>
-                                            <button type="button" data-sort="alpha-asc" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A→Z</button>
-                                            <button type="button" data-sort="alpha-desc" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">Z→A</button>
+                                            <button type="button" data-sortkey="reg" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">등록순</button>
+                                            <button type="button" data-sortkey="score" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">점수순</button>
+                                            <button type="button" data-sortkey="alpha" onclick="setFilterSort(this)" class="filter-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A→Z</button>
                                         </div>
                                     </div>
                                     <!-- 취소 / 확인 -->
@@ -362,7 +361,14 @@
 
                 <!-- TAB 3: VOCAB QUIZ -->
                 <div id="tab-quiz" class="hidden space-y-6">
-                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6">
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-3">
+                    <!-- [냐냐 PATCH-4배치] 복습/퀴즈 통합 서브메뉴 (복습 탭과 동일) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1 flex gap-1">
+                        <button onclick="selectReviewMode('blink')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-500 hover:bg-slate-50">👁️ 깜빡이</button>
+                        <button onclick="selectReviewMode('fill')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-500 hover:bg-slate-50">✏️ 단어 빈칸</button>
+                        <button onclick="selectReviewMode('gfill')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-500 hover:bg-slate-50">📋 문법표 빈칸</button>
+                        <button class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm">🎯 퀴즈</button>
+                    </div>
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
@@ -512,6 +518,7 @@
                         <button id="review-mode-blink-btn" onclick="selectReviewMode('blink')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all">👁️ 깜빡이</button>
                         <button id="review-mode-fill-btn" onclick="selectReviewMode('fill')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all">✏️ 단어 빈칸</button>
                         <button id="review-mode-gfill-btn" onclick="selectReviewMode('gfill')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all">📋 문법표 빈칸</button>
+                        <button id="review-mode-quiz-btn" onclick="selectReviewMode('quiz')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all">🎯 퀴즈</button>
                     </div>
                     </div>
 
