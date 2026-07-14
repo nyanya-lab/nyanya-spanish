@@ -1,1131 +1,1515 @@
-let quizSession = null;
-        let quizReviewPoolOverride = null; // [냐냐 PATCH] 오늘의 복습 전용 단어 풀 (있으면 범위 무시)
-        let selectedQuizCount = 30;
+// ============================================================
+        // [냐냐 PATCH] 미니 게임 모음
+        // ============================================================
+        let gameState = null; // 현재 진행 중인 게임 상태
 
-        function initQuizTab() {
-            document.getElementById('quiz-setup-screen').classList.remove('hidden');
-            document.getElementById('quiz-question-screen').classList.add('hidden');
-            document.getElementById('quiz-results-screen').classList.add('hidden');
-            document.getElementById('quiz-combo-box').classList.add('hidden');
-
-            const startBtn = document.getElementById('quiz-start-btn');
-            const sub = document.getElementById('quiz-setup-sub');
-            // [냐냐 PATCH] 마스터한 단어는 퀴즈에서 제외 — 아직 안 외운 단어만 출제
-            const reviewablePool = vocabulary.filter(w => !w.mastered);
-            if (reviewablePool.length < 2) {
-                sub.innerText = vocabulary.length >= 2
-                    ? '복습할 단어가 부족해요! (마스터한 단어는 제외돼요. 전부 마스터하셨다면 멋져요 🎉)'
-                    : '퀴즈를 시작하려면 단어장에 최소 2개 이상의 단어를 등록해 주어야 합니다!';
-                startBtn.disabled = true;
-                startBtn.className = "bg-slate-300 text-white px-8 py-3 rounded-xl text-sm font-bold cursor-not-allowed";
-            } else {
-                sub.innerText = '객관식과 주관식(스페인어 작문)이 섞여서 나와요 (마스터한 단어는 제외돼요)';
-                startBtn.disabled = false;
-                startBtn.className = "bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100";
-            }
-        }
-
-        function selectQuizCount(count, btnEl) {
-            selectedQuizCount = count;
-            document.querySelectorAll('.quiz-count-btn').forEach(btn => {
-                btn.className = "quiz-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-violet-300 transition-all";
-            });
-            btnEl.className = "quiz-count-btn px-6 py-3 rounded-xl border-2 border-violet-500 bg-violet-50 font-bold text-violet-600 transition-all";
-        }
-
-        let selectedQuizFormat = 'mc'; // 'mc' | 'subjective' | 'mixed'
-        function selectQuizFormat(fmt, btnEl) {
-            selectedQuizFormat = fmt;
-            document.querySelectorAll('.quiz-format-btn').forEach(btn => {
-                btn.className = "quiz-format-btn py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-xs font-bold hover:border-violet-300 transition-all";
-            });
-            btnEl.className = "quiz-format-btn py-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 text-violet-600 text-xs font-bold transition-all";
-        }
-
-        // [냐냐 PATCH] 약점 집중 모드 — 퀴즈 탭으로 이동 후 약점 단어만으로 바로 시작
-        function startQuiz() {
-            // [냐냐 PATCH] 오늘의 복습 전용 풀이 지정된 경우: 범위 무시하고 그 단어들로 진행
-            let reviewablePool;
-            if (quizReviewPoolOverride && quizReviewPoolOverride.length >= 2) {
-                reviewablePool = quizReviewPoolOverride;
-                quizReviewPoolOverride = null; // 1회성 (다음 퀴즈엔 영향 없음)
-            } else {
-                quizReviewPoolOverride = null;
-                // [냐냐 PATCH] 출제 범위: 체크박스로 여러 개 선택 (마스터 제외/마스터/약점 단어/승급 대기)
-                const wantNotMastered = document.getElementById('scope-not-mastered')?.checked;
-                const wantMastered = document.getElementById('scope-mastered')?.checked;
-                const wantWeak = document.getElementById('scope-weak')?.checked;
-                const wantPromotion = document.getElementById('scope-promotion')?.checked;
-
-                if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion) {
-                    showToast("출제 범위를 최소 하나는 선택해 주세요!", "error");
-                    return;
+        // 게임 메뉴로 돌아가기 (진행 중이던 게임 정리)
+        function resetGamesMenu() {
+            stopCurrentGame();
+            const menu = document.getElementById('games-menu');
+            const playArea = document.getElementById('game-play-area');
+            if (menu) menu.classList.remove('hidden');
+            if (playArea) { playArea.classList.add('hidden'); playArea.innerHTML = ''; }
+            // 각 게임 최고기록 표시 (이번 주 / 역대)
+            ['rapidfire', 'falling'].forEach(g => {
+                const el = document.getElementById('hs-' + g);
+                if (el) {
+                    const week = getGameWeekHighScore(g);
+                    const all = getGameHighScore(g);
+                    el.innerHTML = `이번 주 <b class="text-slate-600">${week}</b> · 역대 <b class="text-amber-500">${all}</b>`;
                 }
+            });
+        }
 
-                // [냐냐 PATCH-0배치] 승급 대기 단어 = 통합 점수 3점 이상 + 아직 마스터 안 됨
-                const promotionWords = vocabulary.filter(w => !w.mastered && getScore(w) >= 3);
-                // 승급 대기 퀴즈는 5개 이상 있어야 열림
-                if (wantPromotion && promotionWords.length < 5) {
-                    showToast(`아직 승급할 단어가 5개 미만이에요! (현재 ${promotionWords.length}개) 퀴즈를 더 풀어서 마스터 점수를 쌓아보세요.`, "info");
-                    return;
-                }
-
-                // 선택된 범위들의 합집합 (중복 제거)
-                const poolSet = new Map();
-                if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
-                if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
-                if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
-                if (wantPromotion) promotionWords.forEach(w => poolSet.set(w.id, w));
-                reviewablePool = [...poolSet.values()];
+        // 진행 중인 게임의 타이머/애니메이션 정리
+        function stopCurrentGame() {
+            if (gameState) {
+                if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+                if (gameState.spawnInterval) clearInterval(gameState.spawnInterval);
+                if (gameState.rafId) cancelAnimationFrame(gameState.rafId);
+                if (gameState.flashTimeout) clearTimeout(gameState.flashTimeout);
             }
+            gameState = null;
+        }
 
-            if (reviewablePool.length < 2) {
-                showToast("출제할 단어가 2개 이상 있어야 해요! 출제 범위를 바꿔보세요.", "error");
+        // 게임용 단어 풀 (마스터 안 된 단어 우선, 없으면 전체)
+        function getGameWordPool() {
+            const notMastered = vocabulary.filter(w => !w.mastered && w.word && w.meaning);
+            const pool = notMastered.length >= 4 ? notMastered : vocabulary.filter(w => w.word && w.meaning);
+            return pool;
+        }
+
+        function showGamePlayArea(html) {
+            const menu = document.getElementById('games-menu');
+            const playArea = document.getElementById('game-play-area');
+            if (menu) menu.classList.add('hidden');
+            if (playArea) { playArea.classList.remove('hidden'); playArea.innerHTML = html; }
+        }
+
+        // 정답 비교 (악센트/관사 관용 — 기존 normalizeSpanishAnswer 재사용)
+        function gameCheckAnswer(userRaw, correct) {
+            const stripArticle = (s) => normalizeSpanishAnswer(s).replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            // 관사 포함/미포함 둘 다 정답 인정 (힌트가 관사를 뗀 앞글자를 주므로)
+            return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct)
+                || stripArticle(userRaw) === stripArticle(correct);
+        }
+
+        // [냐냐 PATCH] 동의어 방지용 시작 글자 힌트 (앞 2글자) — 게임 item 2
+        function gameStartHint(word) {
+            if (!word) return '';
+            let clean = word.trim();
+            // [냐냐 PATCH] 명사 등에서 정관사/부정관사를 떼고 실제 단어의 앞글자로 힌트
+            clean = clean.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            const n = Math.min(2, clean.length);
+            return clean.slice(0, n);
+        }
+
+        // [냐냐 PATCH-0배치] 게임 결과를 통합 점수(score)에 반영
+        //   속사포: 정답 +0.5 / 오답 -1
+        //   떨어지는 단어: 정답 +1 (오답 판정 없음)
+        //   듣기 받아쓰기: 문장 단위라 단어 점수 반영 없음
+        //   게임 정답만으로는 마스터 못 뚫음 (주관식 정답 경험이 있어야 마스터)
+        const GAME_SCORE = {
+            rapid: { correct: 0.5, wrong: -1 },
+            fall:  { correct: 1,   wrong: 0 }
+        };
+        function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
+            const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
+            const delta = isCorrect ? rule.correct : rule.wrong;
+            addWordScore(wordId, delta, { correct: !!isCorrect });
+        }
+
+        // [냐냐 PATCH] 게임 최고기록 — 역대 + 이번 주 (localStorage)
+        function getWeekKey() {
+            // 이번 주 월요일 날짜를 키로 사용 (YYYY-MM-DD)
+            const d = new Date();
+            const day = (d.getDay() + 6) % 7; // 월=0
+            d.setDate(d.getDate() - day);
+            d.setHours(0,0,0,0);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+        function getGameHighScore(gameType) {
+            try { return parseInt(localStorage.getItem('nyanya_game_hs_' + gameType) || '0', 10) || 0; }
+            catch (e) { return 0; }
+        }
+        function getGameWeekHighScore(gameType) {
+            try {
+                const raw = localStorage.getItem('nyanya_game_whs_' + gameType);
+                if (!raw) return 0;
+                const obj = JSON.parse(raw);
+                if (obj.week !== getWeekKey()) return 0; // 지난 주 기록이면 0
+                return obj.score || 0;
+            } catch (e) { return 0; }
+        }
+        function setGameHighScore(gameType, score) {
+            let isNewAllTime = false;
+            // 역대 최고
+            const prev = getGameHighScore(gameType);
+            if (score > prev) {
+                try { localStorage.setItem('nyanya_game_hs_' + gameType, String(score)); } catch (e) {}
+                isNewAllTime = true;
+            }
+            // 이번 주 최고
+            const weekPrev = getGameWeekHighScore(gameType);
+            if (score > weekPrev) {
+                try { localStorage.setItem('nyanya_game_whs_' + gameType, JSON.stringify({ week: getWeekKey(), score })); } catch (e) {}
+            }
+            return isNewAllTime; // 역대 신기록 여부
+        }
+
+        // ============================================================
+        // 게임 1: 속사포 퀴즈 (제한 시간 60초, 콤보)
+        // ============================================================
+        function startRapidFire() {
+            const pool = getGameWordPool();
+            if (pool.length < 4) {
+                showToast("게임하려면 단어가 4개 이상 있어야 해요!", "error");
                 return;
             }
-            // 단어 수가 적으면 같은 단어가 반복 출제될 수 있음 (최대 단어 수의 4배까지만 허용)
-            const count = Math.min(selectedQuizCount, reviewablePool.length * 4);
+            stopCurrentGame();
+            gameState = {
+                type: 'rapidfire',
+                pool: pool,
+                score: 0,
+                combo: 0,
+                maxCombo: 0,
+                correct: 0,
+                wrong: 0,
+                timeLeft: 60,
+                current: null,
+                timerInterval: null
+            };
 
-            // [냐냐 PATCH] 관용구 문제 풀 준비 (관용구는 객관식만)
-            const allIdioms = [];
-            reviewablePool.forEach(w => {
-                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdioms.push({ ...it, word: w }); });
-            });
-            const allIdiomsGlobal = [];
-            vocabulary.forEach(w => {
-                const list = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                list.forEach(it => { if (it.idiom && it.idiomMeaning) allIdiomsGlobal.push(it); });
-            });
-
-            // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 20%로 하되, 전체 개수는 선택한 수를 넘지 않음
-            // 주관식만 모드에서는 관용구(객관식) 문제를 넣지 않음
-            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2;
-            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length * 2) : 0;
-            const wordCount = count - idiomCount;
-
-            const questions = [];
-            // 단어 문제
-            for (let i = 0; i < wordCount; i++) {
-                const w = reviewablePool[Math.floor(Math.random() * reviewablePool.length)];
-                // [냐냐 PATCH] 문제 유형: 객관식만 / 주관식만 / 섞어서(약 30% 주관식)
-                let isSubjective;
-                if (selectedQuizFormat === 'mc') isSubjective = false;
-                else if (selectedQuizFormat === 'subjective') isSubjective = true;
-                else isSubjective = Math.random() < 0.3;
-                const q = { word: w, type: isSubjective ? 'subjective' : 'mc' };
-
-                // [냐냐 PATCH] 동사이고 활용 정보가 있으면 30% 확률로 '활용형 문제' 출제 (B방식: 원형 숨김)
-                //   여러 시제가 등록돼 있으면 그 중 랜덤으로 출제
-                const tenseMap = {
-                    presente: '직설법 현재', indefinido: '직설법 부정과거', imperfecto: '직설법 불완료과거',
-                    futuro: '직설법 미래', condicional: '조건법', subjPresente: '접속법 현재',
-                    subjImperfecto: '접속법 불완료과거', imperativo: '명령법'
-                };
-                // 사용 가능한 시제 목록 수집 (구버전 conjugations는 presente로 취급)
-                const availableTenses = [];
-                if (w.pos === 'verb') {
-                    if (w.conjugationsByTense) {
-                        Object.keys(tenseMap).forEach(t => {
-                            const c = w.conjugationsByTense[t];
-                            if (c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos)) availableTenses.push({ key: t, data: c });
-                        });
-                    } else if (w.conjugations && (w.conjugations.yo || w.conjugations.el)) {
-                        availableTenses.push({ key: 'presente', data: w.conjugations });
-                    }
-                }
-                if (availableTenses.length > 0 && selectedQuizFormat !== 'mc' && Math.random() < 0.3) {
-                    const pickedTense = availableTenses[Math.floor(Math.random() * availableTenses.length)];
-                    const conj = pickedTense.data;
-                    const forms = [
-                        { key: 'yo', label: '1인칭 단수 (yo)' },
-                        { key: 'tu', label: '2인칭 단수 (tú)' },
-                        { key: 'el', label: '3인칭 단수 (él/ella)' },
-                        { key: 'nos', label: '1인칭 복수 (nosotros)' },
-                        { key: 'vos', label: '2인칭 복수 (vosotros)' },
-                        { key: 'ellos', label: '3인칭 복수 (ellos/ellas)' },
-                    ].filter(f => conj[f.key]); // 값이 있는 형태만
-                    if (forms.length > 0) {
-                        const pick = forms[Math.floor(Math.random() * forms.length)];
-                        questions.push({
-                            word: w,
-                            type: 'conjugation',
-                            conjKey: pick.key,
-                            conjLabel: pick.label,
-                            tenseKey: pickedTense.key,
-                            tenseLabel: tenseMap[pickedTense.key],
-                            answer: conj[pick.key]
-                        });
-                        continue; // 이 문제는 활용형으로 대체
-                    }
-                }
-
-                if (!isSubjective) {
-                    q.answer = w.meaning;
-                    let choices = [w.meaning];
-                    // [냐냐 PATCH] 보기(오답)는 정답 단어와 같은 품사에서 우선 뽑기
-                    const samePos = vocabulary.filter(x => x.id !== w.id && x.pos === w.pos).map(x => x.meaning);
-                    const otherPos = vocabulary.filter(x => x.id !== w.id && x.pos !== w.pos).map(x => x.meaning);
-                    let pool = [...new Set(samePos)]; // 같은 품사 우선, 중복 제거
-                    pool.sort(() => Math.random() - 0.5);
-                    // 같은 품사가 3개 미만이면 다른 품사로 채움
-                    if (pool.length < 3) {
-                        const filler = [...new Set(otherPos)].sort(() => Math.random() - 0.5);
-                        pool = pool.concat(filler);
-                    }
-                    // 정답과 같은 뜻은 제외
-                    pool = pool.filter(m => m !== w.meaning);
-                    choices = choices.concat(pool.slice(0, 3));
-                    choices.sort(() => Math.random() - 0.5);
-                    q.choices = choices;
-                }
-                questions.push(q);
-            }
-
-            // 관용구 문제 (양방향 섞어서)
-            for (let i = 0; i < idiomCount; i++) {
-                const target = allIdioms[Math.floor(Math.random() * allIdioms.length)];
-                // [냐냐 PATCH] 섞어서/주관식 모드에서 30% 확률로 '뜻 해석 주관식' 문제 (AI가 유연하게 채점)
-                const canSubjective = selectedQuizFormat === 'subjective' || (selectedQuizFormat === 'mixed' && Math.random() < 0.3);
-                if (canSubjective) {
-                    // 방향 랜덤: 스→한(뜻 쓰기) 또는 한→스(관용구 쓰기)
-                    const askSpanish = Math.random() < 0.5;
-                    if (askSpanish) {
-                        questions.push({
-                            type: 'idiom-subjective',
-                            subDir: 'ko-es', // 한국어 뜻 → 스페인어 관용구 입력
-                            word: target.word,
-                            answer: target.idiom,
-                            idiomData: target,
-                            promptText: `"${target.idiomMeaning}" 를 뜻하는 스페인어 관용구를 써보세요.`
-                        });
-                    } else {
-                        questions.push({
-                            type: 'idiom-subjective',
-                            subDir: 'es-ko', // 스페인어 관용구 → 한국어 뜻 입력
-                            word: target.word,
-                            answer: target.idiomMeaning,
-                            idiomData: target,
-                            promptText: `관용구 "${target.idiom}"의 뜻을 한국어로 써보세요.`
-                        });
-                    }
-                    continue;
-                }
-                const showIdiomAskMeaning = Math.random() < 0.5; // true: 관용구 보여주고 뜻, false: 뜻 보여주고 관용구
-                let answer, distractorField, promptText;
-                if (showIdiomAskMeaning) {
-                    answer = target.idiomMeaning;
-                    promptText = `관용구 "${target.idiom}"의 뜻은 무엇일까요?`;
-                    distractorField = 'idiomMeaning';
-                } else {
-                    answer = target.idiom;
-                    promptText = `"${target.idiomMeaning}" — 이 뜻의 관용구는 무엇일까요?`;
-                    distractorField = 'idiom';
-                }
-                let choices = [answer];
-                let pool = allIdiomsGlobal.map(it => it[distractorField]).filter(v => v && v !== answer);
-                pool = [...new Set(pool)];
-                pool.sort(() => Math.random() - 0.5);
-                choices = choices.concat(pool.slice(0, 3));
-                choices.sort(() => Math.random() - 0.5);
-                questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText, idiomData: target });
-            }
-
-            // 단어 문제 + 관용구 문제 전체를 섞음
-            questions.sort(() => Math.random() - 0.5);
-
-            quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
-
-            document.getElementById('quiz-setup-screen').classList.add('hidden');
-            document.getElementById('quiz-results-screen').classList.add('hidden');
-            document.getElementById('quiz-question-screen').classList.remove('hidden');
-            document.getElementById('quiz-combo-box').classList.remove('hidden');
-            renderQuizQuestion();
-        }
-
-        function renderQuizQuestion() {
-            const q = quizSession.questions[quizSession.currentIndex];
-            document.getElementById('quiz-question-counter').innerText = `${quizSession.currentIndex + 1} / ${quizSession.questions.length}`;
-            document.getElementById('arena-score').innerText = `정답 ${quizSession.correctCount}개`;
-            document.getElementById('quiz-progress-text').innerText = `${quizSession.currentIndex + 1}/${quizSession.questions.length}`;
-
-            document.getElementById('quiz-review-panel').classList.add('hidden');
-            const nextBtn = document.getElementById('quiz-next-btn');
-            nextBtn.disabled = true;
-            nextBtn.className = "w-full bg-slate-300 text-white py-3 rounded-xl text-sm font-bold transition-all cursor-not-allowed";
-
-            const coach = document.getElementById('quiz-coach-character');
-            coach.innerText = "🧑‍🏫";
-
-            if (q.type === 'mc' || q.type === 'idiom-mc') {
-                document.getElementById('quiz-question-label').innerText = q.type === 'idiom-mc' ? '관용구 QUESTION' : 'QUESTION';
-                document.getElementById('quiz-question-text').innerText = q.type === 'idiom-mc'
-                    ? q.promptText
-                    : `스페인어 "${q.word.word}"의 올바른 한국어 뜻은 무엇일까요?`;
-                document.getElementById('quiz-choices-box').classList.remove('hidden');
-                document.getElementById('quiz-subjective-box').classList.add('hidden');
-
-                const box = document.getElementById('quiz-choices-box');
-                box.innerHTML = '';
-                q.choices.forEach((choice, idx) => {
-                    box.innerHTML += `
-                        <button onclick="submitMcAnswer('${choice.replace(/'/g, "\\'")}', this)" class="w-full bg-white border-2 border-slate-200 rounded-2xl py-4 px-5 text-slate-700 text-sm font-bold transition-all text-center flex items-center justify-center gap-2 hover:border-violet-400 hover:bg-violet-50 active:scale-95 shadow-sm">
-                            <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-400 text-xs flex items-center justify-center font-black">${idx + 1}</span>
-                            <span class="flex-1">${choice}</span>
-                        </button>
-                    `;
-                });
-            } else {
-                // 주관식 또는 활용형 문제
-                if (q.type === 'conjugation') {
-                    document.getElementById('quiz-question-label').innerText = '동사 활용';
-                    // [냐냐 PATCH] B방식: 원형(스페인어)을 숨기고 한국어 뜻 + 시제로 물어봄
-                    const tenseName = q.tenseLabel || '현재시제';
-                    document.getElementById('quiz-question-text').innerHTML = `<b class="text-violet-600">${q.word.meaning}</b>의 ${tenseName} <b>${q.conjLabel}</b>은?`;
-                } else if (q.type === 'idiom-subjective') {
-                    document.getElementById('quiz-question-label').innerText = '관용구 뜻풀이';
-                    if (q.subDir === 'ko-es') {
-                        document.getElementById('quiz-question-text').innerHTML = `<b class="text-violet-600">${q.idiomData.idiomMeaning}</b> 를 뜻하는 스페인어 관용구를 써보세요.`;
-                    } else {
-                        document.getElementById('quiz-question-text').innerHTML = `관용구 <b class="text-violet-600">${q.idiomData.idiom}</b>의 뜻을 한국어로 써보세요.`;
-                    }
-                } else {
-                    document.getElementById('quiz-question-label').innerText = 'WRITE IN SPANISH';
-                    // [냐냐 PATCH] 형용사는 남성형(사전형)으로 통일해서 물어봄 — 답이 하나로 명확해짐
-                    const genderHint = (q.word.pos === 'adjective') ? ' <span class="text-violet-500">(남성형)</span>' : '';
-                    document.getElementById('quiz-question-text').innerHTML = `${q.word.meaning} → 스페인어로 써보세요!${genderHint}`;
-                }
-                document.getElementById('quiz-choices-box').classList.add('hidden');
-                document.getElementById('quiz-subjective-box').classList.remove('hidden');
-                const input = document.getElementById('quiz-subjective-input');
-                input.value = '';
-                input.disabled = false;
-                const synHint = document.getElementById('quiz-synonym-hint');
-                if (synHint) synHint.classList.add('hidden'); // 새 문제면 동의어 힌트 숨김
-                document.getElementById('quiz-subjective-submit-btn').disabled = false;
-                setTimeout(() => input.focus(), 50);
-            }
-        }
-
-        // [냐냐 PATCH] 서술형 답 분석 — 오답일 때 힌트 생성 (동의어/성수틀림/철자근접)
-        // AI 없이 문자열 비교로 처리 (빠름). 반환: {isCorrect, hint}
-        function analyzeSubjectiveAnswer(userRaw, q) {
-            const correct = q.word.word;
-            const correctNorm = normalizeSpanishAnswer(correct);
-            const userNorm = normalizeSpanishAnswer(userRaw);
-
-            // 1) 정답 (악센트/관사 관용 처리 후 일치)
-            if (userNorm === correctNorm) return { isCorrect: true, hint: '' };
-
-            // 빈칸이면 힌트 없이 오답
-            if (!userRaw.trim()) return { isCorrect: false, hint: '' };
-
-            // 2) 성/수 틀림 감지 (형용사) — 어근이 같은데 어미만 다름
-            //    corto vs corta, egoísta vs egoísto 등
-            const stem = (s) => s.replace(/(o|a|os|as|e|es)$/,'');
-            if (q.word.pos === 'adjective' && stem(userNorm) === stem(correctNorm) && stem(correctNorm).length >= 2) {
-                return {
-                    isCorrect: false,
-                    hint: `✏️ 어근은 맞아요! 어미(성·수)를 확인해 보세요. 남성형은 <b>${correct}</b> 예요.`
-                };
-            }
-
-            // 3) 동의어 감지 — 사용자가 입력한 단어가 단어장에 있고, 뜻이 같으면 동의어
-            const userWordInVocab = vocabulary.find(w => normalizeSpanishAnswer(w.word) === userNorm);
-            const sameMeaning = userWordInVocab && meaningsOverlap(userWordInVocab.meaning, q.word.meaning);
-            if (sameMeaning) {
-                // 앞글자 힌트: 정답과 사용자 답이 공유하는 접두사 + 다음 한 글자
-                const sharedLen = sharedPrefixLen(userNorm, correctNorm);
-                const hintPrefix = correct.slice(0, sharedLen + 1);
-                return {
-                    isCorrect: false,
-                    hint: `💡 그것도 같은 뜻이에요! 다른 동의어를 생각해 볼까요? <b>${hintPrefix}</b>로 시작하는 단어예요.`,
-                    isSynonym: true
-                };
-            }
-
-            // 4) [냐냐 PATCH-1배치] 오타 감지 — 정답과 1~2글자 차이면 새 단어가 아니라 그냥 오타
-            //    (예: hblar → hablar). 등록 버튼 띄우지 않음.
-            const dist = levenshtein(userNorm, correctNorm);
-            if (correctNorm.length >= 4 && dist > 0 && dist <= 2) {
-                return {
-                    isCorrect: false,
-                    hint: `✏️ 철자가 살짝 틀렸어요! 정답은 <b>${correct}</b> 예요.`,
-                    isTypo: true
-                };
-            }
-
-            // 5) [냐냐 PATCH-1배치] 활용형·복수형 등 "변형된 형태"도 이미 등록된 단어로 인정
-            //    (예: hablo → hablar가 단어장에 있음). 등록 버튼 띄우지 않음.
-            const formInVocab = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userRaw) : null;
-
-            // 6) 입력한 단어가 단어장에 정말 없음 → 등록 추천 표시 (오답)
-            if (!userWordInVocab && !formInVocab && userRaw.trim().length >= 2) {
-                return {
-                    isCorrect: false,
-                    hint: `❌ 정답은 <b>${correct}</b> 예요.`,
-                    unknownWord: userRaw.trim()
-                };
-            }
-
-            // 7) 그 외 (단어장엔 있지만 뜻이 다른 경우 등) → 일반 오답
-            return { isCorrect: false, hint: `❌ 정답은 <b>${correct}</b> 예요.` };
-        }
-
-        // [냐냐 PATCH-1배치] 두 단어의 편집 거리 (오타 판정용)
-        function levenshtein(a, b) {
-            if (a === b) return 0;
-            if (!a.length) return b.length;
-            if (!b.length) return a.length;
-            let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-            for (let i = 1; i <= a.length; i++) {
-                const cur = [i];
-                for (let j = 1; j <= b.length; j++) {
-                    cur[j] = Math.min(
-                        prev[j] + 1,
-                        cur[j - 1] + 1,
-                        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-                    );
-                }
-                prev = cur;
-            }
-            return prev[b.length];
-        }
-
-        // 두 뜻 문자열이 겹치는지 (동의어 판정용) — 쉼표/슬래시로 나눠 하나라도 겹치면 true
-        function meaningsOverlap(m1, m2) {
-            const split = (m) => m.toLowerCase().replace(/\(.*?\)/g,'').split(/[,;/·]/).map(s => s.trim()).filter(Boolean);
-            const a = split(m1), b = split(m2);
-            return a.some(x => b.some(y => x === y || x.includes(y) || y.includes(x)));
-        }
-
-        // 두 문자열의 공통 접두사 길이
-        function sharedPrefixLen(a, b) {
-            let i = 0;
-            while (i < a.length && i < b.length && a[i] === b[i]) i++;
-            return i;
-        }
-
-        function normalizeSpanishAnswer(s) {
-            return s.toLowerCase().trim()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // 채점은 악센트 관용 처리
-                .replace(/[¿?¡!.,;:"'()]/g, '') // [냐냐 PATCH] 문장부호 무시 (¿dónde? = dónde)
-                .replace(/\s+/g, ' ').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, ''); // [1배치] "el/la estudiante" 같은 슬래시 관사도 제거
-        }
-
-        function submitMcAnswer(choice, btnEl) {
-            const q = quizSession.questions[quizSession.currentIndex];
-            const correctAnswer = q.answer !== undefined ? q.answer : q.word.meaning;
-            const isCorrect = (choice === correctAnswer);
-
-            // [냐냐 PATCH-버그수정] 클릭한 선택지가 바로 시각적으로 표시되도록 함
-            // (정답/오답 색 표시 + 다른 선택지들은 비활성화해서 중복 클릭 방지)
-            const allBtns = document.querySelectorAll('#quiz-choices-box button');
-            allBtns.forEach(btn => { btn.disabled = true; btn.classList.add('opacity-60'); });
-            if (btnEl) {
-                btnEl.classList.remove('opacity-60', 'border-slate-200', 'hover:border-violet-400', 'hover:bg-violet-50');
-                btnEl.classList.add(isCorrect ? 'border-emerald-500' : 'border-rose-500', isCorrect ? 'bg-emerald-50' : 'bg-rose-50');
-            }
-
-            finishQuizQuestion(isCorrect, q);
-        }
-
-        // [냐냐 PATCH-1배치] 퀴즈에서 입력한 미등록 단어를 단어장에 등록
-        //   ⚠️ 예전엔 changeTab('list')로 단어장 탭으로 넘어가버려서 퀴즈 기록이 날아갔음.
-        //      단어 모달은 화면 전체를 덮는 오버레이라 탭을 옮길 필요가 없음 → 모달만 띄움.
-        function registerUnknownFromQuiz() {
-            const word = quizSession && quizSession._pendingRegisterWord;
-            if (!word) return;
-            openWordModal();
-            const input = document.getElementById('input-word');
-            if (input) {
-                input.value = word;
-                if (typeof handleWordInput === 'function') handleWordInput(word);
-            }
-            showToast(`"${word}" 등록 창을 열었어요. 닫으면 퀴즈로 돌아와요!`, "info");
-        }
-
-        // [냐냐 PATCH] 형용사 성·수 변화 설명 텍스트 생성
-        function adjAgreementText(word) {
-            if (word.pos !== 'adjective') return '';
-            const base = word.word;
-            const stem = base.replace(/(o|a|os|as|e|es)$/, '');
-            switch (word.adjAgreement) {
-                case 'full': // corto/corta
-                    return `남성: ${stem}o · 여성: ${stem}a (복수는 -s)`;
-                case 'no-gender': // egoísta
-                    return `성별 변화 없음 (남녀 모두 ${base}) · 복수는 -s`;
-                case 'no-number':
-                    return `수 변화 없음 (단수·복수 모두 ${base})`;
-                case 'invariable':
-                    return `성·수 변화 없음 (항상 ${base})`;
-                default:
-                    return '';
-            }
-        }
-
-        // [냐냐 PATCH] 노트/관용구/예문/성수를 색 구분된 HTML로 (제목색 ≠ 내용색)
-        // [냐냐 PATCH-1배치] 결과 화면 상단 배지 — 품사 · 성별 · 통합 점수
-        function buildWordBadgesHtml(word) {
-            if (!word) return '';
-            const chips = [];
-            const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[word.pos]) ? POS_LABELS[word.pos] : word.pos;
-            if (posLabel) chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black bg-indigo-50 text-indigo-600">${escapeHtml(posLabel)}</span>`);
-            if (word.pos === 'noun' && word.gender) {
-                const g = word.gender === 'f' ? ['여성 (la)', 'bg-rose-50 text-rose-600']
-                        : word.gender === 'm' ? ['남성 (el)', 'bg-blue-50 text-blue-600']
-                        : ['남녀공용 (el/la)', 'bg-violet-50 text-violet-600'];
-                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${g[1]}">${g[0]}</span>`);
-            }
-            if (typeof getWordGrade === 'function' && typeof GRADE_INFO !== 'undefined') {
-                const gi = GRADE_INFO[getWordGrade(word)];
-                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label}">${formatScore(word)}</span>`);
-            }
-            return chips.length ? `<div class="flex items-center justify-center gap-1.5 flex-wrap">${chips.join('')}</div>` : '';
-        }
-
-        function buildNotesHtml(word, opts) {
-            opts = opts || {};
-            const sections = [];
-            // 관용구 안내 (관용구 문제일 때만)
-            if (opts.idiomIntro) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-rose-500 mb-1.5">📌 관용구 안내</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed">"${word.word}" (${word.meaning}) 단어의 관용구예요.</span>
-                    </div>`);
-            }
-            // 성·수 변화 (형용사)
-            const agr = adjAgreementText(word);
-            if (agr) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-fuchsia-500 mb-1.5">🔤 성·수 변화</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed">${agr}</span>
-                    </div>`);
-            }
-            // 노트
-            if (word.notes) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-amber-600 mb-1.5">📝 노트</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed">${escapeHtml(word.notes)}</span>
-                    </div>`);
-            }
-            // 관용구
-            const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
-            if (idiomList.length > 0) {
-                const items = idiomList.map(x => `<span class="block text-sm text-slate-700 leading-relaxed">· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>`).join('');
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-emerald-600 mb-1.5">💬 관용구</span>
-                        ${items}
-                    </div>`);
-            }
-            // 예문
-            if (word.example) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-sky-600 mb-1.5">✍️ 예문</span>
-                        <span class="block text-sm text-slate-700 italic leading-relaxed">${escapeHtml(word.example)}</span>
-                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
-                    </div>`);
-            }
-            return sections.join('<div class="border-t border-slate-100 my-3"></div>');
-        }
-
-        // [냐냐 PATCH-1배치] 퀴즈 정답 화면 동사 활용표 — 등록된 "모든 시제"를 다 보여줌
-        //   (예전엔 출제된 시제 하나만 보여줬음. 출제된 시제는 맨 위 + 보라 테두리로 강조)
-        function renderQuizConjugation(word, q, boxId) {
-            const box = document.getElementById(boxId || 'quiz-review-conj-box'); // [3배치] 복습 화면에서도 재사용
-            if (!box) return;
-            if (!word || word.pos !== 'verb') { box.classList.add('hidden'); box.innerHTML = ''; return; }
-
-            const byTense = word.conjugationsByTense || {};
-            const irrByTense = word.irregularByTense || {};
-            const vcByTense = word.verbClassByTense || {};
-            const askedKey = (q && q.tenseKey) || null;
-
-            const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
-            const tenseOpts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
-            const labelOf = (k) => { const o = tenseOpts.find(t => t.key === k); return o ? o.label : k; };
-
-            // 등록된 시제 모으기 (구버전 호환: conjugations = 현재시제)
-            let keys = Object.keys(byTense).filter(k => hasValues(byTense[k]));
-            if (!keys.includes('presente') && hasValues(word.conjugations)) keys.unshift('presente');
-            if (keys.length === 0) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-
-            // 정렬: 출제된 시제 먼저 → 나머지는 등록 폼의 시제 순서대로
-            const orderOf = (k) => { const i = tenseOpts.findIndex(t => t.key === k); return i < 0 ? 99 : i; };
-            keys.sort((a, b) => {
-                if (a === askedKey) return -1;
-                if (b === askedKey) return 1;
-                return orderOf(a) - orderOf(b);
-            });
-
-            const blocks = keys.map(k => {
-                const c = byTense[k] || (k === 'presente' ? word.conjugations : null);
-                if (!hasValues(c)) return '';
-                const irrType = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
-                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
-                const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
-                const isAsked = (k === askedKey);
-
-                const isIrregularCell = (person) => {
-                    if (!isIrr) return false;
-                    const p = person.split('/')[0];
-                    if (irrType.includes('완전 불규칙')) return true;
-                    if (irrType.includes('1인칭') && p === 'yo') return true;
-                    const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i');
-                    if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
-                    return false;
-                };
-
-                let cells;
-                if (c.form && !c.yo) {
-                    // 1칸짜리 특수 시제 (gerundio 등)
-                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`;
-                } else {
-                    const rows = [['yo', c.yo], ['tú', c.tu], ['él/ella', c.el], ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]];
-                    cells = rows.map(([label, val]) => {
-                        const hl = val && isIrregularCell(label);
-                        return `
-                        <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5">
-                            <span class="text-[11px] text-slate-400 font-medium">${label}</span>
-                            <span class="text-sm ${hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold'}">${val ? escapeHtml(val) : '-'}</span>
-                        </div>`;
-                    }).join('');
-                }
-
-                return `
-                <div class="bg-white border ${isAsked ? 'border-2 border-violet-400' : 'border-slate-200'} rounded-xl overflow-hidden">
-                    <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
-                        <span>🔀</span> ${escapeHtml(labelOf(k))}
-                        ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
-                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold text-slate-500">점수 <span id="rf-score" class="text-rose-600 text-base">0</span></span>
+                            <span class="text-xs font-bold text-slate-500">콤보 <span id="rf-combo" class="text-amber-500 text-base">0</span></span>
+                        </div>
                     </div>
-                    <div class="grid grid-cols-3">${cells}</div>
-                    ${isIrr ? '<p class="text-[10px] text-slate-400 text-center py-1.5 border-t border-slate-100">파란 글씨가 불규칙으로 바뀌는 부분이에요</p>' : ''}
+                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="rf-timebar" class="h-full bg-gradient-to-r from-rose-400 to-pink-500 transition-all duration-1000 ease-linear" style="width:100%"></div>
+                    </div>
+                    <div class="text-center py-4">
+                        <p class="text-xs font-bold text-slate-400 mb-1">이 뜻의 스페인어는?</p>
+                        <p id="rf-question" class="text-2xl font-black text-slate-900">-</p>
+                        <p id="rf-feedback" class="text-sm font-bold mt-2 h-5"></p>
+                    </div>
+                    <input type="text" id="rf-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-rose-400">
+                    <p class="text-center text-xs text-slate-400">남은 시간 <span id="rf-time" class="font-bold text-slate-600">60</span>초</p>
+                </div>
+            `);
+
+            const input = document.getElementById('rf-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); rapidFireSubmit(); }
+            });
+            setTimeout(() => input.focus(), 50);
+
+            rapidFireNext();
+            gameState.timerInterval = setInterval(() => {
+                if (!gameState) return;
+                gameState.timeLeft--;
+                const timeEl = document.getElementById('rf-time');
+                const bar = document.getElementById('rf-timebar');
+                if (timeEl) timeEl.innerText = gameState.timeLeft;
+                if (bar) bar.style.width = Math.min(100, gameState.timeLeft / 60 * 100) + '%';
+                if (gameState.timeLeft <= 0) rapidFireEnd();
+            }, 1000);
+        }
+
+        function rapidFireNext() {
+            if (!gameState) return;
+            const pool = gameState.pool;
+            gameState.current = pool[Math.floor(Math.random() * pool.length)];
+            const qEl = document.getElementById('rf-question');
+            if (qEl) qEl.innerHTML = `${gameState.current.meaning} <span class="text-base text-rose-400 font-bold">(${gameStartHint(gameState.current.word)}…)</span>`;
+            const input = document.getElementById('rf-input');
+            if (input) { input.value = ''; input.focus(); }
+        }
+
+        function rapidFireSubmit() {
+            if (!gameState || !gameState.current) return;
+            const input = document.getElementById('rf-input');
+            const fb = document.getElementById('rf-feedback');
+            const userAnswer = input.value.trim();
+            // [냐냐 PATCH] 빈칸으로 엔터쳐도 넘어감 (오답 처리)
+
+            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
+            applyGameScore(gameState.current.id, isCorrect, 'rapid'); // [0배치] 속사포: 정답 +0.5 / 오답 -1
+            if (isCorrect) {
+                gameState.combo++;
+                gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
+                gameState.correct++;
+                // 콤보 보너스: 기본 10점 + 콤보당 2점
+                const points = 10 + (gameState.combo - 1) * 2;
+                gameState.score += points;
+                // [냐냐 PATCH] 정답 시 시간 +3초 보너스
+                gameState.timeLeft += 3;
+                const timerEl = document.getElementById('rf-time');
+                if (timerEl) timerEl.innerText = gameState.timeLeft;
+                if (fb) { fb.innerText = `+${points}점! +3초 ⏱ ${gameState.combo >= 3 ? '🔥 ' + gameState.combo + ' 콤보!' : '✓'}`; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                gameState.combo = 0;
+                gameState.wrong++;
+                // [냐냐 PATCH-2차잔여] 틀린 단어 기록 → 결과 화면에서 복습용으로 보여줌
+                if (!gameState.wrongIds) gameState.wrongIds = [];
+                if (!gameState.wrongIds.includes(gameState.current.id)) gameState.wrongIds.push(gameState.current.id);
+                if (fb) { fb.innerText = `✗ 정답: ${gameState.current.word}`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+            const scoreEl = document.getElementById('rf-score');
+            const comboEl = document.getElementById('rf-combo');
+            if (scoreEl) scoreEl.innerText = gameState.score;
+            if (comboEl) comboEl.innerText = gameState.combo;
+            rapidFireNext();
+        }
+
+        // [냐냐 PATCH-2차잔여] 게임 결과 화면의 '틀린 단어' 목록 — 유의어/반의어까지 같이 보여줌
+        function buildGameWrongListHtml(wrongIds) {
+            if (!wrongIds || wrongIds.length === 0) return '';
+            const cards = wrongIds.map(id => {
+                const w = vocabulary.find(v => v.id === id);
+                if (!w) return '';
+                const syn = (typeof buildSynonymChipsHtml === 'function') ? buildSynonymChipsHtml(w) : '';
+                return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-3 text-left space-y-2">
+                    <div class="flex items-baseline gap-2 flex-wrap">
+                        <button type="button" onclick="goToWord('${w.id}')" class="text-base font-black text-slate-900 hover:text-violet-600 transition-colors">${escapeHtml(w.word)}</button>
+                        <span class="text-sm text-slate-500 font-semibold">${escapeHtml(w.meaning || '')}</span>
+                    </div>
+                    ${syn}
                 </div>`;
             }).filter(Boolean).join('');
-
-            box.classList.remove('hidden');
-            box.innerHTML = `<div class="space-y-2">${blocks}</div>`;
+            if (!cards) return '';
+            return `
+                <div class="pt-3 border-t border-slate-100 space-y-2 text-left">
+                    <p class="text-xs font-black text-rose-500">✗ 틀린 단어 ${wrongIds.length}개 — 다시 한 번 보고 가요!</p>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">${cards}</div>
+                </div>`;
         }
 
-        // [냐냐 PATCH] 관용구 뜻풀이 채점 — 먼저 로컬(부분일치) 확인, 애매하면 AI가 유연하게 판단
-        async function gradeIdiomSubjective(q, userAnswer) {
-            const input = document.getElementById('quiz-subjective-input');
-            const submitBtn = document.getElementById('quiz-subjective-submit-btn');
-            input.disabled = true;
-            submitBtn.disabled = true;
-
-            const correctMeaning = q.answer || '';
-            // 1) 빈칸이면 바로 오답
-            if (!userAnswer) {
-                q._subjectiveHint = `✏️ 정답은 <b>${correctMeaning}</b> 예요.`;
-                finishQuizQuestion(false, q);
-                return;
-            }
-            // 2) 로컬 빠른 확인: 핵심 단어가 겹치면 정답 (AI 안 부르고 빠르게)
-            const norm = (s) => s.toLowerCase().replace(/[.,!?~\s]/g, '');
-            if (norm(userAnswer) === norm(correctMeaning) ||
-                (norm(correctMeaning).length >= 2 && (norm(userAnswer).includes(norm(correctMeaning)) || norm(correctMeaning).includes(norm(userAnswer))))) {
-                finishQuizQuestion(true, q);
-                return;
-            }
-
-            // 3) 애매하면 AI에게 유연 채점 요청
-            submitBtn.innerText = '채점 중...';
-            try {
-                let prompt, system;
-                if (q.subDir === 'ko-es') {
-                    // 한국어 뜻 → 스페인어 관용구 입력
-                    prompt = `스페인어 관용구 채점 (한국어 뜻을 보고 스페인어 관용구를 쓰는 문제).
-정답 관용구: "${q.idiomData.idiom}"
-관용구 뜻: "${q.idiomData.idiomMeaning}"
-학생이 쓴 스페인어: "${userAnswer}"
-
-학생이 쓴 스페인어가 정답 관용구와 같거나, 같은 뜻의 올바른 스페인어 관용구면 정답이에요. 사소한 철자/악센트 차이는 정답으로 인정하세요. JSON만: {"correct": true/false, "comment": "짧은 한국어 코멘트 1문장"}`;
-                    system = "당신은 관대하고 친절한 스페인어 선생님입니다. 학생이 올바른 관용구를 떠올렸으면 사소한 철자 차이는 정답으로 인정합니다.";
-                } else {
-                    // 스페인어 관용구 → 한국어 뜻 입력
-                    prompt = `스페인어 관용구 채점.
-관용구: "${q.idiomData.idiom}"
-정확한 뜻: "${correctMeaning}"
-학생이 쓴 뜻: "${userAnswer}"
-
-학생의 답이 관용구의 뜻을 올바르게 이해했으면 정답이에요. 표현이 정확히 같지 않아도, 의미가 통하면 정답으로 인정하세요. JSON만 출력: {"correct": true/false, "comment": "짧은 한국어 코멘트 1문장"}`;
-                    system = "당신은 관대하고 친절한 스페인어 선생님입니다. 학생이 관용구의 핵심 의미를 파악했으면 표현이 조금 달라도 정답으로 인정합니다.";
-                }
-                const responseText = await callGemini(prompt, system, null, 'low');
-                const parsed = extractAndParseJson(responseText);
-                const isCorrect = !!(parsed && parsed.correct);
-                if (!isCorrect) {
-                    q._subjectiveHint = `✏️ 정답은 <b>${correctMeaning}</b> 예요.${parsed && parsed.comment ? '<br>' + parsed.comment : ''}`;
-                } else if (parsed && parsed.comment) {
-                    q._subjectiveHint = `👍 ${parsed.comment}`;
-                }
-                submitBtn.innerText = '제출하기';
-                finishQuizQuestion(isCorrect, q);
-            } catch (e) {
-                // AI 실패 시: 관대하게 정답 처리하지 않고, 정답을 보여주며 오답 (안전)
-                submitBtn.innerText = '제출하기';
-                q._subjectiveHint = `✏️ 정답은 <b>${correctMeaning}</b> 예요. (채점 오류로 정답을 확인하세요)`;
-                finishQuizQuestion(false, q);
-            }
+        function rapidFireEnd() {
+            if (!gameState) return;
+            const finalScore = gameState.score;
+            const correct = gameState.correct;
+            const wrong = gameState.wrong;
+            const maxCombo = gameState.maxCombo;
+            const wrongIds = gameState.wrongIds ? [...gameState.wrongIds] : [];
+            stopCurrentGame();
+            // [냐냐 PATCH] 게임 1판 완료 = 학습 기록에 게임 +1
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
+            // 마스터/약점 점수 변경사항 저장 + 최고기록 갱신
+            const isNewRecord = setGameHighScore('rapidfire', finalScore);
+            const highScore = getGameHighScore('rapidfire');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">⚡</div>
+                    <h3 class="text-xl font-black text-slate-900">시간 종료!</h3>
+                    <p class="text-4xl font-black text-rose-600">${finalScore}점</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
+                    <div class="flex justify-center gap-6 text-sm">
+                        <span class="text-slate-500">정답 <b class="text-emerald-600">${correct}</b></span>
+                        <span class="text-slate-500">오답 <b class="text-rose-500">${wrong}</b></span>
+                        <span class="text-slate-500">최고 콤보 <b class="text-amber-500">${maxCombo}</b></span>
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="startRapidFire()" class="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
+                    </div>
+                    ${buildGameWrongListHtml(wrongIds)}
+                </div>
+            `);
         }
 
-        // [냐냐 PATCH-2배치] AI 주관식 채점
-        //   AI가 4가지로 분류: correct(정답) / synonym(유의어) / typo(오타) / wrong(오답)
-        //   - 유의어  → 점수 없이 재입력 1회 (앞글자 힌트 공개)
-        //   - 오타    → 점수 없이 재입력 1회 (단, 3글자 초과로 틀리면 바로 오답)
-        //   - AI 키 없거나 실패 → 기존 로컬 채점(analyzeSubjectiveAnswer)으로 폴백
-        async function aiGradeSubjective(userAnswer, q) {
-            if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return null;
-            try {
-                const system = `You grade a Korean learner's Spanish vocabulary answer. Classify into exactly one verdict.
-- "correct": the answer IS the target word (ignore capitalization, surrounding punctuation, and a leading article el/la/los/las/un/una).
-- "synonym": a DIFFERENT, real Spanish word that means the same or nearly the same thing as the target (e.g. target "televisor", answer "televisión"). It must be a real word, not a misspelling.
-- "typo": clearly an attempt at the TARGET word but misspelled (including a wrong/missing accent), i.e. within about 3 characters of the target.
-- "wrong": anything else (different meaning, gibberish, blank).
-Prefer "typo" over "synonym" when the answer is not a real Spanish word.
-Return JSON only.`;
-                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).
-Student answered: "${userAnswer}".
-Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)" }`;
-                const schema = { type: "OBJECT", properties: { verdict: { type: "STRING" }, comment: { type: "STRING" } }, required: ["verdict"] };
-                const resp = await callGemini(prompt, system, schema, 'low');
-                const data = extractAndParseJson(resp);
-                if (data && data.verdict) return data;
-            } catch (e) {
-                console.warn('AI 주관식 채점 실패, 로컬 채점으로 대체', e);
-            }
-            return null;
-        }
-
-        async function submitSubjectiveAnswer() {
-            const q = quizSession.questions[quizSession.currentIndex];
-            const inputEl = document.getElementById('quiz-subjective-input');
-            const submitBtn = document.getElementById('quiz-subjective-submit-btn');
-            if (!inputEl || inputEl.disabled) return;
-            const userAnswer = inputEl.value.trim();
-
-            // 활용형 문제는 정답(활용형)과 직접 비교
-            if (q.type === 'conjugation') {
-                inputEl.disabled = true;
-                submitBtn.disabled = true;
-                const isCorrect = userAnswer && (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer));
-                q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word} = ${q.word.meaning} · ${q.tenseLabel || '현재'} ${q.conjLabel})`;
-                finishQuizQuestion(isCorrect, q);
+        function startFallingWords() {
+            const pool = getGameWordPool();
+            if (pool.length < 4) {
+                showToast("게임하려면 단어가 4개 이상 있어야 해요!", "error");
                 return;
             }
-
-            // 관용구 뜻풀이는 AI가 유연하게 채점
-            if (q.type === 'idiom-subjective') {
-                gradeIdiomSubjective(q, userAnswer);
-                return;
-            }
-
-            const correct = q.word.word;
-            const correctNorm = normalizeSpanishAnswer(correct);
-            const userNorm = normalizeSpanishAnswer(userAnswer);
-            const synHintBox = document.getElementById('quiz-synonym-hint');
-
-            const gradeNow = (isCorrect, hint, unknownWord) => {
-                inputEl.disabled = true;
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '확인';
-                if (synHintBox) synHintBox.classList.add('hidden');
-                q._subjectiveHint = hint || '';
-                q._userAnswer = userAnswer;
-                if (unknownWord) q._unknownWord = unknownWord;
-                finishQuizQuestion(isCorrect, q);
+            stopCurrentGame();
+            gameState = {
+                type: 'falling',
+                pool: pool,
+                score: 0,
+                correct: 0,
+                lives: 5,
+                fallingItems: [], // {id, word, meaning, x, y, el}
+                speed: 0.15, // % per frame
+                spawnInterval: null,
+                rafId: null,
+                lastSpawn: 0
             };
 
-            // 한 번 더 쓰게 하기 (점수 반영 없음)
-            const askRetry = (reason, hintHtml) => {
-                q._retryReason = reason;   // 'synonym' | 'typo' → 재입력 후 점수에 반영됨
-                if (synHintBox) {
-                    synHintBox.classList.remove('hidden');
-                    synHintBox.innerHTML = hintHtml;
-                }
-                inputEl.disabled = false;
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '확인';
-                inputEl.value = '';
-                inputEl.focus();
-            };
-
-            // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자 (televisión → televiso)
-            const prefixHint = () => correct.slice(0, sharedPrefixLen(userNorm, correctNorm) + 1);
-
-            // 0) 빈칸이면 바로 오답
-            if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }
-            // 1) 정답이면 AI 안 부르고 바로 통과 (빠름)
-            if (userNorm === correctNorm) { gradeNow(true, ''); return; }
-
-            // 2) AI 채점 (키 있을 때만) — 채점 중 표시
-            submitBtn.disabled = true;
-            inputEl.disabled = true;
-            submitBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...';
-            const ai = await aiGradeSubjective(userAnswer, q);
-            inputEl.disabled = false;
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '확인';
-
-            if (!ai) {
-                // 3) 폴백 — AI 키가 없거나 실패하면 기존 로컬 채점
-                const analysis = analyzeSubjectiveAnswer(userAnswer, q);
-                if (analysis.isSynonym && !q._retryReason) { askRetry('synonym', analysis.hint); return; }
-                if (analysis.isTypo && !q._retryReason) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
-                gradeNow(analysis.isCorrect, analysis.hint, analysis.unknownWord);
-                return;
-            }
-
-            const verdict = String(ai.verdict || '').toLowerCase();
-
-            if (verdict === 'correct') { gradeNow(true, ''); return; }
-
-            // 이미 재입력 기회를 한 번 썼으면 → 더는 안 봐주고 채점
-            if (q._retryReason) {
-                const unknown = (verdict === 'wrong' && !isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
-                gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
-                return;
-            }
-
-            if (verdict === 'synonym') {
-                askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.`);
-                return;
-            }
-
-            if (verdict === 'typo') {
-                // 오타가 3글자를 넘으면 봐주지 않고 바로 오답
-                if (levenshtein(userNorm, correctNorm) > 3) {
-                    gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.`);
-                    return;
-                }
-                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
-                return;
-            }
-
-            // wrong — 미등록 단어면 등록 추천
-            const unknown = (!isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
-            gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
-        }
-
-        // [냐냐 PATCH-2배치] 이 단어가 단어장에 이미 있나? (원형·활용형·관사 전부 고려)
-        function isWordKnown(raw) {
-            const n = normalizeSpanishAnswer(raw);
-            if (vocabulary.some(w => normalizeSpanishAnswer(w.word) === n)) return true;
-            if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return true;
-            return false;
-        }
-
-        function finishQuizQuestion(isCorrect, q) {
-            const coach = document.getElementById('quiz-coach-character');
-
-            // [냐냐 PATCH-수준맞춤] 누적 정답률/취약 품사만 살짝 갱신 (전체 기록 저장 아님)
-            // 방어 코드: learnerProfile이 없어도(파일 버전이 안 맞아도) 퀴즈 본 기능은 멈추지 않게 함
-            if (typeof learnerProfile !== 'undefined' && learnerProfile) {
-                learnerProfile.totalAnswered = (learnerProfile.totalAnswered || 0) + 1;
-                if (isCorrect) {
-                    learnerProfile.totalCorrect = (learnerProfile.totalCorrect || 0) + 1;
-                } else {
-                    if (!learnerProfile.wrongByPos) learnerProfile.wrongByPos = {};
-                    const pos = q.word.pos || 'etc';
-                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
-                }
-            }
-
-            if (isCorrect) {
-                AudioFX.playSuccess();
-                quizSession.correctCount++;
-                // [냐냐 PATCH] 맞힌 단어 id 기록 (중복 제외) — 결과 화면에서 마스터 등록 선택용
-                if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
-                if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
-
-                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 +1 / 주관식 +2
-                //   유의어 재입력 후 정답 +2 · 오타 재입력 후 정답 +1
-                const vocabItemC = vocabulary.find(w => w.id === q.word.id);
-                if (vocabItemC) {
-                    const wasMasteredC = vocabItemC.mastered;
-                    const isProductionC = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
-                    let gain = isProductionC ? 2 : 1;
-                    if (q._retryReason === 'typo') gain = 1;
-                    else if (q._retryReason === 'synonym') gain = 2;
-                    addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
-                    if (!wasMasteredC && vocabItemC.mastered) {
-                        if (!quizSession.autoMasteredIds) quizSession.autoMasteredIds = [];
-                        quizSession.autoMasteredIds.push(vocabItemC.id);
-                    }
-                }
-                coach.innerText = "✨😄";
-                showToast("🎯 정답입니다!", "success");
-            } else {
-                AudioFX.playError();
-                quizSession.wrongList.push(q.word);
-
-                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 -2 / 주관식 -1
-                //   재입력(유의어·오타) 기회를 줬는데도 틀리면 -2
-                const vocabItem = vocabulary.find(w => w.id === q.word.id);
-                if (vocabItem) {
-                    const wasWeak = vocabItem.weak;
-                    const isProductionW = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
-                    let penalty = isProductionW ? -1 : -2;
-                    if (q._retryReason) penalty = -2;
-                    addWordScore(vocabItem, penalty, { correct: false });
-                    if (!wasWeak && vocabItem.weak) {
-                        if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
-                        if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);
-                    }
-                }
-                coach.innerText = "🤔💭";
-                showToast("아쉬워요, 정답을 확인하고 다시 기억해 봐요!", "error");
-            }
-
-            document.getElementById('arena-score').innerText = `정답 ${quizSession.correctCount}개`;
-
-            const verdict = document.getElementById('quiz-review-verdict');
-            verdict.innerText = isCorrect ? "🎯 정답입니다!" : "📝 다시 한 번 확인해 볼까요?";
-            verdict.className = isCorrect ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-rose-600";
-
-            // [냐냐 PATCH] 스마트 힌트 박스 (동의어/성수틀림/등록추천)
-            const hintBox = document.getElementById('quiz-review-hint-box');
-            const registerBox = document.getElementById('quiz-review-register-box');
-            if (hintBox) {
-                if (!isCorrect && q._subjectiveHint) {
-                    hintBox.classList.remove('hidden');
-                    hintBox.innerHTML = q._subjectiveHint;
-                } else {
-                    hintBox.classList.add('hidden');
-                }
-            }
-            if (registerBox) {
-                if (!isCorrect && q._unknownWord) {
-                    registerBox.classList.remove('hidden');
-                    document.getElementById('quiz-review-register-box').querySelector('span').innerText = `"${q._unknownWord}"를 단어장에 등록할까요?`;
-                    quizSession._pendingRegisterWord = q._unknownWord;
-                } else {
-                    registerBox.classList.add('hidden');
-                }
-            }
-
-            // [냐냐 PATCH-1배치] 정답이든 오답이든 단어장 정보를 "항상 전부" 보여줌
-            //   (배지: 품사·성별·점수 / 성수변화 / 노트 / 관용구 / 예문 / 등록된 시제 전부)
-            const notesBox = document.getElementById('quiz-review-notes-box');
-            const isIdiomQ = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
-
-            if (isIdiomQ) {
-                const it = q.idiomData || {};
-                document.getElementById('quiz-review-word').innerText = it.idiom || q.answer;
-                document.getElementById('quiz-review-meaning').innerText = it.idiomMeaning || '';
-            } else {
-                document.getElementById('quiz-review-word').innerText = q.word.word;
-                document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
-            }
-
-            const badges = buildWordBadgesHtml(q.word);
-            const notes = buildNotesHtml(q.word, { idiomIntro: isIdiomQ });
-            const combined = [badges, notes].filter(x => x && x.trim())
-                .join('<div class="border-t border-slate-100 my-3"></div>');
-
-            if (combined.trim()) {
-                notesBox.classList.remove('hidden');
-                notesBox.innerHTML = combined;
-            } else {
-                notesBox.classList.add('hidden');
-            }
-
-            // [냐냐 PATCH] 동사 문제면 현재시제 활용표를 보여줌
-            renderQuizConjugation(q.word, q);
-
-            document.getElementById('quiz-review-panel').classList.remove('hidden');
-            window._quizReviewShownAt = Date.now(); // 엔터 가드용 (방금 제출한 엔터로 바로 안 넘어가게)
-            const nextBtn = document.getElementById('quiz-next-btn');
-            nextBtn.disabled = false;
-            nextBtn.className = "w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95";
-
-            // [냐냐 PATCH-버그수정] 모바일에서 키보드가 열려있거나 화면이 길면 결과 패널이
-            // 화면 밖에 가려져서 "멈춘 것처럼" 보였을 수 있음 — 결과 패널로 자동 스크롤
-            const subjInput = document.getElementById('quiz-subjective-input');
-            if (subjInput) subjInput.blur();
-            setTimeout(() => {
-                const reviewPanel = document.getElementById('quiz-review-panel');
-                if (reviewPanel) reviewPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 100);
-        }
-
-        function nextQuizQuestion() {
-            if (document.getElementById('quiz-next-btn').disabled) return;
-            quizSession.currentIndex++;
-            if (quizSession.currentIndex >= quizSession.questions.length) {
-                showQuizResults();
-            } else {
-                renderQuizQuestion();
-            }
-        }
-
-        function showQuizResults() {
-            document.getElementById('quiz-question-screen').classList.add('hidden');
-            document.getElementById('quiz-results-screen').classList.remove('hidden');
-            document.getElementById('quiz-combo-box').classList.add('hidden');
-
-            // [냐냐 PATCH] 이번 퀴즈에서 자동 마스터된 단어 알림
-            const autoMastered = quizSession.autoMasteredIds || [];
-            if (autoMastered.length > 0) {
-                const names = autoMastered.map(id => { const w = vocabulary.find(v => v.id === id); return w ? w.word : ''; }).filter(Boolean);
-                setTimeout(() => {
-                    showToast(`🏆 자동 마스터! ${names.join(', ')} (${names.length}개)`, "success");
-                }, 600);
-            }
-
-            // [냐냐 PATCH] 이번 퀴즈에서 자동으로 바뀐 단어 목록 표시 (마스터 승급 / 약점 추가)
-            const changesBox = document.getElementById('quiz-results-changes-box');
-            if (changesBox) {
-                const newlyWeak = (quizSession.newlyWeakIds || []).filter(id => !autoMastered.includes(id));
-                const parts = [];
-                if (autoMastered.length > 0) {
-                    const items = autoMastered.map(id => { const w = vocabulary.find(v => v.id === id); return w ? `<span class="inline-block bg-white/70 rounded-lg px-2 py-0.5 text-xs font-bold text-emerald-700 m-0.5">${w.word}</span>` : ''; }).join('');
-                    parts.push(`<div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-                        <p class="text-xs font-black text-emerald-700 mb-1.5">🏆 마스터 승급 (${autoMastered.length}개)</p>
-                        <div class="flex flex-wrap">${items}</div>
-                    </div>`);
-                }
-                if (newlyWeak.length > 0) {
-                    const items = newlyWeak.map(id => { const w = vocabulary.find(v => v.id === id); return w ? `<span class="inline-block bg-white/70 rounded-lg px-2 py-0.5 text-xs font-bold text-amber-700 m-0.5">${w.word}</span>` : ''; }).join('');
-                    parts.push(`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-3">
-                        <p class="text-xs font-black text-amber-700 mb-1.5">⭐ 약점 단어 추가 (${newlyWeak.length}개)</p>
-                        <div class="flex flex-wrap">${items}</div>
-                    </div>`);
-                }
-                if (parts.length > 0) {
-                    changesBox.classList.remove('hidden');
-                    changesBox.innerHTML = parts.join('');
-                } else {
-                    changesBox.classList.add('hidden');
-                }
-            }
-
-            const total = quizSession.questions.length;
-            const correct = quizSession.correctCount;
-            document.getElementById('quiz-results-score').innerText = `${correct} / ${total}`;
-            document.getElementById('quiz-results-percent').innerText = `정답률 ${Math.round((correct / total) * 100)}%`;
-
-            // [PATCH] 퀴즈가 끝났을 때 한 번만 학습일지에 기록 (문제마다 갱신하지 않음)
-            touchDiarySnapshot();
-            const today = getLocalDateString();
-            nyanyaDiary[today].quizTotal += total;
-            nyanyaDiary[today].quizCorrect += correct;
-            saveToStorage();
-            renderDiary();
-            updateStats();
-
-            const wrongBox = document.getElementById('quiz-results-wrong-list');
-            if (quizSession.wrongList.length === 0) {
-                wrongBox.innerHTML = '<p class="text-center text-emerald-600 text-sm font-bold py-2">전부 다 맞췄어요! 완벽해요 🎉</p>';
-            } else {
-                let html = '<p class="text-xs font-bold text-slate-500 mb-1">다시 볼 단어들</p>';
-                quizSession.wrongList.forEach(w => {
-                    html += `<div class="flex items-baseline justify-between bg-white rounded-xl px-3 py-2 border border-slate-100"><span class="font-bold text-slate-800">${w.word}</span><span class="text-slate-500 text-sm">${w.meaning}</span></div>`;
-                });
-                wrongBox.innerHTML = html;
-            }
-
-            // [냐냐 PATCH] 맞힌 단어 중 아직 마스터 안 된 것들을 골라 마스터 등록할 수 있게 표시
-            const masteryBox = document.getElementById('quiz-results-mastery-box');
-            const masteryList = document.getElementById('quiz-mastery-list');
-            const correctIds = quizSession.correctWordIds || [];
-            const masterCandidates = correctIds
-                .map(id => vocabulary.find(w => w.id === id))
-                .filter(w => w && !w.mastered);
-
-            if (masterCandidates.length === 0) {
-                masteryBox.classList.add('hidden');
-            } else {
-                masteryBox.classList.remove('hidden');
-                document.getElementById('quiz-mastery-all').checked = false;
-                masteryList.innerHTML = masterCandidates.map(w => {
-                    const isStrong = (quizSession.masterSuggestIds || []).includes(w.id);
-                    const strongBadge = isStrong ? '<span class="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full shrink-0">잘 아는 단어!</span>' : '';
-                    const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-                    const detailParts = [];
-                    if (idiomList.length > 0) {
-                        const idiomText = idiomList.map(it => `· ${it.idiom}${it.idiomMeaning ? ' — ' + it.idiomMeaning : ''}`).join('<br>');
-                        detailParts.push(`<div class="text-teal-700"><span class="font-bold">💬 관용구</span><br>${idiomText}</div>`);
-                    }
-                    if (w.example) detailParts.push(`<div class="text-slate-600"><span class="font-bold">✍️ 예문</span><br>${w.example}${w.exampleMeaning ? '<br><span class="text-slate-400">' + w.exampleMeaning + '</span>' : ''}</div>`);
-                    if (w.notes) detailParts.push(`<div class="text-amber-700"><span class="font-bold">📝 노트</span><br>${w.notes.replace(/\n/g, '<br>')}</div>`);
-                    const detailHtml = detailParts.length > 0 ? detailParts.join('<div class="my-1"></div>') : '<span class="text-slate-400">추가 정보가 없어요</span>';
-                    return `
-                    <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
-                        <div class="flex items-center gap-2 px-3 py-2">
-                            <input type="checkbox" data-master-id="${w.id}" class="w-4 h-4 accent-emerald-600 shrink-0">
-                            <button type="button" onclick="toggleMasteryDetail('${w.id}')" class="flex items-center gap-2 flex-1 min-w-0 text-left">
-                                <i class="fa-solid fa-chevron-right text-slate-300 text-[10px] transition-transform shrink-0" data-mastery-chevron="${w.id}"></i>
-                                <span class="font-bold text-slate-800 text-sm truncate">${w.word}</span>
-                                ${strongBadge}
-                                <span class="text-slate-400 text-xs ml-auto shrink-0">${w.meaning}</span>
-                            </button>
-                        </div>
-                        <div class="hidden px-3 pb-2.5 pt-0.5 text-[11px] leading-relaxed border-t border-slate-50 bg-slate-50/50" data-mastery-detail="${w.id}">
-                            ${detailHtml}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-slate-500">점수 <span id="fall-score" class="text-emerald-600 text-base">0</span></span>
+                            <span id="fall-lives" class="text-sm">${'❤️'.repeat(5)}</span>
                         </div>
                     </div>
-                `;
-                }).join('');
+                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: 480px;">
+                        <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-300"></div>
+                    </div>
+                    <input type="text" id="fall-input" autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                </div>
+            `);
+
+            const input = document.getElementById('fall-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); fallingWordsSubmit(); }
+            });
+            setTimeout(() => input.focus(), 50);
+
+            // 첫 단어 스폰 + 주기적 스폰
+            fallingWordsSpawn();
+            gameState.spawnInterval = setInterval(() => {
+                if (gameState) fallingWordsSpawn();
+            }, 2600);
+            // 애니메이션 루프
+            gameState.rafId = requestAnimationFrame(fallingWordsLoop);
+        }
+
+        function fallingWordsSpawn() {
+            if (!gameState) return;
+            const area = document.getElementById('fall-area');
+            if (!area) return;
+            const w = gameState.pool[Math.floor(Math.random() * gameState.pool.length)];
+            const x = 5 + Math.random() * 80; // 좌우 위치 %
+            const el = document.createElement('div');
+            el.className = 'absolute px-3 py-1.5 bg-white rounded-xl shadow-sm border border-slate-200 text-sm font-bold text-slate-800 whitespace-nowrap';
+            el.style.left = x + '%';
+            el.style.top = '0%';
+            el.innerHTML = `${w.meaning} <span class="text-emerald-500 text-xs">(${gameStartHint(w.word)}…)</span>`;
+            area.appendChild(el);
+            gameState.fallingItems.push({ id: w.id, word: w.word, meaning: w.meaning, x, y: 0, el });
+        }
+
+        function fallingWordsLoop() {
+            if (!gameState) return;
+            const area = document.getElementById('fall-area');
+            if (!area) return;
+            const items = gameState.fallingItems;
+            for (let i = items.length - 1; i >= 0; i--) {
+                const it = items[i];
+                it.y += gameState.speed;
+                it.el.style.top = it.y + '%';
+                // 바닥(약 92%)에 닿으면 생명 -1
+                if (it.y >= 92) {
+                    it.el.remove();
+                    items.splice(i, 1);
+                    gameState.lives--;
+                    const livesEl = document.getElementById('fall-lives');
+                    if (livesEl) livesEl.innerText = '❤️'.repeat(Math.max(0, gameState.lives)) + '🖤'.repeat(Math.max(0, 5 - gameState.lives));
+                    AudioFX.playError();
+                    if (gameState.lives <= 0) { fallingWordsEnd(); return; }
+                }
+            }
+            // 점점 빨라짐
+            gameState.speed = Math.min(0.4, gameState.speed + 0.00003);
+            gameState.rafId = requestAnimationFrame(fallingWordsLoop);
+        }
+
+        function fallingWordsSubmit() {
+            if (!gameState) return;
+            const input = document.getElementById('fall-input');
+            const userAnswer = input.value.trim();
+            input.value = '';
+            if (!userAnswer) return; // 빈칸은 무시 (생명 안 깎음)
+
+            // 떨어지는 단어 중 일치하는 것 찾기 (가장 아래 것 우선)
+            const items = gameState.fallingItems;
+            let matchIdx = -1;
+            let lowestY = -1;
+            for (let i = 0; i < items.length; i++) {
+                if (gameCheckAnswer(userAnswer, items[i].word) && items[i].y > lowestY) {
+                    matchIdx = i; lowestY = items[i].y;
+                }
+            }
+            if (matchIdx >= 0) {
+                const it = items[matchIdx];
+                applyGameScore(it.id, true, 'fall'); // [0배치] 떨어지는 단어: 정답 +1
+                gameState.score += 10;
+                gameState.correct++;
+                it.el.remove();
+                items.splice(matchIdx, 1);
+                const scoreEl = document.getElementById('fall-score');
+                if (scoreEl) scoreEl.innerText = gameState.score;
+                AudioFX.playSuccess();
+            } else {
+                // 틀린 입력 — 페널티는 없지만 효과음
+                AudioFX.playError();
             }
         }
 
-        // [냐냐 PATCH] 마스터 후보 단어 상세정보 펼치기/접기
-        function toggleMasteryDetail(id) {
-            const detail = document.querySelector(`[data-mastery-detail="${id}"]`);
-            const chevron = document.querySelector(`[data-mastery-chevron="${id}"]`);
-            if (!detail) return;
-            const nowHidden = detail.classList.toggle('hidden');
-            if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
+        function fallingWordsEnd() {
+            if (!gameState) return;
+            const score = gameState.score;
+            const correct = gameState.correct;
+            stopCurrentGame();
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {} // [냐냐 PATCH] 게임 1판 완료
+            const isNewRecord = setGameHighScore('falling', score);
+            const highScore = getGameHighScore('falling');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">🌧️</div>
+                    <h3 class="text-xl font-black text-slate-900">게임 종료!</h3>
+                    <p class="text-4xl font-black text-emerald-600">${score}점</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
+                    <p class="text-sm text-slate-500">맞힌 단어 <b class="text-emerald-600">${correct}</b>개</p>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="startFallingWords()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
+                    </div>
+                </div>
+            `);
         }
 
-        // [냐냐 PATCH] 마스터 등록 체크박스 - 전체 선택
-        function toggleAllMasteryChecks(checked) {
-            document.querySelectorAll('[data-master-id]').forEach(cb => { cb.checked = checked; });
+
+        // ============================================================
+        // 게임 4: 듣기 받아쓰기 (예문 듣고 따라 쓰기, 점수 없음)
+        // ============================================================
+        function speakSpanish(text, rate) {
+            speakSpanishVoice(text, rate || 0.9);
         }
 
-        // [냐냐 PATCH] 선택한 단어를 단어장에서 마스터로 등록 (연동)
-        function applyQuizMastery() {
-            const checked = [...document.querySelectorAll('[data-master-id]')].filter(cb => cb.checked);
-            if (checked.length === 0) {
-                showToast("마스터로 등록할 단어를 선택해 주세요!", "info");
-                return;
-            }
-            let count = 0;
-            checked.forEach(cb => {
-                const id = cb.getAttribute('data-master-id');
-                const w = vocabulary.find(x => x.id === id);
-                if (w && !w.mastered) {
-                    // [냐냐 PATCH-0배치] 수동 마스터 = 8점(완벽) + 주관식 조건 통과 처리
-                    setWordScore(w, SCORE_PERFECT, { subjectivePassed: true });
-                    count++;
+        // [냐냐 PATCH] 듣기 퀴즈 재생 속도 (기본 0.9)
+        let listeningRate = 0.9;
+        function setListeningRate(rate) {
+            listeningRate = rate;
+            // 버튼 하이라이트 갱신
+            document.querySelectorAll('.listen-speed-btn').forEach(b => {
+                const r = parseFloat(b.dataset.rate);
+                if (Math.abs(r - rate) < 0.001) {
+                    b.classList.add('bg-sky-500', 'text-white');
+                    b.classList.remove('bg-sky-50', 'text-sky-600');
+                } else {
+                    b.classList.remove('bg-sky-500', 'text-white');
+                    b.classList.add('bg-sky-50', 'text-sky-600');
                 }
             });
-            // 마스터 단어 수 변화를 학습일지에 반영
-            touchDiarySnapshot();
-            saveToStorage();
-            renderWordList();
-            updateStats();
-            renderDiary();
-            // 방금 등록한 단어들은 목록에서 사라지게 다시 렌더
-            const masteryBox = document.getElementById('quiz-results-mastery-box');
-            const remaining = [...document.querySelectorAll('[data-master-id]')].filter(cb => !cb.checked);
-            if (remaining.length === 0) masteryBox.classList.add('hidden');
-            else checked.forEach(cb => { const card = cb.parentElement && cb.parentElement.parentElement; if (card) card.remove(); });
-            showToast(`${count}개 단어를 마스터로 등록했어요! 🎉`, "success");
+        }
+        function speakListening() {
+            if (gameState && gameState.current) speakSpanish(gameState.current.example, listeningRate);
         }
 
-        function restartQuizSetup() {
-            quizSession = null;
-            document.getElementById('quiz-results-screen').classList.add('hidden');
-            document.getElementById('quiz-question-screen').classList.add('hidden');
-            document.getElementById('quiz-setup-screen').classList.remove('hidden');
+        function startListeningQuiz() {
+            // 예문이 있는 단어만 사용
+            const pool = vocabulary.filter(w => w.example && w.example.trim().length > 0);
+            if (pool.length < 1) {
+                showToast("예문이 있는 단어가 없어요! 단어에 예문을 추가해 주세요.", "error");
+                return;
+            }
+            stopCurrentGame();
+            gameState = { type: 'listening', pool, index: 0, correct: 0, total: 0, current: null, goal: 5 }; // [냐냐 PATCH] 5문장 1세트
+            listeningNext();
+        }
+
+        function listeningNext() {
+            if (!gameState) return;
+            gameState.current = gameState.pool[Math.floor(Math.random() * gameState.pool.length)];
+            gameState.total++;
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${gameState.total}/${gameState.goal}문장 · 맞힌 문장 <span class="text-sky-600">${gameState.correct}</span></span>
+                    </div>
+                    <div class="text-center py-6 space-y-4">
+                        <p class="text-xs font-bold text-sky-400">🎧 예문을 듣고 똑같이 써보세요!</p>
+                        <button onclick="speakListening()" class="bg-sky-500 hover:bg-sky-600 text-white w-16 h-16 rounded-full text-2xl shadow-lg shadow-sky-100 transition-all active:scale-90">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <div class="flex items-center justify-center gap-1.5">
+                            <span class="text-[10px] font-bold text-slate-400 mr-1">속도</span>
+                            <button onclick="setListeningRate(0.5)" data-rate="0.5" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">0.5x</button>
+                            <button onclick="setListeningRate(0.75)" data-rate="0.75" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">0.75x</button>
+                            <button onclick="setListeningRate(0.9)" data-rate="0.9" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">보통</button>
+                            <button onclick="setListeningRate(1.1)" data-rate="1.1" class="listen-speed-btn text-[11px] font-bold px-2 py-1 rounded-lg bg-sky-50 text-sky-600 transition-all">1.1x</button>
+                        </div>
+                        <p class="text-xs text-slate-400">속도를 바꾸고 스피커를 다시 눌러요</p>
+                        <p id="listen-feedback" class="text-sm font-bold h-5"></p>
+                    </div>
+                    <textarea id="listen-input" rows="2" placeholder="들은 문장을 입력하세요..." class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-semibold focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
+                    <!-- [냐냐 PATCH-2차잔여] 확인 후 이 문장의 단어 정보(유의어 포함) -->
+                    <div id="listen-detail-box" class="hidden"></div>
+                    <button onclick="listeningSubmit()" class="w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
+                </div>
+            `);
+            // 자동으로 한 번 읽어주기 (선택된 속도로)
+            setTimeout(() => {
+                setListeningRate(listeningRate); // 버튼 하이라이트
+                speakListening();
+                document.getElementById('listen-input')?.focus();
+            }, 300);
+        }
+
+        function listeningSubmit() {
+            if (!gameState || !gameState.current) return;
+            const input = document.getElementById('listen-input');
+            const fb = document.getElementById('listen-feedback');
+            const userText = input.value.trim();
+            input.disabled = true;
+
+            // 문장 비교 (악센트/문장부호/대소문자 관대하게)
+            const norm = (s) => s.toLowerCase().replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim()
+                .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
+            const correct = gameState.current.example;
+            const isCorrect = norm(userText) === norm(correct);
+
+            if (isCorrect) {
+                gameState.correct++;
+                if (fb) { fb.innerText = "✓ 완벽해요!"; fb.className = "text-sm font-bold h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                if (fb) { fb.innerHTML = `✗ 정답: <span class="text-slate-700">${correct}</span>`; fb.className = "text-sm font-bold h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+
+            // [냐냐 PATCH-2차잔여] 정답/오답 상관없이, 이 문장이 나온 단어의 정보를 보여줌 (유의어 포함)
+            const detailBox = document.getElementById('listen-detail-box');
+            if (detailBox && gameState.current) {
+                const w = gameState.current;
+                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w) : '';
+                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+                const parts = [badges, notes].filter(x => x && x.trim());
+                detailBox.classList.remove('hidden');
+                detailBox.innerHTML = `
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 leading-relaxed text-left">
+                        <div class="text-center pb-2">
+                            <p class="text-[10px] font-black text-sky-500 uppercase tracking-wider mb-1">이 문장의 단어</p>
+                            <button type="button" onclick="goToWord('${w.id}')" class="text-xl font-black text-slate-900 hover:text-violet-600 transition-colors">${escapeHtml(w.word)}</button>
+                            <p class="text-sm text-slate-500">${escapeHtml(w.meaning || '')}</p>
+                        </div>
+                        ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                    </div>`;
+            }
+            // [냐냐 PATCH] 5문장 완료하면 세트 종료, 아니면 다음 문장
+            const playArea = document.getElementById('game-play-area');
+            const isSetDone = gameState.total >= (gameState.goal || 5);
+            let nextBtnHtml;
+            if (isSetDone) {
+                const correctCount = gameState.correct;
+                const goalCount = gameState.goal || 5;
+                // 게임 1판(세트) 완료 기록
+                try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
+                try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+                nextBtnHtml = `
+                    <div class="text-center pt-3 space-y-3">
+                        <p class="text-sm font-black text-sky-600">🎧 5문장 완료! 맞힌 문장 ${correctCount}/${goalCount}</p>
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="startListeningQuiz()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">한 세트 더</button>
+                            <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                        </div>
+                    </div>`;
+            } else {
+                nextBtnHtml = `
+                    <div class="flex gap-2 justify-center pt-3">
+                        <button onclick="listeningNext()" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다음 문장 (${gameState.total}/${gameState.goal || 5})</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                    </div>`;
+            }
+            // 확인 버튼을 다음/완료 버튼으로 교체
+            const confirmBtn = playArea.querySelector('button[onclick="listeningSubmit()"]');
+            if (confirmBtn) confirmBtn.outerHTML = nextBtnHtml;
+            // 정답 뜻도 보여주기
+            if (fb && gameState.current.exampleMeaning) {
+                fb.innerHTML += `<br><span class="text-xs text-slate-400 font-normal">${gameState.current.exampleMeaning}</span>`;
+            }
+        }
+
+
+        // ============================================================
+        // [냐냐 PATCH] 단어 복습 (깜빡이 방식, 점수 없음, 단어 선택 가능)
+        // ============================================================
+        let reviewState = null;
+        let reviewScope = 'today-wrong';
+        let reviewCount = 20;   // [냐냐 PATCH] 복습할 단어 개수
+        let reviewRepeat = 1;   // [냐냐 PATCH] 반복 횟수
+
+        function resetReviewTab() {
+            reviewState = null;
+            const setup = document.getElementById('review-setup');
+            const play = document.getElementById('review-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            // 기본 선택
+            selectReviewScope(reviewScope || 'today-wrong');
+            selectReviewCount(reviewCount || 20);
+            selectReviewRepeat(reviewRepeat || 1);
+            // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
+            if (typeof resetFillSetup === 'function') resetFillSetup();
+            if (typeof resetGrammarFillSetup === 'function') resetGrammarFillSetup();
+            if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'blink');
+        }
+
+        function selectReviewCount(n) {
+            reviewCount = n;
+            document.querySelectorAll('.review-count-btn').forEach(btn => {
+                if (parseInt(btn.dataset.reviewCount) === n) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
+        }
+
+        function selectReviewRepeat(n) {
+            reviewRepeat = n;
+            document.querySelectorAll('.review-repeat-btn').forEach(btn => {
+                if (parseInt(btn.dataset.reviewRepeat) === n) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
+        }
+
+        function getReviewPool(scope) {
+            // [냐냐 PATCH] '오늘 복습' = 망각곡선 복습 대상 (오늘 틀린 것 + 1·3·7·14·30일 주기)
+            if (scope === 'today-wrong') return getReviewDueWords();
+            if (scope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
+            if (scope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
+            return vocabulary.slice(); // all
+        }
+
+        function selectReviewScope(scope) {
+            reviewScope = scope;
+            // 버튼 하이라이트
+            document.querySelectorAll('.review-scope-btn').forEach(btn => {
+                if (btn.dataset.reviewScope === scope) {
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.remove('border-slate-200', 'text-slate-600');
+                } else {
+                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+                    btn.classList.add('border-slate-200', 'text-slate-600');
+                }
+            });
+            const cnt = getReviewPool(scope).length;
+            const cntEl = document.getElementById('review-scope-count');
+            if (cntEl) cntEl.innerText = `복습할 단어: ${cnt}개`;
+        }
+
+        function startWordReview() {
+            const pool = getReviewPool(reviewScope);
+            if (pool.length < 1) {
+                showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error");
+                return;
+            }
+            // 순서 섞고, 선택한 개수만큼 자르기
+            let shuffled = pool.slice().sort(() => Math.random() - 0.5);
+            shuffled = shuffled.slice(0, reviewCount);
+            // 반복 횟수만큼 리스트를 이어붙임 (매 회차 순서 다시 섞음)
+            let sequence = [];
+            for (let r = 0; r < reviewRepeat; r++) {
+                sequence = sequence.concat(shuffled.slice().sort(() => Math.random() - 0.5));
+            }
+            reviewState = { pool: sequence, index: 0, correct: 0, total: sequence.length, showMs: 2500, uniqueCount: shuffled.length, repeat: reviewRepeat };
+            document.getElementById('review-setup').classList.add('hidden');
+            document.getElementById('review-play-area').classList.remove('hidden');
+            reviewShowWord();
+        }
+
+        function reviewShowWord() {
+            if (!reviewState) return;
+            if (reviewState.index >= reviewState.pool.length) { reviewEnd(); return; }
+            const w = reviewState.pool[reviewState.index];
+            reviewState.current = w;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(reviewState.index / reviewState.total * 100)}%"></div>
+                    </div>
+                    <div class="text-center py-10">
+                        <p class="text-xs font-bold text-indigo-400 mb-3">👁️ 잘 기억하세요!</p>
+                        <p class="text-4xl font-black text-slate-900">${escapeHtml(w.word)}</p>
+                        <p class="text-sm text-slate-400 mt-2">${escapeHtml(w.meaning)}</p>
+                        <button onclick="speakSpanish('${String(w.word).replace(/'/g, "\\'")}', 0.85)" class="mt-4 w-9 h-9 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-500 transition-all"><i class="fa-solid fa-volume-high"></i></button>
+                    </div>
+                </div>
+            `;
+            // [냐냐 PATCH-3배치] 깜박이는 노출 시간이 짧아서 자동으로 읽어줌 (음소거면 안 나감)
+            if (typeof speakSpanish === 'function') speakSpanish(w.word, 0.85);
+            reviewState.flashTimeout = setTimeout(() => { if (reviewState) reviewAskInput(); }, reviewState.showMs);
+        }
+
+        function reviewAskInput() {
+            if (!reviewState) return;
+            const w = reviewState.current;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
+                    </div>
+                    <div class="text-center py-6">
+                        <p class="text-xs font-bold text-slate-400 mb-1">방금 본 단어를 써보세요!</p>
+                        <p class="text-lg font-bold text-indigo-600">${escapeHtml(w.meaning)}</p>
+                        <p id="review-feedback" class="text-sm font-bold mt-2 h-5"></p>
+                    </div>
+                    <input type="text" id="review-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <!-- [냐냐 PATCH-3배치] 확인 후 단어장 정보가 여기에 펼쳐짐 -->
+                    <div id="review-detail-box" class="hidden space-y-2"></div>
+                    <div class="flex gap-2" id="review-btn-row">
+                        <button onclick="reviewReveal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all">모르겠어요</button>
+                        <button onclick="reviewSubmit()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
+                    </div>
+                </div>
+            `;
+            const input = document.getElementById('review-input');
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); reviewSubmit(); } });
+            setTimeout(() => input.focus(), 50);
+        }
+
+        // [냐냐 PATCH-3배치] 확인/모르겠어요 누른 뒤 공통 처리 — 단어장 정보 전부 + [다음] 버튼
+        function reviewShowDetail(w) {
+            const box = document.getElementById('review-detail-box');
+            if (box) {
+                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w) : '';
+                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+                const parts = [badges, notes].filter(x => x && x.trim());
+                box.classList.remove('hidden');
+                box.innerHTML = `
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 leading-relaxed">
+                        <div class="text-center pb-2">
+                            <p class="text-2xl font-black text-slate-900">${escapeHtml(w.word)}</p>
+                            <p class="text-sm text-slate-500">${escapeHtml(w.meaning)}</p>
+                        </div>
+                        ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                    </div>
+                    <div id="review-conj-box" class="hidden"></div>`;
+                // 동사면 등록된 시제 전부 (퀴즈 결과창과 동일한 렌더러 재사용)
+                if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'review-conj-box');
+            }
+            // 버튼을 [다음]으로 교체 — 자동으로 안 넘어감
+            const row = document.getElementById('review-btn-row');
+            if (row) {
+                const isLast = (reviewState && reviewState.index + 1 >= reviewState.total);
+                row.innerHTML = `<button id="review-next-btn" onclick="reviewNext()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">${isLast ? '결과 보기 →' : '다음 →'}</button>`;
+                setTimeout(() => { const b = document.getElementById('review-next-btn'); if (b) b.focus(); }, 60);
+            }
+        }
+
+        // [냐냐 PATCH-3배치] 다음 문제로 (자동 넘김 폐지)
+        function reviewNext() {
+            if (!reviewState) return;
+            reviewState.index++;
+            reviewShowWord();
+        }
+
+        function reviewSubmit() {
+            if (!reviewState || !reviewState.current) return;
+            const input = document.getElementById('review-input');
+            if (!input || input.disabled) return; // 이미 채점됨
+            const userAnswer = input.value.trim();
+            input.disabled = true;
+            const w = reviewState.current;
+            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, w.word) : false;
+            // [냐냐 PATCH-0배치] 깜박이 복습 점수: 정답 +0.2 / 오답 -2
+            if (typeof addWordScore === 'function') {
+                addWordScore(w.id, isCorrect ? 0.2 : -2, { correct: isCorrect });
+            }
+            const fb = document.getElementById('review-feedback');
+            if (isCorrect) {
+                reviewState.correct++;
+                if (fb) { fb.innerText = "✓ 정답!"; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
+                AudioFX.playSuccess();
+            } else {
+                if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${escapeHtml(w.word)}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
+                AudioFX.playError();
+            }
+            logAction('review'); // [냐냐 PATCH] 제출한 단어 1개 = 복습 1개 기록
+            reviewShowDetail(w);  // [3배치] 정답/오답 상관없이 단어장 정보 전부
+        }
+
+        function reviewReveal() {
+            if (!reviewState || !reviewState.current) return;
+            const fb = document.getElementById('review-feedback');
+            const input = document.getElementById('review-input');
+            if (input && input.disabled) return;
+            if (input) input.disabled = true;
+            const w = reviewState.current;
+            // [냐냐 PATCH-0배치] '모르겠어요'도 오답 처리 (-2)
+            if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
+            if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${escapeHtml(w.word)}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-slate-500"; }
+            logAction('review');
+            reviewShowDetail(w);
+        }
+
+        function reviewEnd() {
+            const correct = reviewState ? reviewState.correct : 0;
+            const total = reviewState ? reviewState.total : 0;
+            reviewState = null;
+            const play = document.getElementById('review-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">🎉</div>
+                    <h3 class="text-xl font-black text-slate-900">복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}개 중 <b class="text-emerald-600">${correct}개</b> 기억했어요!</p>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetReviewTab()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 3차-① 단어 빈칸 채우기 복습 (AI 채점)
+        //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
+        // ============================================================
+        let reviewMode = 'blink';          // 'blink' | 'fill'
+        let fillScope = 'today-wrong';
+        let fillCount = 10;
+        let fillState = null;
+
+        function selectReviewMode(mode) {
+            // [냐냐 PATCH-4배치] '퀴즈'는 별도 탭 → 탭 전환만 하고 끝
+            if (mode === 'quiz') {
+                if (typeof changeTab === 'function') changeTab('quiz');
+                return;
+            }
+            // 퀴즈 탭에서 복습 서브메뉴를 누른 경우 → 복습 탭으로 되돌아옴
+            if (typeof activeTab !== 'undefined' && activeTab === 'quiz' && typeof changeTab === 'function') {
+                changeTab('review');
+            }
+            reviewMode = mode;
+            const containers = { blink: 'review-mode-blink', fill: 'review-mode-fill', gfill: 'review-mode-gfill' };
+            Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
+            const btns = { blink: 'review-mode-blink-btn', fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn' };
+            const on = 'bg-indigo-600 text-white shadow-sm';
+            const off = 'text-slate-500 hover:bg-slate-50';
+            Object.entries(btns).forEach(([m, id]) => {
+                const b = document.getElementById(id); if (!b) return;
+                b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
+                b.className += ' ' + (m === mode ? on : off);
+            });
+        }
+
+        function resetFillSetup() {
+            fillState = null;
+            const setup = document.getElementById('fill-setup');
+            const play = document.getElementById('fill-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            selectFillScope(fillScope || 'today-wrong');
+            selectFillCount(fillCount || 10);
+        }
+
+        function selectFillScope(scope) {
+            fillScope = scope;
+            document.querySelectorAll('.fill-scope-btn').forEach(btn => {
+                const active = btn.dataset.fillScope === scope;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+            const cnt = getReviewPool(scope).length;
+            const el = document.getElementById('fill-scope-count');
+            if (el) el.innerText = `복습할 단어: ${cnt}개`;
+        }
+
+        function selectFillCount(n) {
+            fillCount = n;
+            document.querySelectorAll('.fill-count-btn').forEach(btn => {
+                const active = parseInt(btn.dataset.fillCount) === n;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+        }
+
+        function startFillReview() {
+            const pool = getReviewPool(fillScope);
+            if (pool.length < 1) { showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
+            let shuffled = pool.slice().sort(() => Math.random() - 0.5).slice(0, fillCount);
+            fillState = { pool: shuffled, index: 0, total: shuffled.length, results: [], current: null, phase: 'input' };
+            document.getElementById('fill-setup').classList.add('hidden');
+            document.getElementById('fill-play-area').classList.remove('hidden');
+            renderFillProblem();
+        }
+
+        // 단어 하나에서 빈칸 낼 후보를 모아 랜덤 1~2곳 선택
+        function buildFillProblem(w) {
+            const idiomList = (w.idioms && w.idioms.length) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+            const blanks = [];
+            // [냐냐 PATCH] 단어/뜻 — 한쪽만 빈칸 (다른 쪽이 힌트)
+            if (w.word && w.meaning) {
+                const side = Math.random() < 0.5 ? 'word' : 'meaning';
+                blanks.push(side === 'word'
+                    ? { key: 'word', label: '단어', language: 'es', expected: w.word }
+                    : { key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            } else if (w.word) blanks.push({ key: 'word', label: '단어', language: 'es', expected: w.word });
+            else if (w.meaning) blanks.push({ key: 'meaning', label: '뜻', language: 'ko', expected: w.meaning });
+            // 관용구 — 있는 것 전부, 각 한쪽만
+            idiomList.forEach((id, i) => {
+                const sp = (id.idiom || '').trim(); const me = (id.idiomMeaning || '').trim();
+                if (sp && me) {
+                    const side = Math.random() < 0.5 ? 'sp' : 'me';
+                    blanks.push(side === 'sp'
+                        ? { key: 'idiom-sp-' + i, label: '관용구', language: 'es', expected: sp }
+                        : { key: 'idiom-me-' + i, label: '관용구 뜻', language: 'ko', expected: me });
+                }
+            });
+            // 예문 — 한쪽만
+            const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
+            if (exSp && exMe) {
+                const side = Math.random() < 0.5 ? 'sp' : 'me';
+                blanks.push(side === 'sp'
+                    ? { key: 'ex-sp', label: '예문', language: 'es', expected: exSp }
+                    : { key: 'ex-me', label: '예문 뜻', language: 'ko', expected: exMe });
+            }
+            // [냐냐 PATCH] 동사 변형(현재시제) — 값 있는 칸 전부 빈칸
+            if (w.pos === 'verb') {
+                const conj = (w.conjugationsByTense && w.conjugationsByTense.presente) || w.conjugations || {};
+                ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'].forEach(p => {
+                    const v = (conj[p] || '').toString().trim();
+                    if (v) blanks.push({ key: 'conj-' + p, label: p, language: 'es', expected: v });
+                });
+            }
+            return { word: w, blanks };
+        }
+
+        function fillFieldHtml(problem, key, text, extraClass, inputClass) {
+            // 해당 key가 빈칸이면 input, 아니면 텍스트로 렌더
+            const bi = problem.blanks.findIndex(b => b.key === key);
+            if (bi >= 0) {
+                const cls = inputClass || 'inline-block min-w-[120px] w-auto';
+                return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input ${cls} px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
+            }
+            return `<span class="${extraClass || ''}">${escapeHtml(text || '')}</span>`;
+        }
+
+        function renderFillProblem() {
+            if (!fillState) return;
+            if (fillState.index >= fillState.pool.length) { endFillReview(); return; }
+            fillState.phase = 'input';
+            const w = fillState.pool[fillState.index];
+            const problem = buildFillProblem(w);
+            fillState.current = problem;
+            const idiomList = (w.idioms && w.idioms.length) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+
+            const posLabel = (typeof getPosAbbreviation === 'function') ? getPosAbbreviation(w.pos, w.gender) : (w.pos || '');
+            let rows = '';
+            // 단어 / 뜻
+            rows += `<div class="flex items-baseline gap-2"><span class="text-[11px] font-bold text-slate-400 w-16 shrink-0">단어</span><span class="text-base font-extrabold text-slate-900">${fillFieldHtml(problem, 'word', w.word)}</span><span class="text-[10px] font-bold text-slate-400">${escapeHtml(posLabel)}</span></div>`;
+            rows += `<div class="flex items-baseline gap-2"><span class="text-[11px] font-bold text-slate-400 w-16 shrink-0">뜻</span><span class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'meaning', w.meaning)}</span></div>`;
+            // 관용구
+            idiomList.forEach((id, i) => {
+                const sp = (id.idiom || '').trim(); const me = (id.idiomMeaning || '').trim();
+                if (!sp && !me) return;
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-violet-400 w-16 shrink-0">관용구</span><div class="flex-1 space-y-0.5"><div class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'idiom-sp-' + i, sp)}</div><div class="text-xs text-slate-500">${fillFieldHtml(problem, 'idiom-me-' + i, me)}</div></div></div>`;
+            });
+            // 예문
+            const exSp = (w.example || '').trim(); const exMe = (w.exampleMeaning || '').trim();
+            if (exSp || exMe) {
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-sky-400 w-16 shrink-0">예문</span><div class="flex-1 space-y-0.5"><div class="text-sm font-bold text-slate-700">${fillFieldHtml(problem, 'ex-sp', exSp)}</div><div class="text-xs text-slate-500">${fillFieldHtml(problem, 'ex-me', exMe)}</div></div></div>`;
+            }
+            // [냐냐 PATCH] 동사 변형 (현재시제) — 등록폼처럼 6칸 그리드, 전부 빈칸 (규칙/불규칙 표시 없음)
+            if (w.pos === 'verb') {
+                const conj = (w.conjugationsByTense && w.conjugationsByTense.presente) || w.conjugations || {};
+                const persons = [['yo', 'yo (나)'], ['tu', 'tú (너)'], ['el', 'él/ella'], ['nos', 'nosotros'], ['vos', 'vosotros'], ['ellos', 'ellos/ellas']];
+                const hasConj = persons.some(([p]) => (conj[p] || '').toString().trim());
+                if (hasConj) {
+                    const cells = persons.map(([p, lbl]) => {
+                        const val = (conj[p] || '').toString().trim();
+                        const inner = val ? fillFieldHtml(problem, 'conj-' + p, val, '', 'w-full text-center text-xs') : '<span class="text-slate-300 text-xs">–</span>';
+                        return `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${lbl}</span><div>${inner}</div></div>`;
+                    }).join('');
+                    rows += `<div class="pt-2"><span class="text-[11px] font-bold text-blue-400 block mb-1.5">동사 변형 (현재시제)</span><div class="grid grid-cols-3 gap-2 bg-white/60 rounded-xl p-2 border border-slate-100">${cells}</div></div>`;
+                }
+            }
+            // 노트 (문맥용, 빈칸 아님)
+            if ((w.notes || '').trim()) {
+                rows += `<div class="flex items-baseline gap-2 pt-1"><span class="text-[11px] font-bold text-slate-300 w-16 shrink-0">메모</span><span class="text-xs text-slate-400 whitespace-pre-line">${escapeHtml(w.notes)}</span></div>`;
+            }
+
+            const play = document.getElementById('fill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetFillSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${fillState.index + 1} / ${fillState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(fillState.index / fillState.total * 100)}%"></div>
+                    </div>
+                    <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
+                    <div class="bg-slate-50 rounded-2xl p-4 space-y-2">${rows}</div>
+                    <div id="fill-feedback" class="hidden space-y-2"></div>
+                    <div class="flex justify-end">
+                        <button id="fill-action-btn" onclick="submitFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { const first = document.getElementById('fill-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        function fillInputKeydown(e, idx) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (fillState && fillState.phase === 'graded') { nextFillProblem(); return; }
+            const total = fillState && fillState.current ? fillState.current.blanks.length : 0;
+            if (idx < total - 1) {
+                const next = document.getElementById('fill-input-' + (idx + 1));
+                if (next) next.focus();
+            } else {
+                submitFillProblem();
+            }
+        }
+
+        function fillLocalGrade(blank, ans) {
+            const clean = s => (s || '').toString().toLowerCase().replace(/[\s.,!¡?¿;:"'()¿¡]/g, '');
+            const u = clean(ans), ex = clean(blank.expected);
+            if (!u) return false;
+            if (blank.language === 'ko') return u === ex || ex.includes(u) || u.includes(ex);
+            return u === ex; // 스페인어는 악센트 유지한 채 비교 (엄격)
+        }
+
+        async function submitFillProblem() {
+            if (!fillState || !fillState.current || fillState.phase !== 'input') return;
+            const blanks = fillState.current.blanks;
+            const answers = blanks.map((b, i) => { const el = document.getElementById('fill-input-' + i); return el ? el.value.trim() : ''; });
+            fillState.phase = 'grading';
+            const actionBtn = document.getElementById('fill-action-btn');
+            if (actionBtn) { actionBtn.disabled = true; actionBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`; }
+
+            let graded = null;
+            if (typeof hasGeminiApiKey === 'function' && hasGeminiApiKey()) {
+                try {
+                    const items = blanks.map((b, i) => ({ index: i, language: b.language === 'es' ? 'Spanish' : 'Korean', field: b.label, expected: b.expected, studentAnswer: answers[i] }));
+                    const system = `You grade fill-in-the-blank answers for a Korean student learning Spanish. Be fair but NOT lenient.
+Rules:
+- Spanish answers: accents and tildes MATTER (á é í ó ú ñ ü). Missing/wrong accent = INCORRECT. Ignore capitalization and surrounding punctuation/whitespace only.
+- Korean (meaning) answers: accept if the meaning matches in substance (synonyms/paraphrases OK). Ignore particles, spacing, and punctuation. Do not demand exact wording.
+- An empty answer is incorrect.
+Return JSON only, no markdown.`;
+                    const prompt = `Grade each blank. For each, the "expected" is the correct value from the flashcard and "studentAnswer" is what the student typed.\n${JSON.stringify(items)}\nReturn JSON: { "results": [ { "index": number, "correct": boolean, "correctAnswer": string } ] }`;
+                    const schema = { type: "OBJECT", properties: { results: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "NUMBER" }, correct: { type: "BOOLEAN" }, correctAnswer: { type: "STRING" } }, required: ["index", "correct", "correctAnswer"] } } }, required: ["results"] };
+                    const resp = await callGemini(prompt, system, schema, 'low');
+                    const data = extractAndParseJson(resp);
+                    graded = blanks.map((b, i) => {
+                        const r = (data.results || []).find(x => x.index === i) || {};
+                        return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showToast("AI 채점 실패 — 기본 채점으로 진행할게요", "error");
+                }
+            }
+            if (!graded) {
+                // API 키 없거나 실패 시 로컬 채점
+                graded = blanks.map(b => ({ correct: fillLocalGrade(b, answers[blanks.indexOf(b)]), correctAnswer: b.expected }));
+            }
+
+            // 결과 저장 + 표시
+            const detail = blanks.map((b, i) => ({ label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
+            const allCorrect = detail.every(d => d.correct);
+            fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
+
+            // [냐냐 PATCH-0배치] 단어 빈칸 복습 점수: 정답 칸당 +0.7 / 오답 칸당 -0.5
+            if (typeof addWordScore === 'function' && fillState.current.word) {
+                const nRight = detail.filter(d => d.correct).length;
+                const nWrong = detail.length - nRight;
+                const delta = (nRight * 0.7) + (nWrong * -0.5);
+                addWordScore(fillState.current.word.id, delta, { correct: allCorrect });
+            }
+
+            if (typeof logAction === 'function') logAction('review'); // 복습 1개 기록
+
+            applyFillGradeResults(detail);
+            fillState.phase = 'graded';
+        }
+
+        function applyFillGradeResults(detail) {
+            detail.forEach((d, i) => {
+                const el = document.getElementById('fill-input-' + i);
+                if (!el) return;
+                el.disabled = true;
+                el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
+                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through');
+            });
+            const fb = document.getElementById('fill-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                fb.innerHTML = detail.map(d => {
+                    const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-xs flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${escapeHtml(d.label)}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                }).join('');
+            }
+            const btn = document.getElementById('fill-action-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = (fillState.index + 1 >= fillState.total) ? '결과 보기 →' : '다음 →';
+                btn.setAttribute('onclick', 'nextFillProblem()');
+                setTimeout(() => btn.focus(), 40); // 엔터 한 번 더 = 다음
+            }
+        }
+
+        function nextFillProblem() {
+            if (!fillState) return;
+            fillState.index++;
+            if (fillState.index >= fillState.pool.length) { endFillReview(); return; }
+            renderFillProblem();
+        }
+
+        function endFillReview() {
+            const results = fillState ? fillState.results : [];
+            const total = results.length;
+            const correct = results.filter(r => r.allCorrect).length;
+            const studied = results.map(r => r.word);
+            const masterCandidates = results.filter(r => r.allCorrect && r.word && !r.word.mastered).map(r => r.word);
+            fillState = null;
+
+            let listHtml = '';
+            results.forEach(r => {
+                const icon = r.allCorrect ? '<span class="text-emerald-500">✓</span>' : '<span class="text-red-400">✗</span>';
+                listHtml += `<div class="flex items-baseline justify-between bg-white rounded-xl px-3 py-2 border border-slate-100"><span class="font-bold text-slate-800">${icon} ${escapeHtml(r.word.word)}</span><span class="text-slate-500 text-sm">${escapeHtml(r.word.meaning)}</span></div>`;
+            });
+
+            let masteryHtml = '';
+            if (masterCandidates.length > 0) {
+                masteryHtml = `
+                    <div id="fill-mastery-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-left">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-black text-emerald-700">🏆 다 맞힌 단어, 마스터로 등록할까요?</p>
+                            <label class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 cursor-pointer"><input type="checkbox" id="fill-master-all" onchange="fillMasterToggleAll(this)"> 전체</label>
+                        </div>
+                        <div class="space-y-1">${masterCandidates.map(w => `<label class="flex items-center gap-2 bg-white/70 rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" class="fill-master-chk" data-id="${w.id}"><span class="text-xs font-bold text-slate-700">${escapeHtml(w.word)}</span><span class="text-[11px] text-slate-400">${escapeHtml(w.meaning)}</span></label>`).join('')}</div>
+                        <button onclick="applyFillMastery()" class="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all">선택 단어 마스터하기</button>
+                    </div>`;
+            }
+
+            const play = document.getElementById('fill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">${correct === total ? '🎉' : '💪'}</div>
+                    <h3 class="text-xl font-black text-slate-900">빈칸 복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}문제 중 <b class="text-emerald-600">${correct}개</b> 다 맞혔어요! (정답률 ${total ? Math.round(correct / total * 100) : 0}%)</p>
+                    ${masteryHtml}
+                    <div class="text-left space-y-1.5 max-h-72 overflow-y-auto">
+                        <p class="text-xs font-bold text-slate-500 mb-1">복습한 단어들</p>
+                        ${listHtml}
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetFillSetup()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        function fillMasterToggleAll(cb) {
+            document.querySelectorAll('.fill-master-chk').forEach(c => { c.checked = cb.checked; });
+        }
+        function applyFillMastery() {
+            const ids = [...document.querySelectorAll('.fill-master-chk:checked')].map(c => c.dataset.id);
+            if (ids.length === 0) { showToast("선택된 단어가 없어요", "error"); return; }
+            let n = 0;
+            ids.forEach(id => { const w = vocabulary.find(v => v.id === id); if (w && !w.mastered) { w.mastered = true; if (typeof logAction === 'function') logAction('new-mastered'); n++; } });
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats();
+            if (typeof renderWordList === 'function') renderWordList();
+            showToast(`${n}개 마스터 완료! 🏆`, "success");
+            document.getElementById('fill-mastery-box')?.classList.add('hidden');
+        }
+
+        // ============================================================
+        // [냐냐 PATCH] 3차-② 문법표 빈칸 채우기 복습 (AI 채점)
+        //   제목·설명·팁·열제목·강조열 전체는 공개, 나머지 (비어있지 않은) 칸을 빈칸으로.
+        // ============================================================
+        let gfillMastery = 'not-mastered'; // [냐냐 PATCH] 마스터 필터: all | not-mastered | mastered (갯수 선택 제거)
+        let gfillState = null;
+
+        function resetGrammarFillSetup() {
+            gfillState = null;
+            const setup = document.getElementById('gfill-setup');
+            const play = document.getElementById('gfill-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            selectGfillMastery(gfillMastery || 'not-mastered');
+        }
+
+        function selectGfillMastery(m) {
+            gfillMastery = m;
+            document.querySelectorAll('.gfill-mastery-btn').forEach(btn => {
+                const active = btn.dataset.gfillMastery === m;
+                btn.classList.toggle('border-indigo-500', active);
+                btn.classList.toggle('bg-indigo-50', active);
+                btn.classList.toggle('text-indigo-700', active);
+                btn.classList.toggle('border-slate-200', !active);
+                btn.classList.toggle('text-slate-600', !active);
+            });
+            const el = document.getElementById('gfill-scope-count');
+            if (el) el.innerText = `복습할 표: ${getGrammarFillPool().length}개`;
+        }
+
+        // 빈칸 낼 칸이 있고, 마스터 필터에 맞는 표만
+        function getGrammarFillPool() {
+            const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            return all.filter(t => {
+                if (countGrammarBlanks(t) <= 0) return false;
+                const mastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[t.id];
+                if (gfillMastery === 'mastered') return mastered;
+                if (gfillMastery === 'not-mastered') return !mastered;
+                return true; // all
+            });
+        }
+        function countGrammarBlanks(t) {
+            const hlCols = t.highlightCols || [0];
+            let n = 0;
+            (t.rows || []).forEach(r => r.forEach((c, ci) => { if (!hlCols.includes(ci) && (c || '').toString().trim()) n++; }));
+            return n;
+        }
+
+        function startGrammarFillReview() {
+            const pool = getGrammarFillPool();
+            if (pool.length < 1) { showToast("복습할 문법표가 없어요! (마스터 필터/강조열 조건 확인)", "error"); return; }
+            const shuffled = pool.slice().sort(() => Math.random() - 0.5); // [냐냐 PATCH] 갯수 제한 없이 전부
+            gfillState = { pool: shuffled, index: 0, total: shuffled.length, results: [], current: null, phase: 'input' };
+            document.getElementById('gfill-setup').classList.add('hidden');
+            document.getElementById('gfill-play-area').classList.remove('hidden');
+            renderGrammarFillProblem();
+        }
+
+        // [냐냐 PATCH] 열 우선(세로) 순서로 빈칸 수집 → 엔터가 한 열을 쭉 내려간 뒤 다음 열로
+        function buildGrammarFillProblem(t) {
+            const hlCols = t.highlightCols || [0];
+            const rows = t.rows || [];
+            const numCols = Math.max((t.headers || []).length, ...rows.map(r => r.length), 0);
+            const blanks = [];
+            for (let ci = 0; ci < numCols; ci++) {
+                if (hlCols.includes(ci)) continue;         // 강조 열은 공개
+                for (let ri = 0; ri < rows.length; ri++) {
+                    const c = rows[ri][ci];
+                    if (!(c || '').toString().trim()) continue; // 빈 칸은 스킵
+                    blanks.push({ ri, ci, expected: c });
+                }
+            }
+            return { table: t, blanks };
+        }
+
+        function renderGrammarFillProblem() {
+            if (!gfillState) return;
+            if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
+            gfillState.phase = 'input';
+            const t = gfillState.pool[gfillState.index];
+            const problem = buildGrammarFillProblem(t);
+            gfillState.current = problem;
+            const hlCols = t.highlightCols || [0];
+            // 빈칸 key → input index
+            const blankIndexOf = {};
+            problem.blanks.forEach((b, i) => { blankIndexOf[`${b.ri}-${b.ci}`] = i; });
+
+            const headerRow = (t.headers || []).map(h => `<th class="text-center px-2 py-2 text-xs font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`).join('');
+            const bodyRows = (t.rows || []).map((r, ri) => {
+                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
+                const cells = r.map((c, ci) => {
+                    const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800';
+                    const key = `${ri}-${ci}`;
+                    if (key in blankIndexOf) {
+                        const bi = blankIndexOf[key];
+                        return `<td class="px-1 py-1 border border-[#e1edf7] ${rowBg}"><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                    }
+                    return `<td class="px-2 py-1.5 text-xs text-center border border-[#e1edf7] ${colHl}">${escapeHtml(c || '')}</td>`;
+                }).join('');
+                return `<tr class="${rowBg}">${cells}</tr>`;
+            }).join('');
+
+            const play = document.getElementById('gfill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetGrammarFillSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${gfillState.index + 1} / ${gfillState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(gfillState.index / gfillState.total * 100)}%"></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg shrink-0">${t.icon || '📋'}</span>
+                        <h3 class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</h3>
+                    </div>
+                    ${t.desc ? `<p class="text-xs text-slate-600 leading-relaxed">${escapeHtml(t.desc).replace(/\n/g, '<br>')}</p>` : ''}
+                    <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
+                    <div class="overflow-x-auto rounded-xl border border-slate-100">
+                        <table class="w-full border-collapse">
+                            ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
+                            <tbody>${bodyRows}</tbody>
+                        </table>
+                    </div>
+                    ${t.note ? `<div class="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1">${escapeHtml(t.note).replace(/\n/g, '<br>')}</span></div>` : ''}
+                    <div id="gfill-feedback" class="hidden space-y-1"></div>
+                    <div class="flex justify-end">
+                        <button id="gfill-action-btn" onclick="submitGrammarFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { const first = document.getElementById('gfill-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        function gfillInputKeydown(e, idx) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (gfillState && gfillState.phase === 'graded') { nextGrammarFillProblem(); return; }
+            const total = gfillState && gfillState.current ? gfillState.current.blanks.length : 0;
+            if (idx < total - 1) {
+                const next = document.getElementById('gfill-input-' + (idx + 1));
+                if (next) next.focus();
+            } else {
+                submitGrammarFillProblem();
+            }
+        }
+
+        async function submitGrammarFillProblem() {
+            if (!gfillState || !gfillState.current || gfillState.phase !== 'input') return;
+            const t = gfillState.current.table;
+            const hlCols = t.highlightCols || [0];
+            const blanks = gfillState.current.blanks;
+            const answers = blanks.map((b, i) => { const el = document.getElementById('gfill-input-' + i); return el ? el.value.trim() : ''; });
+            gfillState.phase = 'grading';
+            const actionBtn = document.getElementById('gfill-action-btn');
+            if (actionBtn) { actionBtn.disabled = true; actionBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`; }
+
+            // 각 빈칸에 문맥(행 대표값=강조열, 열 제목) 부여
+            const ctxItems = blanks.map((b, i) => {
+                const rowLabel = (t.rows[b.ri] && hlCols.length) ? (t.rows[b.ri][hlCols[0]] || '') : '';
+                const colHeader = (t.headers && t.headers[b.ci]) ? t.headers[b.ci] : '';
+                return { index: i, rowLabel, column: colHeader, expected: b.expected, studentAnswer: answers[i] };
+            });
+
+            let graded = null;
+            if (typeof hasGeminiApiKey === 'function' && hasGeminiApiKey()) {
+                try {
+                    const system = `You grade fill-in-the-blank answers in a Spanish grammar table for a Korean student. Be fair but NOT lenient.
+Rules:
+- Spanish text: accents/tildes MATTER (á é í ó ú ñ ü). Missing/wrong accent = INCORRECT. Ignore only capitalization and surrounding punctuation/whitespace.
+- Cells may be TEMPLATE PATTERNS with placeholders/variables, e.g. "Hay [숫자] [algo/alguien]" or "verbo + -ando". For these, accept the student's answer if it expresses the SAME structure/pattern; equivalent placeholder wording is OK (e.g., brackets vs no brackets, "algo" vs "[algo]").
+- Korean text: accept if the meaning matches in substance (paraphrases OK); ignore particles/spacing/punctuation.
+- Empty answer = incorrect.
+Return JSON only, no markdown.`;
+                    const prompt = `Grammar table: "${t.title || ''}". Grade each blank cell. "rowLabel" is the row's key column, "column" is the column header, "expected" is the correct cell text, "studentAnswer" is what the student typed.\n${JSON.stringify(ctxItems)}\nReturn JSON: { "results": [ { "index": number, "correct": boolean, "correctAnswer": string } ] }`;
+                    const schema = { type: "OBJECT", properties: { results: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "NUMBER" }, correct: { type: "BOOLEAN" }, correctAnswer: { type: "STRING" } }, required: ["index", "correct", "correctAnswer"] } } }, required: ["results"] };
+                    const resp = await callGemini(prompt, system, schema, 'low');
+                    const data = extractAndParseJson(resp);
+                    graded = blanks.map((b, i) => {
+                        const r = (data.results || []).find(x => x.index === i) || {};
+                        return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showToast("AI 채점 실패 — 기본 채점으로 진행할게요", "error");
+                }
+            }
+            if (!graded) {
+                graded = blanks.map((b, i) => ({ correct: fillLocalGrade({ language: 'es', expected: b.expected }, answers[i]), correctAnswer: b.expected }));
+            }
+
+            const detail = blanks.map((b, i) => ({
+                ri: b.ri, ci: b.ci,
+                rowLabel: ctxItems[i].rowLabel, column: ctxItems[i].column,
+                expected: b.expected, userAnswer: answers[i],
+                correct: graded[i].correct, correctAnswer: graded[i].correctAnswer
+            }));
+            const allCorrect = detail.every(d => d.correct);
+            gfillState.results.push({ table: t, blanks: detail, allCorrect });
+
+            // [냐냐 PATCH-0배치] 마스터된 문법표를 틀리면 → 마스터 자동 해제
+            let unmastered = false;
+            if (!allCorrect && typeof masteredGrammar !== 'undefined' && masteredGrammar[t.id]) {
+                delete masteredGrammar[t.id];
+                unmastered = true;
+                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered');
+                showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");
+            }
+            gfillState.lastUnmastered = unmastered;
+
+            if (typeof logAction === 'function') logAction('review');
+
+            applyGrammarFillResults(detail);
+            gfillState.phase = 'graded';
+        }
+
+        function applyGrammarFillResults(detail) {
+            detail.forEach((d, i) => {
+                const el = document.getElementById('gfill-input-' + i);
+                if (!el) return;
+                el.disabled = true;
+                el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
+                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600');
+            });
+            const fb = document.getElementById('gfill-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                // [냐냐 PATCH-0배치] 마스터 해제 알림 배너
+                const unmasterBanner = (gfillState && gfillState.lastUnmastered)
+                    ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-triangle-exclamation"></i> 마스터했던 표라서 <b>마스터가 해제됐어요.</b> 다시 정복해봐요!</div>`
+                    : '';
+                fb.innerHTML = unmasterBanner + detail.map(d => {
+                    const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
+                    const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-[11px] flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${label || '칸'}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                }).join('');
+            }
+            const btn = document.getElementById('gfill-action-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = (gfillState.index + 1 >= gfillState.total) ? '결과 보기 →' : '다음 →';
+                btn.setAttribute('onclick', 'nextGrammarFillProblem()');
+                setTimeout(() => btn.focus(), 40);
+            }
+        }
+
+        function nextGrammarFillProblem() {
+            if (!gfillState) return;
+            gfillState.index++;
+            if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
+            renderGrammarFillProblem();
+        }
+
+        function endGrammarFillReview() {
+            const results = gfillState ? gfillState.results : [];
+            const total = results.length;
+            const correct = results.filter(r => r.allCorrect).length;
+            const masterCandidates = results.filter(r => r.allCorrect && r.table && !masteredGrammar[r.table.id]).map(r => r.table);
+            gfillState = null;
+
+            let listHtml = '';
+            results.forEach(r => {
+                const icon = r.allCorrect ? '<span class="text-emerald-500">✓</span>' : '<span class="text-red-400">✗</span>';
+                const wrongN = r.blanks.filter(b => !b.correct).length;
+                const sub = r.allCorrect ? '<span class="text-emerald-600 text-xs">다 맞힘</span>' : `<span class="text-slate-400 text-xs">${wrongN}칸 틀림</span>`;
+                listHtml += `<div class="flex items-baseline justify-between bg-white rounded-xl px-3 py-2 border border-slate-100"><span class="font-bold text-slate-800">${icon} ${escapeHtml(r.table.icon || '📋')} ${escapeHtml(r.table.title || '')}</span>${sub}</div>`;
+            });
+
+            let masteryHtml = '';
+            if (masterCandidates.length > 0) {
+                masteryHtml = `
+                    <div id="gfill-mastery-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-left">
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs font-black text-emerald-700">🏆 다 맞힌 표, 마스터로 등록할까요?</p>
+                            <label class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 cursor-pointer"><input type="checkbox" id="gfill-master-all" onchange="gfillMasterToggleAll(this)"> 전체</label>
+                        </div>
+                        <div class="space-y-1">${masterCandidates.map(t => `<label class="flex items-center gap-2 bg-white/70 rounded-lg px-2 py-1 cursor-pointer"><input type="checkbox" class="gfill-master-chk" data-id="${t.id}"><span class="text-xs font-bold text-slate-700">${escapeHtml(t.icon || '📋')} ${escapeHtml(t.title || '')}</span></label>`).join('')}</div>
+                        <button onclick="applyGrammarFillMastery()" class="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all">선택 표 마스터하기</button>
+                    </div>`;
+            }
+
+            const play = document.getElementById('gfill-play-area');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">${correct === total ? '🎉' : '💪'}</div>
+                    <h3 class="text-xl font-black text-slate-900">문법표 복습 완료!</h3>
+                    <p class="text-sm text-slate-500">${total}개 표 중 <b class="text-emerald-600">${correct}개</b> 완벽하게 채웠어요! (${total ? Math.round(correct / total * 100) : 0}%)</p>
+                    ${masteryHtml}
+                    <div class="text-left space-y-1.5 max-h-72 overflow-y-auto">
+                        <p class="text-xs font-bold text-slate-500 mb-1">복습한 문법표</p>
+                        ${listHtml}
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="resetGrammarFillSetup()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
+                    </div>
+                </div>
+            `;
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        function gfillMasterToggleAll(cb) {
+            document.querySelectorAll('.gfill-master-chk').forEach(c => { c.checked = cb.checked; });
+        }
+        function applyGrammarFillMastery() {
+            const ids = [...document.querySelectorAll('.gfill-master-chk:checked')].map(c => c.dataset.id);
+            if (ids.length === 0) { showToast("선택된 표가 없어요", "error"); return; }
+            let n = 0;
+            ids.forEach(id => { if (!masteredGrammar[id]) { masteredGrammar[id] = true; if (typeof logAction === 'function') logAction('new-grammar-mastered'); n++; } });
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            showToast(`${n}개 표 마스터 완료! 🏆`, "success");
+            document.getElementById('gfill-mastery-box')?.classList.add('hidden');
         }
