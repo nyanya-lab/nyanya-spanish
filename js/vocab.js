@@ -450,6 +450,8 @@
         //   유의어 = 스카이(하늘색) · 반의어 = 로즈(빨강)
         //   저장 시: 미등록 유의어는 자동 등록 + 상대 단어에도 양방향 자동 연결
         // ============================================================
+        const SYN_POS_ABBR = { noun:'n.', verb:'v.', adjective:'adj.', adverb:'adv.', preposition:'prep.',
+                              conjunction:'conj.', pronoun:'pron.', interrogative:'int.', phrase:'phr.' };
         const SYN_TYPES = { synonym: { label: '유의어', chip: 'bg-sky-50 text-sky-600', dot: 'text-sky-500' },
                             antonym: { label: '반의어', chip: 'bg-rose-50 text-rose-600', dot: 'text-rose-500' } };
 
@@ -471,34 +473,34 @@
             const rowId = 'syn-row-' + (synRowCounter++);
             const esc = (v) => String(v || '').replace(/"/g, '&quot;');
             const type = data.type === 'antonym' ? 'antonym' : 'synonym';
+            // [냐냐 PATCH] 품사는 영어 약자로 (n. v. adj. ...)
             const posOpts = ALL_POS_LIST.map(p =>
-                `<option value="${p}" ${data.pos === p ? 'selected' : ''}>${POS_LABELS[p] || p}</option>`).join('');
+                `<option value="${p}" ${data.pos === p ? 'selected' : ''}>${SYN_POS_ABBR[p] || p}</option>`).join('');
             const g = data.gender || 'none';
 
             const row = document.createElement('div');
             row.id = rowId;
             row.className = 'bg-slate-50/60 border border-slate-200 rounded-xl p-2.5 space-y-2';
             row.innerHTML = `
+                <!-- [냐냐 PATCH] 1줄: [종류][단어][품사][뜻][성별][x] -->
                 <div class="flex gap-2 items-center">
-                    <select data-syn-field="type" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <select data-syn-field="type" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-2 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
                         <option value="synonym" ${type === 'synonym' ? 'selected' : ''}>유의어</option>
                         <option value="antonym" ${type === 'antonym' ? 'selected' : ''}>반의어</option>
                     </select>
-                    <!-- [냐냐 PATCH] 단어 + 뜻을 한 줄에 -->
-                    <input type="text" data-syn-field="word" placeholder="단어 (예: alegre)" autocomplete="off" value="${esc(data.word)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
-                    <input type="text" data-syn-field="meaning" placeholder="뜻 (예: 즐거운)" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <input type="text" data-syn-field="word" placeholder="단어" autocomplete="off" value="${esc(data.word)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <select data-syn-field="pos" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-1.5 py-2 rounded-lg border border-slate-200 text-xs font-normal text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400">${posOpts}</select>
+                    <input type="text" data-syn-field="meaning" placeholder="뜻" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <select data-syn-field="gender" class="syn-gender-sel shrink-0 bg-white px-1.5 py-2 rounded-lg border border-slate-200 text-xs font-normal text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400">
+                        <option value="none" ${g === 'none' ? 'selected' : ''}>el/la</option>
+                        <option value="masculine" ${g === 'masculine' ? 'selected' : ''}>el</option>
+                        <option value="feminine" ${g === 'feminine' ? 'selected' : ''}>la</option>
+                    </select>
                     <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-8 h-8 shrink-0 rounded-lg bg-white hover:bg-rose-50 hover:text-rose-500 text-slate-400 border border-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
                 </div>
+                <!-- 2줄: 차이 설명 (유의어일 때만) -->
                 <div class="flex gap-2 items-center">
-                    <select data-syn-field="pos" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">${posOpts}</select>
-                    <!-- [냐냐 PATCH] 명사일 때 성별 선택 (관사 자동으로 붙음) -->
-                    <select data-syn-field="gender" class="syn-gender-sel shrink-0 bg-white px-2.5 py-2 rounded-lg border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
-                        <option value="none" ${g === 'none' ? 'selected' : ''}>공용 (el/la)</option>
-                        <option value="masculine" ${g === 'masculine' ? 'selected' : ''}>남성 (el)</option>
-                        <option value="feminine" ${g === 'feminine' ? 'selected' : ''}>여성 (la)</option>
-                    </select>
-                    <!-- [냐냐 PATCH] 차이는 아래 줄에 넓게 + 글씨 크게 -->
-                    <input type="text" data-syn-field="difference" placeholder="차이·뉘앙스 (예: alegre는 겉으로 드러나는 밝음)" autocomplete="off" value="${esc(data.difference)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <input type="text" data-syn-field="difference" placeholder="차이 (예: dormido : 완전히 잠든 상태 | adormecido : 잠들기 직전의 졸림)" autocomplete="off" value="${esc(data.difference)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-sky-400">
                 </div>
                 <input type="hidden" data-syn-field="id" value="${esc(data.id)}">
             `;
@@ -788,10 +790,16 @@
               · 유의어도 있으면 1~2개 넣을 것. 학습에 도움되는 실제로 쓰이는 단어만.
               · 각 항목마다 word(관사 없이 단어만) · pos(품사) · gender(명사면 masculine/feminine, 아니면 none) · isPlural · meaning(한글 뜻) · type 을 전부 채울 것.
               · **difference(차이)는 유의어(synonym)일 때만 채울 것. 반의어(antonym)는 반대말이라 차이 설명이 필요 없으므로 반드시 빈 문자열 "" 로 둘 것.**
-              · 유의어의 difference: 반드시 한국어로, 두 단어를 어떻게 구분해서 쓰는지 구체적으로. **두 단어 이름을 모두 넣어서** 쓸 것.
-                예) "feliz는 마음속 지속적 행복, alegre는 겉으로 드러나는 밝음"
-                예) "ser는 본질·영구적 속성, estar는 상태·일시적"
-                차이가 거의 없는 완전 동의어면 "거의 같은 뜻, [단어]가 더 구어적" 처럼 사용역(구어/문어/격식) 차이라도 쓸 것.
+              · 유의어의 difference: **아래 형식을 반드시 지킬 것 (다른 형식 금지)**
+                형식: "단어A : 설명 | 단어B : 설명"
+                  · 파이프( | )로 두 항목을 나누고, 콜론( : ) 앞에 단어, 뒤에 설명.
+                  · 설명은 **명사형으로 짧게 끝낼 것.** 서술형/구어체 금지.
+                  · 좋은 예: "dormido : 완전히 잠든 상태 | adormecido : 잠들기 직전의 졸림, 손발 저림"
+                  · 좋은 예: "ser : 본질·영구적 속성 | estar : 일시적 상태"
+                  · 좋은 예: "feliz : 마음속 지속적 행복 | alegre : 겉으로 드러나는 밝음"
+                  · 나쁜 예(금지): "dormido는 완전히 잠든 상태이고, adormecido는 ~를 의미함" ← 서술형 금지
+                  · 나쁜 예(금지): "~에 가깝고," ← "가까움" 처럼 명사형으로
+                차이가 거의 없는 완전 동의어면 사용역 차이라도 같은 형식으로: "단어A : 구어체 | 단어B : 문어체".
               · 정말 유의어도 반의어도 없는 단어(고유명사 등)만 빈 배열 [] 허용.`;
 
             const system = "You are a precise Spanish dictionary engine. Output must strictly follow the given JSON schema, in Korean where applicable. No greetings, no markdown fences, no conversational filler — just the structured facts.";
@@ -847,7 +855,7 @@
                                 gender: { type: "STRING", enum: ["none", "masculine", "feminine"], description: "명사일 때만. 아니면 none" },
                                 isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true" },
                                 meaning: { type: "STRING", description: "그 단어의 핵심 한글 뜻" },
-                                difference: { type: "STRING", description: "유의어(synonym)일 때만 채울 것 — 두 단어를 어떻게 구분해서 쓰는지 한국어로, 두 단어 이름을 모두 넣어서 (예: feliz는 마음속 지속적 행복, alegre는 겉으로 드러나는 밝음). 반의어(antonym)는 반드시 빈 문자열 \"\"" },
+                                difference: { type: "STRING", description: "유의어(synonym)일 때만. 반드시 `단어A : 설명 | 단어B : 설명` 형식 (파이프로 구분, 콜론 뒤에 명사형 짧은 설명). 예: 'dormido : 완전히 잠든 상태 | adormecido : 잠들기 직전의 졸림'. 서술형 문장 금지. 반의어(antonym)는 반드시 빈 문자열" },
                                 type: { type: "STRING", enum: ["synonym", "antonym"], description: "synonym=유의어, antonym=반의어" }
                             },
                             required: ["word", "pos", "gender", "meaning", "type"]
@@ -2257,13 +2265,14 @@
                     badgeMarkup = `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-purple-100 text-purple-600 shadow-sm">Phr.</span>`;
                 }
 
-                // [냐냐 PATCH] 정답률 배지 (시도 3회 이상일 때만) — 색으로 실력 표시
+                // [냐냐 PATCH] 정답률 배지 — 카드 우측 하단, 점수 배지 왼쪽으로 이동 (시도 3회 이상일 때만)
                 const acc = getWordAccuracy(w);
+                let accHtml = '';
                 if (acc !== null) {
                     const accColor = acc >= 80 ? 'bg-emerald-100 text-emerald-700'
                         : acc >= 50 ? 'bg-amber-100 text-amber-700'
                         : 'bg-rose-100 text-rose-600';
-                    badgeMarkup += `<span class="px-2 py-0.5 text-[10px] font-black rounded-full ${accColor} shadow-sm" title="이번 달 정답률 (정답 ${w.correctTotal||0} / 시도 ${(w.correctTotal||0)+(w.wrongTotal||0)})">${acc}%</span>`;
+                    accHtml = `<span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${accColor}" title="이번 달 정답률 (정답 ${w.correctTotal||0} / 시도 ${(w.correctTotal||0)+(w.wrongTotal||0)})">${acc}%</span>`;
                 }
 
                 // [냐냐 PATCH-0배치] 등급 5단계 카드 스타일 (완벽=찐초록 / 마스터=연초록 / 일반 / 약점 / 치명적)
@@ -2286,12 +2295,13 @@
                 }
 
                 html += `
-                <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
-                    <!-- [냐냐 PATCH-0배치] 통합 점수 배지 (우측 하단, 숫자만) -->
-                    <div class="absolute bottom-2.5 right-3.5 pointer-events-none select-none">
+                <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-3">
+                    <!-- [냐냐 PATCH] 우측 하단: [정답률] [점수] -->
+                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
+                        ${accHtml}
                         <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
                     </div>
-                    <div class="space-y-4">
+                    <div class="space-y-2.5">
                         <div class="flex items-start justify-between gap-2">
                             <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
                                 <i class="fa-solid fa-chevron-right text-slate-300 text-xs transition-transform shrink-0 mt-2" data-card-chevron="${w.id}"></i>
@@ -2319,7 +2329,7 @@
                         </div>
 
                         <!-- 접히는 본문 -->
-                        <div class="word-card-body space-y-4 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">
+                        <div class="word-card-body space-y-2 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">
                         <!-- Meaning section -->
                         <div class="space-y-1">
                             <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
