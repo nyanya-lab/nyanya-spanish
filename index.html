@@ -88,8 +88,18 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 확인 중...</span>
                     </button>
 
+                    <!-- [냐냐 PATCH-0배치] 전역 음소거 -->
+                    <button id="mute-badge" onclick="toggleMute()" title="사이트 전체 소리 켜기/끄기" class="flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer">
+                        <i class="fa-solid fa-volume-high"></i><span class="hidden sm:inline"> 소리 켜짐</span>
+                    </button>
+
                     <button onclick="openBackupModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
                         <i class="fa-solid fa-box-archive"></i><span class="hidden sm:inline"> 백업</span>
+                    </button>
+
+                    <!-- [냐냐 PATCH-0배치] 사이트 설명 (점수 규칙) -->
+                    <button onclick="openHelpModal()" title="점수·등급 규칙 설명" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
+                        <i class="fa-solid fa-circle-question"></i><span class="hidden sm:inline"> 설명</span>
                     </button>
 
                     <button onclick="toggleMobileMenu()" class="md:hidden w-9 h-9 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
@@ -1319,6 +1329,25 @@
             <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
                 <button onclick="closeWordModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
                 <button onclick="saveWord()" class="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md shadow-violet-100">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [냐냐 PATCH-0배치] 사이트 설명 모달 (점수·등급 규칙) -->
+    <div id="help-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-question text-violet-500"></i>
+                    <span>점수 · 등급 규칙</span>
+                </h3>
+                <button onclick="closeHelpModal()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="help-modal-body" class="p-6 space-y-6"></div>
+            <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end">
+                <button onclick="closeHelpModal()" class="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl text-xs font-bold text-white transition-all active:scale-95">닫기</button>
             </div>
         </div>
     </div>
