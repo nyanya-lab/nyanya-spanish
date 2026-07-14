@@ -70,42 +70,41 @@ let quizSession = null;
                 // '차이' 설명이 있으면 35% 확률로 차이 구분 문제
                 //   ⚠️ 차이 설명은 양방향으로 공유되므로, 설명이 "어느 쪽 단어를 가리키는지"를
                 //      본문에서 직접 찾아야 함 (안 그러면 정답이 뒤집힘)
-                const bare = (t) => String(t || '').toLowerCase()
-                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                    .replace(/^(el\/la|los\/las|el|la|los|las|un|una)\s+/, '').trim();
-                const diffTarget = (diffText, wordA, wordB) => {
-                    const d = String(diffText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                    const ia = d.indexOf(bare(wordA.word));
-                    const ib = d.indexOf(bare(wordB.word));
-                    if (ia < 0 && ib < 0) return null;      // 어느 단어도 언급 안 함 → 출제 불가
-                    if (ia >= 0 && ib < 0) return wordA;
-                    if (ib >= 0 && ia < 0) return wordB;
-                    return ia < ib ? wordA : wordB;         // 둘 다 나오면 먼저 나온 쪽
-                };
-
                 // [냐냐 PATCH] '차이 구분' 문제는 유의어만 (반의어는 반대말이라 차이 설명이 없음)
+                // [냐냐 PATCH] '차이 구분' 문제 — 두 단어를 직접 제시하고, 한쪽 설명만 물어봄
+                //   차이 형식: "dormido : 완전히 잠든 상태 | adormecido : 잠들기 직전의 졸림"
+                //   → "dormido, adormecido 중 '완전히 잠든 상태'를 뜻하는 단어는?" (보기 2개)
                 const withDiff = links.filter(x => x.link.type !== 'antonym' && (x.link.difference || '').trim().length > 3);
                 if (withDiff.length > 0 && Math.random() < 0.35) {
                     const pick = withDiff[Math.floor(Math.random() * withDiff.length)];
-                    const answerWord = diffTarget(pick.link.difference, w, pick.t);
-                    if (answerWord) {
-                        let choices = [pick.t.word, w.word];
-                        const filler = vocabulary
-                            .filter(v => v.id !== w.id && v.id !== pick.t.id && v.pos === w.pos && !choices.includes(v.word))
-                            .map(v => v.word).sort(() => Math.random() - 0.5);
-                        choices = choices.concat(filler.slice(0, 2));
-                        choices = [...new Set(choices)].sort(() => Math.random() - 0.5);
-                        out.push({
-                            type: 'syn-mc',
-                            word: w,
-                            answer: answerWord.word,
-                            choices,
-                            promptText: `🔍 차이 구분 — "${pick.link.difference}" 에 해당하는 단어는?`,
-                            synInfo: { partner: pick.t, kind: pick.link.type, difference: pick.link.difference }
-                        });
-                        continue;
+                    const rows = (typeof parseDifference === 'function') ? parseDifference(pick.link.difference) : null;
+                    // 새 형식(단어 : 설명 | 단어 : 설명)으로 파싱되고, 단어 이름이 제대로 들어있을 때만 출제
+                    const usable = rows && rows.length >= 2 && rows.every(r => r.word && r.desc);
+                    if (usable) {
+                        const askIdx = Math.floor(Math.random() * rows.length);
+                        const asked = rows[askIdx];
+                        // 설명에 적힌 단어 이름이 실제 단어와 매칭되는지 확인
+                        const match = (name) => {
+                            const n = normalizeSpanishAnswer(name);
+                            if (normalizeSpanishAnswer(w.word) === n) return w.word;
+                            if (normalizeSpanishAnswer(pick.t.word) === n) return pick.t.word;
+                            return null;
+                        };
+                        const answerWord = match(asked.word);
+                        const choices = rows.map(r => match(r.word)).filter(Boolean);
+                        if (answerWord && choices.length >= 2) {
+                            out.push({
+                                type: 'syn-mc',
+                                word: w,
+                                answer: answerWord,
+                                choices: [...new Set(choices)].sort(() => Math.random() - 0.5),
+                                promptText: `🔍 차이 구분 — "${asked.desc}" 을(를) 뜻하는 단어는?`,
+                                synInfo: { partner: pick.t, kind: pick.link.type, difference: pick.link.difference }
+                            });
+                            continue;
+                        }
                     }
-                    // 설명이 단어를 안 가리키면 → 아래 일반 유의어 문제로 진행
+                    // 옛 형식이거나 파싱 실패 → 차이 문제는 건너뛰고 아래 일반 유의어 문제로
                 }
 
                 // 일반 유의어/반의어 문제
@@ -133,7 +132,7 @@ let quizSession = null;
                     word: w,
                     answer: pick.t.word,
                     choices,
-                    promptText: `다음 중 "${w.word}" (${w.meaning}) 의 ${kindLabel}는?`,
+                    promptText: `다음 중 "${w.word}" 의 ${kindLabel}는?`,
                     synInfo: { partner: pick.t, kind, difference: pick.link.difference || '' }
                 });
             }
@@ -329,7 +328,12 @@ let quizSession = null;
             }
 
             // [냐냐 PATCH-4차] 유의어 묶음 문제 (유의어/반의어가 등록된 단어만 출제)
-            questions.push(...buildSynonymQuestions(reviewablePool, Math.max(1, Math.round(count * 0.2))));
+            //   · 객관식이라서 '주관식만' 모드에선 출제하지 않음
+            //   · 전체 문제의 10% 정도만
+            if (selectedQuizFormat !== 'subjective') {
+                const synCount = Math.max(1, Math.round(count * 0.1));
+                questions.push(...buildSynonymQuestions(reviewablePool, synCount));
+            }
 
             // 단어 문제 + 관용구 문제 + 유의어 문제 전체를 섞음
             questions.sort(() => Math.random() - 0.5);
@@ -537,8 +541,14 @@ let quizSession = null;
             const allBtns = document.querySelectorAll('#quiz-choices-box button');
             allBtns.forEach(btn => { btn.disabled = true; btn.classList.add('opacity-60'); });
             if (btnEl) {
-                btnEl.classList.remove('opacity-60', 'border-slate-200', 'hover:border-violet-400', 'hover:bg-violet-50');
-                btnEl.classList.add(isCorrect ? 'border-emerald-500' : 'border-rose-500', isCorrect ? 'bg-emerald-50' : 'bg-rose-50');
+                // [냐냐 PATCH] bg-white가 안 지워져서 배경색이 안 보이던 문제 → 같이 제거 + 색 진하게
+                btnEl.classList.remove('opacity-60', 'bg-white', 'border-slate-200', 'text-slate-700',
+                                       'hover:border-violet-400', 'hover:bg-violet-50');
+                if (isCorrect) {
+                    btnEl.classList.add('border-emerald-500', 'bg-emerald-100', 'text-emerald-800');
+                } else {
+                    btnEl.classList.add('border-rose-500', 'bg-rose-100', 'text-rose-700');
+                }
             }
 
             finishQuizQuestion(isCorrect, q);
@@ -1048,21 +1058,9 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             const badges = buildWordBadgesHtml(q.word);
             const notes = buildNotesHtml(q.word, { idiomIntro: isIdiomQ });
 
-            // [냐냐 PATCH-4차] 유의어 문제면 관계를 한 줄로 짚어줌
-            let synIntro = '';
-            if (q.type === 'syn-mc' && q.synInfo) {
-                const isAnt = q.synInfo.kind === 'antonym';
-                const cls = isAnt ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-sky-50 border-sky-200 text-sky-700';
-                const arrow = isAnt ? '↔️ 반의어' : '🟰 유의어';
-                synIntro = `
-                    <div class="${cls} border rounded-xl px-3 py-2 text-[12px] font-bold leading-relaxed">
-                        ${escapeHtml(q.word.word)} ${arrow} ${escapeHtml(q.synInfo.partner.word)}
-                        <span class="text-slate-500 font-semibold">(${escapeHtml(q.synInfo.partner.meaning || '')})</span>
-                        ${q.synInfo.difference ? `<div class="text-slate-600 font-medium mt-1">↳ ${escapeHtml(q.synInfo.difference)}</div>` : ''}
-                    </div>`;
-            }
-
-            const combined = [synIntro, badges, notes].filter(x => x && x.trim())
+            // [냐냐 PATCH] 유의어 문제여도 상단 안내는 안 띄움
+            //   (빨간색이라 오답처럼 보이고, 어차피 아래 유의어 섹션에 똑같이 나옴)
+            const combined = [badges, notes].filter(x => x && x.trim())
                 .join('<div class="border-t border-slate-100 my-3"></div>');
 
             if (combined.trim()) {
