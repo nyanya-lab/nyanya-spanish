@@ -83,7 +83,8 @@ let quizSession = null;
                     return ia < ib ? wordA : wordB;         // 둘 다 나오면 먼저 나온 쪽
                 };
 
-                const withDiff = links.filter(x => (x.link.difference || '').trim().length > 3);
+                // [냐냐 PATCH] '차이 구분' 문제는 유의어만 (반의어는 반대말이라 차이 설명이 없음)
+                const withDiff = links.filter(x => x.link.type !== 'antonym' && (x.link.difference || '').trim().length > 3);
                 if (withDiff.length > 0 && Math.random() < 0.35) {
                     const pick = withDiff[Math.floor(Math.random() * withDiff.length)];
                     const answerWord = diffTarget(pick.link.difference, w, pick.t);
@@ -328,7 +329,7 @@ let quizSession = null;
             }
 
             // [냐냐 PATCH-4차] 유의어 묶음 문제 (유의어/반의어가 등록된 단어만 출제)
-            questions.push(...buildSynonymQuestions(pool, Math.max(1, Math.round(count * 0.2))));
+            questions.push(...buildSynonymQuestions(reviewablePool, Math.max(1, Math.round(count * 0.2))));
 
             // 단어 문제 + 관용구 문제 + 유의어 문제 전체를 섞음
             questions.sort(() => Math.random() - 0.5);
@@ -510,11 +511,20 @@ let quizSession = null;
         }
 
         function normalizeSpanishAnswer(s) {
-            return s.toLowerCase().trim()
+            return String(s || '').toLowerCase().trim()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // 채점은 악센트 관용 처리
-                .replace(/[¿?¡!.,;:"'()]/g, '') // [냐냐 PATCH] 문장부호 무시 (¿dónde? = dónde)
+                // [냐냐 PATCH] 대괄호 자리표시자는 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
+                //   (냐냐가 저 안의 한글을 똑같이 칠 수는 없으니 채점 대상에서 뺌)
+                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
+                // [냐냐 PATCH] 한글은 채점하지 않음 (스페인어만 비교)
+                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                // [냐냐 PATCH] 기호 전부 무시 (¿ ? ¡ ! . , ; : " ' ( ) ~ - / 등)
+                // ⚠️ 관사는 기호 제거보다 "먼저" 떼야 함 (안 그러면 el/la 의 슬래시가 공백이 돼서 la가 남음)
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
+                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
                 .replace(/\s+/g, ' ').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, ''); // [1배치] "el/la estudiante" 같은 슬래시 관사도 제거
+                .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '') // 기호 제거 후 남은 관사도 한 번 더
+                .trim();
         }
 
         function submitMcAnswer(choice, btnEl) {
@@ -576,8 +586,9 @@ let quizSession = null;
             const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[word.pos]) ? POS_LABELS[word.pos] : word.pos;
             if (posLabel) chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black bg-indigo-50 text-indigo-600">${escapeHtml(posLabel)}</span>`);
             if (word.pos === 'noun' && word.gender) {
-                const g = word.gender === 'f' ? ['여성 (la)', 'bg-rose-50 text-rose-600']
-                        : word.gender === 'm' ? ['남성 (el)', 'bg-blue-50 text-blue-600']
+                // [냐냐 PATCH-버그] 저장값은 'masculine'/'feminine' 인데 'm'/'f'로 비교해서 전부 남녀공용으로 나오던 버그
+                const g = word.gender === 'feminine' ? ['여성 (la)', 'bg-rose-50 text-rose-600']
+                        : word.gender === 'masculine' ? ['남성 (el)', 'bg-blue-50 text-blue-600']
                         : ['남녀공용 (el/la)', 'bg-violet-50 text-violet-600'];
                 chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${g[1]}">${g[0]}</span>`);
             }
