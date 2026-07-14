@@ -43,6 +43,102 @@ let quizSession = null;
         }
 
         // [냐냐 PATCH] 약점 집중 모드 — 퀴즈 탭으로 이동 후 약점 단어만으로 바로 시작
+        // ============================================================
+        // [냐냐 PATCH-4차] 유의어 묶음 퀴즈 — 유의어/반의어가 등록된 단어만 출제
+        //   ① "다음 중 feliz 의 반의어는?"  (객관식)
+        //   ② "차이 구분: '겉으로 드러나는 밝음' 쪽은?" (차이 설명 활용, 객관식)
+        //   → 차이를 서술이 아니라 객관식으로 물어서 부담 없이 학습
+        // ============================================================
+        function buildSynonymQuestions(sourcePool, maxCount) {
+            const out = [];
+            // 링크가 살아있는 단어만 (상대 단어가 삭제됐으면 제외)
+            const linked = (sourcePool || vocabulary).filter(w =>
+                Array.isArray(w.synonyms) && w.synonyms.some(l => vocabulary.find(v => v.id === l.id))
+            );
+            if (linked.length === 0) return out;
+
+            const shuffled = [...linked].sort(() => Math.random() - 0.5);
+            const limit = Math.min(maxCount, shuffled.length);
+
+            for (let i = 0; i < limit; i++) {
+                const w = shuffled[i];
+                const links = w.synonyms
+                    .map(l => ({ link: l, t: vocabulary.find(v => v.id === l.id) }))
+                    .filter(x => x.t);
+                if (links.length === 0) continue;
+
+                // '차이' 설명이 있으면 35% 확률로 차이 구분 문제
+                //   ⚠️ 차이 설명은 양방향으로 공유되므로, 설명이 "어느 쪽 단어를 가리키는지"를
+                //      본문에서 직접 찾아야 함 (안 그러면 정답이 뒤집힘)
+                const bare = (t) => String(t || '').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/^(el\/la|los\/las|el|la|los|las|un|una)\s+/, '').trim();
+                const diffTarget = (diffText, wordA, wordB) => {
+                    const d = String(diffText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const ia = d.indexOf(bare(wordA.word));
+                    const ib = d.indexOf(bare(wordB.word));
+                    if (ia < 0 && ib < 0) return null;      // 어느 단어도 언급 안 함 → 출제 불가
+                    if (ia >= 0 && ib < 0) return wordA;
+                    if (ib >= 0 && ia < 0) return wordB;
+                    return ia < ib ? wordA : wordB;         // 둘 다 나오면 먼저 나온 쪽
+                };
+
+                const withDiff = links.filter(x => (x.link.difference || '').trim().length > 3);
+                if (withDiff.length > 0 && Math.random() < 0.35) {
+                    const pick = withDiff[Math.floor(Math.random() * withDiff.length)];
+                    const answerWord = diffTarget(pick.link.difference, w, pick.t);
+                    if (answerWord) {
+                        let choices = [pick.t.word, w.word];
+                        const filler = vocabulary
+                            .filter(v => v.id !== w.id && v.id !== pick.t.id && v.pos === w.pos && !choices.includes(v.word))
+                            .map(v => v.word).sort(() => Math.random() - 0.5);
+                        choices = choices.concat(filler.slice(0, 2));
+                        choices = [...new Set(choices)].sort(() => Math.random() - 0.5);
+                        out.push({
+                            type: 'syn-mc',
+                            word: w,
+                            answer: answerWord.word,
+                            choices,
+                            promptText: `🔍 차이 구분 — "${pick.link.difference}" 에 해당하는 단어는?`,
+                            synInfo: { partner: pick.t, kind: pick.link.type, difference: pick.link.difference }
+                        });
+                        continue;
+                    }
+                    // 설명이 단어를 안 가리키면 → 아래 일반 유의어 문제로 진행
+                }
+
+                // 일반 유의어/반의어 문제
+                const pick = links[Math.floor(Math.random() * links.length)];
+                const kind = pick.link.type === 'antonym' ? 'antonym' : 'synonym';
+                const kindLabel = kind === 'antonym' ? '반의어' : '유의어';
+
+                // 오답 보기: 같은 품사의 다른 단어 (그 단어의 유의어/반의어가 아닌 것)
+                const relatedIds = w.synonyms.map(l => l.id);
+                let filler = vocabulary
+                    .filter(v => v.id !== w.id && !relatedIds.includes(v.id) && v.pos === w.pos)
+                    .map(v => v.word).sort(() => Math.random() - 0.5);
+                if (filler.length < 3) {
+                    const more = vocabulary
+                        .filter(v => v.id !== w.id && !relatedIds.includes(v.id) && v.pos !== w.pos)
+                        .map(v => v.word).sort(() => Math.random() - 0.5);
+                    filler = filler.concat(more);
+                }
+                if (filler.length < 2) continue; // 보기가 너무 적으면 출제 안 함
+
+                let choices = [pick.t.word, ...filler.slice(0, 3)];
+                choices = [...new Set(choices)].sort(() => Math.random() - 0.5);
+                out.push({
+                    type: 'syn-mc',
+                    word: w,
+                    answer: pick.t.word,
+                    choices,
+                    promptText: `다음 중 "${w.word}" (${w.meaning}) 의 ${kindLabel}는?`,
+                    synInfo: { partner: pick.t, kind, difference: pick.link.difference || '' }
+                });
+            }
+            return out;
+        }
+
         function startQuiz() {
             // [냐냐 PATCH] 오늘의 복습 전용 풀이 지정된 경우: 범위 무시하고 그 단어들로 진행
             let reviewablePool;
@@ -231,7 +327,10 @@ let quizSession = null;
                 questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText, idiomData: target });
             }
 
-            // 단어 문제 + 관용구 문제 전체를 섞음
+            // [냐냐 PATCH-4차] 유의어 묶음 문제 (유의어/반의어가 등록된 단어만 출제)
+            questions.push(...buildSynonymQuestions(pool, Math.max(1, Math.round(count * 0.2))));
+
+            // 단어 문제 + 관용구 문제 + 유의어 문제 전체를 섞음
             questions.sort(() => Math.random() - 0.5);
 
             quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
@@ -257,9 +356,13 @@ let quizSession = null;
             const coach = document.getElementById('quiz-coach-character');
             coach.innerText = "🧑‍🏫";
 
-            if (q.type === 'mc' || q.type === 'idiom-mc') {
-                document.getElementById('quiz-question-label').innerText = q.type === 'idiom-mc' ? '관용구 QUESTION' : 'QUESTION';
-                document.getElementById('quiz-question-text').innerText = q.type === 'idiom-mc'
+            if (q.type === 'mc' || q.type === 'idiom-mc' || q.type === 'syn-mc') {
+                // [냐냐 PATCH-4차] syn-mc = 유의어/반의어 묶음 문제 (객관식)
+                document.getElementById('quiz-question-label').innerText =
+                    q.type === 'idiom-mc' ? '관용구 QUESTION'
+                    : (q.type === 'syn-mc' ? '유의어 QUESTION' : 'QUESTION');
+                document.getElementById('quiz-question-text').innerText =
+                    (q.type === 'idiom-mc' || q.type === 'syn-mc')
                     ? q.promptText
                     : `스페인어 "${q.word.word}"의 올바른 한국어 뜻은 무엇일까요?`;
                 document.getElementById('quiz-choices-box').classList.remove('hidden');
@@ -933,7 +1036,22 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             const badges = buildWordBadgesHtml(q.word);
             const notes = buildNotesHtml(q.word, { idiomIntro: isIdiomQ });
-            const combined = [badges, notes].filter(x => x && x.trim())
+
+            // [냐냐 PATCH-4차] 유의어 문제면 관계를 한 줄로 짚어줌
+            let synIntro = '';
+            if (q.type === 'syn-mc' && q.synInfo) {
+                const isAnt = q.synInfo.kind === 'antonym';
+                const cls = isAnt ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-sky-50 border-sky-200 text-sky-700';
+                const arrow = isAnt ? '↔️ 반의어' : '🟰 유의어';
+                synIntro = `
+                    <div class="${cls} border rounded-xl px-3 py-2 text-[12px] font-bold leading-relaxed">
+                        ${escapeHtml(q.word.word)} ${arrow} ${escapeHtml(q.synInfo.partner.word)}
+                        <span class="text-slate-500 font-semibold">(${escapeHtml(q.synInfo.partner.meaning || '')})</span>
+                        ${q.synInfo.difference ? `<div class="text-slate-600 font-medium mt-1">↳ ${escapeHtml(q.synInfo.difference)}</div>` : ''}
+                    </div>`;
+            }
+
+            const combined = [synIntro, badges, notes].filter(x => x && x.trim())
                 .join('<div class="border-t border-slate-100 my-3"></div>');
 
             if (combined.trim()) {
