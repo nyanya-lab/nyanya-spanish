@@ -532,6 +532,11 @@ let quizSession = null;
                         ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
                     </div>`);
             }
+            // [냐냐 PATCH-5배치] 유의어 / 반의어 (퀴즈 결과·복습 화면에도 표시)
+            if (typeof buildSynonymChipsHtml === 'function') {
+                const syn = buildSynonymChipsHtml(word);
+                if (syn) sections.push(`<div class="space-y-2">${syn}</div>`);
+            }
             return sections.join('<div class="border-t border-slate-100 my-3"></div>');
         }
 
