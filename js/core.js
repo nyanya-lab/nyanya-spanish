@@ -1243,8 +1243,9 @@ let vocabulary = [];
                 ['⭐ 별표 1번 클릭', '−3점 (약점)'],
                 ['⭐ 별표 2번 클릭', '−8점 (치명적 약점)'],
                 ['⭐ 별표 3번 클릭', '0점 (해제)'],
-                ['✅ 마스터 버튼 켜기', '+8점 (완벽) + 마스터 조건 통과 처리'],
-                ['✅ 마스터 버튼 끄기', '0점']
+                ['✅ 마스터 1번 클릭', '+5점 (마스터)'],
+                ['✅ 마스터 2번 클릭', '+8점 (완벽)'],
+                ['✅ 마스터 3번 클릭', '0점 (해제)']
             ].map(([act, res]) => `
                 <tr class="border-b border-slate-100 last:border-0">
                     <td class="py-2.5 px-3 font-bold text-slate-700">${act}</td>
@@ -1320,15 +1321,19 @@ let vocabulary = [];
             const render = (list, kind) => {
                 if (list.length === 0) return;
                 const isAnt = kind === 'antonym';
-                const title = isAnt ? '↔️ 반의어' : '🟰 유의어';
+                // [냐냐 PATCH] 이모지(🟰↔️)가 일부 폰트에서 ✗로 깨져서 → Font Awesome 아이콘으로 교체
+                const icon = isAnt
+                    ? '<i class="fa-solid fa-right-left text-[9px]"></i>'
+                    : '<i class="fa-solid fa-equals text-[9px]"></i>';
+                const title = isAnt ? `${icon} 반의어` : `${icon} 유의어`;
                 const titleCls = isAnt ? 'text-rose-600' : 'text-sky-600';
                 const boxCls = isAnt ? 'bg-rose-50/50 border-rose-200/60' : 'bg-sky-50/50 border-sky-200/60';
                 const chipCls = isAnt ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-sky-100 text-sky-700 hover:bg-sky-200';
                 const items = list.map(({ t, diff }) => `
                     <div class="flex flex-wrap items-baseline gap-1.5">
-                        <button type="button" onclick="event.stopPropagation(); goToWord('${t.id}')" class="px-2 py-0.5 rounded-lg text-[12px] font-black ${chipCls} transition-all">${escapeHtml(t.word)}</button>
-                        <span class="text-[12px] text-slate-500 font-semibold">${escapeHtml(t.meaning || '')}</span>
-                        ${diff ? `<span class="text-[11px] text-slate-500 font-medium basis-full leading-snug">↳ ${escapeHtml(diff)}</span>` : ''}
+                        <button type="button" onclick="event.stopPropagation(); goToWord('${t.id}')" class="px-2 py-0.5 rounded-lg text-[13px] font-black ${chipCls} transition-all">${escapeHtml(t.word)}</button>
+                        <span class="text-[13px] text-slate-600 font-semibold">${escapeHtml(t.meaning || '')}</span>
+                        ${diff ? `<span class="text-[13px] text-slate-600 font-semibold basis-full leading-relaxed pt-0.5">↳ ${escapeHtml(diff)}</span>` : ''}
                     </div>`).join('');
                 blocks.push(`
                     <div class="${boxCls} border p-2.5 rounded-2xl space-y-1.5">
@@ -2414,6 +2419,7 @@ let vocabulary = [];
                 "지금 등록할까요? AI가 뜻·품사·예문을 자동으로 채워줘요!",
                 () => {
                     openWordModal();
+                    _skipContinueRegisterPrompt = true; // [냐냐 PATCH] 문법표에서 온 등록은 '계속 등록?' 안 물어봄
                     const input = document.getElementById('input-word');
                     if (input) {
                         input.value = word;
