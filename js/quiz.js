@@ -62,8 +62,8 @@ let quizSession = null;
                     return;
                 }
 
-                // 승급 대기 단어 = 마스터 점수 3점 이상 + 아직 마스터 안 됨
-                const promotionWords = vocabulary.filter(w => !w.mastered && (w.masterScore || 0) >= 3);
+                // [냐냐 PATCH-0배치] 승급 대기 단어 = 통합 점수 3점 이상 + 아직 마스터 안 됨
+                const promotionWords = vocabulary.filter(w => !w.mastered && getScore(w) >= 3);
                 // 승급 대기 퀴즈는 5개 이상 있어야 열림
                 if (wantPromotion && promotionWords.length < 5) {
                     showToast(`아직 승급할 단어가 5개 미만이에요! (현재 ${promotionWords.length}개) 퀴즈를 더 풀어서 마스터 점수를 쌓아보세요.`, "info");
@@ -672,27 +672,18 @@ let quizSession = null;
                 // [냐냐 PATCH] 맞힌 단어 id 기록 (중복 제외) — 결과 화면에서 마스터 등록 선택용
                 if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
                 if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
-                // [냐냐 PATCH] 정답 처리: 약점 점수↓ + 마스터 점수↑ (동시에, 모순 방지)
+
+                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 +1 / 주관식 +2
+                //   유의어 재입력 후 정답 +2 · 오타 재입력 후 정답 +1
                 const vocabItemC = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItemC) {
-                    // [냐냐 PATCH] 정답률용 카운터
-                    vocabItemC.correctTotal = (vocabItemC.correctTotal || 0) + 1;
-                    // (1) 약점 점수 내리기: 객관식 -2, 주관식 -1
-                    const isProduction = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
-                    const weakReward = isProduction ? 1 : 2;
-                    vocabItemC.weakScore = Math.max(0, (vocabItemC.weakScore || 0) - weakReward);
-                    if (vocabItemC.weakScore < 5) vocabItemC.weak = false;
-
-                    // (2) 마스터 점수 올리기: 객관식 +1, 주관식 +2 (상한 8점)
-                    const masterGain = isProduction ? 2 : 1;
-                    vocabItemC.masterScore = Math.min(8, (vocabItemC.masterScore || 0) + masterGain);
-                    // 주관식으로 맞힌 적 있으면 기록 (자동 마스터 필수 조건)
-                    if (q.type === 'subjective') vocabItemC.subjectivePassed = true;
-
-                    // (3) 자동 마스터: 5점 이상 + 주관식 정답 경험 있음
-                    if (!vocabItemC.mastered && vocabItemC.masterScore >= 5 && vocabItemC.subjectivePassed) {
-                        vocabItemC.mastered = true;
-                        logAction('new-mastered'); // [냐냐 PATCH] 자동 마스터도 일지/그래프에 반영
+                    const wasMasteredC = vocabItemC.mastered;
+                    const isProductionC = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
+                    let gain = isProductionC ? 2 : 1;
+                    if (q._retryReason === 'typo') gain = 1;
+                    else if (q._retryReason === 'synonym') gain = 2;
+                    addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
+                    if (!wasMasteredC && vocabItemC.mastered) {
                         if (!quizSession.autoMasteredIds) quizSession.autoMasteredIds = [];
                         quizSession.autoMasteredIds.push(vocabItemC.id);
                     }
@@ -702,28 +693,19 @@ let quizSession = null;
             } else {
                 AudioFX.playError();
                 quizSession.wrongList.push(q.word);
-                // [냐냐 PATCH] 오답 처리: 약점 점수↑ + 마스터 점수↓ (동시에)
+
+                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 -2 / 주관식 -1
+                //   재입력(유의어·오타) 기회를 줬는데도 틀리면 -2
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
-                    // [냐냐 PATCH] 정답률용 카운터
-                    vocabItem.wrongTotal = (vocabItem.wrongTotal || 0) + 1;
-                    // (1) 약점 점수 올리기: 객관식 +2, 주관식 +1
-                    const penalty = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective') ? 1 : 2;
-                    vocabItem.weakScore = (vocabItem.weakScore || 0) + penalty;
-                    vocabItem.lastWrongDate = getLocalDateString(); // [냐냐 PATCH] 오늘 틀림 기록
                     const wasWeak = vocabItem.weak;
-                    if (vocabItem.weakScore >= 3) vocabItem.weak = true;
-                    // 이번 퀴즈에서 새로 약점이 된 단어 기록
+                    const isProductionW = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
+                    let penalty = isProductionW ? -1 : -2;
+                    if (q._retryReason) penalty = -2;
+                    addWordScore(vocabItem, penalty, { correct: false });
                     if (!wasWeak && vocabItem.weak) {
                         if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
                         if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);
-                    }
-
-                    // (2) 마스터 점수 내리기: -3점. 5점 밑으로 떨어지면 마스터 해제
-                    vocabItem.masterScore = Math.max(0, (vocabItem.masterScore || 0) - 3);
-                    if (vocabItem.mastered && vocabItem.masterScore < 5) {
-                        vocabItem.mastered = false;
-                        if (typeof logAction === 'function') logAction('undo-new-mastered'); // [냐냐 PATCH] 자동 마스터 해제도 감소
                     }
                 }
                 coach.innerText = "🤔💭";
@@ -947,8 +929,8 @@ let quizSession = null;
                 const id = cb.getAttribute('data-master-id');
                 const w = vocabulary.find(x => x.id === id);
                 if (w && !w.mastered) {
-                    w.mastered = true;
-                    logAction('new-mastered'); // [냐냐 PATCH] 수동 일괄 마스터도 일지/그래프에 반영
+                    // [냐냐 PATCH-0배치] 수동 마스터 = 만점(+10) + 주관식 조건 통과 처리
+                    setWordScore(w, SCORE_MAX, { subjectivePassed: true });
                     count++;
                 }
             });
