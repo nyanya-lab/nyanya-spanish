@@ -2366,6 +2366,67 @@ let vocabulary = [];
             renderGrammarTables();
         }
 
+        // ============================================================
+        // [냐냐 PATCH-4차] 문법표 🔍 단어 찾기 모드
+        //   켜면: 셀 안의 스페인어 단어에 밑줄 + 클릭 가능
+        //   클릭 → 등록된 단어면 단어창 열기 (hablo → hablar 처럼 변형형도 원형 찾음)
+        //          미등록이면 "등록할까요?" → AI 자동완성으로 바로 등록
+        // ============================================================
+        let grammarWordLookupMode = false;
+
+        function toggleGrammarWordLookup() {
+            grammarWordLookupMode = !grammarWordLookupMode;
+            renderGrammarTables();
+            showToast(grammarWordLookupMode
+                ? "🔍 단어 찾기 켰어요! 표 안의 단어를 눌러보세요"
+                : "단어 찾기를 껐어요", "info");
+        }
+
+        // 셀 텍스트를 단어 단위로 쪼개서 클릭 가능한 조각으로 만듦
+        //   (스페인어 글자만 단어로 취급 — 화살표·슬래시·괄호·숫자는 그대로 둠)
+        function buildLookupCellHtml(text) {
+            const raw = String(text || '');
+            if (!raw.trim()) return '';
+            const parts = raw.split(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)/g);
+            return parts.map(seg => {
+                if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/.test(seg)) return escapeHtml(seg);
+                if (seg.length < 2) return escapeHtml(seg); // 한 글자는 건너뜀
+                const safe = seg.replace(/'/g, "\\'");
+                return `<span onclick="lookupGrammarWord('${safe}')" class="underline decoration-sky-400 decoration-2 underline-offset-2 cursor-pointer hover:text-sky-600 hover:bg-sky-50 rounded px-0.5 transition-colors">${escapeHtml(seg)}</span>`;
+            }).join('');
+        }
+
+        function lookupGrammarWord(rawWord) {
+            const word = String(rawWord || '').trim();
+            if (!word) return;
+
+            // 등록된 단어 찾기 (변형형도 원형으로 역추적)
+            const found = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(word) : null;
+            if (found) {
+                openWordModal(found.id);
+                showToast(`"${found.word}" 단어창을 열었어요`, "info");
+                return;
+            }
+
+            // 미등록 → 등록할지 물어보고, 예면 AI 자동완성까지 실행
+            showConfirm(
+                `"${word}" 는 아직 단어장에 없어요`,
+                "지금 등록할까요? AI가 뜻·품사·예문을 자동으로 채워줘요!",
+                () => {
+                    openWordModal();
+                    const input = document.getElementById('input-word');
+                    if (input) {
+                        input.value = word;
+                        if (typeof handleWordInput === 'function') handleWordInput(word);
+                    }
+                    setTimeout(() => {
+                        if (typeof triggerAiAutofill === 'function') triggerAiAutofill();
+                    }, 250);
+                },
+                { okLabel: '등록할래요', cancelLabel: '아니요', okStyle: 'primary', icon: 'happy' }
+            );
+        }
+
         function renderGrammarTables() {
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
@@ -2413,8 +2474,11 @@ let vocabulary = [];
                         const cellBg = isHl ? 'bg-[#ffe0ec]' : '';
                         // [냐냐 PATCH] 열 강조: 해당 열은 진한 보라 두꺼운 글씨
                         const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
-                        // [냐냐 PATCH] 조회 화면에선 별표 없이 색 강조만 (별표는 수정 탭에서만)
-                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${escapeHtml(c || '')}</td>`;
+                        // [냐냐 PATCH-4차] 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
+                        const cellContent = grammarWordLookupMode
+                            ? buildLookupCellHtml(c || '')
+                            : escapeHtml(c || '');
+                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${cellContent}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
                 }).join('');
@@ -2426,6 +2490,7 @@ let vocabulary = [];
                         <button onclick="toggleMasterGrammar('${t.id}')" title="${isMastered ? '마스터 해제' : '마스터 표시'}" class="w-7 h-7 rounded-lg transition-colors ${isMastered ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}"><i class="fa-solid fa-circle-check text-xs"></i></button>
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
                         <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
                 return `
