@@ -1177,24 +1177,18 @@
             if (event) event.stopPropagation();
             const w = vocabulary.find(item => item.id === wordId);
             if (w) {
-                // [냐냐 PATCH] 3단계 순환: 해제 → 약점(노랑, 3점) → 심화 약점(빨강, 8점) → 해제
-                const isWeak = w.weak;
-                const isSevere = w.weak && (w.weakScore || 0) >= 8;
-                if (!isWeak) {
-                    // 해제 → 노란 약점
-                    w.weak = true;
-                    w.weakScore = 3;
-                    showToast(`"${w.word}" 약점 단어로 표시했어요 ⭐`, "success");
-                } else if (!isSevere) {
-                    // 노란 약점 → 빨간 심화 약점
-                    w.weak = true;
-                    w.weakScore = 8;
-                    showToast(`"${w.word}" 심화 약점으로 표시했어요 🔴`, "success");
-                } else {
-                    // 빨간 심화 약점 → 해제
-                    w.weak = false;
-                    w.weakScore = 0;
+                // [냐냐 PATCH-0배치] 3단계 순환: 해제 → 약점(-3) → 치명적 약점(-8) → 해제(0)
+                const grade = getWordGrade(w);
+                // (주관식 통과 이력은 건드리지 않음 — 나중에 점수가 다시 오르면 마스터 복귀 가능)
+                if (grade === 'critical') {
+                    setWordScore(w, 0);
                     showToast(`"${w.word}" 약점 표시를 해제했어요`, "info");
+                } else if (grade === 'weak') {
+                    setWordScore(w, SCORE_CRITICAL);
+                    showToast(`"${w.word}" 치명적 약점으로 표시했어요 🟥`, "success");
+                } else {
+                    setWordScore(w, SCORE_WEAK);
+                    showToast(`"${w.word}" 약점 단어로 표시했어요 🟨`, "success");
                 }
                 logAction('snapshot');
                 renderWordList();
@@ -1206,20 +1200,18 @@
             if (event) event.stopPropagation();
             const w = vocabulary.find(item => item.id === wordId);
             if (w) {
-                w.mastered = !w.mastered;
-                if (w.mastered) {
-                    w.masterScore = 8; // 수동 마스터는 만점으로 (한 번 틀려도 안 풀리게)
-                    w.subjectivePassed = true; // 수동 마스터는 주관식 조건도 충족 처리
-                    w.weak = false; w.weakScore = 0; // 마스터되면 약점 해제
+                // [냐냐 PATCH-0배치] 수동 마스터 = 만점(+10, 완벽) / 해제 = 0점
+                if (!w.mastered) {
+                    setWordScore(w, SCORE_MAX, { subjectivePassed: true });
                     AudioFX.playBell();
-                    showToast(`"${w.word}" 단어 마스터 완료! 🏆`, "success");
-                    logAction('new-mastered'); // [냐냐 PATCH] 오늘 새로 마스터한 단어 수 추적
+                    showToast(`"${w.word}" 단어 마스터 완료! 🏆 (완벽 등급)`, "success");
                 } else {
-                    w.masterScore = 0; // 수동 해제하면 점수도 0
-                    logAction('undo-new-mastered'); // [냐냐 PATCH] 마스터 해제 시 일지/그래프도 감소
+                    setWordScore(w, 0);
+                    showToast(`"${w.word}" 마스터를 해제했어요`, "info");
                 }
                 renderWordList();
                 updateStats();
+                saveToStorage();
             }
         }
 
@@ -1506,8 +1498,8 @@
             } else if (sortMode === 'alpha-desc') {
                 filteredSorted = [...filtered].sort((a, b) => stripArticle(b.word).localeCompare(stripArticle(a.word)));
             } else if (sortMode === 'weak-score') {
-                // 약점 점수 높은순 (점수 같으면 최근 추가순 유지)
-                filteredSorted = [...filtered].sort((a, b) => (b.weakScore || 0) - (a.weakScore || 0));
+                // [냐냐 PATCH-0배치] 점수 낮은순(=약한 단어 먼저)
+                filteredSorted = [...filtered].sort((a, b) => getScore(a) - getScore(b));
             }
             // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
@@ -1563,13 +1555,15 @@
                     badgeMarkup += `<span class="px-2 py-0.5 text-[10px] font-black rounded-full ${accColor} shadow-sm" title="이번 달 정답률 (정답 ${w.correctTotal||0} / 시도 ${(w.correctTotal||0)+(w.wrongTotal||0)})">${acc}%</span>`;
                 }
 
-                const cardStyle = w.mastered 
-                    ? 'border border-emerald-100 bg-emerald-50/40 shadow-xs' 
-                    : ((w.weak && (w.weakScore || 0) >= 8)
-                        ? 'border-2 border-red-300 bg-red-50/60 shadow-xs'
-                        : (w.weak
-                            ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
-                            : 'border border-slate-200 shadow-xs bg-white'));
+                // [냐냐 PATCH-0배치] 등급 5단계 카드 스타일 (완벽=찐초록 / 마스터=연초록 / 일반 / 약점 / 치명적)
+                const grade = getWordGrade(w);
+                const cardStyle =
+                      grade === 'perfect'  ? 'border-2 border-emerald-500 bg-emerald-50/70 shadow-sm'
+                    : grade === 'mastered' ? 'border border-emerald-200 bg-emerald-50/30 shadow-xs'
+                    : grade === 'critical' ? 'border-2 border-red-300 bg-red-50/60 shadow-xs'
+                    : grade === 'weak'     ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
+                    :                        'border border-slate-200 shadow-xs bg-white';
+                const gi = GRADE_INFO[grade];
 
                 let verbClassText = '';
                 if (isVerb) {
@@ -1582,6 +1576,11 @@
 
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
+                    <!-- [냐냐 PATCH-0배치] 통합 점수 배지 (우측 하단) -->
+                    <div class="absolute bottom-3 right-4 flex items-center gap-1.5 pointer-events-none select-none">
+                        <span class="text-[10px] font-bold text-slate-400">${gi.label}</span>
+                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg border ${gi.badge} shadow-sm" title="통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
+                    </div>
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
                             <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
@@ -1594,10 +1593,10 @@
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
-                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.weak ? ((w.weakScore || 0) >= 8 ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm') : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시 (약점 → 치명적 약점 → 해제)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${grade === 'critical' ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : (grade === 'weak' ? 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300')}">
                                     <i class="fa-solid fa-star text-xs"></i>
                                 </button>
-                                <button onclick="toggleMasterWord('${w.id}', event)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${w.mastered ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300'}">
+                                <button onclick="toggleMasterWord('${w.id}', event)" title="마스터 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${grade === 'perfect' ? 'bg-emerald-600 border-2 border-emerald-700 text-white shadow-sm' : (grade === 'mastered' ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300')}">
                                     <i class="fa-solid fa-check text-xs"></i>
                                 </button>
                                 <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
@@ -1666,6 +1665,7 @@
 
                         <!-- 핵심만 정리된 노트 -->
                         ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        <div class="h-3"></div><!-- 점수 배지 자리 확보 -->
                         </div>
                     </div>
                 </div>
