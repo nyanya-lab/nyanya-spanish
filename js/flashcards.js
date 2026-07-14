@@ -22,6 +22,8 @@ let flashcardOrder = [];
                 document.getElementById('card-front-pos').innerText = '없음';
                 document.getElementById('card-back-pos').innerText = '없음';
                 document.getElementById('card-notes').innerText = '';
+                const synBoxEmpty = document.getElementById('card-synonyms');
+                if (synBoxEmpty) { synBoxEmpty.innerHTML = ''; synBoxEmpty.classList.add('hidden'); }
                 document.getElementById('card-conjugations-box').classList.add('hidden');
                 document.getElementById('card-front-irregular').innerText = '';
                 return;
@@ -57,6 +59,14 @@ let flashcardOrder = [];
             document.getElementById('card-front-pos').innerText = getPosAbbreviation(w.pos, w.gender);
             document.getElementById('card-back-pos').innerText = getPosAbbreviation(w.pos, w.gender);
             document.getElementById('card-notes').innerText = w.notes || '';
+
+            // [냐냐 PATCH-2차잔여] 뒷면에 유의어/반의어 표시
+            const synBox = document.getElementById('card-synonyms');
+            if (synBox) {
+                const syn = (typeof buildSynonymChipsHtml === 'function') ? buildSynonymChipsHtml(w) : '';
+                synBox.innerHTML = syn;
+                synBox.classList.toggle('hidden', !syn);
+            }
 
             const conjBox = document.getElementById('card-conjugations-box');
             if (w.pos === 'verb' && w.conjugations && Object.values(w.conjugations).some(v => v)) {
