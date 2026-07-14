@@ -205,15 +205,14 @@
                             </button>
                         </div>
                         <div class="flex gap-2 w-full sm:w-auto shrink-0">
-                            <button id="expand-all-btn" onclick="toggleExpandAllBtn()" class="bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-up-right-and-down-left-from-center text-[10px]"></i>
-                                <span>전체 펼치기</span>
+                            <!-- [냐냐 PATCH-6배치] 버튼은 아이콘만 (툴팁으로 이름 표시) -->
+                            <button id="expand-all-btn" onclick="toggleExpandAllBtn()" title="전체 펼치기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
+                                <i id="expand-all-icon" class="fa-solid fa-up-right-and-down-left-from-center"></i>
                             </button>
                             <div class="relative">
-                                <button onclick="event.stopPropagation(); toggleFilterPanel()" class="w-full sm:w-auto h-full bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 transition-all flex items-center justify-center gap-1.5">
+                                <button onclick="event.stopPropagation(); toggleFilterPanel()" title="필터 & 정렬" class="relative w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                     <i class="fa-solid fa-sliders"></i>
-                                    <span>필터 & 정렬</span>
-                                    <span id="filter-active-badge" class="hidden w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                                    <span id="filter-active-badge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-violet-500 ring-2 ring-white"></span>
                                 </button>
                                 <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-4 w-72 max-h-[70vh] overflow-y-auto">
                                     <!-- 품사 (중복 선택) -->
@@ -273,9 +272,36 @@
                                     <select id="sort-select" class="hidden"><option value="weak-score">weak-score</option></select>
                                 </div>
                             </div>
-                            <button onclick="openWordModal()" class="flex-1 sm:flex-initial bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
+
+                            <!-- [냐냐 PATCH-6배치] 표시 설정 (카드에 어떤 정보를 보여줄지) -->
+                            <div class="relative">
+                                <button onclick="event.stopPropagation(); toggleDisplayPanel()" title="표시 설정" class="relative w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
+                                    <i class="fa-solid fa-gear"></i>
+                                    <span id="display-active-badge" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-violet-500 ring-2 ring-white"></span>
+                                </button>
+                                <div id="display-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-4 w-72 max-h-[70vh] overflow-y-auto">
+                                    <div class="flex items-center justify-between">
+                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">카드에 표시할 정보</label>
+                                        <button type="button" id="display-all-btn" onclick="toggleAllDisplay()" class="text-[11px] font-bold text-violet-600 hover:text-violet-700">전부 해제</button>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 font-semibold -mt-2">뜻·품사·점수는 항상 표시돼요</p>
+                                    <div id="display-section-box" class="flex flex-wrap gap-1.5"></div>
+
+                                    <div class="space-y-1.5 pt-1 border-t border-slate-100">
+                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">동사 시제 <span class="text-slate-300 normal-case font-semibold">(개별 선택)</span></label>
+                                        <div id="display-tense-box" class="flex flex-wrap gap-1.5"></div>
+                                    </div>
+
+                                    <div class="flex gap-2 pt-1 border-t border-slate-100">
+                                        <button type="button" onclick="resetDisplayPrefs()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-xs transition-all">초기화</button>
+                                        <button type="button" onclick="closeDisplayPanel()" class="flex-1 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm">확인</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="openWordModal()" title="새로운 단어 등록" class="flex-1 sm:flex-initial sm:w-10 h-10 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
                                 <i class="fa-solid fa-plus"></i>
-                                <span>새로운 단어 등록</span>
+                                <span class="sm:hidden">새로운 단어 등록</span>
                             </button>
                         </div>
                     </div>
@@ -334,6 +360,8 @@
                                     <div class="text-center space-y-2 overflow-y-auto max-h-56">
                                         <h3 id="card-meaning" class="text-2xl font-extrabold text-slate-900">뜻</h3>
                                         <p id="card-notes" class="text-xs text-slate-500 max-w-xs mx-auto whitespace-pre-wrap"></p>
+                                        <!-- [냐냐 PATCH-2차잔여] 유의어/반의어 -->
+                                        <div id="card-synonyms" class="hidden max-w-xs mx-auto space-y-2 text-left pt-1"></div>
                                         <div id="card-conjugations-box" class="hidden grid grid-cols-3 gap-1 pt-3 max-w-xs mx-auto text-[10px] bg-white/70 p-2 rounded-xl border border-violet-100">
                                             <div><span class="text-slate-400 block">yo</span><strong id="card-conj-yo" class="text-blue-600 font-extrabold"></strong></div>
                                             <div><span class="text-slate-400 block">tú</span><strong id="card-conj-tu" class="text-slate-700"></strong></div>
@@ -1319,6 +1347,25 @@
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
                         <input type="text" id="input-example-meaning" placeholder="예: 나 지금 돈이 없어." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    </div>
+                </div>
+
+                <!-- [냐냐 PATCH-5배치] 유의어 / 반의어 -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-500">유의어 / 반의어 (선택, 여러 개 가능)</label>
+                        <button id="syn-toggle-btn" type="button" onclick="toggleSynonymSection()" class="w-6 h-6 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-600 flex items-center justify-center transition-all">
+                            <i id="syn-toggle-icon" class="fa-solid fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="syn-fields-box" class="hidden space-y-2 pt-1">
+                        <div id="syn-entries-box" class="space-y-2"></div>
+                        <button type="button" onclick="addSynonymRow()" class="w-full text-center text-xs font-bold text-sky-600 hover:text-sky-700 border border-dashed border-sky-200 rounded-xl py-2 transition-all">
+                            <i class="fa-solid fa-plus text-[10px]"></i> 유의어/반의어 추가
+                        </button>
+                        <p class="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                            💡 저장하면 <b>단어장에 없는 유의어는 자동으로 등록</b>되고, <b>상대 단어에도 자동으로 연결</b>돼요.
+                        </p>
                     </div>
                 </div>
 
