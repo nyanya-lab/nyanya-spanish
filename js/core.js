@@ -1068,11 +1068,11 @@ let vocabulary = [];
         }
 
         const GRADE_INFO = {
-            perfect:  { label: '완벽',        emoji: '🟢', badge: 'bg-emerald-600 text-white border-emerald-700' },
-            mastered: { label: '마스터',      emoji: '🟩', badge: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-            normal:   { label: '일반',        emoji: '⬜', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
-            weak:     { label: '약점',        emoji: '🟨', badge: 'bg-amber-100 text-amber-700 border-amber-300' },
-            critical: { label: '치명적 약점', emoji: '🟥', badge: 'bg-red-100 text-red-600 border-red-300' }
+            perfect:  { label: '완벽',        emoji: '🟢', badge: 'bg-emerald-600 text-white' },
+            mastered: { label: '마스터',      emoji: '🟩', badge: 'bg-emerald-100 text-emerald-700' },
+            normal:   { label: '일반',        emoji: '⬜', badge: 'bg-slate-100 text-slate-500' },
+            weak:     { label: '약점',        emoji: '🟨', badge: 'bg-amber-100 text-amber-700' },
+            critical: { label: '치명적 약점', emoji: '🟥', badge: 'bg-red-100 text-red-600' }
         };
 
         // 점수 표시용 문자열 (+5 / -3.5 / 0)
@@ -1206,29 +1206,38 @@ let vocabulary = [];
                     <td class="py-2.5 px-3 text-slate-500 font-semibold">${desc}</td>
                 </tr>`).join('');
 
-            const scoreRows = [
-                ['퀴즈 · 객관식', '+1', '−2'],
-                ['퀴즈 · 주관식', '+2', '−1'],
-                ['　└ 유의어 쓴 뒤 다시 정답', '+2', '−2 (그래도 오답)'],
-                ['　└ 오타 고쳐서 다시 정답', '+1', '−2 (그래도 오답)'],
-                ['미니게임 · 속사포', '+0.5', '−1'],
-                ['미니게임 · 떨어지는 단어', '+1', '판정 없음'],
-                ['미니게임 · 듣기 받아쓰기', '문장 단위라 점수 없음', '—'],
-                ['복습 · 깜박이', '+0.2', '−2'],
-                ['복습 · 단어 빈칸', '맞힌 칸당 +0.7', '틀린 칸당 −0.5'],
-                ['복습 · 문법표 빈칸', '단어 점수와 무관', '마스터한 표를 틀리면 마스터 해제']
-            ].map(([act, ok, no]) => `
-                <tr class="border-b border-slate-100 last:border-0">
+            // [냐냐 PATCH] 활동별 점수표 — 구분(퀴즈/미니게임/복습) 열로 묶어서 표시
+            const SCORE_TABLE = [
+                { group: '퀴즈', color: 'text-indigo-600 bg-indigo-50 border-indigo-200', rows: [
+                    ['객관식', '+1', '−2'],
+                    ['주관식', '+2', '−1'],
+                    ['주관식 · 유의어 쓴 뒤 다시 정답', '+2', '−2'],
+                    ['주관식 · 오타 고쳐서 다시 정답', '+1', '−2']
+                ]},
+                { group: '미니게임', color: 'text-teal-600 bg-teal-50 border-teal-200', rows: [
+                    ['속사포', '+0.5', '−1'],
+                    ['떨어지는 단어', '+1', '판정 없음'],
+                    ['듣기 받아쓰기', '점수 없음', '점수 없음']
+                ]},
+                { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
+                    ['깜박이', '+0.2', '−2'],
+                    ['단어 빈칸', '맞힌 칸당 +0.7', '틀린 칸당 −0.5'],
+                    ['문법표 빈칸', '단어 점수 무관', '마스터한 표를 틀리면 마스터 해제']
+                ]}
+            ];
+            const scoreRows = SCORE_TABLE.map(g => g.rows.map(([act, ok, no], i) => `
+                <tr class="border-b border-slate-100 ${i === g.rows.length - 1 ? 'border-b-2 border-b-slate-200' : ''}">
+                    ${i === 0 ? `<td rowspan="${g.rows.length}" class="py-2.5 px-3 align-middle border-r border-slate-200"><span class="px-2 py-1 rounded-lg text-[11px] font-black border ${g.color} whitespace-nowrap">${g.group}</span></td>` : ''}
                     <td class="py-2.5 px-3 font-bold text-slate-700">${act}</td>
                     <td class="py-2.5 px-3 font-black text-emerald-600 whitespace-nowrap">${ok}</td>
                     <td class="py-2.5 px-3 font-black text-rose-500 whitespace-nowrap">${no}</td>
-                </tr>`).join('');
+                </tr>`).join('')).join('');
 
             const manualRows = [
                 ['⭐ 별표 1번 클릭', '−3점 (약점)'],
                 ['⭐ 별표 2번 클릭', '−8점 (치명적 약점)'],
                 ['⭐ 별표 3번 클릭', '0점 (해제)'],
-                ['✅ 마스터 버튼 켜기', '+10점 (완벽) + 마스터 조건 통과 처리'],
+                ['✅ 마스터 버튼 켜기', '+8점 (완벽) + 마스터 조건 통과 처리'],
                 ['✅ 마스터 버튼 끄기', '0점']
             ].map(([act, res]) => `
                 <tr class="border-b border-slate-100 last:border-0">
@@ -1258,6 +1267,7 @@ let vocabulary = [];
                 <table class="w-full text-xs">
                     <thead>
                         <tr class="border-b-2 border-slate-200 text-[11px] text-slate-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">구분</th>
                             <th class="py-2 px-3 text-left">활동</th>
                             <th class="py-2 px-3 text-left">정답</th>
                             <th class="py-2 px-3 text-left">오답</th>
@@ -3016,6 +3026,9 @@ let vocabulary = [];
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            // [냐냐 PATCH-4배치] 퀴즈는 '복습 · 퀴즈' 메뉴 안의 서브탭 → 사이드 메뉴는 복습이 켜진 것처럼 보이게
+            const navKey = (tabId === 'quiz') ? 'review' : tabId;
             
             if (window.innerWidth < 768) {
                 collapseMobileMenu();
@@ -3036,10 +3049,10 @@ let vocabulary = [];
                 const el = document.getElementById(btns[key]);
                 if (!el) return;
                 // [냐냐 PATCH] 플래시카드 메뉴는 숨김 유지 (className 재설정 때 튀어나오는 것 방지)
-                const hiddenPrefix = (key === 'cards') ? 'hidden ' : '';
+                const hiddenPrefix = (key === 'cards' || key === 'quiz') ? 'hidden ' : ''; // [4배치] 퀴즈 메뉴는 숨김 유지
                 // [냐냐 PATCH] 아이콘 색은 전부 통일(회색), 선택했을 때만 그 메뉴의 색으로 강조
                 const sel = NAV_SELECT_STYLES[key] || { bg: 'bg-violet-50', text: 'text-violet-700' };
-                if (key === tabId) {
+                if (key === navKey) {
                     el.className = hiddenPrefix + `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-bold transition-all ${sel.bg} ${sel.text}`;
                 } else {
                     el.className = hiddenPrefix + "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-sm font-medium transition-all text-slate-500 hover:bg-slate-50 hover:text-slate-700";
@@ -3050,7 +3063,7 @@ let vocabulary = [];
                     Object.values(NAV_ICON_COLORS).forEach(c => icon.classList.remove(c));
                     icon.classList.remove('text-white', 'text-slate-400', 'text-slate-600', 'text-slate-900');
                     // 선택 시 글씨 색을 그대로 따라감(색 클래스 없음), 미선택은 옅은 회색
-                    if (key !== tabId) icon.classList.add('text-slate-400');
+                    if (key !== navKey) icon.classList.add('text-slate-400');
                 }
             });
 
