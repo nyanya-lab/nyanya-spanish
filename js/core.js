@@ -1309,6 +1309,24 @@ let vocabulary = [];
         // [냐냐 PATCH-5배치] 유의어/반의어 칩 — 단어카드·퀴즈결과·복습 어디서나 공용
         //   유의어 = 스카이(하늘) · 반의어 = 로즈(빨강). 클릭하면 그 단어로 이동
         // ============================================================
+        // 품사 영어 약자
+        const POS_ABBR = { noun:'n.', verb:'v.', adjective:'adj.', adverb:'adv.', preposition:'prep.',
+                           conjunction:'conj.', pronoun:'pron.', interrogative:'int.', phrase:'phr.' };
+
+        // [냐냐 PATCH] 차이 설명을 "dormido : 완전히 잠든 상태 | adormecido : 잠들기 직전" 형태로 파싱
+        //   파싱되면 단어/설명을 나눠서 보기 좋게, 안 되면 통째로 한 줄로
+        function parseDifference(diff) {
+            const raw = String(diff || '').trim();
+            if (!raw) return null;
+            const parts = raw.split('|').map(x => x.trim()).filter(Boolean);
+            const rows = parts.map(part => {
+                const i = part.indexOf(':');
+                if (i < 0) return { word: '', desc: part };
+                return { word: part.slice(0, i).trim(), desc: part.slice(i + 1).trim() };
+            });
+            return rows.length ? rows : null;
+        }
+
         function buildSynonymChipsHtml(w) {
             if (!w || !Array.isArray(w.synonyms) || w.synonyms.length === 0) return '';
             const groups = { synonym: [], antonym: [] };
@@ -1321,35 +1339,57 @@ let vocabulary = [];
             const render = (list, kind) => {
                 if (list.length === 0) return;
                 const isAnt = kind === 'antonym';
-                // [냐냐 PATCH] 이모지(🟰↔️)가 일부 폰트에서 ✗로 깨져서 → Font Awesome 아이콘으로 교체
                 const icon = isAnt
                     ? '<i class="fa-solid fa-right-left text-[9px]"></i>'
                     : '<i class="fa-solid fa-equals text-[9px]"></i>';
                 const title = isAnt ? `${icon} 반의어` : `${icon} 유의어`;
                 const titleCls = isAnt ? 'text-rose-600' : 'text-sky-600';
-                const boxCls = isAnt ? 'bg-rose-50/50 border-rose-200/60' : 'bg-sky-50/50 border-sky-200/60';
+                // [냐냐 PATCH] 테두리 없이 배경색만
+                const boxCls = isAnt ? 'bg-rose-50/60' : 'bg-sky-50/60';
                 const chipCls = isAnt ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-sky-100 text-sky-700 hover:bg-sky-200';
-                const items = list.map(({ t, diff }) => `
-                    <div class="flex flex-wrap items-baseline gap-1.5">
-                        <button type="button" onclick="event.stopPropagation(); goToWord('${t.id}')" class="px-2 py-0.5 rounded-lg text-[13px] font-black ${chipCls} transition-all">${escapeHtml(t.word)}</button>
-                        <span class="text-[13px] text-slate-600 font-semibold">${escapeHtml(t.meaning || '')}</span>
-                        ${diff ? `<span class="text-[13px] text-slate-600 font-semibold basis-full leading-relaxed pt-0.5">↳ ${escapeHtml(diff)}</span>` : ''}
-                    </div>`).join('');
+                const items = list.map(({ t, diff }) => {
+                    const abbr = POS_ABBR[t.pos] || '';
+                    const rows = parseDifference(diff);
+                    // [냐냐 PATCH] 차이 설명: 화살표 → · 두껍지 않게 · 단어 바로 아래 붙여서
+                    const diffHtml = rows ? `
+                        <div class="basis-full space-y-0 pl-0.5">
+                            ${rows.map(r => `
+                            <div class="text-[12px] text-slate-500 font-normal leading-snug">
+                                <span class="text-slate-400">→</span>
+                                ${r.word ? `<b class="text-slate-700 font-semibold">${escapeHtml(r.word)}</b> : ` : ''}${escapeHtml(r.desc)}
+                            </div>`).join('')}
+                        </div>` : '';
+                    return `
+                    <div class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+                        <button type="button" onclick="event.stopPropagation(); goToWord('${t.id}')" class="px-2 py-0.5 rounded-lg text-[12px] font-black ${chipCls} transition-all">${escapeHtml(t.word)}</button>
+                        ${abbr ? `<span class="text-[10px] text-slate-400 font-bold">${abbr}</span>` : ''}
+                        <span class="text-[12px] text-slate-500 font-medium">${escapeHtml(t.meaning || '')}</span>
+                        ${diffHtml}
+                    </div>`;
+                }).join('');
                 blocks.push(`
-                    <div class="${boxCls} border p-2.5 rounded-2xl space-y-1.5">
+                    <div class="${boxCls} p-2.5 rounded-2xl space-y-1.5">
                         <span class="font-bold ${titleCls} block text-[10px] uppercase tracking-wider">${title}</span>
                         ${items}
                     </div>`);
             };
             render(groups.synonym, 'synonym');
             render(groups.antonym, 'antonym');
-            return blocks.join('');
+            return blocks.join('<div class="h-1.5"></div>');
         }
 
         // 칩 클릭 → 그 단어로 이동 (단어장 탭 + 검색으로 콕 집어줌)
         function goToWord(wordId) {
             const w = vocabulary.find(v => v.id === wordId);
             if (!w) { showToast("그 단어를 찾을 수 없어요", "error"); return; }
+
+            // [냐냐 PATCH] 퀴즈/복습/게임 중이면 탭을 옮기지 않음 (진행 기록이 날아가버림)
+            //   → 그 자리에서 단어 창(오버레이)만 띄우고, 닫으면 하던 거 그대로
+            if (typeof activeTab !== 'undefined' && ['quiz', 'review', 'games'].includes(activeTab)) {
+                if (typeof openWordModal === 'function') openWordModal(wordId);
+                return;
+            }
+
             if (typeof changeTab === 'function') changeTab('list');
             const search = document.getElementById('search-bar');
             if (search) {
