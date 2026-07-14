@@ -1202,9 +1202,9 @@
             if (w) {
                 // [냐냐 PATCH-0배치] 수동 마스터 = 만점(+10, 완벽) / 해제 = 0점
                 if (!w.mastered) {
-                    setWordScore(w, SCORE_MAX, { subjectivePassed: true });
+                    setWordScore(w, SCORE_PERFECT, { subjectivePassed: true }); // [0배치] 수동 마스터 = 8점(완벽)
                     AudioFX.playBell();
-                    showToast(`"${w.word}" 단어 마스터 완료! 🏆 (완벽 등급)`, "success");
+                    showToast(`"${w.word}" 단어 마스터 완료! 🏆 (완벽 8점)`, "success");
                 } else {
                     setWordScore(w, 0);
                     showToast(`"${w.word}" 마스터를 해제했어요`, "info");
@@ -1255,7 +1255,15 @@
         const POS_LABELS = { noun:'명사', verb:'동사', adjective:'형용사', adverb:'부사', preposition:'전치사', conjunction:'접속사', pronoun:'대명사', interrogative:'의문사', phrase:'구문' };
         const MASTERY_LABELS = { all:'전체', mastered:'마스터만', 'not-mastered':'미마스터' };
         const WEAK_LABELS = { all:'', weak:'약점만', 'not-weak':'약점제외' };
-        const SORT_LABELS = { recent:'최근순', oldest:'오래된순', 'weak-score':'약점순', 'alpha-asc':'A→Z', 'alpha-desc':'Z→A' };
+        // [냐냐 PATCH-0배치] 정렬 3종 × 방향 2가지
+        //   등록순: recent(최근 먼저, 기본) ↔ oldest(오래된 먼저)
+        //   점수순: weak-score(낮은 점수 먼저, 기본) ↔ score-desc(높은 점수 먼저)
+        //   A→Z  : alpha-asc(a 먼저, 기본) ↔ alpha-desc(z 먼저)
+        const SORT_LABELS = { recent:'최근 등록순 ↓', oldest:'오래된 등록순 ↑', 'weak-score':'점수 낮은순 ↓', 'score-desc':'점수 높은순 ↑', 'alpha-asc':'A→Z ↓', 'alpha-desc':'Z→A ↑' };
+        const SORT_KEY_OF = { recent:'reg', oldest:'reg', 'weak-score':'score', 'score-desc':'score', 'alpha-asc':'alpha', 'alpha-desc':'alpha' };
+        const SORT_DEFAULT_OF = { reg:'recent', score:'weak-score', alpha:'alpha-asc' };  // 처음 누를 때의 기본 방향
+        const SORT_FLIP_OF = { recent:'oldest', oldest:'recent', 'weak-score':'score-desc', 'score-desc':'weak-score', 'alpha-asc':'alpha-desc', 'alpha-desc':'alpha-asc' };
+        const SORT_BTN_LABEL = { recent:'등록순 ↓', oldest:'등록순 ↑', 'weak-score':'점수순 ↓', 'score-desc':'점수순 ↑', 'alpha-asc':'A→Z', 'alpha-desc':'Z→A' };
 
         // 적용된 필터 상태 (localStorage에서 복원, 없으면 기본값)
         let activeFilterPos = [];          // 빈 배열 = 전체
@@ -1320,8 +1328,26 @@
             document.querySelectorAll('.filter-weak-btn').forEach(b => styleFilterPill(b, b === btn));
         }
         function setFilterSort(btn) {
-            pendingFilterSort = btn.dataset.sort;
-            document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b === btn));
+            const key = btn.dataset.sortkey;
+            // 이미 선택된 기준을 또 누르면 → 오름/내림 전환. 아니면 그 기준의 기본 방향으로.
+            if (SORT_KEY_OF[pendingFilterSort] === key) {
+                pendingFilterSort = SORT_FLIP_OF[pendingFilterSort];
+            } else {
+                pendingFilterSort = SORT_DEFAULT_OF[key];
+            }
+            renderSortButtons();
+        }
+        // 정렬 버튼 3개의 라벨(↓↑)과 활성 상태를 다시 그림
+        function renderSortButtons() {
+            const activeKey = SORT_KEY_OF[pendingFilterSort];
+            document.querySelectorAll('.filter-sort-btn').forEach(b => {
+                const key = b.dataset.sortkey;
+                const on = (key === activeKey);
+                b.innerText = on
+                    ? SORT_BTN_LABEL[pendingFilterSort]
+                    : (key === 'reg' ? '등록순' : (key === 'score' ? '점수순' : 'A→Z'));
+                styleFilterPill(b, on);
+            });
         }
         function styleFilterPill(btn, on) {
             if (on) {
@@ -1340,7 +1366,7 @@
             document.querySelectorAll('.filter-pos-btn').forEach(b => styleFilterPill(b, pendingFilterPos.includes(b.dataset.pos)));
             document.querySelectorAll('.filter-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.mastery === pendingFilterMastery));
             document.querySelectorAll('.filter-weak-btn').forEach(b => styleFilterPill(b, b.dataset.weak === pendingFilterWeak));
-            document.querySelectorAll('.filter-sort-btn').forEach(b => styleFilterPill(b, b.dataset.sort === pendingFilterSort));
+            renderSortButtons(); // [0배치] 정렬 버튼 3종 (방향 화살표 포함)
             updatePosAllBtnLabel();
         }
 
@@ -1500,6 +1526,9 @@
             } else if (sortMode === 'weak-score') {
                 // [냐냐 PATCH-0배치] 점수 낮은순(=약한 단어 먼저)
                 filteredSorted = [...filtered].sort((a, b) => getScore(a) - getScore(b));
+            } else if (sortMode === 'score-desc') {
+                // [냐냐 PATCH-0배치] 점수 높은순(=잘 아는 단어 먼저)
+                filteredSorted = [...filtered].sort((a, b) => getScore(b) - getScore(a));
             }
             // 'recent'는 등록 시 배열 맨 앞에 추가되므로(unshift) 별도 처리 없이 그대로 사용
 
@@ -1576,10 +1605,9 @@
 
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-4">
-                    <!-- [냐냐 PATCH-0배치] 통합 점수 배지 (우측 하단) -->
-                    <div class="absolute bottom-3 right-4 flex items-center gap-1.5 pointer-events-none select-none">
-                        <span class="text-[10px] font-bold text-slate-400">${gi.label}</span>
-                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg border ${gi.badge} shadow-sm" title="통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
+                    <!-- [냐냐 PATCH-0배치] 통합 점수 배지 (우측 하단, 숫자만) -->
+                    <div class="absolute bottom-2.5 right-3.5 pointer-events-none select-none">
+                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
                     </div>
                     <div class="space-y-4">
                         <div class="flex items-start justify-between gap-2">
@@ -1665,7 +1693,6 @@
 
                         <!-- 핵심만 정리된 노트 -->
                         ${w.notes ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
-                        <div class="h-3"></div><!-- 점수 배지 자리 확보 -->
                         </div>
                     </div>
                 </div>
