@@ -1920,27 +1920,15 @@
         let pendingFilterSort = 'weak-score';
 
         // [냐냐 PATCH] 필터/정렬 저장·복원 (localStorage)
+        // [냐냐 요청] 단어장 필터/정렬은 새로고침하면 초기 세팅으로 돌아가게 (저장하지 않음)
+        //   → 기본값을 바꾸고 싶으면 activeFilterPos/Mastery/Weak/Sort 초기값을 코드에서 수정하면 됨
         function saveFilterPrefs() {
-            try {
-                localStorage.setItem('nyanya_word_filters', JSON.stringify({
-                    pos: activeFilterPos, mastery: activeFilterMastery, weak: activeFilterWeak, sort: activeFilterSort
-                }));
-            } catch (e) {}
+            // 일부러 저장 안 함 (새로고침 시 초기화되도록)
         }
         function loadFilterPrefs() {
-            try {
-                const raw = localStorage.getItem('nyanya_word_filters');
-                if (!raw) return; // 첫 방문 = 기본값 유지
-                const f = JSON.parse(raw);
-                if (Array.isArray(f.pos)) activeFilterPos = f.pos;
-                if (f.mastery) activeFilterMastery = f.mastery;
-                if (f.weak) activeFilterWeak = f.weak;
-                if (f.sort) activeFilterSort = f.sort;
-                // 숨은 select도 동기화
-                const ms = document.getElementById('mastery-filter-select'); if (ms) ms.value = activeFilterMastery;
-                const ws = document.getElementById('weak-filter-select'); if (ws) ws.value = activeFilterWeak;
-                const ss = document.getElementById('sort-select'); if (ss) ss.value = activeFilterSort;
-            } catch (e) {}
+            // 예전에 저장해둔 필터가 남아 있으면 지워줌 (한 번만 정리)
+            try { localStorage.removeItem('nyanya_word_filters'); } catch (e) {}
+            // 아무것도 복원하지 않음 → 코드에 적힌 기본값 그대로 사용
         }
 
         // ============================================================
