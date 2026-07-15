@@ -563,6 +563,12 @@
 
             try {
                 const bare = raw.replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+                // 이 행이 유의어인지 반의어인지 + 원래(메인) 단어 파악
+                const typeSel = row.querySelector('[data-syn-field="type"]');
+                const isSynonym = !(typeSel && typeSel.value === 'antonym');
+                const mainWord = (document.getElementById('input-word') || {}).value || '';
+                const mainMeaning = (document.getElementById('input-meaning') || {}).value || '';
+
                 const schema = {
                     type: "OBJECT",
                     properties: {
@@ -570,11 +576,16 @@
                         meaning: { type: "STRING", description: "핵심 한글 뜻 (짧게)" },
                         pos: { type: "STRING", enum: ["noun","verb","adjective","adverb","preposition","conjunction","pronoun","interrogative","phrase"] },
                         gender: { type: "STRING", enum: ["none","masculine","feminine"], description: "명사일 때만. 아니면 none" },
-                        isPlural: { type: "BOOLEAN" }
+                        isPlural: { type: "BOOLEAN" },
+                        difference: { type: "STRING", description: isSynonym
+                            ? `유의어일 때만. "${mainWord}"와 이 단어의 차이. 반드시 형식: "${mainWord} : 설명 | ${bare} : 설명" (파이프로 구분, 콜론 뒤 명사형 짧은 설명). 서술형 금지`
+                            : "반의어면 빈 문자열" }
                     },
-                    required: ["correctedWord","meaning","pos","gender"]
+                    required: ["correctedWord","meaning","pos","gender","difference"]
                 };
-                const prompt = `스페인어 단어 "${bare}"의 정보를 JSON으로. 철자가 틀렸으면 correctedWord에 올바른 철자를 넣어줘. 뜻은 한국어로 짧게.`;
+                const prompt = isSynonym
+                    ? `스페인어 단어 "${mainWord}"(뜻: ${mainMeaning})의 유의어로 "${bare}"를 등록하려 해. "${bare}"의 정보를 JSON으로 채워줘. 철자 틀렸으면 correctedWord에 교정. 뜻은 한국어로 짧게. difference에는 두 단어의 차이를 "단어A : 설명 | 단어B : 설명" 형식으로.`
+                    : `스페인어 단어 "${bare}"의 정보를 JSON으로. 철자 틀렸으면 correctedWord에 교정. 뜻은 한국어로 짧게. difference는 빈 문자열.`;
                 const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
@@ -587,6 +598,9 @@
                 if (posSel && data.pos) posSel.value = data.pos;
                 if (genSel && data.gender) genSel.value = data.gender;
                 if (meanInp && data.meaning) meanInp.value = data.meaning;
+                // 차이 설명 채우기 (유의어만)
+                const diffInp = row.querySelector('[data-syn-field="difference"]');
+                if (diffInp && isSynonym && data.difference) diffInp.value = data.difference;
                 // 오타 교정된 단어 + 관사 반영
                 const fixed = (data.correctedWord || bare).trim();
                 if (wordInp) {
@@ -850,6 +864,7 @@
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
             - estudiante, artista, cantante처럼 남녀 형태가 같고 관사만 바뀌는 사람 명사는 isCommonGender=true, gender='none'으로 (앱이 el/la로 표시함).
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
+            - **의문사(qué, quién, dónde, cuándo, cómo, cuánto, por qué, cuál 등)와 의문사가 들어간 의문 구문은 품사를 무조건 pos="interrogative"(의문사)로 할 것.** 부사/대명사/구문으로 분류하지 말 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
             - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
             - adjMasculineBase: 형용사인데 입력이 여성형/복수형이면 사전 표제형인 남성 단수형을 여기에(관사 없이). 이미 남성 단수형이거나 성별로 안 변하는 형용사(feliz, azul 등)면 빈 문자열. 오타 교정(correctedSpelling)과는 별개로, 형태만 여성→남성으로 바꾸는 용도임.
@@ -1062,7 +1077,23 @@
             return false;
         }
 
+        // [냐냐 PATCH] 의문사는 AI가 부사/구문으로 줘도 무조건 '의문사(interrogative)' 품사로 강제
+        function coerceInterrogativePos(word, pos) {
+            // 앞뒤 물음표·느낌표·기호를 다 떼고 판단 (¿Dónde? → donde)
+            const w = String(word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[¿?¡!.,;:"'()]/g, '').trim();
+            const qWords = ['que','quien','quienes','donde','adonde','cuando','como','cuanto','cuanta','cuantos','cuantas','cual','cuales','por que','porque'];
+            const first = w.split(/\s+/)[0];
+            if (qWords.includes(w) || qWords.includes(first)) return 'interrogative';
+            return pos;
+        }
+
         function applyAutofillResult(result, forceOverwrite = false) {
+            // 의문사 보정
+            if (result && result.pos) {
+                const rawW = document.getElementById('input-word') ? document.getElementById('input-word').value : '';
+                result.pos = coerceInterrogativePos(rawW, result.pos);
+            }
             const wordVal = document.getElementById('input-word').value.trim();
             
             const meaningInput = document.getElementById('input-meaning');
