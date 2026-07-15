@@ -444,6 +444,16 @@
                                     </label>
                                 </div>
                             </div>
+
+                            <!-- [냐냐 PATCH] 문제 유형별 비율 슬라이더 -->
+                            <div class="space-y-2 pt-1">
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-xs font-bold text-slate-500">문제 유형 비율</label>
+                                    <button type="button" onclick="resetQuizMix()" class="text-[11px] font-bold text-violet-600 hover:text-violet-700">기본값</button>
+                                </div>
+                                <div id="quiz-mix-box" class="space-y-2.5 bg-slate-50 rounded-2xl p-3.5 border border-slate-200"></div>
+                                <p class="text-[11px] text-slate-400 font-semibold">단어(뜻) 문제는 나머지를 자동으로 채워요. 관용구·유의어가 없으면 그 비율은 무시돼요.</p>
+                            </div>
                         </div>
                         <button id="quiz-start-btn" onclick="startQuiz()" class="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-violet-100">시작하기</button>
                     </div>
