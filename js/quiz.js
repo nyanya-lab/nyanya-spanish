@@ -139,6 +139,55 @@ let quizSession = null;
             return out;
         }
 
+        // ============================================================
+        // [냐냐 PATCH] 문제 유형별 비율 (관용구 · 유의어). 나머지는 단어(뜻) 문제가 자동으로 채움
+        // ============================================================
+        const QUIZ_MIX_DEFAULT = { idiom: 20, synonym: 10 };
+        let quizMix = { ...QUIZ_MIX_DEFAULT };
+
+        function loadQuizMix() {
+            try { const r = localStorage.getItem('nyanya_quiz_mix'); if (r) quizMix = { ...QUIZ_MIX_DEFAULT, ...JSON.parse(r) }; } catch (e) {}
+        }
+        function saveQuizMix() {
+            try { localStorage.setItem('nyanya_quiz_mix', JSON.stringify(quizMix)); } catch (e) {}
+        }
+        function renderQuizMix() {
+            const box = document.getElementById('quiz-mix-box');
+            if (!box) return;
+            const rows = [
+                { key: 'idiom', label: '📘 관용구', color: 'accent-violet-600' },
+                { key: 'synonym', label: '🟰 유의어·반의어', color: 'accent-sky-600' }
+            ];
+            const wordPct = Math.max(0, 100 - (quizMix.idiom || 0) - (quizMix.synonym || 0));
+            box.innerHTML = rows.map(r => `
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-bold text-slate-600 w-28 shrink-0">${r.label}</span>
+                    <input type="range" min="0" max="60" step="5" value="${quizMix[r.key]}"
+                        oninput="setQuizMix('${r.key}', this.value)"
+                        class="flex-1 ${r.color}">
+                    <span class="text-xs font-black text-slate-700 w-10 text-right">${quizMix[r.key]}%</span>
+                </div>`).join('') + `
+                <div class="flex items-center gap-3 pt-1 border-t border-slate-200">
+                    <span class="text-xs font-bold text-slate-500 w-28 shrink-0">📝 단어(뜻) 문제</span>
+                    <div class="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div class="h-full bg-emerald-400" style="width:${wordPct}%"></div></div>
+                    <span class="text-xs font-black text-emerald-600 w-10 text-right">${wordPct}%</span>
+                </div>`;
+        }
+        function setQuizMix(key, val) {
+            let v = parseInt(val, 10) || 0;
+            // 관용구 + 유의어가 90%를 넘지 않게 (단어 문제 최소 10% 확보)
+            const other = key === 'idiom' ? (quizMix.synonym || 0) : (quizMix.idiom || 0);
+            if (v + other > 90) v = 90 - other;
+            quizMix[key] = v;
+            saveQuizMix();
+            renderQuizMix();
+        }
+        function resetQuizMix() {
+            quizMix = { ...QUIZ_MIX_DEFAULT };
+            saveQuizMix();
+            renderQuizMix();
+        }
+
         function startQuiz() {
             // [냐냐 PATCH] 오늘의 복습 전용 풀이 지정된 경우: 범위 무시하고 그 단어들로 진행
             let reviewablePool;
@@ -160,9 +209,11 @@ let quizSession = null;
 
                 // [냐냐 PATCH-0배치] 승급 대기 단어 = 통합 점수 3점 이상 + 아직 마스터 안 됨
                 const promotionWords = vocabulary.filter(w => !w.mastered && getScore(w) >= 3);
-                // 승급 대기 퀴즈는 5개 이상 있어야 열림
-                if (wantPromotion && promotionWords.length < 5) {
-                    showToast(`아직 승급할 단어가 5개 미만이에요! (현재 ${promotionWords.length}개) 퀴즈를 더 풀어서 마스터 점수를 쌓아보세요.`, "info");
+                // [냐냐 PATCH] 승급 대기 5개 제한은 "승급 대기만" 단독 선택했을 때만 적용
+                //   다른 범위도 같이 골랐으면 그쪽 단어로 채우면 되니까 막지 않음
+                const onlyPromotion = wantPromotion && !wantNotMastered && !wantMastered && !wantWeak;
+                if (onlyPromotion && promotionWords.length < 5) {
+                    showToast(`아직 승급할 단어가 5개 미만이에요! (현재 ${promotionWords.length}개) 다른 범위도 함께 선택하거나, 퀴즈를 더 풀어보세요.`, "info");
                     return;
                 }
 
@@ -199,15 +250,15 @@ let quizSession = null;
 
             // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 20%로 하되, 전체 개수는 선택한 수를 넘지 않음
             // 주관식만 모드에서는 관용구(객관식) 문제를 넣지 않음
+            // [냐냐 PATCH] 유형별 비율은 슬라이더(quizMix)에서 가져옴
             const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2 && selectedQuizFormat !== 'subjective';
-            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length) : 0;
+            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * (quizMix.idiom || 0) / 100), allIdioms.length) : 0;
 
-            // [냐냐 PATCH] 유의어 문제 몫(10%)도 count 안에서 미리 떼둠 → 총 개수가 절대 안 늘어남
             const synPoolSize = reviewablePool.filter(w =>
                 Array.isArray(w.synonyms) && w.synonyms.some(l => vocabulary.find(v => v.id === l.id))
             ).length;
             const synCount = (selectedQuizFormat !== 'subjective')
-                ? Math.min(Math.round(count * 0.10), synPoolSize)
+                ? Math.min(Math.round(count * (quizMix.synonym || 0) / 100), synPoolSize)
                 : 0;
 
             const wordCount = Math.max(0, count - idiomCount - synCount);
