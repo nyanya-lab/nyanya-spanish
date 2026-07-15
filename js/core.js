@@ -1387,7 +1387,7 @@ let vocabulary = [];
             render(groups.antonym, 'antonym');
             if (blocks.length === 0) return '';
             // [냐냐 PATCH] 유의어+반의어 두 박스 간격을 좁게 통일 (h-1.5 div 이중 간격 제거)
-            return `<div class="space-y-1.5">${blocks.join('')}</div>`;
+            return `<div class="space-y-2">${blocks.join('')}</div>`;
         }
 
         // 칩 클릭 → 그 단어로 이동 (단어장 탭 + 검색으로 콕 집어줌)
