@@ -107,8 +107,11 @@ let quizSession = null;
                     // 옛 형식이거나 파싱 실패 → 차이 문제는 건너뛰고 아래 일반 유의어 문제로
                 }
 
-                // 일반 유의어/반의어 문제
-                const pick = links[Math.floor(Math.random() * links.length)];
+                // 일반 유의어/반의어 문제 — 한 유형(유의어 or 반의어)을 골라 그 중 하나를 정답으로
+                const pickType = Math.random() < 0.5 ? 'synonym' : 'antonym';
+                let typed = links.filter(x => (x.link.type === 'antonym' ? 'antonym' : 'synonym') === pickType);
+                if (typed.length === 0) typed = links; // 그 유형이 없으면 아무거나
+                const pick = typed[Math.floor(Math.random() * typed.length)];
                 const kind = pick.link.type === 'antonym' ? 'antonym' : 'synonym';
                 const kindLabel = kind === 'antonym' ? '반의어' : '유의어';
 
@@ -264,8 +267,14 @@ let quizSession = null;
             const wordCount = Math.max(0, count - idiomCount - synCount);
 
             const questions = [];
-            // [냐냐 PATCH] 단어 문제 — 풀 앞쪽(승급 대기 우선)부터 중복 없이
-            const wordQueue = [...reviewablePool];
+            // [냐냐 PATCH] 단어 문제 — 승급대기 그룹을 우선하되, 각 그룹 "안에서는" 셔플해서 매번 다른 단어가 나오게
+            //   (예전엔 배열 앞쪽만 계속 뽑혀서 같은 단어가 반복되는 것처럼 보였음)
+            const shuffle = (arr) => { const a = [...arr]; for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; };
+            //   승급대기 = 통합점수 3점 이상 + 미마스터 (여기서 다시 계산 — 위 블록 스코프 밖이라)
+            const promoIdSet = new Set(vocabulary.filter(x => !x.mastered && getScore(x) >= 3).map(x => x.id));
+            const promo = shuffle(reviewablePool.filter(x => promoIdSet.has(x.id)));
+            const rest = shuffle(reviewablePool.filter(x => !promoIdSet.has(x.id)));
+            const wordQueue = [...promo, ...rest]; // 승급대기 먼저, 각 그룹은 셔플
             for (let i = 0; i < wordCount && i < wordQueue.length; i++) {
                 const w = wordQueue[i];
                 // [냐냐 PATCH] 문제 유형: 객관식만 / 주관식만 / 섞어서(약 30% 주관식)
