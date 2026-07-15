@@ -2161,7 +2161,7 @@
                     </div>
                     ${body}
                 </div>`;
-            }).filter(Boolean).join('<div class="h-1.5"></div>');
+            }).filter(Boolean).join('<div class="h-2"></div>');
         }
 
         function toggleFilterPos(btn) {
