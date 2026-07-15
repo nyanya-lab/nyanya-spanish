@@ -166,12 +166,14 @@ let quizSession = null;
                     return;
                 }
 
-                // 선택된 범위들의 합집합 (중복 제거)
+                // [냐냐 PATCH] 선택된 범위들의 합집합 (중복 제거)
+                //   ⭐ 우선순위: 승급 대기 > 약점 > 나머지
+                //      → 문제 수가 모자라면 승급 대기 단어부터 채워짐
                 const poolSet = new Map();
+                if (wantPromotion) promotionWords.forEach(w => poolSet.set(w.id, w));
+                if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
                 if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
                 if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
-                if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
-                if (wantPromotion) promotionWords.forEach(w => poolSet.set(w.id, w));
                 reviewablePool = [...poolSet.values()];
             }
 
@@ -179,8 +181,9 @@ let quizSession = null;
                 showToast("출제할 단어가 2개 이상 있어야 해요! 출제 범위를 바꿔보세요.", "error");
                 return;
             }
-            // 단어 수가 적으면 같은 단어가 반복 출제될 수 있음 (최대 단어 수의 4배까지만 허용)
-            const count = Math.min(selectedQuizCount, reviewablePool.length * 4);
+            // [냐냐 PATCH] 단어 하나당 문제 하나 (반복 출제 금지)
+            //   출제할 단어가 3개뿐이면 → 문제도 3개. 예전엔 같은 단어를 4번까지 재탕했음
+            const count = Math.min(selectedQuizCount, reviewablePool.length);
 
             // [냐냐 PATCH] 관용구 문제 풀 준비 (관용구는 객관식만)
             const allIdioms = [];
@@ -196,14 +199,24 @@ let quizSession = null;
 
             // [냐냐 PATCH] 관용구 문제 수는 전체 문제(count)의 약 20%로 하되, 전체 개수는 선택한 수를 넘지 않음
             // 주관식만 모드에서는 관용구(객관식) 문제를 넣지 않음
-            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2;
-            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length * 2) : 0;
-            const wordCount = count - idiomCount;
+            const canMakeIdiomQuiz = allIdioms.length >= 1 && allIdiomsGlobal.length >= 2 && selectedQuizFormat !== 'subjective';
+            const idiomCount = canMakeIdiomQuiz ? Math.min(Math.round(count * 0.20), allIdioms.length) : 0;
+
+            // [냐냐 PATCH] 유의어 문제 몫(10%)도 count 안에서 미리 떼둠 → 총 개수가 절대 안 늘어남
+            const synPoolSize = reviewablePool.filter(w =>
+                Array.isArray(w.synonyms) && w.synonyms.some(l => vocabulary.find(v => v.id === l.id))
+            ).length;
+            const synCount = (selectedQuizFormat !== 'subjective')
+                ? Math.min(Math.round(count * 0.10), synPoolSize)
+                : 0;
+
+            const wordCount = Math.max(0, count - idiomCount - synCount);
 
             const questions = [];
-            // 단어 문제
-            for (let i = 0; i < wordCount; i++) {
-                const w = reviewablePool[Math.floor(Math.random() * reviewablePool.length)];
+            // [냐냐 PATCH] 단어 문제 — 풀 앞쪽(승급 대기 우선)부터 중복 없이
+            const wordQueue = [...reviewablePool];
+            for (let i = 0; i < wordCount && i < wordQueue.length; i++) {
+                const w = wordQueue[i];
                 // [냐냐 PATCH] 문제 유형: 객관식만 / 주관식만 / 섞어서(약 30% 주관식)
                 let isSubjective;
                 if (selectedQuizFormat === 'mc') isSubjective = false;
@@ -327,13 +340,13 @@ let quizSession = null;
                 questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText, idiomData: target });
             }
 
-            // [냐냐 PATCH-4차] 유의어 묶음 문제 (유의어/반의어가 등록된 단어만 출제)
-            //   · 객관식이라서 '주관식만' 모드에선 출제하지 않음
-            //   · 전체 문제의 10% 정도만
-            if (selectedQuizFormat !== 'subjective') {
-                const synCount = Math.max(1, Math.round(count * 0.1));
+            // [냐냐 PATCH-4차] 유의어 묶음 문제 (위에서 count 안에 몫을 떼둔 만큼만)
+            if (synCount > 0) {
                 questions.push(...buildSynonymQuestions(reviewablePool, synCount));
             }
+
+            // 총 개수가 선택한 수를 절대 넘지 않게 마지막으로 한 번 더 자름
+            if (questions.length > count) questions.length = count;
 
             // 단어 문제 + 관용구 문제 + 유의어 문제 전체를 섞음
             questions.sort(() => Math.random() - 0.5);
