@@ -489,13 +489,14 @@
                         <option value="antonym" ${type === 'antonym' ? 'selected' : ''}>반의어</option>
                     </select>
                     <input type="text" data-syn-field="word" placeholder="단어" autocomplete="off" value="${esc(data.word)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <!-- [냐냐 PATCH] 품사 + 성별을 나란히 (뜻이 사이에 끼지 않게) -->
                     <select data-syn-field="pos" onchange="styleSynonymRow('${rowId}')" class="shrink-0 bg-white px-1.5 py-2 rounded-lg border border-slate-200 text-xs font-normal text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400">${posOpts}</select>
-                    <input type="text" data-syn-field="meaning" placeholder="뜻" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
-                    <select data-syn-field="gender" class="syn-gender-sel shrink-0 bg-white px-1.5 py-2 rounded-lg border border-slate-200 text-xs font-normal text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400">
-                        <option value="none" ${g === 'none' ? 'selected' : ''}>el/la</option>
-                        <option value="masculine" ${g === 'masculine' ? 'selected' : ''}>el</option>
-                        <option value="feminine" ${g === 'feminine' ? 'selected' : ''}>la</option>
+                    <select data-syn-field="gender" onchange="applySynonymArticle('${rowId}')" class="syn-gender-sel shrink-0 bg-white px-1.5 py-2 rounded-lg border border-slate-200 text-xs font-normal text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-400">
+                        <option value="none" ${g === 'none' ? 'selected' : ''}>m./f.</option>
+                        <option value="masculine" ${g === 'masculine' ? 'selected' : ''}>m.</option>
+                        <option value="feminine" ${g === 'feminine' ? 'selected' : ''}>f.</option>
                     </select>
+                    <input type="text" data-syn-field="meaning" placeholder="뜻" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
                     <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-8 h-8 shrink-0 rounded-lg bg-white hover:bg-rose-50 hover:text-rose-500 text-slate-400 border border-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
                 </div>
                 <!-- 2줄: 차이 설명 (유의어일 때만) -->
@@ -521,6 +522,7 @@
             const posSel = row.querySelector('[data-syn-field="pos"]');
             const genSel = row.querySelector('.syn-gender-sel');
             if (posSel && genSel) genSel.classList.toggle('hidden', posSel.value !== 'noun');
+            if (posSel && posSel.value === 'noun') applySynonymArticle(rowId); // 명사면 관사 붙이기
 
             // [냐냐 PATCH] 반의어는 반대말이라 '차이' 설명이 필요 없음 → 칸 숨기고 값도 비움
             const diffInput = row.querySelector('[data-syn-field="difference"]');
@@ -528,6 +530,20 @@
                 diffInput.classList.toggle('hidden', isAnt);
                 if (isAnt) diffInput.value = '';
             }
+        }
+
+        // [냐냐 PATCH] 명사 + 성별이 정해지면 단어 칸에 관사를 바로 붙여줌 (la casa / el libro / el/la estudiante)
+        function applySynonymArticle(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const posSel = row.querySelector('[data-syn-field="pos"]');
+            const genSel = row.querySelector('.syn-gender-sel');
+            const wordInp = row.querySelector('[data-syn-field="word"]');
+            if (!posSel || !genSel || !wordInp) return;
+            if (posSel.value !== 'noun') return;
+            const bare = wordInp.value.trim().replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+            if (!bare) return;
+            wordInp.value = buildNounDisplayForm(bare, genSel.value, /s$/i.test(bare), 'noun');
         }
 
         function clearSynonymRows() {
@@ -590,12 +606,12 @@
         }
 
         // 중복 판정: 단어 + 품사가 둘 다 같을 때만 같은 단어 (el poder 명사 ≠ poder 동사)
-        function findExistingWord(wordText, pos) {
+        function findExistingWord(wordText, pos, excludeId) {
             const norm = (t) => String(t || '').toLowerCase().trim()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
             const target = norm(wordText);
-            return vocabulary.find(w => norm(w.word) === target && w.pos === pos) || null;
+            return vocabulary.find(w => w.id !== excludeId && norm(w.word) === target && w.pos === pos) || null;
         }
 
         // ⭐ 유의어/반의어 저장 — 자동 등록 + 양방향 연결 + 삭제된 링크 정리
@@ -1076,7 +1092,8 @@
                 result.synonyms.forEach(item => {
                     const t = item.type === 'antonym' ? 'antonym' : 'synonym';
                     addSynonymRow({
-                        word: item.word,                 // 관사는 저장할 때 성별 보고 자동으로 붙임
+                        // [냐냐 PATCH] 명사면 관사를 바로 붙여서 보여줌 (la casa)
+                        word: buildNounDisplayForm(item.word, item.gender, item.isPlural, item.pos),
                         pos: item.pos || 'noun',
                         gender: item.gender || 'none',
                         meaning: item.meaning || '',
@@ -1379,10 +1396,11 @@
             </div>`;
         }
 
-        function openDupModal(oldWord, newSnapshot) {
+        function openDupModal(oldWord, newSnapshot, mergeFromId) {
             dupState = {
                 oldId: oldWord.id,
                 oldWord,
+                mergeFromId: mergeFromId || null, // 수정 중이던 단어 (합쳐진 뒤 삭제됨)
                 // 기존 단어 → 스냅샷 형태로 변환 (링크는 폼 행 형태로)
                 oldSnap: {
                     word: oldWord.word, meaning: oldWord.meaning, pos: oldWord.pos,
@@ -1449,6 +1467,30 @@
             const synResult = applySynonymLinks(target, chosen._synRows || []);
             if (synResult.newIds.length > 0) _synonymFillQueue = [...synResult.newIds];
 
+            // [냐냐 PATCH] 수정하다가 중복이 된 경우 → 두 단어를 하나로 합치고, 고치던 쪽은 삭제
+            //   점수는 더 높은 쪽, 정답/오답 횟수는 합산해서 보존
+            let mergedNote = '';
+            if (dupState.mergeFromId && dupState.mergeFromId !== target.id) {
+                const dying = vocabulary.find(v => v.id === dupState.mergeFromId);
+                if (dying) {
+                    target.score = clampScore(Math.max(getScore(target), getScore(dying)));
+                    target.correctTotal = (target.correctTotal || 0) + (dying.correctTotal || 0);
+                    target.wrongTotal = (target.wrongTotal || 0) + (dying.wrongTotal || 0);
+                    if (dying.subjectivePassed) target.subjectivePassed = true;
+                    syncWordFlags(target);
+
+                    // 사라지는 단어를 유의어로 걸어둔 곳에서 링크 제거
+                    vocabulary.forEach(other => {
+                        if (Array.isArray(other.synonyms)) {
+                            other.synonyms = other.synonyms.filter(l => l.id !== dying.id);
+                        }
+                    });
+                    vocabulary = vocabulary.filter(v => v.id !== dying.id);
+                    if (typeof logAction === 'function') logAction('undo-new-word'); // 단어 수 -1
+                    mergedNote = ' (중복 단어 2개를 하나로 합쳤어요)';
+                }
+            }
+
             closeDupModal();
             closeWordModal();
             logAction('snapshot');
@@ -1456,8 +1498,8 @@
             updateStats();
             saveToStorage();
             showToast(side === 'old'
-                ? `기존 "${target.word}" 를 남겼어요 (점수·기록 유지) ✅`
-                : `신규 내용으로 "${target.word}" 를 덮어썼어요 (점수·기록 유지) ✅`, "success");
+                ? `기존 "${target.word}" 를 남겼어요 (점수·기록 유지)${mergedNote} ✅`
+                : `신규 내용으로 "${target.word}" 를 덮어썼어요 (점수·기록 유지)${mergedNote} ✅`, "success");
 
             if (_synonymFillQueue.length > 0) setTimeout(() => processSynonymQueue(), 250);
         }
@@ -1473,13 +1515,15 @@
 
             const modalId = document.getElementById('modal-word-id').value;
 
-            // [냐냐 PATCH-3차] 새 단어 등록 시 "단어 + 품사"가 둘 다 같으면 → 반반 비교 편집창
-            //   (품사가 다르면 다른 단어로 취급: el poder(명사) vs poder(동사))
-            if (!modalId) {
+            // [냐냐 PATCH-3차] "단어 + 품사"가 둘 다 같으면 → 반반 비교 편집창
+            //   · 신규 등록뿐 아니라 [냐냐 PATCH] 수정할 때도 검사 (품사를 바꾸면 중복이 생길 수 있음)
+            //   · 자기 자신은 제외
+            {
                 const posVal = document.getElementById('input-pos').value;
-                const dup = findExistingWord(wordVal, posVal);
+                const dup = findExistingWord(wordVal, posVal, modalId || null);
                 if (dup) {
-                    openDupModal(dup, snapshotWordForm());
+                    // 수정 중이면: 지금 고치던 단어(modalId)는 합쳐진 뒤 사라짐
+                    openDupModal(dup, snapshotWordForm(), modalId || null);
                     return;
                 }
             }
@@ -2369,7 +2413,7 @@
                         ` : ''}
 
                         <!-- 핵심만 정리된 노트 -->
-                        ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/50 p-2.5 rounded-2xl border border-amber-200/50 text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
+                        ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/60 p-2.5 rounded-2xl text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                         ${isDisplayOn('synonyms') ? buildSynonymChipsHtml(w) : ''}
                         </div>
                     </div>
