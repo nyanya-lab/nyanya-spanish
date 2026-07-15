@@ -356,20 +356,23 @@ let vocabulary = [];
             const maleHints = ['jorge','pablo','diego','carlos','male','hombre','juan','miguel','raul','raúl','enrique','javier','male'];
             const isFemale = (v) => femaleHints.some(h => (v.name || '').toLowerCase().includes(h));
             const isMale = (v) => maleHints.some(h => (v.name || '').toLowerCase().includes(h));
-            // 1순위: 여성 이름 매칭 (es-ES 우선)
-            let pick = esVoices.find(v => (v.lang||'').toLowerCase() === 'es-es' && isFemale(v))
+            // 1순위: 여성 이름 매칭 (중남미 es-419/es-MX 포함, 그다음 es-ES)
+            let pick = esVoices.find(v => isFemale(v) && (v.lang||'').toLowerCase() === 'es-es')
                     || esVoices.find(v => isFemale(v));
-            // 2순위: 남성이 아닌 음성 (여성일 가능성)
-            if (!pick) pick = esVoices.find(v => (v.lang||'').toLowerCase() === 'es-es' && !isMale(v))
+            // 2순위: 남성으로 확인된 음성을 뺀 나머지 (여성일 확률 높음)
+            if (!pick) pick = esVoices.find(v => !isMale(v) && (v.lang||'').toLowerCase() === 'es-es')
                             || esVoices.find(v => !isMale(v));
             // 3순위: 그래도 없으면 es-ES 또는 첫 음성
             if (!pick) pick = esVoices.find(v => (v.lang || '').toLowerCase() === 'es-es') || esVoices[0];
+            // 음성 목록이 아직 안 불러와졌으면(0개) 캐시하지 않음 → 다음에 다시 시도
+            if (esVoices.length === 0) return null;
             _cachedEsVoice = pick;
             return pick;
         }
         // 음성 목록은 비동기로 로드되므로 로드되면 캐시 초기화
         if ('speechSynthesis' in window) {
             window.speechSynthesis.onvoiceschanged = () => { _cachedEsVoice = null; pickSpanishVoice(); };
+            try { window.speechSynthesis.getVoices(); } catch (e) {} // 미리 목록 로드 요청
         }
         function speakSpanishVoice(text, rate) {
             // [냐냐 PATCH-0배치] 전역 음소거 시 발음도 나가지 않음
@@ -382,7 +385,10 @@ let vocabulary = [];
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'es-ES';
             u.rate = rate || 0.9;
-            const voice = pickSpanishVoice();
+            u.pitch = 1.15; // [냐냐 요청] 살짝 높은 톤 = 더 여성적인 음색
+            let voice = pickSpanishVoice();
+            // 음성 목록이 아직 로드 안 됐으면 한 번 깨워서 다시 시도
+            if (!voice) { window.speechSynthesis.getVoices(); _cachedEsVoice = null; voice = pickSpanishVoice(); }
             if (voice) u.voice = voice;
             window.speechSynthesis.speak(u);
         }
