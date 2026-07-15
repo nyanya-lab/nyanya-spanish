@@ -457,9 +457,11 @@ let vocabulary = [];
         function calcStreak() {
             const dates = Object.keys(nyanyaDiary || {}).filter(d => {
                 const log = nyanyaDiary[d];
-                // 하루 총 활동(퀴즈 문제 + AI 첨삭 + 새 단어)이 5개 이상인 날만 "학습한 날"로 인정
+                // 하루 총 활동이 5개 이상인 날만 "학습한 날"로 인정
+                //   [냐냐 PATCH] 복습(reviewCount)·게임(gameCount)도 포함 — 안 세서 복습만 한 날이 streak에서 빠지던 버그
                 if (!log) return false;
-                const total = (log.quizTotal || 0) + (log.aiSessions || 0) + (log.newWordsCount || 0);
+                const total = (log.quizTotal || 0) + (log.aiSessions || 0) + (log.newWordsCount || 0)
+                            + (log.reviewCount || 0) + (log.gameCount || 0);
                 return total >= 5;
             }).sort(); // 오름차순
             if (dates.length === 0) return 0;
@@ -1383,7 +1385,9 @@ let vocabulary = [];
             };
             render(groups.synonym, 'synonym');
             render(groups.antonym, 'antonym');
-            return blocks.join('<div class="h-1.5"></div>');
+            if (blocks.length === 0) return '';
+            // [냐냐 PATCH] 유의어+반의어 두 박스 간격을 좁게 통일 (h-1.5 div 이중 간격 제거)
+            return `<div class="space-y-1.5">${blocks.join('')}</div>`;
         }
 
         // 칩 클릭 → 그 단어로 이동 (단어장 탭 + 검색으로 콕 집어줌)
