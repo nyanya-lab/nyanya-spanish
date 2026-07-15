@@ -2514,7 +2514,7 @@
                         </div>
 
                         <!-- 접히는 본문 -->
-                        <div class="word-card-body space-y-2 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">${expandedAll ? buildCardBody(w) : ''}</div>
+                        <div class="word-card-body space-y-2 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">${buildCardBody(w)}</div>
                     </div>
                 </div>
                 `;
@@ -2599,11 +2599,6 @@
             const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
-            // [냐냐 PATCH-성능] 처음 펼칠 때 본문이 비어있으면 그때 생성 (lazy)
-            if (!nowHidden && !body.innerHTML.trim()) {
-                const w = vocabulary.find(v => v.id === id);
-                if (w) body.innerHTML = buildCardBody(w);
-            }
             if (nowHidden) expandedCardIds.delete(id); else expandedCardIds.add(id);
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
             if (meaning) meaning.classList.toggle('hidden', !nowHidden);
@@ -2616,7 +2611,6 @@
                 const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
                 const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
                 if (!body) return;
-                if (!body.innerHTML.trim()) { const w = vocabulary.find(v => v.id === id); if (w) body.innerHTML = buildCardBody(w); }
                 body.classList.remove('hidden');
                 if (chevron) chevron.style.transform = 'rotate(90deg)';
                 if (meaning) meaning.classList.add('hidden');
@@ -2629,10 +2623,6 @@
             // [냐냐 PATCH] 개별 펼침 기억도 같이 갱신
             expandedCardIds.clear();
             if (expand) document.querySelectorAll('[data-card-body]').forEach(b => expandedCardIds.add(b.getAttribute('data-card-body')));
-            // [냐냐 PATCH-성능] 전체 펼칠 때 비어있는 본문을 채움
-            if (expand) document.querySelectorAll('[data-card-body]').forEach(b => {
-                if (!b.innerHTML.trim()) { const w = vocabulary.find(v => v.id === b.getAttribute('data-card-body')); if (w) b.innerHTML = buildCardBody(w); }
-            });
             document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
