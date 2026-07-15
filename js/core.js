@@ -35,6 +35,7 @@ let vocabulary = [];
             if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 상태 초기화/렌더
             if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
             if (typeof loadDisplayPrefs === 'function') loadDisplayPrefs(); // [냐냐 PATCH-6배치] 카드 표시 설정 복원
+            if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
             if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
             renderWordList();
@@ -1357,7 +1358,7 @@ let vocabulary = [];
                             ${rows.map(r => `
                             <div class="text-[12px] text-slate-500 font-normal leading-snug">
                                 <span class="${isAnt ? 'text-rose-300' : 'text-sky-300'} font-black">·</span>
-                                ${r.word ? `<b class="text-slate-700 font-semibold">${escapeHtml(r.word)}</b> : ` : ''}${escapeHtml(r.desc)}
+                                ${r.word ? `<b class="${isAnt ? 'text-rose-600' : 'text-sky-600'} font-semibold">${escapeHtml(r.word)}</b> : ` : ''}${escapeHtml(r.desc)}
                             </div>`).join('')}
                         </div>` : '';
                     return `
