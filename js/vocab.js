@@ -497,6 +497,7 @@
                         <option value="feminine" ${g === 'feminine' ? 'selected' : ''}>f.</option>
                     </select>
                     <input type="text" data-syn-field="meaning" placeholder="뜻" autocomplete="off" value="${esc(data.meaning)}" class="flex-1 min-w-0 bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <button type="button" onclick="autofillSynonymRow('${rowId}')" title="이 단어 AI로 채우기 (뜻·품사·오타검수)" class="w-8 h-8 shrink-0 rounded-lg bg-white hover:bg-violet-50 hover:text-violet-500 text-slate-400 border border-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
                     <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-8 h-8 shrink-0 rounded-lg bg-white hover:bg-rose-50 hover:text-rose-500 text-slate-400 border border-slate-200 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
                 </div>
                 <!-- 2줄: 차이 설명 (유의어일 때만) -->
@@ -544,6 +545,63 @@
             const bare = wordInp.value.trim().replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
             if (!bare) return;
             wordInp.value = buildNounDisplayForm(bare, genSel.value, /s$/i.test(bare), 'noun');
+        }
+
+        // [냐냐 PATCH] 유의어 행 하나만 AI로 채우기 (뜻·품사·성별 + 철자 오타 교정)
+        async function autofillSynonymRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const wordInp = row.querySelector('[data-syn-field="word"]');
+            const raw = wordInp ? wordInp.value.trim() : '';
+            if (!raw) { showToast("먼저 유의어/반의어 단어를 입력해주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+
+            const btn = row.querySelector('[onclick^="autofillSynonymRow"]');
+            const icon = btn ? btn.querySelector('i') : null;
+            const prevCls = icon ? icon.className : '';
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+
+            try {
+                const bare = raw.replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        correctedWord: { type: "STRING", description: "철자 오타가 있으면 교정한 올바른 스페인어 단어(관사 없이). 정상이면 그대로" },
+                        meaning: { type: "STRING", description: "핵심 한글 뜻 (짧게)" },
+                        pos: { type: "STRING", enum: ["noun","verb","adjective","adverb","preposition","conjunction","pronoun","interrogative","phrase"] },
+                        gender: { type: "STRING", enum: ["none","masculine","feminine"], description: "명사일 때만. 아니면 none" },
+                        isPlural: { type: "BOOLEAN" }
+                    },
+                    required: ["correctedWord","meaning","pos","gender"]
+                };
+                const prompt = `스페인어 단어 "${bare}"의 정보를 JSON으로. 철자가 틀렸으면 correctedWord에 올바른 철자를 넣어줘. 뜻은 한국어로 짧게.`;
+                const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
+                const res = await callGemini(prompt, sys, schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+
+                // 값 채우기
+                const posSel = row.querySelector('[data-syn-field="pos"]');
+                const genSel = row.querySelector('.syn-gender-sel');
+                const meanInp = row.querySelector('[data-syn-field="meaning"]');
+                if (posSel && data.pos) posSel.value = data.pos;
+                if (genSel && data.gender) genSel.value = data.gender;
+                if (meanInp && data.meaning) meanInp.value = data.meaning;
+                // 오타 교정된 단어 + 관사 반영
+                const fixed = (data.correctedWord || bare).trim();
+                if (wordInp) {
+                    wordInp.value = (data.pos === 'noun')
+                        ? buildNounDisplayForm(fixed, data.gender, data.isPlural, 'noun')
+                        : fixed;
+                }
+                styleSynonymRow(rowId); // 성별칸 표시/숨김 + 관사 재적용
+                const wasTypo = fixed.toLowerCase() !== bare.toLowerCase();
+                showToast(wasTypo ? `철자를 "${fixed}"로 고치고 정보를 채웠어요! ✨` : "AI가 정보를 채웠어요! ✨", "success");
+            } catch (e) {
+                showToast("AI 추천 중 문제가 생겼어요. 잠시 후 다시 시도해주세요", "error");
+            } finally {
+                if (icon) icon.className = prevCls || 'fa-solid fa-wand-magic-sparkles text-xs';
+            }
         }
 
         function clearSynonymRows() {
@@ -1707,6 +1765,12 @@
             const ii = document.getElementById('idiom-toggle-icon');
             if (ib) ib.classList.add('hidden');
             if (ii) ii.className = "fa-solid fa-plus text-xs";
+            // [냐냐 PATCH] 유의어/반의어 칸도 비움 (계속 등록 시 전 단어 유의어가 남던 버그)
+            clearSynonymRows();
+            const sb = document.getElementById('syn-fields-box');
+            const si = document.getElementById('syn-toggle-icon');
+            if (sb) sb.classList.add('hidden');
+            if (si) si.className = "fa-solid fa-plus text-xs";
             document.getElementById('input-notes').value = '· ';
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // [냐냐 PATCH] 다음 단어는 다시 AI 추천 후 저장
@@ -1894,6 +1958,8 @@
             tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
         };
         let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+        // [냐냐 PATCH] 설정 패널에서 편집 중인 임시 상태. [확인]을 눌러야 displayPrefs로 반영됨.
+        let pendingDisplay = null;
 
         function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
         function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
@@ -1921,65 +1987,83 @@
             if (!panel) return;
             const willOpen = panel.classList.contains('hidden');
             if (typeof closeFilterPanel === 'function') closeFilterPanel();
-            if (willOpen) { renderDisplayPanel(); panel.classList.remove('hidden'); }
-            else panel.classList.add('hidden');
+            if (willOpen) {
+                // 열 때 현재 설정을 임시본으로 복사 → 여기에 편집, [확인] 눌러야 반영
+                pendingDisplay = { sections: [...displayPrefs.sections], tenses: [...displayPrefs.tenses] };
+                renderDisplayPanel();
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+                pendingDisplay = null; // [확인] 없이 닫으면 편집 내용 버림
+            }
         }
         function closeDisplayPanel() {
             const panel = document.getElementById('display-panel');
             if (panel) panel.classList.add('hidden');
+            pendingDisplay = null;
         }
 
         function renderDisplayPanel() {
+            const p = pendingDisplay || displayPrefs; // 패널은 항상 '편집 중' 상태를 그림
             const secBox = document.getElementById('display-section-box');
             const tenseBox = document.getElementById('display-tense-box');
             if (secBox) {
                 secBox.innerHTML = DISPLAY_SECTIONS.map(sec => {
-                    const on = displayPrefs.sections.includes(sec.key);
+                    const on = p.sections.includes(sec.key);
                     const cls = on ? 'border-violet-500 bg-violet-50 text-violet-600' : 'border-slate-200 bg-slate-50 text-slate-500';
                     // [냐냐 PATCH] onclick 인라인 대신 data-속성 + 패널 위임 리스너 (렌더로 버튼 갈려도 안 깨짐)
                     return `<button type="button" data-disp-section="${sec.key}" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${sec.label}</button>`;
                 }).join('');
             }
             if (tenseBox) {
-                const conjOn = displayPrefs.sections.includes('conj');
+                const conjOn = p.sections.includes('conj');
                 tenseBox.innerHTML = TENSE_TYPE_OPTIONS.map(t => {
-                    const on = displayPrefs.tenses.includes(t.key) && conjOn;
+                    const on = p.tenses.includes(t.key) && conjOn;
                     const cls = !conjOn ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                               : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-500');
                     return `<button type="button" data-disp-tense="${t.key}" ${conjOn ? '' : 'disabled'} class="text-[11px] font-bold px-2 py-1 rounded-lg border transition-all ${cls}">${escapeHtml(t.label)}</button>`;
                 }).join('');
             }
             const allBtn = document.getElementById('display-all-btn');
-            if (allBtn) allBtn.innerText = (displayPrefs.sections.length === 0) ? '전부 선택' : '전부 해제';
+            if (allBtn) allBtn.innerText = (p.sections.length === 0) ? '전부 선택' : '전부 해제';
         }
 
         // [냐냐 PATCH] 패널 전체에 클릭 위임 — 버튼이 다시 그려져도 항상 동작
-        //   설정을 누르는 즉시 반영(저장 + 목록 갱신). 카드 펼침 상태는 유지.
+        //   ⭐ 편집은 pendingDisplay(임시본)에만 한다. 실제 반영은 [확인]에서.
         function _displayPanelClick(ev) {
             const t = ev.target.closest('[data-disp-section],[data-disp-tense],[data-disp-action]');
             if (!t) return;
             ev.stopPropagation();
+            if (!pendingDisplay) pendingDisplay = { sections: [...displayPrefs.sections], tenses: [...displayPrefs.tenses] };
+
             if (t.hasAttribute('data-disp-section')) {
                 const key = t.getAttribute('data-disp-section');
-                const i = displayPrefs.sections.indexOf(key);
-                if (i >= 0) displayPrefs.sections.splice(i, 1); else displayPrefs.sections.push(key);
+                const i = pendingDisplay.sections.indexOf(key);
+                if (i >= 0) pendingDisplay.sections.splice(i, 1); else pendingDisplay.sections.push(key);
             } else if (t.hasAttribute('data-disp-tense')) {
                 if (t.disabled) return;
                 const key = t.getAttribute('data-disp-tense');
-                const i = displayPrefs.tenses.indexOf(key);
-                if (i >= 0) displayPrefs.tenses.splice(i, 1); else displayPrefs.tenses.push(key);
+                const i = pendingDisplay.tenses.indexOf(key);
+                if (i >= 0) pendingDisplay.tenses.splice(i, 1); else pendingDisplay.tenses.push(key);
             } else if (t.getAttribute('data-disp-action') === 'all') {
-                if (displayPrefs.sections.length === 0) {
-                    displayPrefs.sections = [...DEFAULT_DISPLAY.sections];
-                    displayPrefs.tenses = [...DEFAULT_DISPLAY.tenses];
-                } else { displayPrefs.sections = []; }
+                if (pendingDisplay.sections.length === 0) {
+                    pendingDisplay.sections = [...DEFAULT_DISPLAY.sections];
+                    pendingDisplay.tenses = [...DEFAULT_DISPLAY.tenses];
+                } else { pendingDisplay.sections = []; }
             } else if (t.getAttribute('data-disp-action') === 'reset') {
-                displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+                pendingDisplay = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+            } else if (t.getAttribute('data-disp-action') === 'apply') {
+                // ⭐ [확인] — 이때 비로소 실제 반영 + 저장. 카드 펼침 상태 유지.
+                if (pendingDisplay) {
+                    displayPrefs = { sections: [...pendingDisplay.sections], tenses: [...pendingDisplay.tenses] };
+                    saveDisplayPrefs();
+                }
+                closeDisplayPanel();
+                renderWordList();
+                if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
+                return;
             }
-            saveDisplayPrefs();
-            renderDisplayPanel();
-            renderWordList();
-            if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
+            renderDisplayPanel(); // 임시본 기준으로 패널만 다시 그림 (목록은 안 건드림)
         }
         // 패널에 리스너 한 번만 부착
         (function attachDisplayPanelListener() {
@@ -1992,12 +2076,12 @@
             setTimeout(bind, 500); // 안전망
         })();
 
-        // 예전 이름 호환 (혹시 다른 곳에서 부를 경우)
+        // 예전 이름 호환
         function toggleDisplaySection(key){ const b=document.querySelector('[data-disp-section="'+key+'"]'); if(b) b.click(); }
         function toggleDisplayTense(key){ const b=document.querySelector('[data-disp-tense="'+key+'"]'); if(b) b.click(); }
-        function toggleAllDisplay(){ _displayPanelClick({target:{closest:()=>({getAttribute:()=> 'all', hasAttribute:()=>false})}, stopPropagation(){}}); }
-        function resetDisplayPrefs(){ _displayPanelClick({target:{closest:()=>({getAttribute:()=> 'reset', hasAttribute:()=>false})}, stopPropagation(){}}); }
-        function applyDisplayPrefs(){ closeDisplayPanel(); } // 즉시 적용 방식이라 '확인'은 그냥 닫기
+        function toggleAllDisplay(){ const b=document.querySelector('[data-disp-action="all"]'); if(b) b.click(); }
+        function resetDisplayPrefs(){ const b=document.querySelector('[data-disp-action="reset"]'); if(b) b.click(); }
+        function applyDisplayPrefs(){ const b=document.querySelector('[data-disp-action="apply"]'); if(b) b.click(); else closeDisplayPanel(); }
 
         // [냐냐 PATCH-6배치] 카드 안의 동사 변형표 — 등록된 시제 중 "설정에서 켠 시제"만 전부 표시
         function buildCardConjHtml(w) {
