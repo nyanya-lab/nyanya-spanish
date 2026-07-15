@@ -2298,11 +2298,14 @@
             if (willOpen) syncFilterPanelUI();
         }
 
+        // [냐냐 PATCH-성능] 검색은 타이핑 멈추고 200ms 뒤에 한 번만 렌더 (글자마다 750개 다시 그리던 것 방지)
+        let _searchDebounceTimer = null;
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
             if (val.trim()) todayWrongFilterActive = false;
-            renderWordList();
+            if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
+            _searchDebounceTimer = setTimeout(() => { renderWordList(); }, 200);
         }
 
         function clearSearch() {
@@ -2511,7 +2514,41 @@
                         </div>
 
                         <!-- 접히는 본문 -->
-                        <div class="word-card-body space-y-2 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">
+                        <div class="word-card-body space-y-2 ${expandedAll ? '' : 'hidden'}" data-card-body="${w.id}">${expandedAll ? buildCardBody(w) : ''}</div>
+                    </div>
+                </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+            // 펼침 상태에 따라 chevron 회전 동기화
+            if (expandedAll) {
+                document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
+            }
+        }
+
+        // [냐냐 PATCH] 전체 접기/펼치기 버튼 토글
+        function toggleExpandAllBtn() {
+            const btn = document.getElementById('expand-all-btn');
+            const willExpand = !wordListExpandedAll;
+            setAllWordCards(willExpand);
+            if (btn) {
+                // [냐냐 PATCH-6배치] 아이콘만 남겨서 span이 없음 → 툴팁(title)과 아이콘만 바꿔줌
+                btn.title = willExpand ? '전체 접기' : '전체 펼치기';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center';
+            }
+        }
+
+        // [냐냐 PATCH] 단어 카드 하나 접기/펼치기
+        // [냐냐 PATCH] 어떤 카드가 펼쳐져 있는지 기억 (설정 바꿔서 다시 그려도 유지)
+        const expandedCardIds = new Set();
+
+        // [냐냐 PATCH-성능] 카드 본문 HTML을 따로 생성 — 접힌 카드는 본문을 아예 안 만들고,
+        //   펼칠 때(toggleWordCard) 그때 채운다 → 750개 카드도 처음엔 헤더만 그려서 훨씬 가벼움
+        function buildCardBody(w) {
+            const isVerb = w.pos === 'verb';
+            return `
                         <!-- Meaning section -->
                         <div class="space-y-1">
                             <p class="text-sm font-bold text-slate-500 flex items-center gap-1.5">
@@ -2553,35 +2590,8 @@
                         <!-- 핵심만 정리된 노트 -->
                         ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/60 p-2.5 rounded-2xl text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                         ${isDisplayOn('synonyms') ? buildSynonymChipsHtml(w) : ''}
-                        </div>
-                    </div>
-                </div>
-                `;
-            });
-
-            grid.innerHTML = html;
-            // 펼침 상태에 따라 chevron 회전 동기화
-            if (expandedAll) {
-                document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
-            }
+                        `;
         }
-
-        // [냐냐 PATCH] 전체 접기/펼치기 버튼 토글
-        function toggleExpandAllBtn() {
-            const btn = document.getElementById('expand-all-btn');
-            const willExpand = !wordListExpandedAll;
-            setAllWordCards(willExpand);
-            if (btn) {
-                // [냐냐 PATCH-6배치] 아이콘만 남겨서 span이 없음 → 툴팁(title)과 아이콘만 바꿔줌
-                btn.title = willExpand ? '전체 접기' : '전체 펼치기';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = willExpand ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center';
-            }
-        }
-
-        // [냐냐 PATCH] 단어 카드 하나 접기/펼치기
-        // [냐냐 PATCH] 어떤 카드가 펼쳐져 있는지 기억 (설정 바꿔서 다시 그려도 유지)
-        const expandedCardIds = new Set();
 
         function toggleWordCard(id) {
             const body = document.querySelector(`[data-card-body="${id}"]`);
@@ -2589,9 +2599,13 @@
             const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
+            // [냐냐 PATCH-성능] 처음 펼칠 때 본문이 비어있으면 그때 생성 (lazy)
+            if (!nowHidden && !body.innerHTML.trim()) {
+                const w = vocabulary.find(v => v.id === id);
+                if (w) body.innerHTML = buildCardBody(w);
+            }
             if (nowHidden) expandedCardIds.delete(id); else expandedCardIds.add(id);
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
-            // [냐냐 PATCH] 접혔을 때만 헤더에 뜻 표시 (펼치면 본문에 뜻이 있으니 숨김)
             if (meaning) meaning.classList.toggle('hidden', !nowHidden);
         }
 
@@ -2602,6 +2616,7 @@
                 const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
                 const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
                 if (!body) return;
+                if (!body.innerHTML.trim()) { const w = vocabulary.find(v => v.id === id); if (w) body.innerHTML = buildCardBody(w); }
                 body.classList.remove('hidden');
                 if (chevron) chevron.style.transform = 'rotate(90deg)';
                 if (meaning) meaning.classList.add('hidden');
@@ -2614,6 +2629,10 @@
             // [냐냐 PATCH] 개별 펼침 기억도 같이 갱신
             expandedCardIds.clear();
             if (expand) document.querySelectorAll('[data-card-body]').forEach(b => expandedCardIds.add(b.getAttribute('data-card-body')));
+            // [냐냐 PATCH-성능] 전체 펼칠 때 비어있는 본문을 채움
+            if (expand) document.querySelectorAll('[data-card-body]').forEach(b => {
+                if (!b.innerHTML.trim()) { const w = vocabulary.find(v => v.id === b.getAttribute('data-card-body')); if (w) b.innerHTML = buildCardBody(w); }
+            });
             document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
