@@ -1603,13 +1603,16 @@
                     wordObj.wrongTotal = prev.wrongTotal || 0;
                     if (prev.lastWrongDate) wordObj.lastWrongDate = prev.lastWrongDate;
                     wordObj.synonyms = Array.isArray(prev.synonyms) ? prev.synonyms : [];
-                    // [냐냐 PATCH] 수정한 단어를 맨 앞으로 (최근순에서 바로 보이게)
-                    vocabulary.splice(index, 1);
-                    vocabulary.unshift(wordObj);
+                    // [냐냐 PATCH] 등록순 유지 — 수정해도 배열 위치를 그대로 둠 (맨 앞으로 안 올림)
+                    //   등록일(createdAt)은 보존, 수정일(updatedAt)만 갱신 (정렬엔 안 쓰지만 데이터로 남김)
+                    wordObj.createdAt = prev.createdAt || prev.registeredAt || null;
+                    wordObj.updatedAt = Date.now();
+                    vocabulary[index] = wordObj; // 제자리 교체
                     showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
                 }
                 logAction('snapshot');
             } else {
+                wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
                 vocabulary.unshift(wordObj);
                 showToast("새 단어가 등록되었습니다! 📚", "success");
                 logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
@@ -1891,18 +1894,13 @@
             tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
         };
         let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
-        // [냐냐 PATCH] 설정 패널에서 편집 중인 임시 상태 ([확인] 눌러야 displayPrefs로 반영)
-        //   ⚠️ 반드시 사용처보다 위에서 선언해야 함 (아래에 두면 패널 열 때 접근 불가 → 내부 버튼이 안 먹혔음)
-        let pendingDisplay = null;
 
         function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
         function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
-
         function isDisplayDefault() {
             return displayPrefs.sections.length === DEFAULT_DISPLAY.sections.length
                 && displayPrefs.tenses.length === DEFAULT_DISPLAY.tenses.length;
         }
-
         function saveDisplayPrefs() {
             try { localStorage.setItem('nyanya_word_display', JSON.stringify(displayPrefs)); } catch (e) {}
         }
@@ -1917,86 +1915,89 @@
             } catch (e) {}
         }
 
-        function toggleDisplayPanel() {
+        function toggleDisplayPanel(ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
             const panel = document.getElementById('display-panel');
             if (!panel) return;
             const willOpen = panel.classList.contains('hidden');
-            closeFilterPanel();
-            panel.classList.toggle('hidden');
-            if (willOpen) {
-                pendingDisplay = { sections: [...displayPrefs.sections], tenses: [...displayPrefs.tenses] };
-                renderDisplayPanel();
-            }
+            if (typeof closeFilterPanel === 'function') closeFilterPanel();
+            if (willOpen) { renderDisplayPanel(); panel.classList.remove('hidden'); }
+            else panel.classList.add('hidden');
         }
         function closeDisplayPanel() {
             const panel = document.getElementById('display-panel');
             if (panel) panel.classList.add('hidden');
-            pendingDisplay = null;
         }
 
         function renderDisplayPanel() {
-            const p = pendingDisplay || displayPrefs;
             const secBox = document.getElementById('display-section-box');
             const tenseBox = document.getElementById('display-tense-box');
             if (secBox) {
-                secBox.innerHTML = DISPLAY_SECTIONS.map(s => {
-                    const on = p.sections.includes(s.key);
+                secBox.innerHTML = DISPLAY_SECTIONS.map(sec => {
+                    const on = displayPrefs.sections.includes(sec.key);
                     const cls = on ? 'border-violet-500 bg-violet-50 text-violet-600' : 'border-slate-200 bg-slate-50 text-slate-500';
-                    return `<button type="button" onclick="toggleDisplaySection('${s.key}')" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${s.label}</button>`;
+                    // [냐냐 PATCH] onclick 인라인 대신 data-속성 + 패널 위임 리스너 (렌더로 버튼 갈려도 안 깨짐)
+                    return `<button type="button" data-disp-section="${sec.key}" class="text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${cls}">${sec.label}</button>`;
                 }).join('');
             }
             if (tenseBox) {
-                const conjOn = p.sections.includes('conj');
+                const conjOn = displayPrefs.sections.includes('conj');
                 tenseBox.innerHTML = TENSE_TYPE_OPTIONS.map(t => {
-                    const on = p.tenses.includes(t.key) && conjOn;
+                    const on = displayPrefs.tenses.includes(t.key) && conjOn;
                     const cls = !conjOn ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                               : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-500');
-                    return `<button type="button" ${conjOn ? '' : 'disabled'} onclick="toggleDisplayTense('${t.key}')" class="text-[11px] font-bold px-2 py-1 rounded-lg border transition-all ${cls}">${escapeHtml(t.label)}</button>`;
+                    return `<button type="button" data-disp-tense="${t.key}" ${conjOn ? '' : 'disabled'} class="text-[11px] font-bold px-2 py-1 rounded-lg border transition-all ${cls}">${escapeHtml(t.label)}</button>`;
                 }).join('');
             }
             const allBtn = document.getElementById('display-all-btn');
-            if (allBtn) allBtn.innerText = (p.sections.length === 0) ? '전부 선택' : '전부 해제';
+            if (allBtn) allBtn.innerText = (displayPrefs.sections.length === 0) ? '전부 선택' : '전부 해제';
         }
 
-        function toggleDisplaySection(key) {
-            if (!pendingDisplay) return;
-            const i = pendingDisplay.sections.indexOf(key);
-            if (i >= 0) pendingDisplay.sections.splice(i, 1);
-            else pendingDisplay.sections.push(key);
-            renderDisplayPanel();
-        }
-        function toggleDisplayTense(key) {
-            if (!pendingDisplay) return;
-            const i = pendingDisplay.tenses.indexOf(key);
-            if (i >= 0) pendingDisplay.tenses.splice(i, 1);
-            else pendingDisplay.tenses.push(key);
-            renderDisplayPanel();
-        }
-        function toggleAllDisplay() {
-            if (!pendingDisplay) return;
-            if (pendingDisplay.sections.length === 0) {
-                pendingDisplay.sections = [...DEFAULT_DISPLAY.sections];
-                pendingDisplay.tenses = [...DEFAULT_DISPLAY.tenses];
-            } else {
-                pendingDisplay.sections = [];
+        // [냐냐 PATCH] 패널 전체에 클릭 위임 — 버튼이 다시 그려져도 항상 동작
+        //   설정을 누르는 즉시 반영(저장 + 목록 갱신). 카드 펼침 상태는 유지.
+        function _displayPanelClick(ev) {
+            const t = ev.target.closest('[data-disp-section],[data-disp-tense],[data-disp-action]');
+            if (!t) return;
+            ev.stopPropagation();
+            if (t.hasAttribute('data-disp-section')) {
+                const key = t.getAttribute('data-disp-section');
+                const i = displayPrefs.sections.indexOf(key);
+                if (i >= 0) displayPrefs.sections.splice(i, 1); else displayPrefs.sections.push(key);
+            } else if (t.hasAttribute('data-disp-tense')) {
+                if (t.disabled) return;
+                const key = t.getAttribute('data-disp-tense');
+                const i = displayPrefs.tenses.indexOf(key);
+                if (i >= 0) displayPrefs.tenses.splice(i, 1); else displayPrefs.tenses.push(key);
+            } else if (t.getAttribute('data-disp-action') === 'all') {
+                if (displayPrefs.sections.length === 0) {
+                    displayPrefs.sections = [...DEFAULT_DISPLAY.sections];
+                    displayPrefs.tenses = [...DEFAULT_DISPLAY.tenses];
+                } else { displayPrefs.sections = []; }
+            } else if (t.getAttribute('data-disp-action') === 'reset') {
+                displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
             }
+            saveDisplayPrefs();
             renderDisplayPanel();
-        }
-        function resetDisplayPrefs() {
-            pendingDisplay = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
-            renderDisplayPanel();
-        }
-
-        // [확인] — 이때 비로소 적용 + 저장. 카드 펼침 상태는 유지됨
-        function applyDisplayPrefs() {
-            if (pendingDisplay) {
-                displayPrefs = { sections: [...pendingDisplay.sections], tenses: [...pendingDisplay.tenses] };
-                saveDisplayPrefs();
-            }
-            closeDisplayPanel();
             renderWordList();
             if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
         }
+        // 패널에 리스너 한 번만 부착
+        (function attachDisplayPanelListener() {
+            function bind() {
+                const panel = document.getElementById('display-panel');
+                if (panel && !panel._dispBound) { panel.addEventListener('click', _displayPanelClick); panel._dispBound = true; }
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+            else bind();
+            setTimeout(bind, 500); // 안전망
+        })();
+
+        // 예전 이름 호환 (혹시 다른 곳에서 부를 경우)
+        function toggleDisplaySection(key){ const b=document.querySelector('[data-disp-section="'+key+'"]'); if(b) b.click(); }
+        function toggleDisplayTense(key){ const b=document.querySelector('[data-disp-tense="'+key+'"]'); if(b) b.click(); }
+        function toggleAllDisplay(){ _displayPanelClick({target:{closest:()=>({getAttribute:()=> 'all', hasAttribute:()=>false})}, stopPropagation(){}}); }
+        function resetDisplayPrefs(){ _displayPanelClick({target:{closest:()=>({getAttribute:()=> 'reset', hasAttribute:()=>false})}, stopPropagation(){}}); }
+        function applyDisplayPrefs(){ closeDisplayPanel(); } // 즉시 적용 방식이라 '확인'은 그냥 닫기
 
         // [냐냐 PATCH-6배치] 카드 안의 동사 변형표 — 등록된 시제 중 "설정에서 켠 시제"만 전부 표시
         function buildCardConjHtml(w) {
