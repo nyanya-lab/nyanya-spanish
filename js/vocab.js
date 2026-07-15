@@ -679,16 +679,19 @@
 
         // [냐냐 PATCH-5배치] 자동 등록된 단어들의 상세정보를 차례로 채우기 (한 번에 한 창씩)
         let _synonymFillQueue = [];
+        let _inSynonymFill = false; // 유의어 자동채우기 진행 중 표시 (저장 흐름 분기용)
         function processSynonymQueue() {
-            if (!_synonymFillQueue || _synonymFillQueue.length === 0) return;
+            if (!_synonymFillQueue || _synonymFillQueue.length === 0) { _inSynonymFill = false; return; }
             const nextId = _synonymFillQueue.shift();
             const w = vocabulary.find(v => v.id === nextId);
             if (!w) { processSynonymQueue(); return; }
+            _inSynonymFill = true;
+            // openWordModal이 이 단어의 저장된 유의어 링크(원래 단어 포함)를 폼에 복원해줌
             openWordModal(nextId);
-            _skipContinueRegisterPrompt = true; // '계속 등록?' 팝업 없이
+            // 자동완성은 "빈 칸만" 채우도록(forceOverwrite=false) → 이미 걸려있는 유의어 링크를 지우지 않음
             setTimeout(() => {
-                if (typeof triggerAiAutofill === 'function') triggerAiAutofill(); // AI 자동완성 자동 실행
-            }, 250);
+                if (typeof triggerAiAutofill === 'function') triggerAiAutofill(false);
+            }, 300);
         }
 
         function clearConjugationFields() {
@@ -761,7 +764,7 @@
         }
 
         // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
-        async function triggerAiAutofill() {
+        async function triggerAiAutofill(force = true) {
             const rawWord = document.getElementById('input-word').value.trim();
             if (!rawWord) {
                 showToast("단어 입력창에 스페인어 단어를 먼저 적어주세요!", "error");
@@ -905,7 +908,7 @@
                         () => {
                             // 수정: 교정된 철자로 단어칸 교체 후 적용
                             document.getElementById('input-word').value = corrected;
-                            applyAutofillResult(result, true);
+                            applyAutofillResult(result, force);
                             saveAiWordCache(corrected, result);
                             AudioFX.playSuccess();
                             showToast(`"${corrected}"(으)로 고쳐서 적용했어요 ✨`, "success");
@@ -916,7 +919,7 @@
                             okStyle: 'primary',
                             onCancel: () => {
                                 // 취소: 입력한 철자 그대로 정보만 적용
-                                applyAutofillResult(result, true);
+                                applyAutofillResult(result, force);
                                 saveAiWordCache(rawWord, result);
                                 showToast("입력한 철자 그대로 정보를 적용했어요", "info");
                             }
@@ -928,7 +931,7 @@
                         `형용사는 보통 사전형인 남성 단수형으로 등록해요. 입력하신 "${rawWord}"는 여성형/복수형 같아서, 남성형 "${mascBase}"(으)로 바꿔서 등록할지 여쭤봐요. (그대로를 누르면 입력한 형태로 둡니다)`,
                         () => {
                             document.getElementById('input-word').value = mascBase;
-                            applyAutofillResult(result, true);
+                            applyAutofillResult(result, force);
                             saveAiWordCache(mascBase, result);
                             AudioFX.playSuccess();
                             showToast(`남성형 "${mascBase}"(으)로 바꿔서 적용했어요 ✨`, "success");
@@ -938,7 +941,7 @@
                             cancelLabel: '그대로',
                             okStyle: 'primary',
                             onCancel: () => {
-                                applyAutofillResult(result, true);
+                                applyAutofillResult(result, force);
                                 saveAiWordCache(rawWord, result);
                                 AudioFX.playSuccess();
                                 showToast("입력하신 형태 그대로 적용했어요 ✨", "info");
@@ -946,7 +949,7 @@
                         }
                     );
                 } else {
-                    applyAutofillResult(result, true); // AI 추천 클릭 시 강제 덮어쓰기 허용 (true)
+                    applyAutofillResult(result, force); // 기본 true(덮어쓰기), 유의어 자동채우기에선 false
                     saveAiWordCache(rawWord, result); // [PATCH-속도개선] 다음 조회를 위해 캐시 저장
                     AudioFX.playSuccess();
                     showToast("Gemini AI 분석 완료! 추천 정보를 적용했어요 ✨", "success");
@@ -1087,7 +1090,9 @@
             }
 
             // [냐냐 PATCH-5배치] AI가 유의어/반의어를 찾아줬으면 자동으로 채우고 섹션을 펼침
-            if (result.synonyms && result.synonyms.length > 0) {
+            //   ⚠️ 이미 유의어 행이 있으면(=원래 단어와의 링크 등) 건드리지 않음 (양방향 링크 보존)
+            const synBoxHasRows = document.querySelectorAll('#syn-entries-box > div').length > 0;
+            if (result.synonyms && result.synonyms.length > 0 && !synBoxHasRows) {
                 clearSynonymRows();
                 result.synonyms.forEach(item => {
                     const t = item.type === 'antonym' ? 'antonym' : 'synonym';
@@ -1623,22 +1628,35 @@
             updateStats();
             if (typeof refreshBreakdownRegisterButtons === 'function') refreshBreakdownRegisterButtons();
 
-            // [냐냐 PATCH] 유의어 때문에 자동 등록된 단어가 있으면
-            //   → '계속 등록?' 확인창 없이 바로 유의어 상세 채우기 창으로 넘어감
-            const autoCount = synResult.newIds.length;
-            if (autoCount > 0) {
+            // [냐냐 PATCH] 지금 저장한 게 '유의어 자동채우기 큐'로 열린 단어라면
+            //   → 팝업 없이 조용히 다음 큐로 넘어감 (또는 큐 끝이면 마무리)
+            if (_inSynonymFill) {
                 closeWordModal();
-                showToast(`유의어 ${autoCount}개를 자동 등록했어요! 차례로 채워볼게요 📚`, "success");
-                setTimeout(() => processSynonymQueue(), 250);
+                if (_synonymFillQueue.length > 0) {
+                    setTimeout(() => processSynonymQueue(), 250);
+                } else {
+                    _inSynonymFill = false;
+                    showToast("유의어 단어 정보를 다 채웠어요! ✨", "success");
+                }
                 return;
             }
 
-            // 유의어 상세 채우기 큐가 남아있으면 → 다음 단어 창으로
-            if (modalId && _synonymFillQueue.length > 0) {
-                _skipContinueRegisterPrompt = false;
-                showToast("저장했어요! 다음 단어로 넘어갈게요 ✏️", "success");
+            // [냐냐 PATCH] 이번 저장으로 유의어가 자동 등록됐으면 → 상세정보 채울지 물어봄
+            const autoCount = synResult.newIds.length;
+            if (autoCount > 0) {
                 closeWordModal();
-                setTimeout(() => processSynonymQueue(), 200);
+                showConfirm(
+                    `유의어 ${autoCount}개를 자동 등록했어요! 📚`,
+                    `방금 등록한 ${autoCount}개 단어에 자세한 정보(뜻·예문 등)를 지금 채울까요? 한 창씩 차례로 열려요.`,
+                    () => { _synonymFillQueue = [...synResult.newIds]; processSynonymQueue(); },
+                    {
+                        okLabel: '네, 채울게요',
+                        cancelLabel: '나중에',
+                        okStyle: 'primary',
+                        icon: 'happy',
+                        onCancel: () => { _synonymFillQueue = []; }
+                    }
+                );
                 return;
             }
 
@@ -1873,6 +1891,9 @@
             tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
         };
         let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
+        // [냐냐 PATCH] 설정 패널에서 편집 중인 임시 상태 ([확인] 눌러야 displayPrefs로 반영)
+        //   ⚠️ 반드시 사용처보다 위에서 선언해야 함 (아래에 두면 패널 열 때 접근 불가 → 내부 버튼이 안 먹혔음)
+        let pendingDisplay = null;
 
         function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
         function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
@@ -1936,9 +1957,6 @@
             const allBtn = document.getElementById('display-all-btn');
             if (allBtn) allBtn.innerText = (p.sections.length === 0) ? '전부 선택' : '전부 해제';
         }
-
-        // [냐냐 PATCH] 누르는 즉시 적용하지 않고, [확인]을 눌러야 반영됨 (필터 패널과 동일한 방식)
-        let pendingDisplay = null;
 
         function toggleDisplaySection(key) {
             if (!pendingDisplay) return;
