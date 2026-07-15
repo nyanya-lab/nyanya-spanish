@@ -1082,9 +1082,12 @@
             // 앞뒤 물음표·느낌표·기호를 다 떼고 판단 (¿Dónde? → donde)
             const w = String(word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                 .replace(/[¿?¡!.,;:"'()]/g, '').trim();
-            const qWords = ['que','quien','quienes','donde','adonde','cuando','como','cuanto','cuanta','cuantos','cuantas','cual','cuales','por que','porque'];
-            const first = w.split(/\s+/)[0];
-            if (qWords.includes(w) || qWords.includes(first)) return 'interrogative';
+            const qWords = ['que','quien','quienes','donde','adonde','cuando','como','cuanto','cuanta','cuantos','cuantas','cual','cuales','porque'];
+            const tokens = w.split(/\s+/).filter(Boolean);
+            // 전치사 + 의문사 구문도 잡기 (de dónde, por qué, a dónde, con quién 등)
+            //   → 짧은 구문(3단어 이하)에 의문사가 포함되면 의문사로 취급
+            const hasQ = tokens.some(t => qWords.includes(t));
+            if (qWords.includes(w) || (hasQ && tokens.length <= 3)) return 'interrogative';
             return pos;
         }
 
@@ -1180,8 +1183,10 @@
 
             // [냐냐 PATCH-5배치] AI가 유의어/반의어를 찾아줬으면 자동으로 채우고 섹션을 펼침
             //   ⚠️ 이미 유의어 행이 있으면(=원래 단어와의 링크 등) 건드리지 않음 (양방향 링크 보존)
+            // [냐냐 PATCH] 큰 ✨(전체 추천, forceOverwrite=true)면 유의어도 새로 덮어씀
+            //   유의어 자동채우기 큐(force=false)에서만 기존 링크를 보존
             const synBoxHasRows = document.querySelectorAll('#syn-entries-box > div').length > 0;
-            if (result.synonyms && result.synonyms.length > 0 && !synBoxHasRows) {
+            if (result.synonyms && result.synonyms.length > 0 && (forceOverwrite || !synBoxHasRows)) {
                 clearSynonymRows();
                 result.synonyms.forEach(item => {
                     const t = item.type === 'antonym' ? 'antonym' : 'synonym';
@@ -1951,15 +1956,26 @@
         let pendingFilterSort = 'weak-score';
 
         // [냐냐 PATCH] 필터/정렬 저장·복원 (localStorage)
-        // [냐냐 요청] 단어장 필터/정렬은 새로고침하면 초기 세팅으로 돌아가게 (저장하지 않음)
-        //   → 기본값을 바꾸고 싶으면 activeFilterPos/Mastery/Weak/Sort 초기값을 코드에서 수정하면 됨
         function saveFilterPrefs() {
-            // 일부러 저장 안 함 (새로고침 시 초기화되도록)
+            try {
+                localStorage.setItem('nyanya_word_filters', JSON.stringify({
+                    pos: activeFilterPos, mastery: activeFilterMastery, weak: activeFilterWeak, sort: activeFilterSort
+                }));
+            } catch (e) {}
         }
         function loadFilterPrefs() {
-            // 예전에 저장해둔 필터가 남아 있으면 지워줌 (한 번만 정리)
-            try { localStorage.removeItem('nyanya_word_filters'); } catch (e) {}
-            // 아무것도 복원하지 않음 → 코드에 적힌 기본값 그대로 사용
+            try {
+                const raw = localStorage.getItem('nyanya_word_filters');
+                if (!raw) return; // 첫 방문 = 기본값 유지
+                const f = JSON.parse(raw);
+                if (Array.isArray(f.pos)) activeFilterPos = f.pos;
+                if (f.mastery) activeFilterMastery = f.mastery;
+                if (f.weak) activeFilterWeak = f.weak;
+                if (f.sort) activeFilterSort = f.sort;
+                const ms = document.getElementById('mastery-filter-select'); if (ms) ms.value = activeFilterMastery;
+                const ws = document.getElementById('weak-filter-select'); if (ws) ws.value = activeFilterWeak;
+                const ss = document.getElementById('sort-select'); if (ss) ss.value = activeFilterSort;
+            } catch (e) {}
         }
 
         // ============================================================
