@@ -1351,11 +1351,12 @@ let vocabulary = [];
                     const abbr = POS_ABBR[t.pos] || '';
                     const rows = parseDifference(diff);
                     // [냐냐 PATCH] 차이 설명: 화살표 → · 두껍지 않게 · 단어 바로 아래 붙여서
+                    // [냐냐 PATCH] 구분 기호: 화살표 대신 가운뎃점(·)으로 담백하게
                     const diffHtml = rows ? `
                         <div class="basis-full space-y-0 pl-0.5">
                             ${rows.map(r => `
                             <div class="text-[12px] text-slate-500 font-normal leading-snug">
-                                <span class="text-slate-400">→</span>
+                                <span class="${isAnt ? 'text-rose-300' : 'text-sky-300'} font-black">·</span>
                                 ${r.word ? `<b class="text-slate-700 font-semibold">${escapeHtml(r.word)}</b> : ` : ''}${escapeHtml(r.desc)}
                             </div>`).join('')}
                         </div>` : '';
@@ -1363,7 +1364,7 @@ let vocabulary = [];
                     <div class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
                         <button type="button" onclick="event.stopPropagation(); goToWord('${t.id}')" class="px-2 py-0.5 rounded-lg text-[12px] font-black ${chipCls} transition-all">${escapeHtml(t.word)}</button>
                         ${abbr ? `<span class="text-[10px] text-slate-400 font-bold">${abbr}</span>` : ''}
-                        <span class="text-[12px] text-slate-500 font-medium">${escapeHtml(t.meaning || '')}</span>
+                        <span class="text-[12px] text-slate-700 font-semibold">${escapeHtml(t.meaning || '')}</span>
                         ${diffHtml}
                     </div>`;
                 }).join('');
