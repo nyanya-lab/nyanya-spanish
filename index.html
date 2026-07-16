@@ -199,7 +199,7 @@
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
                         <div class="relative w-full sm:flex-1">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" id="search-bar" oninput="handleSearchInput()" placeholder="단어, 뜻 검색..." autocomplete="off" class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                            <input type="text" id="search-bar" oninput="handleSearchInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();runSearch();}" placeholder="단어, 뜻 검색 후 Enter..." autocomplete="off" class="w-full bg-slate-50 pl-10 pr-9 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                             <button id="search-clear-btn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
                                 <i class="fa-solid fa-circle-xmark"></i>
                             </button>
