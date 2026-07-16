@@ -3306,7 +3306,14 @@ let vocabulary = [];
             } else if (tabId === 'review') {
                 if (typeof resetReviewTab === 'function') resetReviewTab();
             } else if (tabId === 'ai-feedback') {
-                resetKoEsMissionState();
+                // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
+                //   '아직 아무것도 안 한 완전 처음' 상태일 때만 초기화한다.
+                //   판단 기준: 현재 모드가 기본(ko-es)이고, 미션도 없고, 결과창도 안 떠있으면 = 처음.
+                const resultShown = !document.getElementById('ai-feedback-result').classList.contains('hidden');
+                const freshStart = (currentAiMode === 'ko-es') && !aiCurrentKoreanSentence && !resultShown;
+                if (freshStart) {
+                    resetKoEsMissionState();
+                }
             } else if (tabId === 'records') {
                 // [냐냐 PATCH] 학습기록 탭 열 때마다 '숫자 요약'은 항상 접힌 상태로 시작
                 const statsBody = document.getElementById('summary-stats-body');
