@@ -2246,6 +2246,7 @@
             if (weakSel) weakSel.value = activeFilterWeak;
             if (sortSel) sortSel.value = activeFilterSort;
             todayWrongFilterActive = false;
+            currentPage = 1; // [냐냐 PATCH-페이지네이션] 필터 바꾸면 1페이지로
             saveFilterPrefs();
             closeFilterPanel();
             renderWordList();
@@ -2260,6 +2261,7 @@
             activeFilterMastery = 'not-mastered';
             activeFilterWeak = 'all';
             activeFilterSort = 'weak-score';
+            currentPage = 1; // [냐냐 PATCH-페이지네이션] 필터 초기화 시 1페이지로
             syncFilterPanelUI();
             saveFilterPrefs();
             renderWordList();
@@ -2304,6 +2306,7 @@
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
             if (val.trim()) todayWrongFilterActive = false;
+            currentPage = 1; // [냐냐 PATCH-페이지네이션] 검색 시작하면 1페이지로 (검색 해제 후 대비)
             if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
             _searchDebounceTimer = setTimeout(() => { renderWordList(); }, 200);
         }
@@ -2313,10 +2316,16 @@
             bar.value = '';
             document.getElementById('search-clear-btn').classList.add('hidden');
             bar.focus();
+            currentPage = 1; // [냐냐 PATCH-페이지네이션] 검색 지우면 1페이지부터
             renderWordList();
         }
 
         let wordListExpandedAll = false; // [냐냐 PATCH] 단어 카드 전체 펼침 상태 (기본 접힘)
+
+        // [냐냐 PATCH-페이지네이션] 성능: 단어 850개+ 대응. 한 페이지에 50개씩만 렌더.
+        //   currentPage는 일반 변수 → 메뉴 이동 시 유지, 새로고침 시 1로 리셋 (localStorage 저장 안 함)
+        const WORDS_PER_PAGE = 50;
+        let currentPage = 1;
 
         function renderWordList() {
             renderStreakBadge();
@@ -2410,12 +2419,27 @@
             if (filteredSorted.length === 0) {
                 grid.innerHTML = '';
                 emptyState.classList.remove('hidden');
+                renderPagination(0, 0); // [냐냐 PATCH-페이지네이션] 결과 없으면 바도 숨김
                 return;
             }
             emptyState.classList.add('hidden');
 
+            // [냐냐 PATCH-페이지네이션] 검색 중엔 페이지 없이 전체 표시, 아니면 50개씩 잘라 그림
+            let pageItems = filteredSorted;
+            let totalPages = 1;
+            if (!isSearching) {
+                totalPages = Math.max(1, Math.ceil(filteredSorted.length / WORDS_PER_PAGE));
+                // 필터/정렬로 결과가 줄어서 현재 페이지가 범위를 벗어나면 마지막 페이지로 보정
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+                const start = (currentPage - 1) * WORDS_PER_PAGE;
+                pageItems = filteredSorted.slice(start, start + WORDS_PER_PAGE);
+            }
+            // 검색 중이면 페이지 바 숨김, 아니면 렌더
+            renderPagination(isSearching ? 0 : totalPages, filteredSorted.length);
+
             let html = '';
-            filteredSorted.forEach(w => {
+            pageItems.forEach(w => {
                 const isVerb = w.pos === 'verb';
                 
                 // 품사 뱃지 완벽한 영어 약어 표기로 개편 (F., M., N., V., Adj., Adv., Prep., Conj., Pron., Phr.)
@@ -2524,6 +2548,54 @@
             // 펼침 상태에 따라 chevron 회전 동기화
             if (expandedAll) {
                 document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
+            }
+        }
+
+        // [냐냐 PATCH-페이지네이션] 페이지 바 렌더. totalPages<=1 이거나 0이면 숨김
+        function renderPagination(totalPages, totalCount) {
+            let bar = document.getElementById('vocab-pagination');
+            if (!bar) {
+                // grid 바로 아래에 바 하나 만들어 둠
+                const grid = document.getElementById('vocabulary-grid');
+                bar = document.createElement('div');
+                bar.id = 'vocab-pagination';
+                grid.parentNode.insertBefore(bar, grid.nextSibling);
+            }
+            if (!totalPages || totalPages <= 1) { bar.innerHTML = ''; bar.classList.add('hidden'); return; }
+            bar.classList.remove('hidden');
+
+            const atFirst = currentPage <= 1;
+            const atLast = currentPage >= totalPages;
+            // 활성/비활성 버튼 스타일 (냐냐 취향: 진하고 semibold, 여백 넉넉)
+            const ACT = "w-11 h-11 flex items-center justify-center rounded-xl bg-white border-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 font-bold transition-all active:scale-95";
+            const DIS = "w-11 h-11 flex items-center justify-center rounded-xl bg-slate-50 border-2 border-slate-100 text-slate-300 font-bold cursor-not-allowed";
+            const btn = (icon, onclick, disabled, title) =>
+                `<button ${disabled ? 'disabled' : `onclick="${onclick}"`} title="${title}" class="${disabled ? DIS : ACT}"><i class="fa-solid ${icon}"></i></button>`;
+
+            bar.innerHTML = `
+                <div class="flex items-center justify-center gap-2 mt-5 mb-2 flex-wrap">
+                    ${btn('fa-angles-left', 'gotoPage(1)', atFirst, '맨 앞')}
+                    ${btn('fa-angle-left', `gotoPage(${currentPage - 1})`, atFirst, '이전')}
+                    <div class="px-4 h-11 flex items-center justify-center rounded-xl bg-indigo-600 text-white font-bold text-sm min-w-[80px]">
+                        ${currentPage} <span class="text-indigo-300 mx-1">/</span> ${totalPages}
+                    </div>
+                    ${btn('fa-angle-right', `gotoPage(${currentPage + 1})`, atLast, '다음')}
+                    ${btn('fa-angles-right', `gotoPage(${totalPages})`, atLast, '맨 뒤')}
+                </div>
+                <p class="text-center text-[11px] font-bold text-slate-400 mb-2">총 ${totalCount}개 단어</p>
+            `;
+        }
+
+        // [냐냐 PATCH-페이지네이션] 페이지 이동 + 목록 맨 위로 스크롤
+        function gotoPage(page) {
+            if (page < 1) page = 1;
+            currentPage = page;
+            renderWordList();
+            // 목록 맨 위로 스크롤 (검색바 sticky 아래로 자연스럽게)
+            const grid = document.getElementById('vocabulary-grid');
+            if (grid) {
+                const top = grid.getBoundingClientRect().top + window.scrollY - 120;
+                window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
             }
         }
 
