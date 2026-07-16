@@ -3299,12 +3299,18 @@ let vocabulary = [];
                 shuffleFlashcards();
                 renderFlashcard();
             } else if (tabId === 'quiz') {
-                initQuizTab();
+                // [냐냐 요청] 퀴즈 진행 중이면(quizSession 살아있음) 화면 유지. 처음/끝났을 때만 셋업 화면으로.
+                const quizInProgress = (typeof quizSession !== 'undefined') && quizSession;
+                if (!quizInProgress) {
+                    initQuizTab();
+                }
             } else if (tabId === 'games') {
                 // 게임 탭 열면 메뉴로 초기화
                 if (typeof resetGamesMenu === 'function') resetGamesMenu();
             } else if (tabId === 'review') {
-                if (typeof resetReviewTab === 'function') resetReviewTab();
+                // [냐냐 요청] 복습 진행 중이면(reviewState 살아있음) 화면 유지. 처음/끝났을 때만 셋업 화면으로.
+                const reviewInProgress = (typeof reviewState !== 'undefined') && reviewState;
+                if (typeof resetReviewTab === 'function' && !reviewInProgress) resetReviewTab();
             } else if (tabId === 'ai-feedback') {
                 // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
                 //   '아직 아무것도 안 한 완전 처음' 상태일 때만 초기화한다.
