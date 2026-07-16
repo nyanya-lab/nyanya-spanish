@@ -2300,15 +2300,23 @@
             if (willOpen) syncFilterPanelUI();
         }
 
-        // [냐냐 PATCH-성능] 검색은 타이핑 멈추고 200ms 뒤에 한 번만 렌더 (글자마다 750개 다시 그리던 것 방지)
-        let _searchDebounceTimer = null;
+        // [냐냐 요청] 검색: 타이핑 중엔 렌더 안 함(렉 방지). 엔터 눌러야 검색.
+        //   단, 검색창을 완전히 비우면 자동으로 전체 목록 복귀.
         function handleSearchInput() {
             const val = document.getElementById('search-bar').value;
             document.getElementById('search-clear-btn').classList.toggle('hidden', !val);
             if (val.trim()) todayWrongFilterActive = false;
-            currentPage = 1; // [냐냐 PATCH-페이지네이션] 검색 시작하면 1페이지로 (검색 해제 후 대비)
-            if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
-            _searchDebounceTimer = setTimeout(() => { renderWordList(); }, 200);
+            // 완전히 비우면 즉시 전체 복귀 (엔터 불필요)
+            if (!val.trim()) {
+                currentPage = 1;
+                renderWordList();
+            }
+        }
+
+        // [냐냐 요청] 엔터로 검색 실행
+        function runSearch() {
+            currentPage = 1;
+            renderWordList();
         }
 
         function clearSearch() {
@@ -2324,7 +2332,7 @@
 
         // [냐냐 PATCH-페이지네이션] 성능: 단어 850개+ 대응. 한 페이지에 50개씩만 렌더.
         //   currentPage는 일반 변수 → 메뉴 이동 시 유지, 새로고침 시 1로 리셋 (localStorage 저장 안 함)
-        const WORDS_PER_PAGE = 50;
+        const WORDS_PER_PAGE = 12;
         let currentPage = 1;
 
         function renderWordList() {
@@ -2566,24 +2574,41 @@
 
             const atFirst = currentPage <= 1;
             const atLast = currentPage >= totalPages;
-            // 활성/비활성 버튼 스타일 (냐냐 취향: 진하고 semibold, 여백 넉넉)
-            const ACT = "w-11 h-11 flex items-center justify-center rounded-xl bg-white border-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 font-bold transition-all active:scale-95";
-            const DIS = "w-11 h-11 flex items-center justify-center rounded-xl bg-slate-50 border-2 border-slate-100 text-slate-300 font-bold cursor-not-allowed";
+            // [냐냐 요청] 톤다운: 파란 네모 제거, 심플한 회색 텍스트 버튼 + 크기 축소
+            const ACT = "w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-indigo-600 font-bold text-xs transition-all active:scale-90";
+            const DIS = "w-8 h-8 flex items-center justify-center rounded-lg text-slate-200 font-bold text-xs cursor-not-allowed";
             const btn = (icon, onclick, disabled, title) =>
                 `<button ${disabled ? 'disabled' : `onclick="${onclick}"`} title="${title}" class="${disabled ? DIS : ACT}"><i class="fa-solid ${icon}"></i></button>`;
 
             bar.innerHTML = `
-                <div class="flex items-center justify-center gap-2 mt-5 mb-2 flex-wrap">
+                <div class="flex items-center justify-center gap-1 mt-4 mb-1.5">
                     ${btn('fa-angles-left', 'gotoPage(1)', atFirst, '맨 앞')}
                     ${btn('fa-angle-left', `gotoPage(${currentPage - 1})`, atFirst, '이전')}
-                    <div class="px-4 h-11 flex items-center justify-center rounded-xl bg-indigo-600 text-white font-bold text-sm min-w-[80px]">
-                        ${currentPage} <span class="text-indigo-300 mx-1">/</span> ${totalPages}
+                    <div class="flex items-center gap-1 px-1.5">
+                        <input id="page-jump-input" type="number" min="1" max="${totalPages}" value="${currentPage}"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();jumpToPage();}"
+                            onblur="jumpToPage()"
+                            class="w-10 h-7 text-center text-sm font-bold text-indigo-600 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                        <span class="text-xs font-bold text-slate-400">/ ${totalPages}</span>
                     </div>
                     ${btn('fa-angle-right', `gotoPage(${currentPage + 1})`, atLast, '다음')}
                     ${btn('fa-angles-right', `gotoPage(${totalPages})`, atLast, '맨 뒤')}
                 </div>
-                <p class="text-center text-[11px] font-bold text-slate-400 mb-2">총 ${totalCount}개 단어</p>
+                <p class="text-center text-[10px] font-semibold text-slate-300 mb-1">총 ${totalCount}개 단어</p>
             `;
+        }
+
+        // [냐냐 요청] 페이지 직접 입력 → 엔터/포커스아웃 시 이동
+        function jumpToPage() {
+            const inp = document.getElementById('page-jump-input');
+            if (!inp) return;
+            let n = parseInt(inp.value, 10);
+            const max = parseInt(inp.getAttribute('max'), 10) || 1;
+            if (isNaN(n)) { inp.value = currentPage; return; } // 잘못 입력하면 원래대로
+            if (n < 1) n = 1;
+            if (n > max) n = max;
+            if (n === currentPage) { inp.value = currentPage; return; } // 그대로면 무시
+            gotoPage(n);
         }
 
         // [냐냐 PATCH-페이지네이션] 페이지 이동 + 목록 맨 위로 스크롤
