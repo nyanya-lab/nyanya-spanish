@@ -516,8 +516,15 @@ let quizSession = null;
             const sameMeaning = userWordInVocab && meaningsOverlap(userWordInVocab.meaning, q.word.meaning);
             if (sameMeaning) {
                 // 앞글자 힌트: 정답과 사용자 답이 공유하는 접두사 + 다음 한 글자
-                const sharedLen = sharedPrefixLen(userNorm, correctNorm);
-                const hintPrefix = correct.slice(0, sharedLen + 1);
+                // [냐냐 요청] 정관사 제외: 정답 앞의 정관사/부정관사 제거 후 힌트 표시
+                const articles = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas'];
+                let hintWord = correct.toLowerCase().trim();
+                const articleMatch = articles.find(art => hintWord.startsWith(art + ' '));
+                if (articleMatch) {
+                    hintWord = hintWord.slice(articleMatch.length + 1).trim(); // 정관사 + 공백 제거
+                }
+                const sharedLen = sharedPrefixLen(userNorm, normalizeSpanishAnswer(hintWord));
+                const hintPrefix = hintWord.slice(0, sharedLen + 1);
                 return {
                     isCorrect: false,
                     hint: `💡 그것도 같은 뜻이에요! 다른 동의어를 생각해 볼까요? <b>${hintPrefix}</b>로 시작하는 단어예요.`,
