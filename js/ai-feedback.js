@@ -3,6 +3,20 @@
         let aiCurrentWordForMission = null;
         let aiCurrentKoreanSentence = "";
 
+        // [냐냐 요청] 첨삭 결과가 나올 때, sticky 입력영역에 상단이 가리지 않도록 스크롤.
+        //   scrollIntoView 기본값은 결과 맨 위를 화면 맨 위에 붙이는데, sticky 입력칸이
+        //   그 위를 덮어서 결과 상단이 안 보였음. sticky 높이만큼 여백을 두고 스크롤한다.
+        function scrollAiResultIntoView() {
+            const resultBox = document.getElementById('ai-feedback-result');
+            if (!resultBox) return;
+            // sticky 입력영역(탭버튼+입력칸)의 실제 높이 측정
+            const tab = document.getElementById('tab-ai-feedback');
+            const sticky = tab ? tab.querySelector('.sticky') : null;
+            const stickyH = sticky ? sticky.getBoundingClientRect().height : 0;
+            const top = resultBox.getBoundingClientRect().top + window.scrollY - stickyH - 16;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        }
+
         // [냐냐 PATCH] B-2 첨삭: '바뀐 부분' 설명 리스트 렌더링 (어순/관사 변경도 표시)
         function renderAiChanges(feedback) {
             const box = document.getElementById('ai-changes-box');
@@ -773,7 +787,7 @@
                 lastAnsweredQuestion = { question: currentQuestionForAnswer.question, answer: userAnswer, corrected: (feedback.correctedText || '').replace(/<[^>]*>/g, '') };
                 const followupBtn = document.getElementById('question-followup-btn');
                 if (followupBtn) followupBtn.classList.remove('hidden');
-                resultBox.scrollIntoView({ behavior: 'smooth' });
+                scrollAiResultIntoView();
                 showToast("채점이 끝났어요! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
             } catch (e) {
                 console.error(e);
@@ -1063,7 +1077,7 @@
                 logAction('ai');
                 saveToStorage();
                 updateStats();
-                resultBox.scrollIntoView({ behavior: 'smooth' });
+                scrollAiResultIntoView();
                 showToast("AI 첨삭이 끝났습니다! 궁금한 점을 하단에서 바로 질문해 보세요! ✨", "success");
             } catch (e) {
                 console.error(e);
@@ -1300,7 +1314,7 @@
                 logAction('ai');
                 saveToStorage();
                 updateStats();
-                resultBox.scrollIntoView({ behavior: 'smooth' });
+                scrollAiResultIntoView();
                 showToast("AI 첨삭이 끝났습니다! ✨", "success");
             } catch (e) {
                 console.error(e);
@@ -1465,7 +1479,7 @@
                 logAction('ai');
                 saveToStorage();
                 updateStats();
-                resultBox.scrollIntoView({ behavior: 'smooth' });
+                scrollAiResultIntoView();
                 showToast("자유 문장 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
             } catch (e) {
                 console.error(e);
