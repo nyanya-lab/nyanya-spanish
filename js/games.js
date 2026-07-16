@@ -949,6 +949,21 @@
             renderFillProblem();
         }
 
+        // [냐냐 요청] 헤더의 '오늘의 복습' 배너 → 원클릭: 복습탭 이동 + 단어빈칸 + 오늘복습 대상으로 바로 시작
+        function startTodayReviewShortcut() {
+            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            changeTab('review');
+            // 복습 탭 진입 후 단어빈칸 모드 + 오늘복습 범위로 시작 (렌더 타이밍 위해 살짝 지연)
+            setTimeout(() => {
+                if (typeof selectReviewMode === 'function') selectReviewMode('fill');
+                fillScope = 'today-wrong';
+                fillCount = Math.min(due.length, Math.max(fillCount || 10, 10));
+                if (typeof selectFillScope === 'function') selectFillScope('today-wrong');
+                startFillReview();
+            }, 60);
+        }
+
         // [냐냐 PATCH] 한 단어당 "한 언어만" 비움 (스페인어만 or 한국어만)
         //   ⚠️ 예전엔 항목마다 따로 뽑아서 스페인어/한국어가 섞였고, 서로 답의 힌트가 됐음
         //   → 스페인어 차례면 스페인어 칸 전부 / 한국어 차례면 한국어 칸 전부를 비움
@@ -1136,7 +1151,7 @@ Return JSON only, no markdown.`;
             }
 
             // 결과 저장 + 표시
-            const detail = blanks.map((b, i) => ({ label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
+            const detail = blanks.map((b, i) => ({ key: b.key, label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
             const allCorrect = detail.every(d => d.correct);
             fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
 
@@ -1145,7 +1160,11 @@ Return JSON only, no markdown.`;
                 const nRight = detail.filter(d => d.correct).length;
                 const nWrong = detail.length - nRight;
                 const delta = (nRight * 0.7) + (nWrong * -0.5);
-                addWordScore(fillState.current.word.id, delta, { correct: allCorrect });
+                // [냐냐 요청] 망각곡선 복습 대상 판정: 관용구/예문 칸은 제외하고,
+                //   핵심 칸(뜻·철자·동사변형)에서 틀렸을 때만 lastWrongDate를 찍는다.
+                const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));
+                const coreWrong = detail.some(d => !d.correct && !isIdiomOrExample(d.key));
+                addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
             }
 
             if (typeof logAction === 'function') logAction('review'); // 복습 1개 기록
