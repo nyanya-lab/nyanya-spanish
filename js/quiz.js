@@ -517,12 +517,9 @@ let quizSession = null;
             if (sameMeaning) {
                 // 앞글자 힌트: 정답과 사용자 답이 공유하는 접두사 + 다음 한 글자
                 // [냐냐 요청] 정관사 제외: 정답 앞의 정관사/부정관사 제거 후 힌트 표시
-                const articles = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas'];
-                let hintWord = correct.toLowerCase().trim();
-                const articleMatch = articles.find(art => hintWord.startsWith(art + ' '));
-                if (articleMatch) {
-                    hintWord = hintWord.slice(articleMatch.length + 1).trim(); // 정관사 + 공백 제거
-                }
+                //   el/la 합쳐진 경우(el/la, los/las 등)까지 처리
+                let hintWord = correct.toLowerCase().trim()
+                    .replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
                 const sharedLen = sharedPrefixLen(userNorm, normalizeSpanishAnswer(hintWord));
                 const hintPrefix = hintWord.slice(0, sharedLen + 1);
                 return {
