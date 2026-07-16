@@ -58,8 +58,9 @@
         function gameStartHint(word) {
             if (!word) return '';
             let clean = word.trim();
-            // [냐냐 PATCH] 명사 등에서 정관사/부정관사를 떼고 실제 단어의 앞글자로 힌트
-            clean = clean.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            // [냐냐 요청] 정관사/부정관사 제거 강화: el/la 합쳐진 경우(el/la, los/las 등)도 처리
+            //   gameCheckAnswer와 동일한 규칙으로 맞춤
+            clean = clean.replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
             const n = Math.min(2, clean.length);
             return clean.slice(0, n);
         }
@@ -197,7 +198,14 @@
             const userAnswer = input.value.trim();
             // [냐냐 PATCH] 빈칸으로 엔터쳐도 넘어감 (오답 처리)
 
-            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
+            // [냐냐 요청] 유의어도 정답 처리: 입력한 단어가 단어장에 있고 뜻이 같으면 정답
+            let isCorrect = userAnswer ? gameCheckAnswer(userAnswer, gameState.current.word) : false;
+            if (!isCorrect && userAnswer && typeof meaningsOverlap === 'function') {
+                const un = normalizeSpanishAnswer(userAnswer);
+                const syn = vocabulary.find(w => normalizeSpanishAnswer(w.word) === un
+                    && meaningsOverlap(w.meaning, gameState.current.meaning));
+                if (syn) isCorrect = true;
+            }
             applyGameScore(gameState.current.id, isCorrect, 'rapid'); // [0배치] 속사포: 정답 +0.5 / 오답 -1
             if (isCorrect) {
                 gameState.combo++;
@@ -315,7 +323,7 @@
                             <span id="fall-lives" class="text-sm">${'❤️'.repeat(5)}</span>
                         </div>
                     </div>
-                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: 480px;">
+                    <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: min(68vh, 640px); min-height: 480px;">
                         <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-300"></div>
                     </div>
                     <input type="text" id="fall-input" autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
@@ -366,6 +374,9 @@
                     it.el.remove();
                     items.splice(i, 1);
                     gameState.lives--;
+                    // [냐냐 요청] 놓친 단어 기록 (결과 화면 표시용)
+                    if (!gameState.missedIds) gameState.missedIds = [];
+                    if (!gameState.missedIds.includes(it.id)) gameState.missedIds.push(it.id);
                     const livesEl = document.getElementById('fall-lives');
                     if (livesEl) livesEl.innerText = '❤️'.repeat(Math.max(0, gameState.lives)) + '🖤'.repeat(Math.max(0, 5 - gameState.lives));
                     AudioFX.playError();
@@ -398,6 +409,9 @@
                 applyGameScore(it.id, true, 'fall'); // [0배치] 떨어지는 단어: 정답 +1
                 gameState.score += 10;
                 gameState.correct++;
+                // [냐냐 요청] 맞춘 단어 기록 (결과 화면 표시용)
+                if (!gameState.correctIds) gameState.correctIds = [];
+                if (!gameState.correctIds.includes(it.id)) gameState.correctIds.push(it.id);
                 it.el.remove();
                 items.splice(matchIdx, 1);
                 const scoreEl = document.getElementById('fall-score');
@@ -413,11 +427,34 @@
             if (!gameState) return;
             const score = gameState.score;
             const correct = gameState.correct;
+            // [냐냐 요청] stopCurrentGame 전에 맞춘/놓친 단어 ID 확보
+            const correctIds = (gameState.correctIds || []).slice();
+            const missedIds = (gameState.missedIds || []).slice();
             stopCurrentGame();
             try { if (typeof logAction === 'function') logAction('game'); } catch (e) {} // [냐냐 PATCH] 게임 1판 완료
             const isNewRecord = setGameHighScore('falling', score);
             const highScore = getGameHighScore('falling');
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            // [냐냐 요청] 맞춘/놓친 단어를 칩으로 렌더
+            const idToChip = (id, kind) => {
+                const w = vocabulary.find(v => v.id === id);
+                if (!w) return '';
+                const color = kind === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-rose-50 text-rose-600 border-rose-200';
+                return `<span class="inline-block px-2 py-0.5 rounded-lg border ${color} text-xs font-bold m-0.5">${w.word} <span class="opacity-60">${w.meaning}</span></span>`;
+            };
+            let wordSummary = '';
+            if (correctIds.length || missedIds.length) {
+                wordSummary = '<div class="text-left space-y-3 pt-2">';
+                if (correctIds.length) {
+                    wordSummary += `<div><p class="text-xs font-black text-emerald-600 mb-1">✓ 맞힌 단어 (${correctIds.length})</p><div>${correctIds.map(id => idToChip(id, 'ok')).join('')}</div></div>`;
+                }
+                if (missedIds.length) {
+                    wordSummary += `<div><p class="text-xs font-black text-rose-500 mb-1">✗ 놓친 단어 (${missedIds.length})</p><div>${missedIds.map(id => idToChip(id, 'miss')).join('')}</div></div>`;
+                }
+                wordSummary += '</div>';
+            }
             showGamePlayArea(`
                 <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
                     <div class="text-6xl">🌧️</div>
@@ -425,6 +462,7 @@
                     <p class="text-4xl font-black text-emerald-600">${score}점</p>
                     ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}점</p>`}
                     <p class="text-sm text-slate-500">맞힌 단어 <b class="text-emerald-600">${correct}</b>개</p>
+                    ${wordSummary}
                     <div class="flex gap-2 justify-center pt-2">
                         <button onclick="startFallingWords()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
                         <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
