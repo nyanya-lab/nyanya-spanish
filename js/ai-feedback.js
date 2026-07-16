@@ -726,20 +726,19 @@
                     originalRender.innerHTML = feedback.originalMarked || userAnswer;
                     correctedRender.innerHTML = feedback.correctedText;
                     renderAiChanges(feedback);
-                    // [냐냐 PATCH] 냐냐님이 쓴 스페인어의 실제 한국어 뜻 표시 (의도와 다를 수 있음) — item 5
+                    // [냐냐 요청] '쓴 문장 실제 뜻'을 아래가 아니라 AI 코멘트 안 위로 이동 → 아래 칸은 숨김
                     const utEl = document.getElementById('ai-user-translation');
-                    if (utEl) {
-                        if (feedback.userTranslation) {
-                            utEl.innerHTML = `<span class="text-[11px] text-slate-400">냐냐님이 쓴 문장의 실제 뜻</span><br>💬 ${feedback.userTranslation}`;
-                            utEl.classList.remove('hidden');
-                        } else {
-                            utEl.classList.add('hidden');
-                        }
-                    }
+                    if (utEl) utEl.classList.add('hidden');
                 }
 
                 coachVerdict.innerText = feedback.verdict;
-                coachMsg.innerHTML = feedback.message;
+                // [냐냐 요청] 스→한과 동일하게: AI 코멘트 위에 '쓴 문장의 실제 뜻'을 박스로 표시
+                let msgHtmlQ = '';
+                if (feedback.userTranslation) {
+                    msgHtmlQ += `<div class="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 mb-2 text-sm"><span class="block text-[11px] text-sky-500 font-bold mb-0.5">💬 냐냐님이 쓴 문장의 실제 뜻</span><span class="text-slate-700 font-semibold">${feedback.userTranslation}</span></div>`;
+                }
+                msgHtmlQ += `<span>${feedback.message}</span>`;
+                coachMsg.innerHTML = msgHtmlQ;
 
                 breakdownGrid.innerHTML = '';
                 const seenWordsQ = new Set();
