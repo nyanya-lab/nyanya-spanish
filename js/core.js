@@ -1021,6 +1021,7 @@ let vocabulary = [];
         let todayWrongFilterActive = false;
         function showTodayWrongInList() {
             todayWrongFilterActive = true;
+            currentPage = 1; // [냐냐 PATCH-페이지네이션] 오늘 틀린 단어 필터도 1페이지부터
             // 다른 필터는 초기화
             const filter = document.getElementById('mastery-filter-select');
             if (filter) filter.value = 'all';
