@@ -66,6 +66,12 @@
                                 <span id="header-weak-vocab" class="text-sm font-extrabold text-rose-600">0개</span>
                             </div>
                         </div>
+                        <!-- [냐냐 요청] 오늘의 복습 배너 (단어↔문법 사이). 복습할 단어 있으면 활성, 없으면 회색 '완료' -->
+                        <button id="today-review-btn" onclick="startTodayReviewShortcut()" class="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-2xl border border-amber-200 transition-all active:scale-95 cursor-pointer">
+                            <span class="text-sm">📖</span>
+                            <span class="text-[10px] font-black text-amber-600 tracking-widest">오늘의 복습</span>
+                            <span id="today-review-count-badge" class="text-sm font-extrabold text-amber-700">0개</span>
+                        </button>
                         <div class="flex items-center gap-2.5 bg-sky-50 px-3 py-1.5 rounded-2xl border border-sky-200">
                             <span class="text-[10px] font-black text-[#4a85bb] tracking-widest">문법</span>
                             <div class="flex items-center gap-1">
