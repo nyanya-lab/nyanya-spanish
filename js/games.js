@@ -957,7 +957,8 @@
             // 해당 key가 빈칸이면 input, 아니면 텍스트로 렌더
             const bi = problem.blanks.findIndex(b => b.key === key);
             if (bi >= 0) {
-                const cls = inputClass || 'inline-block min-w-[120px] w-auto';
+                // [냐냐 요청] 입력칸을 옆으로 쭉 늘림 (w-full)
+                const cls = inputClass || 'inline-block w-full';
                 return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input ${cls} px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
             }
             return `<span class="${extraClass || ''}">${escapeHtml(text || '')}</span>`;
@@ -1121,8 +1122,9 @@ Return JSON only, no markdown.`;
                 if (!el) return;
                 el.disabled = true;
                 el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
-                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
-                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through');
+                // [냐냐 요청] 정답 후 글씨크기 명시적으로 유지 (text-sm font-bold)
+                if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700', 'text-sm', 'font-bold');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through', 'text-sm', 'font-bold');
             });
             const fb = document.getElementById('fill-feedback');
             if (fb) {
