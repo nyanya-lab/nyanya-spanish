@@ -681,9 +681,9 @@
                 </div>
 
                 <!-- TAB 4: AI 1:1 TRANSLATION RING -->
-                <div id="tab-ai-feedback" class="hidden flex flex-col overflow-hidden" style="height: calc(100vh - 6.5rem);">
-                    <!-- [냐냐 요청] 헤더 제거, 탭 버튼만 남김 -->
-                    <div class="shrink-0 pt-2">
+                <div id="tab-ai-feedback" class="hidden space-y-6">
+                    <!-- [냐냐 요청] 검색창과 동일한 sticky 방식: 탭버튼+입력영역을 통째로 상단 고정 -->
+                    <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-4">
                         <!-- Premium Mode Switcher Tabs -->
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
@@ -699,10 +699,8 @@
                                 📖 내 예문으로 연습
                             </button>
                         </div>
-                    </div>
 
-                    <!-- [냐냐 요청] 입력 영역(pane 4개) = 고정 / 첨삭 결과 = 자체 스크롤 -->
-                    <div class="shrink-0 mt-4 space-y-6">
+                    <!-- 입력 영역(pane 4개) — sticky 영역 안에 함께 고정 -->
 
                     <!-- MODE A: KOREAN TO SPANISH PLAYGROUND -->
                     <div id="ai-pane-ko-es" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
@@ -889,10 +887,9 @@
                             </button>
                         </div>
                     </div>
-                    </div><!-- /고정 입력 영역 -->
+                    </div><!-- /sticky 입력 영역 -->
 
-                    <!-- 아래: 첨삭 결과 = 이 영역만 스크롤 (스크롤바 숨김) -->
-                    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar mt-4">
+                    <!-- 아래: 첨삭 결과 (페이지 스크롤 따라 자연스럽게) -->
                     <!-- AI Feedback Result Panel -->
                     <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
                         <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
@@ -971,7 +968,6 @@
                             </div>
                         </div>
                     </div><!-- /ai-feedback-result -->
-                    </div><!-- /결과 스크롤 영역 -->
                 </div>
 
                 <!-- TAB 5: STUDY RECORDS -->
