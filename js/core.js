@@ -1007,13 +1007,13 @@ let vocabulary = [];
         // 망각곡선 복습 주기 (일). 이 날짜에 해당하면 복습 대상
         const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
 
-        // 오늘 복습해야 할 단어 (오늘 틀린 것 + 복습 주기에 도달한 것)
+        // 오늘 복습해야 할 단어 (복습 주기에 도달한 것)
         function getReviewDueWords() {
             return vocabulary.filter(w => {
                 if (w.mastered || !w.lastWrongDate) return false;
                 const d = daysSince(w.lastWrongDate);
-                // 오늘(0일) 또는 복습 주기(1,3,7,14,30일)에 해당
-                return d === 0 || REVIEW_INTERVALS.includes(d);
+                // [냐냐 요청] 틀린 당일(0일)은 제외. 복습 주기(1,3,7,14,30일)에 해당할 때만.
+                return REVIEW_INTERVALS.includes(d);
             }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
         }
 
@@ -1034,16 +1034,31 @@ let vocabulary = [];
         }
 
         function renderTodayReview() {
-            // [냐냐 PATCH] 단어장 알림 박스 제거됨 (단어 복습 탭에서 복습). 호환용 빈 함수.
-            const box = document.getElementById('today-review-box');
-            if (!box) return;
-            const words = getReviewDueWords(); // [냐냐 PATCH] 망각곡선 복습 대상
-            const countEl = document.getElementById('today-review-count');
-            if (countEl) countEl.innerText = words.length;
+            // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
+            //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
+            const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            const btn = document.getElementById('today-review-btn');
+            const badge = document.getElementById('today-review-count-badge');
+            if (!btn || !badge) return;
+
             if (words.length === 0) {
-                box.classList.add('hidden');
+                // 완료 상태 (회색 비활성)
+                badge.innerText = '완료 ✓';
+                btn.disabled = true;
+                btn.classList.remove('bg-amber-50', 'hover:bg-amber-100', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.add('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.remove('text-amber-700'); badge.classList.add('text-slate-400');
+                btn.querySelector('.tracking-widest')?.classList.remove('text-amber-600');
+                btn.querySelector('.tracking-widest')?.classList.add('text-slate-400');
             } else {
-                box.classList.remove('hidden');
+                // 활성 상태 (호박색)
+                badge.innerText = words.length + '개';
+                btn.disabled = false;
+                btn.classList.add('bg-amber-50', 'hover:bg-amber-100', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.remove('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
+                btn.querySelector('.tracking-widest')?.classList.add('text-amber-600');
+                btn.querySelector('.tracking-widest')?.classList.remove('text-slate-400');
             }
         }
 
@@ -1136,7 +1151,11 @@ let vocabulary = [];
                 if (opts.subjective) w.subjectivePassed = true; // 마스터 필수 조건
             } else if (opts.correct === false) {
                 w.wrongTotal = (w.wrongTotal || 0) + 1;
-                w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
+                // [냐냐 요청] skipReviewDate가 true면 망각곡선 복습 대상에서 제외
+                //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
+                if (!opts.skipReviewDate) {
+                    w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
+                }
             }
 
             w.score = clampScore(w.score + (delta || 0));
@@ -3365,4 +3384,6 @@ let vocabulary = [];
             // 모바일 핵심 통계
             setTxt('header-total-vocab-m', `${total}`);
             setTxt('header-mastered-vocab-m', `${mastered}`);
+            // [냐냐 요청] 헤더 '오늘의 복습' 배너도 함께 갱신
+            if (typeof renderTodayReview === 'function') renderTodayReview();
         }
