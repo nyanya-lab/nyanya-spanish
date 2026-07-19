@@ -629,7 +629,7 @@
         // [냐냐 PATCH] 단어 복습 (깜빡이 방식, 점수 없음, 단어 선택 가능)
         // ============================================================
         let reviewState = null;
-        let reviewScope = 'today-wrong';
+        let reviewScope = 'weak'; // [냐냐 요청] '오늘 복습'은 배너로 일원화 → 기본은 약점 단어
         let reviewCount = 20;   // [냐냐 PATCH] 복습할 단어 개수
         let reviewRepeat = 1;   // [냐냐 PATCH] 반복 횟수
 
@@ -639,8 +639,8 @@
             const play = document.getElementById('review-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            // 기본 선택
-            selectReviewScope(reviewScope || 'today-wrong');
+            // 기본 선택 ([냐냐 요청] today-wrong은 메뉴에서 제거됨 → 약점으로 대체)
+            selectReviewScope((!reviewScope || reviewScope === 'today-wrong') ? 'weak' : reviewScope);
             selectReviewCount(reviewCount || 20);
             selectReviewRepeat(reviewRepeat || 1);
             // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
@@ -874,7 +874,7 @@
         //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
         // ============================================================
         let reviewMode = 'blink';          // 'blink' | 'fill'
-        let fillScope = 'today-wrong';
+        let fillScope = 'weak'; // [냐냐 요청] '오늘 복습'은 배너로 일원화 → 기본은 약점 단어
         let fillCount = 10;
         let fillState = null;
 
@@ -908,7 +908,7 @@
             const play = document.getElementById('fill-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            selectFillScope(fillScope || 'today-wrong');
+            selectFillScope((!fillScope || fillScope === 'today-wrong') ? 'weak' : fillScope);
             selectFillCount(fillCount || 10);
         }
 
@@ -949,18 +949,24 @@
             renderFillProblem();
         }
 
-        // [냐냐 요청] 헤더의 '오늘의 복습' 배너 → 원클릭: 복습탭 이동 + 단어빈칸 + 오늘복습 대상으로 바로 시작
+        // [냐냐 요청] 헤더의 '오늘의 복습' 배너 → 원클릭: 복습탭 + 단어빈칸으로 10개 바로 시작
+        //   fillScope(메뉴 설정)는 건드리지 않고 풀을 직접 구성한다.
+        //   isTodayReview 플래그가 있어야 '오늘 복습함'으로 인정된다(배너로만 인정).
+        const TODAY_REVIEW_BATCH = 10;
         function startTodayReviewShortcut() {
             const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
             changeTab('review');
-            // 복습 탭 진입 후 단어빈칸 모드 + 오늘복습 범위로 시작 (렌더 타이밍 위해 살짝 지연)
+            // 복습 탭 진입 후 단어빈칸 모드로 시작 (렌더 타이밍 위해 살짝 지연)
             setTimeout(() => {
                 if (typeof selectReviewMode === 'function') selectReviewMode('fill');
-                fillScope = 'today-wrong';
-                fillCount = Math.min(due.length, Math.max(fillCount || 10, 10));
-                if (typeof selectFillScope === 'function') selectFillScope('today-wrong');
-                startFillReview();
+                const picked = due.slice(0, TODAY_REVIEW_BATCH); // 약한 순으로 앞에서 10개
+                fillState = { pool: picked, index: 0, total: picked.length, results: [], current: null, phase: 'input', isTodayReview: true };
+                const setup = document.getElementById('fill-setup');
+                const play = document.getElementById('fill-play-area');
+                if (setup) setup.classList.add('hidden');
+                if (play) play.classList.remove('hidden');
+                renderFillProblem();
             }, 60);
         }
 
@@ -1165,6 +1171,13 @@ Return JSON only, no markdown.`;
                 const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));
                 const coreWrong = detail.some(d => !d.correct && !isIdiomOrExample(d.key));
                 addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
+                // [냐냐 요청] 배너(오늘의 복습)로 시작한 경우에만 '오늘 복습함'으로 인정
+                if (fillState.isTodayReview && typeof markWordReviewedToday === 'function') {
+                    markWordReviewedToday(fillState.current.word.id, !coreWrong);
+                }
+                // 진행 상황 저장 + 헤더 배너(남은 개수) 갱신
+                try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+                if (typeof updateStats === 'function') updateStats();
             }
 
             if (typeof logAction === 'function') logAction('review'); // 복습 1개 기록
