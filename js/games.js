@@ -629,9 +629,9 @@
         // [냐냐 PATCH] 단어 복습 (깜빡이 방식, 점수 없음, 단어 선택 가능)
         // ============================================================
         let reviewState = null;
-        let reviewScope = 'weak'; // [냐냐 요청] '오늘 복습'은 배너로 일원화 → 기본은 약점 단어
-        let reviewCount = 20;   // [냐냐 PATCH] 복습할 단어 개수
-        let reviewRepeat = 1;   // [냐냐 PATCH] 반복 횟수
+        let reviewScope = 'not-mastered'; // [냐냐 요청] 기본: 마스터 안 된 단어
+        let reviewCount = 10;   // [냐냐 요청] 깜빡이 기본 10개
+        let reviewRepeat = 2;   // [냐냐 요청] 깜빡이 기본 2회
 
         function resetReviewTab() {
             reviewState = null;
@@ -640,9 +640,9 @@
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
             // 기본 선택 ([냐냐 요청] today-wrong은 메뉴에서 제거됨 → 약점으로 대체)
-            selectReviewScope((!reviewScope || reviewScope === 'today-wrong') ? 'weak' : reviewScope);
-            selectReviewCount(reviewCount || 20);
-            selectReviewRepeat(reviewRepeat || 1);
+            selectReviewScope((!reviewScope || reviewScope === 'today-wrong') ? 'not-mastered' : reviewScope);
+            selectReviewCount(reviewCount || 10);
+            selectReviewRepeat(reviewRepeat || 2);
             // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
             if (typeof resetFillSetup === 'function') resetFillSetup();
             if (typeof resetGrammarFillSetup === 'function') resetGrammarFillSetup();
@@ -874,8 +874,8 @@
         //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
         // ============================================================
         let reviewMode = 'blink';          // 'blink' | 'fill'
-        let fillScope = 'weak'; // [냐냐 요청] '오늘 복습'은 배너로 일원화 → 기본은 약점 단어
-        let fillCount = 10;
+        let fillScope = 'not-mastered'; // [냐냐 요청] 기본: 마스터 안 된 단어
+        let fillCount = 5; // [냐냐 요청] 단어빈칸 기본 5개
         let fillState = null;
 
         function selectReviewMode(mode) {
@@ -908,8 +908,8 @@
             const play = document.getElementById('fill-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            selectFillScope((!fillScope || fillScope === 'today-wrong') ? 'weak' : fillScope);
-            selectFillCount(fillCount || 10);
+            selectFillScope((!fillScope || fillScope === 'today-wrong') ? 'not-mastered' : fillScope);
+            selectFillCount(fillCount || 5);
         }
 
         function selectFillScope(scope) {
