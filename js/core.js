@@ -1339,12 +1339,36 @@ let vocabulary = [];
                 <table class="w-full text-xs"><tbody>${manualRows}</tbody></table>
             </div>
 
-            <div class="bg-violet-50 rounded-2xl border border-violet-200 p-4 space-y-2">
-                <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 복습 주기</h4>
+            <div class="bg-violet-50 rounded-2xl border border-violet-200 p-4 space-y-3">
+                <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 오늘의 복습 — 어떤 단어가 뽑히나요?</h4>
                 <p class="text-xs text-violet-900 font-semibold leading-relaxed">
-                    틀린 단어는 <b>그날 · 1일 · 3일 · 7일 · 14일 · 30일 뒤</b>에 '오늘 복습' 목록에 자동으로 올라와요.
-                    (복습·게임·퀴즈 어디서 틀려도 똑같이 기록돼요)
+                    <b>틀린 적 있고 아직 마스터 안 한 단어</b>가 망각곡선에 따라 올라와요.
+                    헤더의 <b>📖 오늘의 복습</b> 버튼을 누르면 <b>약한 순으로 10개씩</b> 단어 빈칸으로 복습해요.
                 </p>
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
+                    <thead>
+                        <tr class="border-b-2 border-violet-100 text-[11px] text-violet-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">단계</th>
+                            <th class="py-2 px-3 text-left">언제 뜨나</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">1단계</td><td class="py-2 px-3 text-slate-600 font-semibold">틀린 날로부터 <b>1일</b> 뒤</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">2단계</td><td class="py-2 px-3 text-slate-600 font-semibold">복습한 날로부터 <b>3일</b> 뒤</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">3단계</td><td class="py-2 px-3 text-slate-600 font-semibold">복습한 날로부터 <b>7일</b> 뒤</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">4단계</td><td class="py-2 px-3 text-slate-600 font-semibold">복습한 날로부터 <b>14일</b> 뒤</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">5단계</td><td class="py-2 px-3 text-slate-600 font-semibold">복습한 날로부터 <b>30일</b> 뒤</td></tr>
+                        <tr><td class="py-2 px-3 font-black text-emerald-600">졸업</td><td class="py-2 px-3 text-emerald-700 font-semibold">5단계까지 마치면 더 안 떠요 🎓</td></tr>
+                    </tbody>
+                </table>
+                <ul class="text-xs text-violet-900 font-semibold leading-relaxed space-y-1.5 pt-1">
+                    <li>• <b>틀린 당일</b>은 뜨지 않아요. 다음 날부터 시작해요.</li>
+                    <li>• <b>놓쳐도 사라지지 않아요.</b> 복습일이 지나면 할 때까지 계속 떠요.</li>
+                    <li>• 밀린 단어도 <b>하루에 한 번만</b> 떠요. (한 번 하면 그날은 빠짐)</li>
+                    <li>• <b>어디서 틀리든</b>(퀴즈·게임·복습) 단계가 <b>1단계부터 다시</b> 시작돼요.</li>
+                    <li>• 단어 빈칸에서 <b>관용구·예문 칸만</b> 틀린 건 복습 대상이 안 돼요. (뜻·철자·동사변형만 해당)</li>
+                    <li>• 그날 복습을 다 끝내면 버튼이 <b>회색 '완료 ✓'</b>로 바뀌어요.</li>
+                </ul>
             </div>
 
             <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
