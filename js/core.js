@@ -1007,14 +1007,32 @@ let vocabulary = [];
         // 망각곡선 복습 주기 (일). 이 날짜에 해당하면 복습 대상
         const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
 
-        // 오늘 복습해야 할 단어 (복습 주기에 도달한 것)
+        // 오늘 복습해야 할 단어
+        // [냐냐 요청] B방식 — 놓친 복습도 사라지지 않고 할 때까지 계속 뜬다.
+        //   w.reviewStage = 지금까지 끝낸 복습 단계 수 (0이면 아직 1일차도 안 함)
+        //   기준일 = 마지막으로 복습한 날(lastReviewDate). 아직 복습 전이면 틀린 날.
+        //   다음 복습일 = 기준일 + REVIEW_INTERVALS[reviewStage] 일
+        //   '정확히 그날'이 아니라 '그날이 지났으면' 계속 대상 → 밀린 복습 유지
         function getReviewDueWords() {
+            const today = getLocalDateString();
             return vocabulary.filter(w => {
                 if (w.mastered || !w.lastWrongDate) return false;
-                const d = daysSince(w.lastWrongDate);
-                // [냐냐 요청] 틀린 당일(0일)은 제외. 복습 주기(1,3,7,14,30일)에 해당할 때만.
-                return REVIEW_INTERVALS.includes(d);
+                if (w.lastReviewDate === today) return false; // 오늘 이미 복습함
+                const stage = w.reviewStage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return false; // 복습 주기 다 마침
+                const base = w.lastReviewDate || w.lastWrongDate; // 복습했으면 그날부터 다시 셈
+                return daysSince(base) >= REVIEW_INTERVALS[stage]; // 지났으면 계속 대상(밀린 복습)
             }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
+        }
+
+        // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
+        //   맞았으면 다음 단계로, 핵심을 틀렸으면 주기를 처음부터 다시.
+        function markWordReviewedToday(wordOrId, wasCorrect) {
+            const w = (typeof wordOrId === 'string') ? vocabulary.find(v => v.id === wordOrId) : wordOrId;
+            if (!w) return;
+            w.lastReviewDate = getLocalDateString();
+            if (wasCorrect) w.reviewStage = (w.reviewStage || 0) + 1;
+            else w.reviewStage = 0; // 틀리면 lastWrongDate도 오늘로 갱신되어 곡선 재시작
         }
 
         // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
