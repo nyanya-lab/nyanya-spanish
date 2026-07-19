@@ -1173,6 +1173,9 @@ let vocabulary = [];
                 //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
                 if (!opts.skipReviewDate) {
                     w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
+                    // [냐냐 요청] 퀴즈·게임·복습 어디서 틀리든 망각곡선을 처음부터 다시 시작
+                    w.reviewStage = 0;
+                    w.lastReviewDate = null;
                 }
             }
 
