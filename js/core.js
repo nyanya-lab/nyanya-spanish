@@ -420,24 +420,69 @@ let vocabulary = [];
         }
 
         // ============================================================
-        // [냐냐 요청] AI에게 바로 물어보기 — 퀴즈·빈칸 풀다가 모르는 게 생기면
-        //   화면을 벗어나지 않고 그 자리에서 물어볼 수 있는 떠 있는 버튼.
-        //   진행 중인 퀴즈/복습 상태는 건드리지 않는다(모달만 띄움).
+        // [냐냐 요청] AI에게 바로 물어보기 — 왼쪽 아래에 붙는 대화 패널.
+        //   · 배경을 가리지 않아서 퀴즈·복습을 하면서 그때그때 물어볼 수 있음
+        //   · 대화가 이어짐(앞 내용을 기억) · 새로고침 버튼으로 비우기
+        //   · 탭을 옮겨도 대화는 그대로. 페이지를 새로고침하면 사라짐
         // ============================================================
         let askAiBusy = false;
+        let askAiMessages = []; // { role: 'user' | 'ai', text }
+
+        function toggleAskAi() {
+            const panel = document.getElementById('ask-ai-panel');
+            if (!panel) return;
+            if (panel.classList.contains('hidden')) openAskAi(); else closeAskAi();
+        }
 
         function openAskAi(preset) {
-            const modal = document.getElementById('ask-ai-modal');
-            if (!modal) return;
-            modal.classList.remove('hidden');
+            const panel = document.getElementById('ask-ai-panel');
+            if (!panel) return;
+            panel.classList.remove('hidden');
+            const icon = document.getElementById('ask-ai-fab-icon');
+            if (icon) icon.className = 'fa-solid fa-xmark';
+            renderAskAiThread();
             const input = document.getElementById('ask-ai-input');
             if (input && preset) input.value = preset;
             setTimeout(() => { if (input) input.focus(); }, 60);
         }
 
         function closeAskAi() {
-            const modal = document.getElementById('ask-ai-modal');
-            if (modal) modal.classList.add('hidden');
+            const panel = document.getElementById('ask-ai-panel');
+            if (panel) panel.classList.add('hidden');
+            const icon = document.getElementById('ask-ai-fab-icon');
+            if (icon) icon.className = 'fa-solid fa-comment-dots';
+        }
+
+        function clearAskAi() {
+            askAiMessages = [];
+            renderAskAiThread();
+            const input = document.getElementById('ask-ai-input');
+            if (input) { input.value = ''; input.focus(); }
+        }
+
+        function renderAskAiThread() {
+            const thread = document.getElementById('ask-ai-thread');
+            if (!thread) return;
+            if (!askAiMessages.length) {
+                thread.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center px-4 gap-1.5">
+                        <div class="text-3xl">💬</div>
+                        <p class="text-xs font-bold text-slate-500">풀다가 막히면 물어보세요</p>
+                        <p class="text-[11px] font-semibold text-slate-400 leading-relaxed">단어 차이, 문법, 어순 무엇이든<br>대화는 이어서 물어볼 수 있어요</p>
+                    </div>`;
+                return;
+            }
+            thread.innerHTML = askAiMessages.map(m => {
+                if (m.role === 'user') {
+                    return `<div class="flex justify-end"><div class="bg-violet-600 text-white rounded-2xl rounded-br-md px-3 py-2 max-w-[85%] text-xs font-semibold whitespace-pre-wrap break-words">${escapeHtml(m.text)}</div></div>`;
+                }
+                if (m.role === 'pending') {
+                    return `<div class="flex justify-start"><div class="bg-slate-100 text-slate-400 rounded-2xl rounded-bl-md px-3 py-2 text-xs font-bold">생각하는 중...</div></div>`;
+                }
+                const cls = m.error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-800';
+                return `<div class="flex justify-start"><div class="${cls} rounded-2xl rounded-bl-md px-3 py-2 max-w-[90%] text-xs font-semibold leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(m.text)}</div></div>`;
+            }).join('');
+            thread.scrollTop = thread.scrollHeight;
         }
 
         function askAiKeydown(e) {
@@ -451,30 +496,46 @@ let vocabulary = [];
         async function submitAskAi() {
             if (askAiBusy) return;
             const input = document.getElementById('ask-ai-input');
-            const out = document.getElementById('ask-ai-answer');
-            if (!input || !out) return;
+            if (!input) return;
             const q = input.value.trim();
             if (!q) { showToast("궁금한 걸 적어주세요!", "error"); return; }
 
             askAiBusy = true;
-            out.classList.remove('hidden');
-            out.innerHTML = `<p class="text-xs font-bold text-slate-400">생각하는 중...</p>`;
+            input.value = '';
+            askAiMessages.push({ role: 'user', text: q });
+            askAiMessages.push({ role: 'pending' });
+            renderAskAiThread();
             const btn = document.getElementById('ask-ai-send-btn');
             if (btn) btn.disabled = true;
 
             try {
                 const sys = "너는 한국인 스페인어 학습자를 돕는 친절한 선생님이야. "
                     + "반드시 한국어로, 짧고 명확하게 답해. 예시가 필요하면 스페인어 문장 1~2개만 들어. "
-                    + "군더더기 인사말 없이 바로 핵심부터. 마크다운 기호(**, ##)는 쓰지 마.";
-                const answer = await callGemini(q, sys, null, 'low');
-                const safe = escapeHtml((answer || '').toString().trim());
-                out.innerHTML = `<div class="text-sm font-semibold text-slate-800 leading-relaxed whitespace-pre-wrap">${safe}</div>`;
+                    + "군더더기 인사말 없이 바로 핵심부터. 마크다운 기호(**, ##)는 쓰지 마. "
+                    + "앞선 대화가 있으면 그 맥락을 이어서 답해.";
+                // 최근 대화 몇 개를 같이 보내서 맥락이 이어지게 함
+                const history = askAiMessages
+                    .filter(m => m.role === 'user' || (m.role === 'ai' && !m.error))
+                    .slice(-9, -1)
+                    .map(m => (m.role === 'user' ? '학생: ' : '선생님: ') + m.text)
+                    .join('\n');
+                const prompt = history ? `${history}\n학생: ${q}` : q;
+                const answer = await callGemini(prompt, sys, null, 'low');
+                askAiMessages = askAiMessages.filter(m => m.role !== 'pending');
+                askAiMessages.push({ role: 'ai', text: (answer || '').toString().trim() || '답을 받지 못했어요.' });
             } catch (e) {
                 console.error(e);
-                out.innerHTML = `<p class="text-xs font-bold text-red-500">${escapeHtml(typeof describeGeminiError === 'function' ? describeGeminiError(e) : 'AI 응답을 받지 못했어요. 설정에서 API 키를 확인해 주세요.')}</p>`;
+                askAiMessages = askAiMessages.filter(m => m.role !== 'pending');
+                askAiMessages.push({
+                    role: 'ai', error: true,
+                    text: (typeof describeGeminiError === 'function' ? describeGeminiError(e) : 'AI 응답을 받지 못했어요. 설정에서 API 키를 확인해 주세요.')
+                });
             } finally {
                 askAiBusy = false;
                 if (btn) btn.disabled = false;
+                renderAskAiThread();
+                const el = document.getElementById('ask-ai-input');
+                if (el) el.focus();
             }
         }
 
