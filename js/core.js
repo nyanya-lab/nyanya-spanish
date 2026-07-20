@@ -1213,7 +1213,8 @@ let vocabulary = [];
 
         // [냐냐 요청] 헤더 '오늘 틀린 단어' 버튼 갱신.
         //   퀴즈·게임·복습 어디서 틀렸든 오늘 날짜로 기록된 단어를 센다.
-        //   (단어빈칸에서 관용구·예문만 틀린 건 기록되지 않으므로 여기에도 안 잡힘)
+        //   ※ 현재 헤더 버튼은 내려간 상태 — 버튼이 없으면 아무것도 안 하므로 두면 됨.
+        //     나중에 버튼(id: today-wrong-btn)을 다시 달면 바로 살아남.
         function renderTodayWrongBtn() {
             const btn = document.getElementById('today-wrong-btn');
             const badge = document.getElementById('today-wrong-count-badge');
@@ -1238,7 +1239,7 @@ let vocabulary = [];
         }
 
         function renderTodayReview() {
-            renderTodayWrongBtn(); // [냐냐 요청] 옆의 '오늘 틀린 단어' 버튼도 같이 갱신
+            renderTodayWrongBtn(); // 버튼이 헤더에 있을 때만 동작 (지금은 내려가 있어 그냥 통과)
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
             const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
@@ -1529,7 +1530,9 @@ let vocabulary = [];
                 <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 오늘의 복습 — 어떤 단어가 뽑히나요?</h4>
                 <p class="text-xs text-violet-900 font-semibold leading-relaxed">
                     <b>틀린 적 있고 아직 마스터 안 한 단어</b>가 망각곡선에 따라 올라와요.
-                    헤더의 <b>📖 오늘의 복습</b> 버튼을 누르면 <b>약한 순으로 10개씩</b> 단어 빈칸으로 복습해요.
+                    헤더의 <b>📖 복습</b> 버튼을 누르면 <b>랜덤 10개씩 쓰기 복습</b>으로 진행해요:
+                    1바퀴는 단어를 <b>보면서 2번</b> 쓰고, 2바퀴는 순서를 섞어 <b>가린 채 1번</b> 써요.
+                    가리고 쓴 결과로 복습이 반영돼요 (점수는 안 변해요).
                 </p>
                 <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
                     <thead>
