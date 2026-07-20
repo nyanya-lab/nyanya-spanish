@@ -2335,6 +2335,134 @@
         const WORDS_PER_PAGE = 12;
         let currentPage = 1;
 
+        // ============================================================
+        // [냐냐 요청] 쓰기 연습 — 지금 보고 있는 단어장 목록으로 스페인어를 2번씩 따라 쓴다.
+        //   · 목록은 랜덤 순서 (같은 단어만 반복해서 만나지 않도록)
+        //   · 정답을 보면서 그대로 입력 (철자·악센트를 손에 익히는 교정 연습)
+        //   · 점수는 변하지 않음. 페이지 이동 없이 세션 안에서 끝까지 진행
+        // ============================================================
+        const WRITE_PRACTICE_TIMES = 2;
+        let lastFilteredWords = [];
+        let writePracticeState = null;
+
+        function updateWritePracticeBtn() {
+            const btn = document.getElementById('write-practice-btn');
+            if (!btn) return;
+            const n = lastFilteredWords.length;
+            const cnt = document.getElementById('write-practice-count');
+            if (cnt) cnt.innerText = n + '개';
+            btn.disabled = n === 0;
+            btn.classList.toggle('opacity-40', n === 0);
+            btn.classList.toggle('cursor-not-allowed', n === 0);
+        }
+
+        function startWritePractice() {
+            const pool = (lastFilteredWords || []).filter(w => w && w.word);
+            if (!pool.length) { showToast("연습할 단어가 없어요!", "error"); return; }
+            writePracticeState = {
+                pool: shuffleArray(pool.slice()), // [냐냐 요청] 랜덤 순서
+                index: 0,
+                done: 0
+            };
+            document.getElementById('write-practice-modal').classList.remove('hidden');
+            renderWritePractice();
+        }
+
+        function closeWritePractice() {
+            writePracticeState = null;
+            document.getElementById('write-practice-modal').classList.add('hidden');
+        }
+
+        function renderWritePractice() {
+            const s = writePracticeState;
+            const body = document.getElementById('write-practice-body');
+            if (!s || !body) return;
+
+            if (s.index >= s.pool.length) {
+                body.innerHTML = `
+                    <div class="text-center space-y-4 py-6">
+                        <div class="text-5xl">🎉</div>
+                        <p class="text-lg font-bold text-slate-900">${s.pool.length}개 다 썼어요!</p>
+                        <p class="text-xs font-bold text-slate-400">점수엔 영향 없는 연습이에요</p>
+                        <button onclick="closeWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">닫기</button>
+                    </div>`;
+                return;
+            }
+
+            const w = s.pool[s.index];
+            const dots = Array.from({ length: WRITE_PRACTICE_TIMES }, (_, k) =>
+                `<span class="w-2.5 h-2.5 rounded-full ${k < s.done ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
+            const pct = Math.round(s.index / s.pool.length * 100);
+
+            body.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-[11px] font-bold text-slate-400">${s.index + 1} / ${s.pool.length}</span>
+                            <span class="flex items-center gap-1.5">${dots}</span>
+                        </div>
+                        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-indigo-500 transition-all" style="width:${pct}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 text-center space-y-1">
+                        <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
+                        <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500">보고 그대로 쓰세요 (엔터)</label>
+                        <input id="write-practice-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                            onkeydown="writePracticeKeydown(event)"
+                            class="w-full px-3 py-2.5 rounded-xl border-2 border-indigo-300 bg-indigo-50/40 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            placeholder="${escapeHtml(w.word)}">
+                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">악센트까지 정확히 써야 넘어가요</p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="skipWritePractice()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">건너뛰기</button>
+                        <button onclick="closeWritePractice()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
+                    </div>
+                </div>`;
+            setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
+        }
+
+        function skipWritePractice() {
+            if (!writePracticeState) return;
+            writePracticeState.index++;
+            writePracticeState.done = 0;
+            renderWritePractice();
+        }
+
+        function writePracticeKeydown(e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const s = writePracticeState;
+            const el = document.getElementById('write-practice-input');
+            if (!s || !el) return;
+            const w = s.pool[s.index];
+            // 철자 연습이므로 악센트까지 정확히. 대소문자와 앞뒤·중복 공백만 관대하게 처리
+            const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+            if (norm(el.value) === norm(w.word)) {
+                s.done++;
+                if (s.done >= WRITE_PRACTICE_TIMES) {
+                    s.index++;
+                    s.done = 0;
+                    renderWritePractice();
+                } else {
+                    el.value = '';
+                    renderWritePractice();
+                }
+            } else {
+                el.classList.add('border-red-400', 'bg-red-50');
+                const hint = document.getElementById('write-practice-hint');
+                if (hint) { hint.innerText = '다시 한 번 — 철자를 확인해 보세요'; hint.className = 'text-[11px] font-bold text-red-500'; }
+                setTimeout(() => el.classList.remove('border-red-400', 'bg-red-50'), 500);
+                el.select();
+            }
+        }
+
         function renderWordList() {
             renderStreakBadge();
             renderTodayReview();
@@ -2429,9 +2557,14 @@
                 grid.innerHTML = '';
                 emptyState.classList.remove('hidden');
                 renderPagination(0, 0); // [냐냐 PATCH-페이지네이션] 결과 없으면 바도 숨김
+                lastFilteredWords = []; // [냐냐 요청] 쓰기 연습이 쓸 목록
+                updateWritePracticeBtn();
                 return;
             }
             emptyState.classList.add('hidden');
+            // [냐냐 요청] 지금 보고 있는 목록(필터·검색 반영)을 쓰기 연습에서 그대로 사용
+            lastFilteredWords = filteredSorted;
+            updateWritePracticeBtn();
 
             // [냐냐 PATCH-페이지네이션] 검색 중엔 페이지 없이 전체 표시, 아니면 50개씩 잘라 그림
             let pageItems = filteredSorted;
