@@ -72,6 +72,12 @@
                             <span class="text-[10px] font-black text-amber-600 tracking-widest">오늘의 복습</span>
                             <span id="today-review-count-badge" class="text-sm font-extrabold text-amber-700">0개</span>
                         </button>
+                        <!-- [냐냐 요청] 오늘 틀린 단어 보기 (복습·퀴즈·게임 어디서 틀렸든 한 번에) -->
+                        <button id="today-wrong-btn" onclick="showTodayWrongInList()" class="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-2xl border border-rose-200 transition-all active:scale-95 cursor-pointer">
+                            <span class="text-sm">✏️</span>
+                            <span class="text-[10px] font-black text-rose-500 tracking-widest">오늘 틀린 단어</span>
+                            <span id="today-wrong-count-badge" class="text-sm font-extrabold text-rose-700">0개</span>
+                        </button>
                         <div class="flex items-center gap-2.5 bg-sky-50 px-3 py-1.5 rounded-2xl border border-sky-200">
                             <span class="text-[10px] font-black text-[#4a85bb] tracking-widest">문법</span>
                             <div class="flex items-center gap-1">
