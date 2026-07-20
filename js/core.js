@@ -419,6 +419,65 @@ let vocabulary = [];
             window.speechSynthesis.speak(u);
         }
 
+        // ============================================================
+        // [냐냐 요청] AI에게 바로 물어보기 — 퀴즈·빈칸 풀다가 모르는 게 생기면
+        //   화면을 벗어나지 않고 그 자리에서 물어볼 수 있는 떠 있는 버튼.
+        //   진행 중인 퀴즈/복습 상태는 건드리지 않는다(모달만 띄움).
+        // ============================================================
+        let askAiBusy = false;
+
+        function openAskAi(preset) {
+            const modal = document.getElementById('ask-ai-modal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            const input = document.getElementById('ask-ai-input');
+            if (input && preset) input.value = preset;
+            setTimeout(() => { if (input) input.focus(); }, 60);
+        }
+
+        function closeAskAi() {
+            const modal = document.getElementById('ask-ai-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function askAiKeydown(e) {
+            // 엔터로 전송 (줄바꿈은 Shift+Enter)
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitAskAi();
+            }
+        }
+
+        async function submitAskAi() {
+            if (askAiBusy) return;
+            const input = document.getElementById('ask-ai-input');
+            const out = document.getElementById('ask-ai-answer');
+            if (!input || !out) return;
+            const q = input.value.trim();
+            if (!q) { showToast("궁금한 걸 적어주세요!", "error"); return; }
+
+            askAiBusy = true;
+            out.classList.remove('hidden');
+            out.innerHTML = `<p class="text-xs font-bold text-slate-400">생각하는 중...</p>`;
+            const btn = document.getElementById('ask-ai-send-btn');
+            if (btn) btn.disabled = true;
+
+            try {
+                const sys = "너는 한국인 스페인어 학습자를 돕는 친절한 선생님이야. "
+                    + "반드시 한국어로, 짧고 명확하게 답해. 예시가 필요하면 스페인어 문장 1~2개만 들어. "
+                    + "군더더기 인사말 없이 바로 핵심부터. 마크다운 기호(**, ##)는 쓰지 마.";
+                const answer = await callGemini(q, sys, null, 'low');
+                const safe = escapeHtml((answer || '').toString().trim());
+                out.innerHTML = `<div class="text-sm font-semibold text-slate-800 leading-relaxed whitespace-pre-wrap">${safe}</div>`;
+            } catch (e) {
+                console.error(e);
+                out.innerHTML = `<p class="text-xs font-bold text-red-500">${escapeHtml(typeof describeGeminiError === 'function' ? describeGeminiError(e) : 'AI 응답을 받지 못했어요. 설정에서 API 키를 확인해 주세요.')}</p>`;
+            } finally {
+                askAiBusy = false;
+                if (btn) btn.disabled = false;
+            }
+        }
+
         function getLocalDateString(date = new Date()) {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -3438,8 +3497,13 @@ let vocabulary = [];
                 // 게임 탭 열면 메뉴로 초기화
                 if (typeof resetGamesMenu === 'function') resetGamesMenu();
             } else if (tabId === 'review') {
-                // [냐냐 요청] 복습 진행 중이면(reviewState 살아있음) 화면 유지. 처음/끝났을 때만 셋업 화면으로.
-                const reviewInProgress = (typeof reviewState !== 'undefined') && reviewState;
+                // [냐냐 요청] 복습 진행 중이면 화면 유지. 처음/끝났을 때만 셋업 화면으로.
+                //   ⚠️ resetReviewTab()은 깜빡이·단어빈칸·문법표빈칸을 전부 초기화하므로
+                //      셋 중 하나라도 진행 중이면 건드리면 안 됨.
+                const reviewInProgress =
+                    (typeof reviewState !== 'undefined' && reviewState) ||
+                    (typeof fillState !== 'undefined' && fillState) ||
+                    (typeof gfillState !== 'undefined' && gfillState);
                 if (typeof resetReviewTab === 'function' && !reviewInProgress) resetReviewTab();
             } else if (tabId === 'ai-feedback') {
                 // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
