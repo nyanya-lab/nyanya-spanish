@@ -949,26 +949,17 @@
             renderFillProblem();
         }
 
-        // [냐냐 요청] 헤더의 '오늘의 복습' 배너 → 원클릭: 복습탭 + 단어빈칸으로 10개 바로 시작
-        //   fillScope(메뉴 설정)는 건드리지 않고 풀을 직접 구성한다.
-        //   isTodayReview 플래그가 있어야 '오늘 복습함'으로 인정된다(배너로만 인정).
+        // [냐냐 요청] 헤더의 '복습' 배너 → 쓰기 복습으로 원클릭.
+        //   랜덤 10개 · 1바퀴 보고 2번 → 2바퀴 가리고 1번 · 2바퀴 첫 시도로 망각곡선 반영.
+        //   모달로 돌아서 탭 이동이 필요 없음 (어느 화면에서든 바로 시작).
         const TODAY_REVIEW_BATCH = 10;
         function startTodayReviewShortcut() {
             const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
-            changeTab('review');
-            // 복습 탭 진입 후 단어빈칸 모드로 시작 (렌더 타이밍 위해 살짝 지연)
-            setTimeout(() => {
-                if (typeof selectReviewMode === 'function') selectReviewMode('fill');
-                // [냐냐 요청] 매번 같은 단어만 나오지 않도록 랜덤으로 10개
-                const picked = shuffleArray(due.slice()).slice(0, TODAY_REVIEW_BATCH);
-                fillState = { pool: picked, index: 0, total: picked.length, results: [], current: null, phase: 'input', isTodayReview: true };
-                const setup = document.getElementById('fill-setup');
-                const play = document.getElementById('fill-play-area');
-                if (setup) setup.classList.add('hidden');
-                if (play) play.classList.remove('hidden');
-                renderFillProblem();
-            }, 60);
+            const picked = shuffleArray(due.slice()).slice(0, TODAY_REVIEW_BATCH);
+            if (typeof beginWritePractice === 'function') {
+                beginWritePractice(picked, { isTodayReview: true });
+            }
         }
 
         // [냐냐 PATCH] 한 단어당 "한 언어만" 비움 (스페인어만 or 한국어만)
