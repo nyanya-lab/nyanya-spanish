@@ -400,6 +400,18 @@ let vocabulary = [];
             return `${y}-${m}-${d}`;
         }
 
+        // [냐냐 요청] 제대로 섞기 (Fisher-Yates).
+        //   예전에 쓰던 sort(() => Math.random() - 0.5)는 고르게 안 섞여서
+        //   앞쪽 항목이 계속 앞에 남는 편향이 있었음. 이 함수는 모든 순서가 같은 확률.
+        //   배열을 직접 섞고 그대로 돌려주므로 기존 .sort(...) 자리에 그대로 대체 가능.
+        function shuffleArray(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+            }
+            return arr;
+        }
+
         // [냐냐 PATCH-수준맞춤] 누적된 작은 통계만으로 AI 프롬프트에 넣을 짧은 요약 문장 생성.
         // 전체 기록을 보내지 않고 이 요약 텍스트(보통 100토큰 이내)만 매번 같이 보냄.
         function buildLearnerProfileSummary() {
@@ -1277,7 +1289,7 @@ let vocabulary = [];
                 ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
                     ['깜박이', '+0.2', '−2'],
-                    ['단어 빈칸', '맞힌 칸당 +0.7', '틀린 칸당 −0.5'],
+                    ['단어 빈칸', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
                     ['문법표 빈칸', '단어 점수 무관', '마스터한 표를 틀리면 마스터 해제']
                 ]}
             ];
