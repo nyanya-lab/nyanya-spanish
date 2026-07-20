@@ -1162,10 +1162,16 @@ Return JSON only, no markdown.`;
             fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
 
             // [냐냐 PATCH-0배치] 단어 빈칸 복습 점수: 정답 칸당 +0.7 / 오답 칸당 -0.5
+            //   [냐냐 요청] 단, 동사변형(conj-*) 칸은 한 문제에 6칸까지 나올 수 있어
+            //   점수가 과하게 커지므로 ±0.1로 작게 계산한다.
             if (typeof addWordScore === 'function' && fillState.current.word) {
-                const nRight = detail.filter(d => d.correct).length;
-                const nWrong = detail.length - nRight;
-                const delta = (nRight * 0.7) + (nWrong * -0.5);
+                const isConj = (k) => k && k.startsWith('conj-');
+                let delta = 0;
+                detail.forEach(d => {
+                    if (d.correct) delta += isConj(d.key) ? 0.1 : 0.7;
+                    else delta += isConj(d.key) ? -0.1 : -0.5;
+                });
+                delta = Math.round(delta * 100) / 100; // 소수점 오차 정리
                 // [냐냐 요청] 망각곡선 복습 대상 판정: 관용구/예문 칸은 제외하고,
                 //   핵심 칸(뜻·철자·동사변형)에서 틀렸을 때만 lastWrongDate를 찍는다.
                 const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));
