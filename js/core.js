@@ -1057,13 +1057,42 @@ let vocabulary = [];
             if (filter) filter.value = 'all';
             const sortSel = document.getElementById('sort-select');
             if (sortSel) sortSel.value = 'weak-score';
+            // [냐냐 요청] 헤더에서 눌러도 동작하도록 단어장 탭으로 이동 (기존엔 빠져 있었음)
+            if (typeof changeTab === 'function') changeTab('list');
             renderWordList();
             const grid = document.getElementById('vocabulary-grid');
             if (grid) setTimeout(() => grid.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-            showToast("오늘 복습할 단어를 모아서 보여드려요! 📖", "info");
+            showToast("오늘 틀린 단어를 모아서 보여드려요! ✏️", "info");
+        }
+
+        // [냐냐 요청] 헤더 '오늘 틀린 단어' 버튼 갱신.
+        //   퀴즈·게임·복습 어디서 틀렸든 오늘 날짜로 기록된 단어를 센다.
+        //   (단어빈칸에서 관용구·예문만 틀린 건 기록되지 않으므로 여기에도 안 잡힘)
+        function renderTodayWrongBtn() {
+            const btn = document.getElementById('today-wrong-btn');
+            const badge = document.getElementById('today-wrong-count-badge');
+            if (!btn || !badge) return;
+            const n = (typeof getTodayReviewWords === 'function') ? getTodayReviewWords().length : 0;
+            badge.innerText = n + '개';
+            if (n === 0) {
+                btn.disabled = true;
+                btn.classList.remove('bg-rose-50', 'hover:bg-rose-100', 'border-rose-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.add('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.remove('text-rose-700'); badge.classList.add('text-slate-400');
+                btn.querySelector('.tracking-widest')?.classList.remove('text-rose-500');
+                btn.querySelector('.tracking-widest')?.classList.add('text-slate-400');
+            } else {
+                btn.disabled = false;
+                btn.classList.add('bg-rose-50', 'hover:bg-rose-100', 'border-rose-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.remove('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.add('text-rose-700'); badge.classList.remove('text-slate-400');
+                btn.querySelector('.tracking-widest')?.classList.add('text-rose-500');
+                btn.querySelector('.tracking-widest')?.classList.remove('text-slate-400');
+            }
         }
 
         function renderTodayReview() {
+            renderTodayWrongBtn(); // [냐냐 요청] 옆의 '오늘 틀린 단어' 버튼도 같이 갱신
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
             const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
