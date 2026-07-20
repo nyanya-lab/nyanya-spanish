@@ -2362,7 +2362,8 @@
                 const matchesWeak = weakFilter === 'all'
                     || (weakFilter === 'weak' && w.weak)
                     || (weakFilter === 'not-weak' && !w.weak);
-                const matchesTodayWrong = !todayWrongFilterActive || (!w.mastered && w.lastWrongDate && (daysSince(w.lastWrongDate) === 0 || REVIEW_INTERVALS.includes(daysSince(w.lastWrongDate))));
+                // [냐냐 요청] '오늘 틀린 단어'는 말 그대로 오늘 틀린 것만. (복습 주기는 헤더 배너가 담당)
+                const matchesTodayWrong = !todayWrongFilterActive || (!w.mastered && w.lastWrongDate && daysSince(w.lastWrongDate) === 0);
                 return matchesSearch && matchesPos && matchesMastery && matchesWeak && matchesTodayWrong;
             });
 
