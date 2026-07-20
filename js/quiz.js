@@ -57,7 +57,7 @@ let quizSession = null;
             );
             if (linked.length === 0) return out;
 
-            const shuffled = [...linked].sort(() => Math.random() - 0.5);
+            const shuffled = shuffleArray([...linked]);
             const limit = Math.min(maxCount, shuffled.length);
 
             for (let i = 0; i < limit; i++) {
@@ -97,7 +97,7 @@ let quizSession = null;
                                 type: 'syn-mc',
                                 word: w,
                                 answer: answerWord,
-                                choices: [...new Set(choices)].sort(() => Math.random() - 0.5),
+                                choices: shuffleArray([...new Set(choices)]),
                                 promptText: `🔍 차이 구분 — "${asked.desc}" 을(를) 뜻하는 단어는?`,
                                 synInfo: { partner: pick.t, kind: pick.link.type, difference: pick.link.difference }
                             });
@@ -117,19 +117,19 @@ let quizSession = null;
 
                 // 오답 보기: 같은 품사의 다른 단어 (그 단어의 유의어/반의어가 아닌 것)
                 const relatedIds = w.synonyms.map(l => l.id);
-                let filler = vocabulary
+                let filler = shuffleArray(vocabulary
                     .filter(v => v.id !== w.id && !relatedIds.includes(v.id) && v.pos === w.pos)
-                    .map(v => v.word).sort(() => Math.random() - 0.5);
+                    .map(v => v.word));
                 if (filler.length < 3) {
-                    const more = vocabulary
+                    const more = shuffleArray(vocabulary
                         .filter(v => v.id !== w.id && !relatedIds.includes(v.id) && v.pos !== w.pos)
-                        .map(v => v.word).sort(() => Math.random() - 0.5);
+                        .map(v => v.word));
                     filler = filler.concat(more);
                 }
                 if (filler.length < 2) continue; // 보기가 너무 적으면 출제 안 함
 
                 let choices = [pick.t.word, ...filler.slice(0, 3)];
-                choices = [...new Set(choices)].sort(() => Math.random() - 0.5);
+                choices = shuffleArray([...new Set(choices)]);
                 out.push({
                     type: 'syn-mc',
                     word: w,
@@ -336,16 +336,16 @@ let quizSession = null;
                     const samePos = vocabulary.filter(x => x.id !== w.id && x.pos === w.pos).map(x => x.meaning);
                     const otherPos = vocabulary.filter(x => x.id !== w.id && x.pos !== w.pos).map(x => x.meaning);
                     let pool = [...new Set(samePos)]; // 같은 품사 우선, 중복 제거
-                    pool.sort(() => Math.random() - 0.5);
+                    shuffleArray(pool);
                     // 같은 품사가 3개 미만이면 다른 품사로 채움
                     if (pool.length < 3) {
-                        const filler = [...new Set(otherPos)].sort(() => Math.random() - 0.5);
+                        const filler = shuffleArray([...new Set(otherPos)]);
                         pool = pool.concat(filler);
                     }
                     // 정답과 같은 뜻은 제외
                     pool = pool.filter(m => m !== w.meaning);
                     choices = choices.concat(pool.slice(0, 3));
-                    choices.sort(() => Math.random() - 0.5);
+                    shuffleArray(choices);
                     q.choices = choices;
                 }
                 questions.push(q);
@@ -394,9 +394,9 @@ let quizSession = null;
                 let choices = [answer];
                 let pool = allIdiomsGlobal.map(it => it[distractorField]).filter(v => v && v !== answer);
                 pool = [...new Set(pool)];
-                pool.sort(() => Math.random() - 0.5);
+                shuffleArray(pool);
                 choices = choices.concat(pool.slice(0, 3));
-                choices.sort(() => Math.random() - 0.5);
+                shuffleArray(choices);
                 questions.push({ type: 'idiom-mc', word: target.word, answer: answer, choices: choices, promptText: promptText, idiomData: target });
             }
 
@@ -409,7 +409,7 @@ let quizSession = null;
             if (questions.length > count) questions.length = count;
 
             // 단어 문제 + 관용구 문제 + 유의어 문제 전체를 섞음
-            questions.sort(() => Math.random() - 0.5);
+            shuffleArray(questions);
 
             quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
 
