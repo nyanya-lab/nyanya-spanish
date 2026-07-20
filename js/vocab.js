@@ -2359,10 +2359,22 @@
         function startWritePractice() {
             const pool = (lastFilteredWords || []).filter(w => w && w.word);
             if (!pool.length) { showToast("연습할 단어가 없어요!", "error"); return; }
+            beginWritePractice(pool, { isTodayReview: false });
+        }
+
+        // [냐냐 요청] 쓰기 연습 공용 시작점.
+        //   1바퀴: 단어를 보면서 2번씩 쓰기 (익히기)
+        //   2바퀴: 순서를 다시 섞고, 단어를 가린 채 뜻만 보고 1번 쓰기 (확인)
+        //   isTodayReview면 2바퀴 첫 시도 결과로 망각곡선을 단어당 1회 반영 (점수는 안 건드림)
+        function beginWritePractice(pool, opts) {
             writePracticeState = {
-                pool: shuffleArray(pool.slice()), // [냐냐 요청] 랜덤 순서
+                pool: shuffleArray(pool.slice()),
                 index: 0,
-                done: 0
+                done: 0,
+                phase: 1,                 // 1 = 보고 쓰기, 2 = 가리고 쓰기
+                retry: false,             // 2바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
+                wrongCount: 0,
+                isTodayReview: !!(opts && opts.isTodayReview)
             };
             document.getElementById('write-practice-modal').classList.remove('hidden');
             renderWritePractice();
@@ -2379,44 +2391,180 @@
             if (!s || !body) return;
 
             if (s.index >= s.pool.length) {
+                if (s.phase === 1) {
+                    // [냐냐 요청] 1바퀴(보고 2번) 끝 → 순서 다시 섞어서 2바퀴(가리고 1번)로
+                    s.phase = 2;
+                    s.pool = shuffleArray(s.pool.slice());
+                    s.index = 0;
+                    s.done = 0;
+                    s.retry = false;
+                    s.showDetail = false;
+                    body.innerHTML = `
+                        <div class="text-center space-y-4 py-6">
+                            <div class="text-5xl">🙈</div>
+                            <p class="text-lg font-bold text-slate-900">이제 가리고 써볼 차례!</p>
+                            <p class="text-xs font-bold text-slate-500 leading-relaxed">뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.</p>
+                            <button onclick="renderWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">2바퀴 시작 →</button>
+                        </div>`;
+                    return;
+                }
+                // 2바퀴까지 끝 → 결과
+                const total = s.pool.length;
+                const ok = total - s.wrongCount;
+                const reviewNote = s.isTodayReview
+                    ? `<p class="text-xs font-bold text-violet-600">📖 복습에 반영했어요 (단어당 1회)</p>`
+                    : `<p class="text-xs font-bold text-slate-400">점수엔 영향 없는 연습이에요</p>`;
+                let nextBtn = '';
+                if (s.isTodayReview && typeof getReviewDueWords === 'function') {
+                    const remain = getReviewDueWords().length;
+                    if (remain > 0) {
+                        nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, 10)}개 이어서 →</button>`;
+                    }
+                }
                 body.innerHTML = `
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
-                        <p class="text-lg font-bold text-slate-900">${s.pool.length}개 다 썼어요!</p>
-                        <p class="text-xs font-bold text-slate-400">점수엔 영향 없는 연습이에요</p>
-                        <button onclick="closeWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">닫기</button>
+                        <p class="text-lg font-bold text-slate-900">${total}개 다 썼어요!</p>
+                        <p class="text-sm font-bold text-slate-600">가리고 쓰기: <span class="text-emerald-600">${ok}개 성공</span>${s.wrongCount ? ` · <span class="text-rose-500">${s.wrongCount}개는 정답 보고 다시 씀</span>` : ''}</p>
+                        ${reviewNote}
+                        ${nextBtn}
+                        <button onclick="closeWritePractice()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">닫기</button>
                     </div>`;
                 return;
             }
 
             const w = s.pool[s.index];
-            const dots = Array.from({ length: WRITE_PRACTICE_TIMES }, (_, k) =>
+            const dotsCount = s.phase === 1 ? WRITE_PRACTICE_TIMES : 1;
+            const dots = Array.from({ length: dotsCount }, (_, k) =>
                 `<span class="w-2.5 h-2.5 rounded-full ${k < s.done ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
             const pct = Math.round(s.index / s.pool.length * 100);
+
+            // [냐냐 요청] 품사 뱃지
+            const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
+            const posHtml = posLabel
+                ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
+                : '';
+
+            // [냐냐 요청] 관용구 (예전 형식 w.idiom 도 함께 지원)
+            const idiomList = (w.idioms && w.idioms.length)
+                ? w.idioms
+                : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+            const idiomHtml = idiomList.length
+                ? `<div class="pt-2 mt-2 border-t border-slate-200 space-y-1 text-left">
+                       ${idiomList.map(it => `
+                           <p class="text-[11px] font-bold text-slate-600 leading-relaxed break-words">
+                               <span class="text-slate-400">·</span> ${escapeHtml(it.idiom || '')}
+                               ${it.idiomMeaning ? `<span class="text-slate-400 font-semibold"> — ${escapeHtml(it.idiomMeaning)}</span>` : ''}
+                           </p>`).join('')}
+                   </div>`
+                : '';
+
+            // [냐냐 요청] 단어를 누르면 전체 정보 펼쳐보기 (연습은 그대로 유지)
+            let detailHtml = '';
+            if (s.showDetail) {
+                const rows = [];
+                if (w.example) {
+                    rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-0.5">예문</p>
+                        <p class="text-xs font-bold text-slate-700 leading-relaxed break-words">${escapeHtml(w.example)}</p>
+                        ${w.exampleMeaning ? `<p class="text-[11px] font-semibold text-slate-400 break-words">${escapeHtml(w.exampleMeaning)}</p>` : ''}</div>`);
+                }
+                // 유의어 / 반의어
+                const linkRow = (list, type) => (list || []).map(l => {
+                    const t = vocabulary.find(v => v.id === l.id);
+                    if (!t) return '';
+                    return `<span class="inline-block text-[11px] font-bold ${type === 'antonym' ? 'text-rose-600 bg-rose-50 border-rose-100' : 'text-sky-600 bg-sky-50 border-sky-100'} border rounded-lg px-2 py-0.5 m-0.5">${escapeHtml(t.word)}<span class="text-slate-400 font-semibold"> ${escapeHtml(t.meaning || '')}</span></span>`;
+                }).join('');
+                const synTxt = linkRow(w.synonyms, 'synonym');
+                const antTxt = linkRow(w.antonyms, 'antonym');
+                if (synTxt || antTxt) {
+                    rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-0.5">유의어 · 반의어</p><div class="-m-0.5">${synTxt}${antTxt}</div></div>`);
+                }
+                // 동사변형 (시제별)
+                const byTense = (w.conjugationsByTense && Object.keys(w.conjugationsByTense).length)
+                    ? w.conjugationsByTense
+                    : (w.conjugations ? { presente: w.conjugations } : {});
+                const persons = [['yo', 'yo'], ['tu', 'tú'], ['el', 'él'], ['nos', 'nos.'], ['vos', 'vos.'], ['ellos', 'ellos']];
+                const tenseHtml = Object.keys(byTense).map(k => {
+                    const c = byTense[k] || {};
+                    if (c.form) {
+                        const o = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS.find(t => t.key === k) : null;
+                        return `<div class="mb-1"><span class="text-[10px] font-bold text-indigo-600">${escapeHtml(o ? o.label : k)}</span>
+                                <span class="text-[11px] font-bold text-slate-700 ml-1">${escapeHtml(c.form)}</span></div>`;
+                    }
+                    const cells = persons.filter(([key]) => c[key]).map(([key, label]) =>
+                        `<span class="text-[11px] font-semibold text-slate-600"><span class="text-slate-400">${label}</span> ${escapeHtml(c[key])}</span>`).join('');
+                    if (!cells) return '';
+                    const o = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS.find(t => t.key === k) : null;
+                    return `<div class="mb-1.5">
+                        <p class="text-[10px] font-bold text-indigo-600 mb-0.5">${escapeHtml(o ? o.label : k)}</p>
+                        <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">${cells}</div></div>`;
+                }).join('');
+                if (tenseHtml) rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-1">동사변형</p>${tenseHtml}</div>`);
+
+                detailHtml = rows.length
+                    ? `<div class="pt-2 mt-2 border-t border-slate-200 space-y-2.5 text-left">${rows.join('')}</div>`
+                    : `<p class="pt-2 mt-2 border-t border-slate-200 text-[11px] font-bold text-slate-300 text-center">더 등록된 정보가 없어요</p>`;
+            }
+
+            // [냐냐 요청] 바퀴별 카드 — 1바퀴: 단어 보임 / 2바퀴: 가림(뜻만) / 2바퀴 틀림: 정답 공개
+            let cardHtml, inputLabel, placeholder;
+            if (s.phase === 1) {
+                cardHtml = `
+                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[38vh] overflow-y-auto no-scrollbar">
+                        <div onclick="toggleWritePracticeDetail()" class="text-center space-y-1 cursor-pointer select-none" title="눌러서 전체 정보 보기">
+                            ${posHtml}
+                            <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
+                            <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
+                            <p class="text-[10px] font-bold text-slate-400 pt-0.5">
+                                <i class="fa-solid fa-chevron-${s.showDetail ? 'up' : 'down'} mr-1"></i>${s.showDetail ? '접기' : '단어 정보 보기'}
+                            </p>
+                        </div>
+                        ${idiomHtml}
+                        ${detailHtml}
+                    </div>`;
+                inputLabel = '보고 그대로 쓰세요 (엔터)';
+                placeholder = w.word;
+            } else if (!s.retry) {
+                cardHtml = `
+                    <div class="bg-violet-50 rounded-2xl border border-violet-200 p-5 text-center space-y-1">
+                        ${posHtml}
+                        <p class="text-2xl font-extrabold text-violet-300 tracking-widest select-none">? ? ?</p>
+                        <p class="text-base font-extrabold text-slate-800 break-words">${escapeHtml(w.meaning || '')}</p>
+                    </div>`;
+                inputLabel = '떠올려서 쓰세요 (엔터)';
+                placeholder = '스페인어로...';
+            } else {
+                cardHtml = `
+                    <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
+                        ${posHtml}
+                        <p class="text-2xl font-extrabold text-rose-600 break-words">${escapeHtml(w.word)}</p>
+                        <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
+                        <p class="text-[10px] font-bold text-rose-400 pt-0.5">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
+                    </div>`;
+                inputLabel = '정답을 보고 한 번 더 (엔터)';
+                placeholder = w.word;
+            }
 
             body.innerHTML = `
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-[11px] font-bold text-slate-400">${s.index + 1} / ${s.pool.length}</span>
+                            <span class="text-[11px] font-bold ${s.phase === 2 ? 'text-violet-500' : 'text-slate-400'}">${s.phase === 1 ? '1바퀴 · 보고 쓰기' : '2바퀴 · 가리고 쓰기'} &nbsp;${s.index + 1} / ${s.pool.length}</span>
                             <span class="flex items-center gap-1.5">${dots}</span>
                         </div>
                         <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-indigo-500 transition-all" style="width:${pct}%"></div>
+                            <div class="h-full ${s.phase === 2 ? 'bg-violet-500' : 'bg-indigo-500'} transition-all" style="width:${pct}%"></div>
                         </div>
                     </div>
 
-                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 text-center space-y-1">
-                        <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
-                        <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
-                    </div>
+                    ${cardHtml}
 
                     <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">보고 그대로 쓰세요 (엔터)</label>
+                        <label class="block text-xs font-bold text-slate-500">${inputLabel}</label>
                         <input id="write-practice-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
                             onkeydown="writePracticeKeydown(event)"
-                            class="w-full px-3 py-2.5 rounded-xl border-2 border-indigo-300 bg-indigo-50/40 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                            placeholder="${escapeHtml(w.word)}">
+                            class="w-full px-3 py-2.5 rounded-xl border-2 ${s.phase === 2 && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2"
+                            placeholder="${escapeHtml(placeholder)}">
                         <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">악센트까지 정확히 써야 넘어가요</p>
                     </div>
 
@@ -2428,11 +2576,32 @@
             setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
         }
 
+        // [냐냐 요청] 단어 정보 펼치기/접기. 다시 그리므로 입력 중이던 값은 보존한다.
+        function toggleWritePracticeDetail() {
+            if (!writePracticeState) return;
+            const el = document.getElementById('write-practice-input');
+            const keep = el ? el.value : '';
+            writePracticeState.showDetail = !writePracticeState.showDetail;
+            renderWritePractice();
+            const el2 = document.getElementById('write-practice-input');
+            if (el2) el2.value = keep;
+        }
+
         function skipWritePractice() {
             if (!writePracticeState) return;
             writePracticeState.index++;
             writePracticeState.done = 0;
+            writePracticeState.retry = false;
+            writePracticeState.showDetail = false;
             renderWritePractice();
+        }
+
+        function writePracticeFlashWrong(el) {
+            el.classList.add('border-red-400', 'bg-red-50');
+            const hint = document.getElementById('write-practice-hint');
+            if (hint) { hint.innerText = '다시 한 번 — 철자를 확인해 보세요'; hint.className = 'text-[11px] font-bold text-red-500'; }
+            setTimeout(() => el.classList.remove('border-red-400', 'bg-red-50'), 500);
+            el.select();
         }
 
         function writePracticeKeydown(e) {
@@ -2444,22 +2613,47 @@
             const w = s.pool[s.index];
             // 철자 연습이므로 악센트까지 정확히. 대소문자와 앞뒤·중복 공백만 관대하게 처리
             const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
-            if (norm(el.value) === norm(w.word)) {
-                s.done++;
-                if (s.done >= WRITE_PRACTICE_TIMES) {
-                    s.index++;
-                    s.done = 0;
+            const isMatch = norm(el.value) === norm(w.word);
+
+            // ── 1바퀴: 보면서 2번 쓰기 ──
+            if (s.phase === 1) {
+                if (isMatch) {
+                    s.done++;
+                    if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; s.showDetail = false; }
+                    else el.value = '';
                     renderWritePractice();
                 } else {
-                    el.value = '';
-                    renderWritePractice();
+                    writePracticeFlashWrong(el);
                 }
+                return;
+            }
+
+            // ── 2바퀴: 가리고 쓰기 ──
+            if (s.retry) {
+                // 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감
+                if (isMatch) { s.retry = false; s.index++; s.done = 0; renderWritePractice(); }
+                else writePracticeFlashWrong(el);
+                return;
+            }
+            // 첫 시도 — 여기서만 망각곡선 반영 (단어당 1회, 점수는 안 건드림)
+            if (isMatch) {
+                if (s.isTodayReview && typeof markWordReviewedToday === 'function') {
+                    markWordReviewedToday(w, true);
+                    try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
+                    if (typeof updateStats === 'function') updateStats();
+                }
+                s.index++;
+                s.done = 0;
+                renderWritePractice();
             } else {
-                el.classList.add('border-red-400', 'bg-red-50');
-                const hint = document.getElementById('write-practice-hint');
-                if (hint) { hint.innerText = '다시 한 번 — 철자를 확인해 보세요'; hint.className = 'text-[11px] font-bold text-red-500'; }
-                setTimeout(() => el.classList.remove('border-red-400', 'bg-red-50'), 500);
-                el.select();
+                s.wrongCount++;
+                s.retry = true;
+                if (s.isTodayReview && typeof markWordReviewedToday === 'function') {
+                    markWordReviewedToday(w, false); // 단계 처음부터 (내일 1일차로 다시)
+                    try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
+                    if (typeof updateStats === 'function') updateStats();
+                }
+                renderWritePractice();
             }
         }
 
