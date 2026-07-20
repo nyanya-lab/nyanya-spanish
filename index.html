@@ -69,13 +69,13 @@
                         <!-- [냐냐 요청] 오늘의 복습 배너 (단어↔문법 사이). 복습할 단어 있으면 활성, 없으면 회색 '완료' -->
                         <button id="today-review-btn" onclick="startTodayReviewShortcut()" class="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-2xl border border-amber-200 transition-all active:scale-95 cursor-pointer">
                             <span class="text-sm">📖</span>
-                            <span class="text-[10px] font-black text-amber-600 tracking-widest">오늘의 복습</span>
+                            <span class="text-[10px] font-black text-amber-600 tracking-widest">복습</span>
                             <span id="today-review-count-badge" class="text-sm font-extrabold text-amber-700">0개</span>
                         </button>
                         <!-- [냐냐 요청] 오늘 틀린 단어 보기 (복습·퀴즈·게임 어디서 틀렸든 한 번에) -->
                         <button id="today-wrong-btn" onclick="showTodayWrongInList()" class="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-2xl border border-rose-200 transition-all active:scale-95 cursor-pointer">
                             <span class="text-sm">✏️</span>
-                            <span class="text-[10px] font-black text-rose-500 tracking-widest">오늘 틀린 단어</span>
+                            <span class="text-[10px] font-black text-rose-500 tracking-widest">틀린 단어</span>
                             <span id="today-wrong-count-badge" class="text-sm font-extrabold text-rose-700">0개</span>
                         </button>
                         <div class="flex items-center gap-2.5 bg-sky-50 px-3 py-1.5 rounded-2xl border border-sky-200">
@@ -100,29 +100,33 @@
                     </div>
                 </div>
 
-                <!-- 오른쪽: AI 연결 · 동기화 · 백업 · 모바일 메뉴 -->
+                <!-- 오른쪽: [냐냐 요청] 버튼 5개를 ⚙️ 설정 하나로 통합 -->
                 <div class="flex items-center gap-2 shrink-0">
-                    <button id="api-key-status-badge" onclick="openApiKeyModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>
-                    </button>
+                    <div class="relative">
+                        <button id="settings-menu-btn" onclick="toggleSettingsMenu(event)" title="설정" class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full border border-slate-200 cursor-pointer transition-all">
+                            <i class="fa-solid fa-gear"></i>
+                            <span class="hidden sm:inline">설정</span>
+                            <span id="settings-alert-dot" class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                        </button>
 
-                    <button id="sync-status-badge" onclick="openSyncPasswordModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 확인 중...</span>
-                    </button>
-
-                    <!-- [냐냐 PATCH-0배치] 전역 음소거 -->
-                    <button id="mute-badge" onclick="toggleMute()" title="사이트 전체 소리 켜기/끄기" class="flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer">
-                        <i class="fa-solid fa-volume-high"></i><span class="hidden sm:inline"> 소리 켜짐</span>
-                    </button>
-
-                    <button onclick="openBackupModal()" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <i class="fa-solid fa-box-archive"></i><span class="hidden sm:inline"> 백업</span>
-                    </button>
-
-                    <!-- [냐냐 PATCH-0배치] 사이트 설명 (점수 규칙) -->
-                    <button onclick="openHelpModal()" title="점수·등급 규칙 설명" class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
-                        <i class="fa-solid fa-circle-question"></i><span class="hidden sm:inline"> 설명</span>
-                    </button>
+                        <!-- 설정 드롭다운 -->
+                        <div id="settings-menu" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50 space-y-0.5">
+                            <button id="api-key-status-badge" onclick="closeSettingsMenu(); openApiKeyModal();" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left transition-all"></button>
+                            <button id="sync-status-badge" onclick="closeSettingsMenu(); openSyncPasswordModal();" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left transition-all"></button>
+                            <button id="mute-badge" onclick="toggleMute()" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left transition-all"></button>
+                            <div class="h-px bg-slate-100 my-1"></div>
+                            <button onclick="closeSettingsMenu(); openBackupModal();" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left transition-all">
+                                <i class="fa-solid fa-box-archive text-slate-400 w-4 text-center"></i>
+                                <span class="text-xs font-bold text-slate-700 flex-1">백업 · 복원</span>
+                                <i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>
+                            </button>
+                            <button onclick="closeSettingsMenu(); openHelpModal();" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left transition-all">
+                                <i class="fa-solid fa-circle-question text-slate-400 w-4 text-center"></i>
+                                <span class="text-xs font-bold text-slate-700 flex-1">점수 · 등급 설명</span>
+                                <i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>
+                            </button>
+                        </div>
+                    </div>
 
                     <button onclick="toggleMobileMenu()" class="md:hidden w-9 h-9 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors">
                         <i id="menu-toggle-icon" class="fa-solid fa-bars text-sm"></i>
