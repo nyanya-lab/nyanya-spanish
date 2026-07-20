@@ -281,13 +281,12 @@ const OFFLINE_DICT_DB = {
         function updateApiKeyBadge() {
             const badge = document.getElementById('api-key-status-badge');
             if (!badge) return;
-            if (hasGeminiApiKey()) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> AI 연결됨</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
-            } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> AI 키 미등록</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
-            }
+            // [냐냐 요청] 설정 메뉴 행 형태. className은 건드리지 않음(레이아웃 깨짐 방지)
+            const ok = hasGeminiApiKey();
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full ${ok ? 'bg-emerald-500' : 'bg-slate-400'} shrink-0"></span>`
+                + `<span class="text-xs font-bold text-slate-700 flex-1">${ok ? 'AI 연결됨' : 'AI 키 미등록'}</span>`
+                + `<i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>`;
+            if (typeof updateSettingsAlertDot === 'function') updateSettingsAlertDot();
         }
         // ============================================================
         // [냐냐 PATCH] 다른 기기로 데이터 옮기기 (이 앱은 서버가 없어서
