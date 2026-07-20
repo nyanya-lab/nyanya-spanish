@@ -320,23 +320,49 @@ let vocabulary = [];
             saveToStorage();
         }
 
+        // [냐냐 요청] 설정 드롭다운 안의 '동기화' 행을 갱신.
+        //   ⚠️ 예전엔 className을 통째로 덮어써서 메뉴에 넣으면 레이아웃이 깨졌음.
+        //   이제 내용(innerHTML)만 바꾸고 스타일은 HTML에 맡긴다.
         function updateSyncBadge(state) {
             const badge = document.getElementById('sync-status-badge');
             if (!badge) return;
-            if (state === true) {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span class="hidden sm:inline"> 모든 기기 동기화 중</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 cursor-pointer";
-            } else if (state === 'claude-only') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span class="hidden sm:inline"> Claude 안에서만 동기화</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 cursor-pointer";
-            } else if (state === 'no-password') {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span><span class="hidden sm:inline"> 동기화 비밀번호 설정하기</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
-            } else {
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span><span class="hidden sm:inline"> 이 기기에만 저장됨</span>`;
-                badge.className = "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer";
-            }
+            let dot = 'bg-slate-400', text = '이 기기에만 저장됨';
+            if (state === true) { dot = 'bg-emerald-500'; text = '모든 기기 동기화 중'; }
+            else if (state === 'claude-only') { dot = 'bg-amber-500'; text = 'Claude 안에서만 동기화'; }
+            else if (state === 'no-password') { dot = 'bg-violet-500'; text = '동기화 비밀번호 설정하기'; }
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>`
+                + `<span class="text-xs font-bold text-slate-700 flex-1">${text}</span>`
+                + `<i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>`;
+            if (typeof updateSettingsAlertDot === 'function') updateSettingsAlertDot();
         }
+
+        // 설정 버튼의 작은 점: 뭔가 설정이 필요하면 눈에 띄게
+        function updateSettingsAlertDot() {
+            const dot = document.getElementById('settings-alert-dot');
+            if (!dot) return;
+            const apiOk = (typeof hasGeminiApiKey === 'function') ? hasGeminiApiKey() : false;
+            dot.className = 'w-1.5 h-1.5 rounded-full ' + (apiOk ? 'bg-emerald-500' : 'bg-amber-500');
+        }
+
+        // 설정 드롭다운 열기/닫기
+        function toggleSettingsMenu(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('settings-menu');
+            if (!menu) return;
+            menu.classList.toggle('hidden');
+        }
+        function closeSettingsMenu() {
+            const menu = document.getElementById('settings-menu');
+            if (menu) menu.classList.add('hidden');
+        }
+        // 바깥 아무 데나 누르면 닫힘
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('settings-menu');
+            const btn = document.getElementById('settings-menu-btn');
+            if (!menu || menu.classList.contains('hidden')) return;
+            if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+            menu.classList.add('hidden');
+        });
 
         // 학습일지 로그 누적 기록 함수
         // [냐냐 PATCH-날짜버그수정] toISOString()은 UTC 기준이라 한국(UTC+9) 등에서는
@@ -1269,12 +1295,11 @@ let vocabulary = [];
             const btn = document.getElementById('mute-badge');
             if (!btn) return;
             const muted = isMuted();
-            btn.innerHTML = muted
-                ? `<i class="fa-solid fa-volume-xmark"></i><span class="hidden sm:inline"> 소리 꺼짐</span>`
-                : `<i class="fa-solid fa-volume-high"></i><span class="hidden sm:inline"> 소리 켜짐</span>`;
-            btn.className = muted
-                ? "flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer"
-                : "flex items-center gap-1.5 text-[10px] font-bold text-violet-600 bg-violet-50 px-2.5 py-1 rounded-full border border-violet-200 cursor-pointer";
+            // [냐냐 요청] 설정 메뉴 행 형태. className은 건드리지 않음(레이아웃 깨짐 방지)
+            btn.innerHTML = (muted
+                ? `<i class="fa-solid fa-volume-xmark text-slate-400 w-4 text-center"></i><span class="text-xs font-bold text-slate-700 flex-1">소리 꺼짐</span>`
+                : `<i class="fa-solid fa-volume-high text-violet-500 w-4 text-center"></i><span class="text-xs font-bold text-slate-700 flex-1">소리 켜짐</span>`)
+                + `<span class="text-[10px] font-bold ${muted ? 'text-slate-400' : 'text-violet-500'}">${muted ? 'OFF' : 'ON'}</span>`;
         }
 
         // ============================================================
