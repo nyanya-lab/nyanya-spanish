@@ -32,6 +32,12 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none"></div>
 
+    <!-- [냐냐 요청] AI에게 바로 물어보기 (어느 화면에서든) -->
+    <button id="ask-ai-fab" onclick="openAskAi()" style="right: max(1.25rem, calc((100vw - 1280px) / 2 - 3.5rem));" class="fixed bottom-20 z-[45] h-11 px-4 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-90" title="AI에게 물어보기">
+        <i class="fa-solid fa-comment-dots"></i>
+        <span class="text-xs font-bold">AI 질문</span>
+    </button>
+
     <!-- [냐냐 PATCH] 맨 위로 가기 버튼 -->
     <!-- [냐냐 요청] 콘텐츠(max-w-7xl=1280px) 오른쪽 여백에 배치해서 본문 안 가림. 화면 좁으면 구석(1.25rem)으로 자동 -->
     <button id="scroll-top-btn" onclick="window.scrollTo({top:0, behavior:'smooth'})" style="right: max(1.25rem, calc((100vw - 1280px) / 2 - 3.5rem));" class="hidden fixed bottom-5 z-[45] w-11 h-11 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center transition-all active:scale-90" title="맨 위로">
@@ -231,6 +237,12 @@
                             </button>
                         </div>
                         <div class="flex gap-2 w-full sm:w-auto shrink-0">
+                            <!-- [냐냐 요청] 지금 보고 있는 목록으로 쓰기 연습 -->
+                            <button id="write-practice-btn" onclick="startWritePractice()" title="지금 목록으로 쓰기 연습" class="h-10 px-3 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 text-sm font-bold text-amber-700 transition-all flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                                <span class="hidden sm:inline text-xs">쓰기</span>
+                                <span id="write-practice-count" class="text-xs">0개</span>
+                            </button>
                             <!-- [냐냐 PATCH-6배치] 버튼은 아이콘만 (툴팁으로 이름 표시) -->
                             <button id="expand-all-btn" onclick="toggleExpandAllBtn()" title="전체 펼치기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                 <i id="expand-all-icon" class="fa-solid fa-up-right-and-down-left-from-center"></i>
@@ -1402,6 +1414,55 @@
     </div>
 
     <!-- [냐냐 PATCH-0배치] 사이트 설명 모달 (점수·등급 규칙) -->
+    <!-- [냐냐 요청] 쓰기 연습 모달 (지금 단어장 목록으로 스페인어 2번씩) -->
+    <div id="write-practice-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-900">쓰기 연습</p>
+                        <p class="text-[11px] font-semibold text-slate-400">스페인어를 2번씩 따라 쓰기</p>
+                    </div>
+                </div>
+                <button onclick="closeWritePractice()" class="w-8 h-8 rounded-xl text-slate-400 hover:bg-slate-100 transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="write-practice-body" class="p-5"></div>
+        </div>
+    </div>
+
+    <!-- [냐냐 요청] AI에게 바로 물어보기 모달 -->
+    <div id="ask-ai-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center">
+                        <i class="fa-solid fa-comment-dots"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-900">AI에게 물어보기</p>
+                        <p class="text-[11px] font-semibold text-slate-400">풀다가 막히면 여기서 바로</p>
+                    </div>
+                </div>
+                <button onclick="closeAskAi()" class="w-8 h-8 rounded-xl text-slate-400 hover:bg-slate-100 transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <textarea id="ask-ai-input" rows="3" onkeydown="askAiKeydown(event)" placeholder="예) sentarse랑 sentar 차이가 뭐야?&#10;예) por랑 para 언제 써?" class="w-full px-3 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300 resize-none"></textarea>
+                <div class="flex gap-2">
+                    <button id="ask-ai-send-btn" onclick="submitAskAi()" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">물어보기 (Enter)</button>
+                    <button onclick="closeAskAi()" class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">닫기</button>
+                </div>
+                <div id="ask-ai-answer" class="hidden bg-slate-50 border border-slate-200 rounded-2xl p-4 max-h-[45vh] overflow-y-auto no-scrollbar"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="help-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
