@@ -87,17 +87,24 @@ html {
            · 글머리 기호 3단계: ▸ → – → ·
            ============================================================ */
         .nyanya-rt, .nyanya-rt-edit {
-            --rt-indent: 0.6em;   /* 한 단계 들여쓰기 폭 — 줄이면 계단이 촘촘해짐 */
-            --rt-gap: 0.32em;     /* 기호와 글씨 사이 간격 — 늘리면 기호가 글씨에서 멀어짐 */
+            /* 세 값은 서로 독립적이라 하나만 바꿔도 나머지가 안 흔들림 */
+            --rt-indent: 0.55em;  /* 단계별 계단 폭 (2단계부터) — 줄이면 계단이 촘촘해짐 */
+            --rt-gap: 0.4em;      /* 기호 ↔ 글씨 간격 — 늘리면 기호가 글씨에서 멀어짐 */
+            --rt-marker: 0.75em;  /* 기호칸 폭 (고정) — 위 두 값이 변해도 안 좁아짐 */
             line-height: 1.65;
             word-break: break-word;
         }
 
         /* 목록 — 기본 마커 끄고 직접 그림 */
+        /* 1단계: 기호가 들어갈 자리만큼만 확보 */
         .nyanya-rt ul, .nyanya-rt-edit ul {
             list-style: none;
-            padding-left: var(--rt-indent);
+            padding-left: calc(var(--rt-marker) + var(--rt-gap));
             margin: 0.2em 0;
+        }
+        /* 2단계부터: 계단 폭만큼만 더 들어감 */
+        .nyanya-rt ul ul, .nyanya-rt-edit ul ul {
+            padding-left: var(--rt-indent);
         }
         .nyanya-rt li, .nyanya-rt-edit li {
             position: relative;
@@ -108,8 +115,8 @@ html {
         .nyanya-rt li::before, .nyanya-rt-edit li::before {
             content: '▸';
             position: absolute;
-            left: calc(-1 * var(--rt-indent));
-            width: calc(var(--rt-indent) - var(--rt-gap));
+            left: calc(-1 * (var(--rt-marker) + var(--rt-gap)));
+            width: var(--rt-marker);
             text-align: right;
             color: #7c3aed;
             font-weight: 700;
@@ -126,9 +133,9 @@ html {
         }
 
         /* 글머리 없는 문단의 들여쓰기 — 목록 글씨 시작점과 동일하게 맞춤 */
-        .nyanya-rt .rt-in1, .nyanya-rt-edit .rt-in1 { padding-left: calc(1 * var(--rt-indent)); }
-        .nyanya-rt .rt-in2, .nyanya-rt-edit .rt-in2 { padding-left: calc(2 * var(--rt-indent)); }
-        .nyanya-rt .rt-in3, .nyanya-rt-edit .rt-in3 { padding-left: calc(3 * var(--rt-indent)); }
+        .nyanya-rt .rt-in1, .nyanya-rt-edit .rt-in1 { padding-left: calc(var(--rt-marker) + var(--rt-gap)); }
+        .nyanya-rt .rt-in2, .nyanya-rt-edit .rt-in2 { padding-left: calc(var(--rt-marker) + var(--rt-gap) + var(--rt-indent)); }
+        .nyanya-rt .rt-in3, .nyanya-rt-edit .rt-in3 { padding-left: calc(var(--rt-marker) + var(--rt-gap) + 2 * var(--rt-indent)); }
 
         /* 소제목 */
         .nyanya-rt h4, .nyanya-rt-edit h4 {
