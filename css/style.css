@@ -79,3 +79,85 @@ html {
             border: none;
         }
         .nyanya-slider:focus { outline: none; }
+
+        /* ============================================================
+           [냐냐 요청] 문법·개념 노트 — 서식 편집기 (rich text)
+           · 글머리 기호 3단계: ▸ → – → ·
+           · 조회 화면(.nyanya-rt)과 편집 화면(.nyanya-rt-edit) 동일 스타일
+           ============================================================ */
+        .nyanya-rt, .nyanya-rt-edit { line-height: 1.65; word-break: break-word; }
+
+        /* 목록 — 기본 마커 끄고 직접 그림 (단계별 기호 지정 위해) */
+        .nyanya-rt ul, .nyanya-rt-edit ul {
+            list-style: none;
+            padding-left: 1.25em;
+            margin: 0.2em 0;
+        }
+        .nyanya-rt li, .nyanya-rt-edit li {
+            position: relative;
+            margin: 0.15em 0;
+        }
+        /* 1단계 ▸ */
+        .nyanya-rt li::before, .nyanya-rt-edit li::before {
+            content: '▸';
+            position: absolute;
+            left: -1.1em;
+            color: #7c3aed;
+            font-weight: 700;
+        }
+        /* 2단계 – */
+        .nyanya-rt ul ul li::before, .nyanya-rt-edit ul ul li::before {
+            content: '–';
+            color: #64748b;
+        }
+        /* 3단계 · */
+        .nyanya-rt ul ul ul li::before, .nyanya-rt-edit ul ul ul li::before {
+            content: '·';
+            color: #94a3b8;
+        }
+        /* 4단계 이상은 3단계 기호 유지 */
+        .nyanya-rt ul ul ul ul li::before, .nyanya-rt-edit ul ul ul ul li::before {
+            content: '·';
+            color: #94a3b8;
+        }
+
+        /* 소제목 */
+        .nyanya-rt h4, .nyanya-rt-edit h4 {
+            font-size: 1.02em;
+            font-weight: 800;
+            color: #4c1d95;
+            margin: 0.6em 0 0.25em;
+            padding-bottom: 0.15em;
+            border-bottom: 1px solid #ede9fe;
+        }
+        .nyanya-rt h4:first-child, .nyanya-rt-edit h4:first-child { margin-top: 0; }
+
+        /* 형광펜 / 빨간 글씨 */
+        .nyanya-rt mark, .nyanya-rt-edit mark {
+            background: #fef08a;
+            color: inherit;
+            padding: 0 0.12em;
+            border-radius: 3px;
+        }
+        .nyanya-rt .rt-red, .nyanya-rt-edit .rt-red {
+            color: #dc2626;
+            font-weight: 700;
+        }
+        .nyanya-rt b, .nyanya-rt-edit b,
+        .nyanya-rt strong, .nyanya-rt-edit strong { font-weight: 800; }
+
+        /* 편집창 — 내용 따라 자동으로 늘어남 */
+        .nyanya-rt-edit {
+            min-height: 5.5rem;
+            max-height: 22rem;
+            overflow-y: auto;
+            outline: none;
+            white-space: pre-wrap;
+        }
+        .nyanya-rt-edit:focus { box-shadow: 0 0 0 2px #8b5cf6; }
+        /* 비었을 때 안내 문구 */
+        .nyanya-rt-edit:empty::before {
+            content: attr(data-placeholder);
+            color: #94a3b8;
+            pointer-events: none;
+        }
