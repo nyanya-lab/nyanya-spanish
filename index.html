@@ -1576,6 +1576,7 @@
                 <label class="block text-xs font-bold text-slate-500">📝 표 위 노트 (선택)</label>
                 <div class="flex items-center gap-1 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-1.5 py-1">
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtExec('ge-desc','bold')" title="굵게" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-xs transition-all">B</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtExec('ge-desc','italic')" title="기울임" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-xs italic transition-all">I</button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtHighlight('ge-desc')" title="형광펜" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-highlighter text-[11px] text-amber-500"></i></button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtRed('ge-desc')" title="빨간 글씨" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-pen text-[11px] text-red-500"></i></button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtHeading('ge-desc')" title="소제목" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">H</button>
@@ -1585,6 +1586,10 @@
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtIndent('ge-desc')" title="수준 내리기 (Tab)" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-indent text-[11px] text-slate-600"></i></button>
                     <span class="w-px h-4 bg-slate-200 mx-0.5"></span>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtClearFormat('ge-desc')" title="서식 지우기" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-eraser text-[11px] text-slate-400"></i></button>
+                    <span class="w-px h-4 bg-slate-200 mx-0.5"></span>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-desc','ej.')" title="예시 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">ej.</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-desc','Q.')" title="질문 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">Q.</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-desc','A.')" title="답 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">A.</button>
                 </div>
                 <div id="ge-desc" contenteditable="true" spellcheck="false"
                     data-placeholder="개념 설명을 자유롭게 적어보세요"
@@ -1608,6 +1613,7 @@
                 <label class="block text-xs font-bold text-slate-500">💡 표 아래 노트 (선택)</label>
                 <div class="flex items-center gap-1 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-1.5 py-1">
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtExec('ge-note','bold')" title="굵게" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-xs transition-all">B</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtExec('ge-note','italic')" title="기울임" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-xs italic transition-all">I</button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtHighlight('ge-note')" title="형광펜" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-highlighter text-[11px] text-amber-500"></i></button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtRed('ge-note')" title="빨간 글씨" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-pen text-[11px] text-red-500"></i></button>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtHeading('ge-note')" title="소제목" class="w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">H</button>
@@ -1617,6 +1623,10 @@
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtIndent('ge-note')" title="수준 내리기 (Tab)" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-indent text-[11px] text-slate-600"></i></button>
                     <span class="w-px h-4 bg-slate-200 mx-0.5"></span>
                     <button type="button" onmousedown="event.preventDefault()" onclick="rtClearFormat('ge-note')" title="서식 지우기" class="w-7 h-7 rounded-lg hover:bg-white transition-all flex items-center justify-center"><i class="fa-solid fa-eraser text-[11px] text-slate-400"></i></button>
+                    <span class="w-px h-4 bg-slate-200 mx-0.5"></span>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-note','ej.')" title="예시 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">ej.</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-note','Q.')" title="질문 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">Q.</button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="rtInsertLabel('ge-note','A.')" title="답 표시 넣기" class="h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all">A.</button>
                 </div>
                 <div id="ge-note" contenteditable="true" spellcheck="false"
                     data-placeholder="예시·주의점·정리 내용"
