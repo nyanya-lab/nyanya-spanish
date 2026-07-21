@@ -2425,7 +2425,12 @@
             const picked = shuffleArray(pool.slice()).slice(0, writeCount);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
-            beginWritePractice(picked, { isTodayReview: false, onClose: () => { if (setup) setup.classList.remove('hidden'); } });
+            beginWritePractice(picked, {
+                isTodayReview: false,
+                batchSize: writeCount,      // [냐냐 요청] '다음 N개 이어서'가 내가 고른 개수를 따라감
+                scopeContinue: true,
+                onClose: () => { if (setup) setup.classList.remove('hidden'); }
+            });
         }
 
         function startWritePractice() {
@@ -2456,6 +2461,10 @@
                 retry: false,             // 2바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
                 wrongCount: 0,
                 results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct}
+                // [냐냐 요청] '다음 N개 이어서'가 처음 시작한 개수를 그대로 따라가도록 기억
+                //   배너로 시작 → 5개 / 쓰기연습 탭에서 시작 → 내가 고른 개수
+                batchSize: (opts && opts.batchSize) || pool.length,
+                scopeContinue: !!(opts && opts.scopeContinue),
                 isTodayReview: !!(opts && opts.isTodayReview),
                 onClose: (opts && opts.onClose) || null
             };
@@ -2517,10 +2526,18 @@
                 const ok = total - s.wrongCount;
                 const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
+                const batch = s.batchSize || total;
                 if (s.isTodayReview && typeof getReviewDueWords === 'function') {
+                    // 헤더 복습 배너 → 망각곡선 대상에서 같은 개수만큼 이어서
                     const remain = getReviewDueWords().length;
                     if (remain > 0) {
-                        nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, 10)}개 이어서 →</button>`;
+                        nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, batch)}개 이어서 →</button>`;
+                    }
+                } else if (s.scopeContinue && typeof getWriteScopePool === 'function') {
+                    // [냐냐 요청] 쓰기연습 탭에서 시작 → 같은 범위에서 '내가 고른 개수'만큼 이어서
+                    const poolLeft = getWriteScopePool().filter(x => x && x.word).length;
+                    if (poolLeft > 0) {
+                        nextBtn = `<button onclick="closeWritePractice(); startWriteReview();" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(poolLeft, batch)}개 이어서 →</button>`;
                     }
                 }
                 // [냐냐 요청] 맞은 단어 / 틀린 단어 목록 (단어 + 뜻)
