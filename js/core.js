@@ -3549,13 +3549,17 @@ let vocabulary = [];
         function rtHasBg(color) {
             if (!color) return false;
             const c = color.toString().toLowerCase().replace(/\s/g, '');
-            if (!c || c === 'transparent' || c === 'initial') return false;
+            if (!c || c === 'transparent' || c === 'initial' || c === 'inherit') return false;
             const m = c.match(/rgba?\(([^)]+)\)/);
             if (m) {
-                const parts = m[1].split(',').map(Number);
-                if (parts.length >= 4 && parts[3] === 0) return false;    // 완전 투명
-                if (parts[0] === 255 && parts[1] === 255 && parts[2] === 255) return false; // 흰색은 강조 아님
+                const p = m[1].split(',').map(Number);
+                if (p.length >= 4 && p[3] === 0) return false;              // 완전 투명
+                // ⚠️ [버그] 편집창 배경(slate-50)까지 형광펜으로 인식하던 문제
+                //    회색·흰색 계열(R≈G≈B)은 강조가 아니라 배경이므로 제외한다
+                const mx = Math.max(p[0], p[1], p[2]), mn = Math.min(p[0], p[1], p[2]);
+                if (mx - mn < 25) return false;
             }
+            if (/^#?(fff|ffffff|f8fafc|f1f5f9|f9fafb)$/.test(c.replace('#', ''))) return false;
             return true;
         }
 
@@ -3564,7 +3568,9 @@ let vocabulary = [];
             if (!html) return '';
             const doc = document.implementation.createHTMLDocument('rt');
             const root = doc.body;
-            root.innerHTML = String(html);
+            // ⚠️ [버그] 복붙한 HTML은 태그 사이에 줄바꿈이 잔뜩 들어있는데,
+            //    편집창이 pre-wrap이면 그게 전부 빈 줄로 보였음 → 태그 사이 줄바꿈만 제거
+            root.innerHTML = String(html).replace(/>[ \t]*[\r\n]+[ \t]*</g, '><');
 
             const walk = (node) => {
                 Array.from(node.childNodes).forEach(child => {
@@ -3608,12 +3614,15 @@ let vocabulary = [];
                     // ⚠️ 이미 저장된 rt-red 는 스타일이 없으므로 class 도 같이 봐야 함
                     //    (안 보면 저장→다시 열기 때 빨간 글씨가 풀려버림)
                     const hadRed = child.classList && child.classList.contains('rt-red');
+                    // [냐냐 요청] 글머리 없는 문단의 들여쓰기 단계(rt-in1~3)도 보존
+                    const inLv = (child.className && child.className.toString().match(/\brt-in([1-3])\b/) || [])[1];
                     const wantMark = !!(bgM && rtHasBg(bgM[1]));
                     const wantRed = hadRed || !!(fgM && rtIsReddish(fgM[1]));
                     const wantBold = /font-weight\s*:\s*(bold|[7-9]00)/i.test(style);
 
                     // 속성 전부 제거 (class는 아래에서 다시 지정)
                     Array.from(child.attributes).forEach(a => child.removeAttribute(a.name));
+                    if (inLv && ['DIV', 'P', 'H4'].includes(child.tagName)) child.className = 'rt-in' + inLv;
 
                     let target = child;
                     if (wantMark && tag !== 'MARK') {
@@ -3713,10 +3722,41 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
-        // 형광펜 — 브라우저별 명령 이름이 달라서 둘 다 시도
+        // 선택 위치의 조상 중에 조건에 맞는 요소 찾기 (토글 판정용)
+        function rtFindAncestor(id, test) {
+            const el = document.getElementById(id);
+            const sel = window.getSelection();
+            if (!el || !sel || !sel.rangeCount) return null;
+            let node = sel.anchorNode;
+            while (node && node !== el) {
+                if (node.nodeType === 1 && test(node)) return node;
+                node = node.parentNode;
+            }
+            return null;
+        }
+
+        // 껍데기만 벗기고 내용은 남김 (서식 해제용)
+        function rtUnwrapNode(node) {
+            if (!node || !node.parentNode) return;
+            const p = node.parentNode;
+            while (node.firstChild) p.insertBefore(node.firstChild, node);
+            p.removeChild(node);
+            p.normalize && p.normalize();
+        }
+
+        const rtIsMarkNode = (n) =>
+            n.tagName === 'MARK' || rtHasBg(n.style && n.style.backgroundColor);
+        const rtIsRedNode = (n) =>
+            (n.classList && n.classList.contains('rt-red'))
+            || rtIsReddish(n.style && n.style.color)
+            || (n.tagName === 'FONT' && rtIsReddish(n.getAttribute('color')));
+
+        // 형광펜 — 이미 칠해져 있으면 해제 (브라우저별 명령 이름이 달라서 둘 다 시도)
         function rtHighlight(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
+            const hit = rtFindAncestor(id, rtIsMarkNode);
+            if (hit) { rtUnwrapNode(hit); rtSyncState(id); return; }
             try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
             let ok = false;
             try { ok = document.execCommand('hiliteColor', false, '#fef08a'); } catch (e) {}
@@ -3724,9 +3764,12 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
+        // 빨간 글씨 — 이미 빨갛면 해제
         function rtRed(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
+            const hit = rtFindAncestor(id, rtIsRedNode);
+            if (hit) { rtUnwrapNode(hit); rtSyncState(id); return; }
             try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
             try { document.execCommand('foreColor', false, '#dc2626'); } catch (e) {}
             rtSyncState(id);
@@ -3747,11 +3790,98 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
-        // 글머리 기호 넣기/빼기 (토글)
-        function rtToggleList(id) { rtExec(id, 'insertUnorderedList'); }
-        // 수준 내리기 / 올리기
-        function rtIndent(id) { rtExec(id, 'indent'); }
-        function rtOutdent(id) { rtExec(id, 'outdent'); }
+        // ── 들여쓰기 / 글머리 기호 ────────────────────────────────
+        const RT_MAX_LEVEL = 3;
+
+        // 커서가 놓인 블록(문단) 찾기. 없으면 만들어줌
+        function rtBlockOf(id) {
+            const el = document.getElementById(id);
+            const sel = window.getSelection();
+            if (!el || !sel || !sel.rangeCount) return null;
+            let n = sel.anchorNode;
+            if (n && n.nodeType === 3) n = n.parentNode;
+            while (n && n !== el) {
+                if (n.nodeType === 1 && ['DIV', 'P', 'H4'].includes(n.tagName)) return n;
+                n = n.parentNode;
+            }
+            return null;
+        }
+        function rtEnsureBlock(id) {
+            let b = rtBlockOf(id);
+            if (!b) { try { document.execCommand('formatBlock', false, 'div'); } catch (e) {} b = rtBlockOf(id); }
+            return b;
+        }
+        function rtGetLevel(b) {
+            for (let i = RT_MAX_LEVEL; i >= 1; i--) if (b.classList.contains('rt-in' + i)) return i;
+            return 0;
+        }
+        function rtSetLevel(b, lv) {
+            for (let i = 1; i <= RT_MAX_LEVEL; i++) b.classList.remove('rt-in' + i);
+            if (lv > 0) b.classList.add('rt-in' + Math.min(RT_MAX_LEVEL, lv));
+        }
+        // 목록 중첩 깊이 (li 안일 때 1부터)
+        function rtListDepth(id) {
+            const el = document.getElementById(id);
+            const sel = window.getSelection();
+            if (!el || !sel || !sel.rangeCount) return 0;
+            let n = sel.anchorNode, d = 0;
+            while (n && n !== el) { if (n.nodeType === 1 && n.tagName === 'UL') d++; n = n.parentNode; }
+            return d;
+        }
+        const rtInList = (id) => !!rtFindAncestor(id, n => n.tagName === 'LI');
+
+        // 수준 내리기 — 목록 안이면 목록 단계, 아니면 문단 들여쓰기 (둘 다 같은 폭)
+        function rtIndent(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            if (rtInList(id)) {
+                if (rtListDepth(id) < RT_MAX_LEVEL) {
+                    try { document.execCommand('indent'); } catch (e) {}
+                }
+            } else {
+                const b = rtEnsureBlock(id);
+                if (b) rtSetLevel(b, rtGetLevel(b) + 1);
+            }
+            rtSyncState(id);
+        }
+
+        // 수준 올리기
+        function rtOutdent(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            if (rtInList(id)) {
+                try { document.execCommand('outdent'); } catch (e) {}
+            } else {
+                const b = rtBlockOf(id);
+                if (b) rtSetLevel(b, Math.max(0, rtGetLevel(b) - 1));
+            }
+            rtSyncState(id);
+        }
+
+        // 글머리 기호 넣기/빼기
+        //   ⚠️ execCommand('insertUnorderedList')는 중첩 목록에서 한 단계만 벗겨져서
+        //      3단계에 있으면 세 번 눌러야 지워졌음 → 몇 단계든 한 번에 제거하도록 직접 처리
+        function rtToggleList(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            if (rtInList(id)) {
+                const depth = rtListDepth(id);
+                let guard = 0;
+                while (rtInList(id) && guard++ < 8) {
+                    try { document.execCommand('outdent'); } catch (e) { break; }
+                }
+                // 목록에서 빠져나온 뒤, 있던 단계만큼 문단 들여쓰기로 옮겨줌
+                const b = rtBlockOf(id);
+                if (b && depth > 1) rtSetLevel(b, depth - 1);
+            } else {
+                const b = rtBlockOf(id);
+                const lv = b ? rtGetLevel(b) : 0;
+                if (b) rtSetLevel(b, 0);       // 문단 들여쓰기는 목록 단계로 넘김
+                try { document.execCommand('insertUnorderedList'); } catch (e) {}
+                for (let i = 0; i < lv; i++) { try { document.execCommand('indent'); } catch (e) {} }
+            }
+            rtSyncState(id);
+        }
         // 서식 싹 지우기 (선택 영역)
         function rtClearFormat(id) {
             const el = rtFocusEditor(id);
