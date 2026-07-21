@@ -1182,17 +1182,26 @@
             }
 
             // [냐냐 PATCH-5배치] AI가 유의어/반의어를 찾아줬으면 자동으로 채우고 섹션을 펼침
-            //   ⚠️ 이미 유의어 행이 있으면(=원래 단어와의 링크 등) 건드리지 않음 (양방향 링크 보존)
-            // [냐냐 PATCH] 큰 ✨(전체 추천, forceOverwrite=true)면 유의어도 새로 덮어씀
-            //   유의어 자동채우기 큐(force=false)에서만 기존 링크를 보존
-            const synBoxHasRows = document.querySelectorAll('#syn-entries-box > div').length > 0;
-            if (result.synonyms && result.synonyms.length > 0 && (forceOverwrite || !synBoxHasRows)) {
-                clearSynonymRows();
+            // [냐냐 요청] 전체 ✨ 추천이어도 기존 유의어를 지우지 않고 '없는 것만 추가'로 합친다.
+            //   예전엔 forceOverwrite면 clearSynonymRows()로 다 지워서, 이미 연결해둔
+            //   양방향 링크가 통째로 끊어지는 문제가 있었음.
+            if (result.synonyms && result.synonyms.length > 0) {
+                // 이미 입력돼 있는 단어들 수집 (중복 추가 방지)
+                const existing = new Set();
+                document.querySelectorAll('#syn-entries-box > div').forEach(row => {
+                    const inp = row.querySelector('input[data-syn-field="word"]');
+                    if (inp && inp.value) existing.add(normalizeSpanishAnswer(inp.value));
+                });
+                let added = 0;
                 result.synonyms.forEach(item => {
                     const t = item.type === 'antonym' ? 'antonym' : 'synonym';
+                    // [냐냐 PATCH] 명사면 관사를 바로 붙여서 보여줌 (la casa)
+                    const shown = buildNounDisplayForm(item.word, item.gender, item.isPlural, item.pos);
+                    if (existing.has(normalizeSpanishAnswer(shown))) return; // 이미 있으면 건너뜀
+                    existing.add(normalizeSpanishAnswer(shown));
+                    added++;
                     addSynonymRow({
-                        // [냐냐 PATCH] 명사면 관사를 바로 붙여서 보여줌 (la casa)
-                        word: buildNounDisplayForm(item.word, item.gender, item.isPlural, item.pos),
+                        word: shown,
                         pos: item.pos || 'noun',
                         gender: item.gender || 'none',
                         meaning: item.meaning || '',
@@ -1200,10 +1209,12 @@
                         type: t
                     });
                 });
-                const synBoxAi = document.getElementById('syn-fields-box');
-                const synIconAi = document.getElementById('syn-toggle-icon');
-                if (synBoxAi) synBoxAi.classList.remove('hidden');
-                if (synIconAi) synIconAi.className = "fa-solid fa-minus text-xs";
+                if (added > 0) {
+                    const synBoxAi = document.getElementById('syn-fields-box');
+                    const synIconAi = document.getElementById('syn-toggle-icon');
+                    if (synBoxAi) synBoxAi.classList.remove('hidden');
+                    if (synIconAi) synIconAi.className = "fa-solid fa-minus text-xs";
+                }
             }
 
             // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
@@ -2356,6 +2367,64 @@
             btn.classList.toggle('cursor-not-allowed', n === 0);
         }
 
+        // ============================================================
+        // [냐냐 요청] 복습 탭 '쓰기' 설정 — 개수 / 범위 (단어만, 가볍게)
+        // ============================================================
+        let writeCount = 10;
+        let writeScope = 'not-mastered';
+
+        function selectWriteCount(n) {
+            writeCount = n;
+            document.querySelectorAll('.write-count-btn').forEach(b => {
+                const on = Number(b.dataset.writeCount) === n;
+                b.classList.toggle('border-indigo-500', on);
+                b.classList.toggle('bg-indigo-50', on);
+                b.classList.toggle('text-indigo-700', on);
+                b.classList.toggle('border-slate-200', !on);
+                b.classList.toggle('text-slate-600', !on);
+            });
+        }
+
+        function selectWriteScope(scope) {
+            writeScope = scope;
+            document.querySelectorAll('.write-scope-btn').forEach(b => {
+                const on = b.dataset.writeScope === scope;
+                b.classList.toggle('border-indigo-500', on);
+                b.classList.toggle('bg-indigo-50', on);
+                b.classList.toggle('text-indigo-700', on);
+                b.classList.toggle('border-slate-200', !on);
+                b.classList.toggle('text-slate-600', !on);
+            });
+            const el = document.getElementById('write-scope-count');
+            if (el) {
+                const n = getWriteScopePool().length;
+                el.innerText = n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요';
+            }
+        }
+
+        function getWriteScopePool() {
+            if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
+            if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
+            return vocabulary.slice();
+        }
+
+        function resetWriteSetup() {
+            selectWriteCount(writeCount || 10);
+            selectWriteScope(writeScope || 'not-mastered');
+            const setup = document.getElementById('write-setup');
+            if (setup) setup.classList.remove('hidden');
+        }
+
+        // [냐냐 요청] 쓰기는 '단어'만. 관용구·예문은 단어 빈칸이 이미 다루므로 여기선 안 씀.
+        function startWriteReview() {
+            const pool = getWriteScopePool().filter(w => w && w.word);
+            if (!pool.length) { showToast("이 범위엔 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
+            const picked = shuffleArray(pool.slice()).slice(0, writeCount);
+            const setup = document.getElementById('write-setup');
+            if (setup) setup.classList.add('hidden');
+            beginWritePractice(picked, { isTodayReview: false, onClose: () => { if (setup) setup.classList.remove('hidden'); } });
+        }
+
         function startWritePractice() {
             const pool = (lastFilteredWords || []).filter(w => w && w.word);
             if (!pool.length) { showToast("연습할 단어가 없어요!", "error"); return; }
@@ -2374,15 +2443,18 @@
                 phase: 1,                 // 1 = 보고 쓰기, 2 = 가리고 쓰기
                 retry: false,             // 2바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
                 wrongCount: 0,
-                isTodayReview: !!(opts && opts.isTodayReview)
+                isTodayReview: !!(opts && opts.isTodayReview),
+                onClose: (opts && opts.onClose) || null
             };
             document.getElementById('write-practice-modal').classList.remove('hidden');
             renderWritePractice();
         }
 
         function closeWritePractice() {
+            const cb = writePracticeState && writePracticeState.onClose;
             writePracticeState = null;
             document.getElementById('write-practice-modal').classList.add('hidden');
+            if (typeof cb === 'function') { try { cb(); } catch (e) {} }
         }
 
         function renderWritePractice() {
@@ -2404,16 +2476,16 @@
                             <div class="text-5xl">🙈</div>
                             <p class="text-lg font-bold text-slate-900">이제 가리고 써볼 차례!</p>
                             <p class="text-xs font-bold text-slate-500 leading-relaxed">뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.</p>
-                            <button onclick="renderWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">2바퀴 시작 →</button>
+                            <button id="write-phase2-btn" onclick="renderWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">2바퀴 시작 (Enter) →</button>
                         </div>`;
+                    // [냐냐 요청] 엔터로도 시작되게 버튼에 포커스
+                    setTimeout(() => { const b = document.getElementById('write-phase2-btn'); if (b) b.focus(); }, 60);
                     return;
                 }
                 // 2바퀴까지 끝 → 결과
                 const total = s.pool.length;
                 const ok = total - s.wrongCount;
-                const reviewNote = s.isTodayReview
-                    ? `<p class="text-xs font-bold text-violet-600">📖 복습에 반영했어요 (단어당 1회)</p>`
-                    : `<p class="text-xs font-bold text-slate-400">점수엔 영향 없는 연습이에요</p>`;
+                const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
                 if (s.isTodayReview && typeof getReviewDueWords === 'function') {
                     const remain = getReviewDueWords().length;
@@ -2574,6 +2646,10 @@
                     </div>
                 </div>`;
             setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
+            // [냐냐 요청] 1바퀴(보고 쓰기)에서만 단어를 읽어줌. 2바퀴는 정답이 새어나가므로 안 읽음.
+            if (s.phase === 1 && s.done === 0 && typeof speakSpanishVoice === 'function') {
+                setTimeout(() => speakSpanishVoice(w.word), 120);
+            }
         }
 
         // [냐냐 요청] 단어 정보 펼치기/접기. 다시 그리므로 입력 중이던 값은 보존한다.
@@ -2635,26 +2711,30 @@
                 else writePracticeFlashWrong(el);
                 return;
             }
-            // 첫 시도 — 여기서만 망각곡선 반영 (단어당 1회, 점수는 안 건드림)
+            // 첫 시도 — 여기서만 점수·복습 반영 (단어당 1회)
             if (isMatch) {
-                if (s.isTodayReview && typeof markWordReviewedToday === 'function') {
-                    markWordReviewedToday(w, true);
-                    try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
-                    if (typeof updateStats === 'function') updateStats();
-                }
+                // [냐냐 요청] 가리고 쓰기 정답 +0.4 (쓰기연습·복습 동일)
+                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: true });
+                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+                writePracticeSave();
                 s.index++;
                 s.done = 0;
                 renderWritePractice();
             } else {
                 s.wrongCount++;
                 s.retry = true;
-                if (s.isTodayReview && typeof markWordReviewedToday === 'function') {
-                    markWordReviewedToday(w, false); // 단계 처음부터 (내일 1일차로 다시)
-                    try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
-                    if (typeof updateStats === 'function') updateStats();
-                }
+                // [냐냐 요청] 가리고 쓰기 오답 −2 → 틀린 날짜도 오늘로 바로 기록되고 곡선 재시작
+                if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
+                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                writePracticeSave();
                 renderWritePractice();
             }
+        }
+
+        // 저장 + 헤더(복습 배너·통계) 갱신
+        function writePracticeSave() {
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
+            if (typeof updateStats === 'function') updateStats();
         }
 
         function renderWordList() {
