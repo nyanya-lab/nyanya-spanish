@@ -2509,6 +2509,7 @@
                     s.index = 0;
                     s.done = 0;
                     s.retry = false;
+                    s.lastWrong = '';
                     s.showDetail = false;
                     body.innerHTML = wrap(`
                         <div class="text-center space-y-4 py-6">
@@ -2611,12 +2612,21 @@
                 inputLabel = '떠올려서 쓰세요 (엔터)';
                 placeholder = '스페인어로...';
             } else {
+                // [냐냐 요청] 내가 쓴 오답을 같이 보여줘서 어디가 틀렸는지 바로 비교
+                const mine = (s.lastWrong || '').trim();
+                const mineHtml = mine
+                    ? `<p class="text-xs font-bold text-rose-400 line-through break-words">${escapeHtml(mine)}</p>`
+                    : `<p class="text-xs font-bold text-slate-300">(빈칸으로 제출했어요)</p>`;
                 cardHtml = `
                     <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-rose-600 break-words">${escapeHtml(w.word)}</p>
                         <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
-                        <p class="text-[10px] font-bold text-rose-400 pt-0.5">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
+                        <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
+                            <p class="text-[10px] font-bold text-slate-400">내가 쓴 답</p>
+                            ${mineHtml}
+                        </div>
+                        <p class="text-[10px] font-bold text-rose-400 pt-1">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
                     </div>`;
                 inputLabel = '정답을 보고 한 번 더 (엔터)';
                 placeholder = w.word;
@@ -2678,6 +2688,7 @@
             writePracticeState.index++;
             writePracticeState.done = 0;
             writePracticeState.retry = false;
+            writePracticeState.lastWrong = '';
             writePracticeState.showDetail = false;
             renderWritePractice();
         }
@@ -2717,7 +2728,7 @@
             // ── 2바퀴: 가리고 쓰기 ──
             if (s.retry) {
                 // 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감
-                if (isMatch) { s.retry = false; s.index++; s.done = 0; renderWritePractice(); }
+                if (isMatch) { s.retry = false; s.lastWrong = ''; s.index++; s.done = 0; renderWritePractice(); }
                 else writePracticeFlashWrong(el);
                 return;
             }
@@ -2737,6 +2748,7 @@
             } else {
                 s.wrongCount++;
                 s.retry = true;
+                s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 // [냐냐 요청] 가리고 쓰기 오답 −2 → 틀린 날짜도 오늘로 바로 기록되고 곡선 재시작
                 if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
