@@ -1407,7 +1407,7 @@ Return JSON only, no markdown.`;
                         <span class="text-lg shrink-0">${t.icon || '📋'}</span>
                         <h3 class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</h3>
                     </div>
-                    ${t.desc ? `<p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(t.desc)}</p>` : ''}
+                    ${t.desc ? `<div class="nyanya-rt text-xs text-slate-600">${renderRichText(t.desc)}</div>` : ''}
                     <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
                     <div class="overflow-x-auto rounded-xl border border-slate-100">
                         <table class="w-full border-collapse">
@@ -1415,7 +1415,7 @@ Return JSON only, no markdown.`;
                             <tbody>${bodyRows}</tbody>
                         </table>
                     </div>
-                    ${t.note ? `<div class="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1 whitespace-pre-wrap">${escapeHtml(t.note)}</span></div>` : ''}
+                    ${t.note ? `<div class="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(t.note)}</span></div>` : ''}
                     <div id="gfill-feedback" class="hidden space-y-1"></div>
                     <div class="flex justify-end">
                         <button id="gfill-action-btn" onclick="submitGrammarFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
