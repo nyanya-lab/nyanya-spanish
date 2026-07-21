@@ -2455,6 +2455,7 @@
                 phase: 1,                 // 1 = 보고 쓰기, 2 = 가리고 쓰기
                 retry: false,             // 2바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
                 wrongCount: 0,
+                results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct}
                 isTodayReview: !!(opts && opts.isTodayReview),
                 onClose: (opts && opts.onClose) || null
             };
@@ -2522,12 +2523,29 @@
                         nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, 10)}개 이어서 →</button>`;
                     }
                 }
+                // [냐냐 요청] 맞은 단어 / 틀린 단어 목록 (단어 + 뜻)
+                const res = s.results || [];
+                const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
+                const okList = res.filter(r => r.correct);
+                const noList = res.filter(r => !r.correct);
+                const listBlock = (title, arr, ok) => arr.length ? `
+                    <div class="text-left">
+                        <p class="text-xs font-black ${ok ? 'text-emerald-600' : 'text-rose-500'} mb-1.5">${title} ${arr.length}개</p>
+                        <div class="-m-0.5">${arr.map(r => chip(r, ok)).join('')}</div>
+                    </div>` : '';
+                const resultLists = (okList.length || noList.length) ? `
+                    <div class="pt-2 mt-2 border-t border-slate-100 space-y-3">
+                        ${listBlock('✅ 맞은 단어', okList, true)}
+                        ${listBlock('❌ 틀린 단어', noList, false)}
+                    </div>` : '';
+
                 body.innerHTML = wrap(`
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
                         <p class="text-lg font-bold text-slate-900">${total}개 다 썼어요!</p>
                         <p class="text-sm font-bold text-slate-600">가리고 쓰기: <span class="text-emerald-600">${ok}개 성공</span>${s.wrongCount ? ` · <span class="text-rose-500">${s.wrongCount}개는 정답 보고 다시 씀</span>` : ''}</p>
                         ${reviewNote}
+                        ${resultLists}
                         ${nextBtn}
                         <button onclick="closeWritePractice()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">설정으로 돌아가기</button>
                     </div>`);
@@ -2552,12 +2570,12 @@
             // [냐냐 요청] 바퀴별 카드 — 1바퀴: 전체 정보 / 2바퀴: 가림(뜻만) / 2바퀴 틀림: 정답 공개
             let cardHtml, inputLabel, placeholder;
             if (s.phase === 1) {
-                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w) : '';
+                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
                 const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
                 const parts = [badges, notes].filter(x => x && x.trim());
                 cardHtml = `
                     <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
-                        <div class="text-center space-y-1">
+                        <div class="text-left space-y-1">
                             <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
                         </div>
@@ -2620,8 +2638,9 @@
                 renderQuizConjugation(w, null, 'write-conj-box');
             }
             setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
-            // [냐냐 요청] 1바퀴(보고 쓰기)에서만 단어를 읽어줌. 2바퀴는 정답이 새어나가므로 안 읽음.
-            if (s.phase === 1 && s.done === 0 && typeof speakSpanishVoice === 'function') {
+            // [냐냐 요청] 1바퀴(보고 쓰기)에선 매 시도마다 읽어줌 (1회차 제출 후 2회차에도 한 번 더).
+            //   2바퀴는 정답이 새어나가므로 안 읽음.
+            if (s.phase === 1 && typeof speakSpanishVoice === 'function') {
                 setTimeout(() => speakSpanishVoice(w.word), 120);
             }
         }
@@ -2685,11 +2704,15 @@
                 else writePracticeFlashWrong(el);
                 return;
             }
-            // 첫 시도 — 여기서만 점수·복습 반영 (단어당 1회)
+            // 첫 시도 — 여기서만 점수·복습 반영 (단어당 1회, 2바퀴에서만)
             if (isMatch) {
                 // [냐냐 요청] 가리고 쓰기 정답 +0.4 (쓰기연습·복습 동일)
-                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: true });
+                // [냐냐 요청] 뜻만 보고 스페인어를 떠올려 쓴 것 = 주관식 정답 → 마스터 자격 부여
+                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: true, subjective: true });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+                // [냐냐 요청] 🔴 학습기록 '복습' 카운터 — 여태 빠져 있어서 숫자가 안 늘었음
+                if (typeof logAction === 'function') logAction('review');
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true });
                 writePracticeSave();
                 s.index++;
                 s.done = 0;
@@ -2700,6 +2723,8 @@
                 // [냐냐 요청] 가리고 쓰기 오답 −2 → 틀린 날짜도 오늘로 바로 기록되고 곡선 재시작
                 if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (typeof logAction === 'function') logAction('review');
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false });
                 writePracticeSave();
                 renderWritePractice();
             }
@@ -2709,6 +2734,8 @@
         function writePracticeSave() {
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
             if (typeof updateStats === 'function') updateStats();
+            // [냐냐 요청] 헤더 '오늘의 복습' 배너도 실시간 갱신
+            if (typeof renderTodayReview === 'function') { try { renderTodayReview(); } catch (err) {} }
         }
 
         function renderWordList() {
@@ -2941,43 +2968,53 @@
             }
         }
 
-        // [냐냐 PATCH-페이지네이션] 페이지 바 렌더. totalPages<=1 이거나 0이면 숨김
+        // [냐냐 PATCH-페이지네이션] 페이지 바 렌더
+        //   [냐냐 요청] 검색창과 같이 고정되는 필터 줄 오른쪽으로 이동 (아래 바는 폐지).
+        //   모바일은 ‹ 3/12 › 축소판, sm 이상에서 맨앞/맨뒤 화살표까지 전부 표시.
         function renderPagination(totalPages, totalCount) {
-            let bar = document.getElementById('vocab-pagination');
-            if (!bar) {
-                // grid 바로 아래에 바 하나 만들어 둠
-                const grid = document.getElementById('vocabulary-grid');
-                bar = document.createElement('div');
-                bar.id = 'vocab-pagination';
-                grid.parentNode.insertBefore(bar, grid.nextSibling);
-            }
+            const bar = document.getElementById('vocab-pagination-sticky');
+            if (!bar) return;
+            // 예전 위치(그리드 아래)에 남아 있던 바가 있으면 정리
+            const legacy = document.getElementById('vocab-pagination');
+            if (legacy) legacy.remove();
+
             if (!totalPages || totalPages <= 1) { bar.innerHTML = ''; bar.classList.add('hidden'); return; }
             bar.classList.remove('hidden');
 
             const atFirst = currentPage <= 1;
             const atLast = currentPage >= totalPages;
-            // [냐냐 요청] 톤다운: 파란 네모 제거, 심플한 회색 텍스트 버튼 + 크기 축소
-            const ACT = "w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-indigo-600 font-bold text-xs transition-all active:scale-90";
-            const DIS = "w-8 h-8 flex items-center justify-center rounded-lg text-slate-200 font-bold text-xs cursor-not-allowed";
-            const btn = (icon, onclick, disabled, title) =>
-                `<button ${disabled ? 'disabled' : `onclick="${onclick}"`} title="${title}" class="${disabled ? DIS : ACT}"><i class="fa-solid ${icon}"></i></button>`;
+            const ACT = "w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-indigo-600 font-bold text-[11px] transition-all active:scale-90";
+            const DIS = "w-7 h-7 flex items-center justify-center rounded-lg text-slate-200 font-bold text-[11px] cursor-not-allowed";
+            const btn = (icon, onclick, disabled, title, extraClass) =>
+                `<button ${disabled ? 'disabled' : `onclick="${onclick}"`} title="${title}" class="${disabled ? DIS : ACT} ${extraClass || ''}"><i class="fa-solid ${icon}"></i></button>`;
 
             bar.innerHTML = `
-                <div class="flex items-center justify-center gap-1 mt-4 mb-1.5">
-                    ${btn('fa-angles-left', 'gotoPage(1)', atFirst, '맨 앞')}
+                <div class="flex items-center gap-0.5">
+                    ${btn('fa-angles-left', 'gotoPage(1)', atFirst, '맨 앞', 'hidden sm:flex')}
                     ${btn('fa-angle-left', `gotoPage(${currentPage - 1})`, atFirst, '이전')}
-                    <div class="flex items-center gap-1 px-1.5">
+                    <div class="flex items-center gap-1 px-1">
                         <input id="page-jump-input" type="number" min="1" max="${totalPages}" value="${currentPage}"
                             onkeydown="if(event.key==='Enter'){event.preventDefault();jumpToPage();}"
                             onblur="jumpToPage()"
-                            class="w-10 h-7 text-center text-sm font-bold text-indigo-600 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                        <span class="text-xs font-bold text-slate-400">/ ${totalPages}</span>
+                            title="총 ${totalCount}개 단어"
+                            class="w-9 h-6 text-center text-xs font-bold text-indigo-600 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                        <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">/ ${totalPages}</span>
                     </div>
                     ${btn('fa-angle-right', `gotoPage(${currentPage + 1})`, atLast, '다음')}
-                    ${btn('fa-angles-right', `gotoPage(${totalPages})`, atLast, '맨 뒤')}
-                </div>
-                <p class="text-center text-[10px] font-semibold text-slate-300 mb-1">총 ${totalCount}개 단어</p>
-            `;
+                    ${btn('fa-angles-right', `gotoPage(${totalPages})`, atLast, '맨 뒤', 'hidden sm:flex')}
+                </div>`;
+        }
+
+        // [냐냐 요청] 단어 목록 새로고침 — 약점·점수 변동이 목록에 바로 반영되도록
+        function refreshWordList() {
+            const icon = document.getElementById('vocab-refresh-icon');
+            if (icon) {
+                icon.classList.add('fa-spin');
+                setTimeout(() => icon.classList.remove('fa-spin'), 600);
+            }
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof updateStats === 'function') updateStats();
+            if (typeof showToast === 'function') showToast("단어 목록을 새로고침했어요! 🔄", "info");
         }
 
         // [냐냐 요청] 페이지 직접 입력 → 엔터/포커스아웃 시 이동
