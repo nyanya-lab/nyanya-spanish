@@ -66,13 +66,14 @@
         }
 
         // [냐냐 PATCH-0배치] 게임 결과를 통합 점수(score)에 반영
-        //   속사포: 정답 +0.5 / 오답 -1
-        //   떨어지는 단어: 정답 +1 (오답 판정 없음)
+        //   [냐냐 요청] 속사포·떨어지는 단어 둘 다 정답 +0.8로 통일
+        //   속사포: 정답 +0.8 / 오답 -1
+        //   떨어지는 단어: 정답 +0.8 (오답 판정 없음)
         //   듣기 받아쓰기: 문장 단위라 단어 점수 반영 없음
         //   게임 정답만으로는 마스터 못 뚫음 (주관식 정답 경험이 있어야 마스터)
         const GAME_SCORE = {
-            rapid: { correct: 0.5, wrong: -1 },
-            fall:  { correct: 1,   wrong: 0 }
+            rapid: { correct: 0.8, wrong: -1 },
+            fall:  { correct: 0.8, wrong: 0 }
         };
         function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
             const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
@@ -956,7 +957,7 @@
         // [냐냐 요청] 헤더의 '복습' 배너 → 쓰기 복습으로 원클릭.
         //   랜덤 10개 · 1바퀴 보고 2번 → 2바퀴 가리고 1번 · 2바퀴 첫 시도로 망각곡선 반영.
         //   모달로 돌아서 탭 이동이 필요 없음 (어느 화면에서든 바로 시작).
-        const TODAY_REVIEW_BATCH = 10;
+        const TODAY_REVIEW_BATCH = 5;
         function startTodayReviewShortcut() {
             const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
@@ -1172,7 +1173,13 @@ Return JSON only, no markdown.`;
                 //   핵심 칸(뜻·철자·동사변형)에서 틀렸을 때만 lastWrongDate를 찍는다.
                 const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));
                 const coreWrong = detail.some(d => !d.correct && !isIdiomOrExample(d.key));
+                // [냐냐 요청] 스페인어 '단어' 칸을 직접 써서 맞혔으면 = 주관식 정답 → 마스터 자격
+                //   (한국어 뜻 칸이나 관용구·예문 칸은 해당 없음)
+                const wordBlankPassed = detail.some(d => d.key === 'word' && d.language === 'es' && d.correct);
                 addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
+                // ⚠️ addWordScore는 correct===true 일 때만 subjective를 반영한다.
+                //   단어 칸은 맞고 예문 칸만 틀린 경우도 인정해야 하므로 여기서 직접 세운다.
+                if (wordBlankPassed) fillState.current.word.subjectivePassed = true;
                 // [냐냐 요청] 배너(오늘의 복습)로 시작한 경우에만 '오늘 복습함'으로 인정
                 if (fillState.isTodayReview && typeof markWordReviewedToday === 'function') {
                     markWordReviewedToday(fillState.current.word.id, !coreWrong);
