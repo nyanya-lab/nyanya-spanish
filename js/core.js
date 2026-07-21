@@ -2083,19 +2083,35 @@ let vocabulary = [];
             return `<div id="${id}" class="hidden absolute z-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap -translate-x-1/2" style="left:0; top:0;"></div>`;
         }
 
-        function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '') {
+        // [냐냐 요청] minVal을 주면 왼쪽 축 하단이 0이 아니라 그 값에서 시작한다
+        //   (성장 그래프처럼 이미 쌓인 양이 많을 때 변화폭이 눌려 보이는 걸 방지)
+        function recordChartGridlines(maxVal, padding, chartW, chartH, width, suffix = '', minVal = 0) {
             const steps = 4;
             let html = '';
+            const span = Math.max(1, maxVal - minVal);
+            const valAt = (i) => Math.round(minVal + (span / steps) * i);
             // [냐냐 PATCH] 라벨이 길면(자릿수 많으면) 글씨 크기를 줄여 잘림 방지
-            const longest = Math.max(...Array.from({ length: steps + 1 }, (_, i) => `${Math.round((maxVal / steps) * i)}${suffix}`.length));
+            const longest = Math.max(...Array.from({ length: steps + 1 }, (_, i) => `${valAt(i)}${suffix}`.length));
             const fs = longest >= 6 ? 7 : (longest >= 5 ? 8 : 9);
             for (let i = 0; i <= steps; i++) {
-                const val = Math.round((maxVal / steps) * i);
+                const val = valAt(i);
                 const y = padding.top + chartH - (i / steps) * chartH;
                 html += `<line x1="${padding.left}" y1="${y.toFixed(1)}" x2="${width - padding.right}" y2="${y.toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>`;
                 html += `<text x="${(padding.left - 5).toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="${fs}" font-weight="700" fill="#475569" text-anchor="end">${val}${suffix}</text>`;
             }
             return html;
+        }
+
+        // [냐냐 요청] 성장 그래프용 축 범위 계산 — 하단 = 조회 시작일의 개수
+        //   · 기간 중 단어를 지워서 더 낮아진 값이 있으면 그 값까지 내려서 선이 잘리지 않게 함
+        //   · 변화가 거의 없어도 눈금이 겹치지 않도록 최소 폭 4 확보
+        function growthAxisRange(values) {
+            const vals = (values || []).filter(v => typeof v === 'number' && isFinite(v));
+            if (!vals.length) return { min: 0, max: 4 };
+            const lo = Math.max(0, Math.floor(Math.min(...vals)));
+            const hi = Math.ceil(Math.max(...vals));
+            const span = Math.max(4, hi - lo);
+            return { min: lo, max: lo + span };
         }
 
         // [냐냐 PATCH] 오른쪽 축 라벨 (막대 그래프 기준선). 왼쪽=꺾은선 축, 오른쪽=막대 축
@@ -2140,13 +2156,16 @@ let vocabulary = [];
                 };
             });
 
-            const maxVal = Math.max(1, ...series.map(d => d.registeredTotal));
+            // [냐냐 요청] 왼쪽 축 하단을 0이 아니라 '조회 시작일의 단어 수'로
+            const axis = growthAxisRange(series.map(d => d.registeredTotal));
+            const minVal = axis.min;
+            const maxVal = axis.max;
             const xInset = Math.min(14, chartW * 0.06);
             const xSpan = chartW - xInset * 2;
             const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
             const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
             const baseY = height - padding.bottom;
-            const yOfCount = (val) => padding.top + chartH - (val / maxVal) * chartH;
+            const yOfCount = (val) => padding.top + chartH - ((val - minVal) / (maxVal - minVal)) * chartH;
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(9, groupWidth * 0.5);
 
@@ -2191,7 +2210,7 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '', minVal)}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
@@ -2511,13 +2530,16 @@ let vocabulary = [];
             }
             const masteredRatioOf = (i) => regByDay[i] > 0 ? (masByDay[i] / regByDay[i]) * 100 : 0;
 
-            const maxVal = Math.max(1, ...regByDay);
+            // [냐냐 요청] 왼쪽 축 하단을 0이 아니라 '조회 시작일의 문법표 수'로
+            const gAxis = growthAxisRange(regByDay);
+            const gMin = gAxis.min;
+            const maxVal = gAxis.max;
             // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
             const xInset = Math.min(14, chartW * 0.06);
             const xSpan = chartW - xInset * 2;
             const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
             const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
-            const yOfCount = (v) => padding.top + chartH - (v / maxVal) * chartH;
+            const yOfCount = (v) => padding.top + chartH - ((v - gMin) / (maxVal - gMin)) * chartH;
             const groupWidth = chartW / series.length;
             const barWidth = Math.min(6, groupWidth * 0.4);
 
@@ -2535,7 +2557,7 @@ let vocabulary = [];
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
                 <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '')}
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '', gMin)}
                     ${recordChartRightAxis(100, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
