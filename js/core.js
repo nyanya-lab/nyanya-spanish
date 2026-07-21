@@ -3870,15 +3870,17 @@ let vocabulary = [];
                 while (rtInList(id) && guard++ < 8) {
                     try { document.execCommand('outdent'); } catch (e) { break; }
                 }
-                // 목록에서 빠져나온 뒤, 있던 단계만큼 문단 들여쓰기로 옮겨줌
-                const b = rtBlockOf(id);
-                if (b && depth > 1) rtSetLevel(b, depth - 1);
+                // [냐냐 요청] 기호만 빼고 '있던 자리'는 그대로 유지
+                //   목록 N단계의 글씨 시작점 = N × --rt-indent = rt-in{N} 과 같음
+                const b = rtEnsureBlock(id);
+                if (b && depth >= 1) rtSetLevel(b, Math.min(RT_MAX_LEVEL, depth));
             } else {
                 const b = rtBlockOf(id);
                 const lv = b ? rtGetLevel(b) : 0;
                 if (b) rtSetLevel(b, 0);       // 문단 들여쓰기는 목록 단계로 넘김
                 try { document.execCommand('insertUnorderedList'); } catch (e) {}
-                for (let i = 0; i < lv; i++) { try { document.execCommand('indent'); } catch (e) {} }
+                // insertUnorderedList 자체가 이미 1단계를 만드므로 나머지만 추가로 내림
+                for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
             }
             rtSyncState(id);
         }
