@@ -434,10 +434,88 @@ let vocabulary = [];
             if (panel.classList.contains('hidden')) openAskAi(); else closeAskAi();
         }
 
+        // ============================================================
+        // [냐냐 요청] AI 패널 — 투명도 슬라이더 + 우상단 드래그 리사이즈
+        //   · 그림자는 제거됨 (뒤 화면이 잘 보이도록)
+        //   · 크기·투명도는 localStorage에 저장돼서 다음에 열 때 그대로 유지
+        //   · pointer 이벤트라 마우스·터치 둘 다 동작
+        // ============================================================
+        const ASK_AI_MIN_W = 280, ASK_AI_MAX_W = 720;
+        const ASK_AI_MIN_H = 260, ASK_AI_MAX_H = 900;
+
+        function setAskAiOpacity(val) {
+            const panel = document.getElementById('ask-ai-panel');
+            const label = document.getElementById('ask-ai-opacity-label');
+            const v = Math.max(30, Math.min(100, parseInt(val, 10) || 100));
+            if (panel) panel.style.opacity = (v / 100).toString();
+            if (label) label.innerText = v + '%';
+            try { localStorage.setItem('nyanya_askai_opacity', String(v)); } catch (e) {}
+        }
+
+        function restoreAskAiPrefs() {
+            const panel = document.getElementById('ask-ai-panel');
+            if (!panel) return;
+            try {
+                const w = parseInt(localStorage.getItem('nyanya_askai_w') || '', 10);
+                const h = parseInt(localStorage.getItem('nyanya_askai_h') || '', 10);
+                if (w) panel.style.width = Math.max(ASK_AI_MIN_W, Math.min(ASK_AI_MAX_W, w)) + 'px';
+                if (h) panel.style.height = Math.max(ASK_AI_MIN_H, Math.min(ASK_AI_MAX_H, h)) + 'px';
+                const op = parseInt(localStorage.getItem('nyanya_askai_opacity') || '100', 10) || 100;
+                const slider = document.getElementById('ask-ai-opacity');
+                if (slider) slider.value = op;
+                setAskAiOpacity(op);
+            } catch (e) {}
+        }
+
+        function initAskAiResize() {
+            const handle = document.getElementById('ask-ai-resize-handle');
+            const panel = document.getElementById('ask-ai-panel');
+            if (!handle || !panel || handle.dataset.bound === '1') return;
+            handle.dataset.bound = '1';
+
+            let startX = 0, startY = 0, startW = 0, startH = 0;
+
+            const onMove = (e) => {
+                // 패널이 좌하단 고정이므로 → 오른쪽으로 끌면 넓어지고, 위로 끌면 높아짐
+                const dw = e.clientX - startX;
+                const dh = startY - e.clientY;
+                const w = Math.max(ASK_AI_MIN_W, Math.min(ASK_AI_MAX_W, startW + dw));
+                const h = Math.max(ASK_AI_MIN_H, Math.min(ASK_AI_MAX_H, startH + dh));
+                panel.style.width = w + 'px';
+                panel.style.height = h + 'px';
+                e.preventDefault();
+            };
+
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                window.removeEventListener('pointercancel', onUp);
+                document.body.style.userSelect = '';
+                try {
+                    localStorage.setItem('nyanya_askai_w', String(Math.round(panel.offsetWidth)));
+                    localStorage.setItem('nyanya_askai_h', String(Math.round(panel.offsetHeight)));
+                } catch (e) {}
+            };
+
+            handle.addEventListener('pointerdown', (e) => {
+                startX = e.clientX;
+                startY = e.clientY;
+                startW = panel.offsetWidth;
+                startH = panel.offsetHeight;
+                document.body.style.userSelect = 'none';
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+                window.addEventListener('pointercancel', onUp);
+                e.preventDefault();
+            });
+        }
+
         function openAskAi(preset) {
             const panel = document.getElementById('ask-ai-panel');
             if (!panel) return;
             panel.classList.remove('hidden');
+            initAskAiResize();
+            restoreAskAiPrefs();
             const icon = document.getElementById('ask-ai-fab-icon');
             if (icon) icon.className = 'fa-solid fa-xmark';
             renderAskAiThread();
