@@ -875,7 +875,9 @@
         // [냐냐 PATCH] 3차-① 단어 빈칸 채우기 복습 (AI 채점)
         //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
         // ============================================================
-        let reviewMode = 'blink';          // 'blink' | 'fill'
+        // [냐냐 요청] 처음 들어오거나 새로고침하면 항상 '쓰기'. 세션 중에는 마지막에 보던 모드를 기억함
+        //   (localStorage에 저장하지 않으므로 새로고침하면 자동으로 'write'로 돌아감)
+        let reviewMode = 'write';          // 'write' | 'fill' | 'gfill' | 'blink'
         let fillScope = 'not-mastered'; // [냐냐 요청] 기본: 마스터 안 된 단어
         let fillCount = 5; // [냐냐 요청] 단어빈칸 기본 5개
         let fillState = null;
@@ -1398,7 +1400,7 @@ Return JSON only, no markdown.`;
                         <span class="text-lg shrink-0">${t.icon || '📋'}</span>
                         <h3 class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</h3>
                     </div>
-                    ${t.desc ? `<p class="text-xs text-slate-600 leading-relaxed">${escapeHtml(t.desc).replace(/\n/g, '<br>')}</p>` : ''}
+                    ${t.desc ? `<p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${escapeHtml(t.desc)}</p>` : ''}
                     <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
                     <div class="overflow-x-auto rounded-xl border border-slate-100">
                         <table class="w-full border-collapse">
@@ -1406,7 +1408,7 @@ Return JSON only, no markdown.`;
                             <tbody>${bodyRows}</tbody>
                         </table>
                     </div>
-                    ${t.note ? `<div class="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1">${escapeHtml(t.note).replace(/\n/g, '<br>')}</span></div>` : ''}
+                    ${t.note ? `<div class="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1 whitespace-pre-wrap">${escapeHtml(t.note)}</span></div>` : ''}
                     <div id="gfill-feedback" class="hidden space-y-1"></div>
                     <div class="flex justify-end">
                         <button id="gfill-action-btn" onclick="submitGrammarFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
