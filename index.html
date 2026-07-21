@@ -231,11 +231,9 @@
                             </button>
                         </div>
                         <div class="flex gap-2 w-full sm:w-auto shrink-0">
-                            <!-- [냐냐 요청] 지금 보고 있는 목록으로 쓰기 연습 -->
-                            <button id="write-practice-btn" onclick="startWritePractice()" title="지금 목록으로 쓰기 연습" class="h-10 px-3 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 text-sm font-bold text-amber-700 transition-all flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-pen-to-square"></i>
-                                <span class="hidden sm:inline text-xs">쓰기</span>
-                                <span id="write-practice-count" class="text-xs">0개</span>
+                            <!-- [냐냐 요청] 쓰기 연습은 복습 탭으로 일원화 → 목록 새로고침 버튼으로 교체 -->
+                            <button id="vocab-refresh-btn" onclick="refreshWordList()" title="단어 목록 새로고침 (약점·점수 변동 반영)" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
+                                <i id="vocab-refresh-icon" class="fa-solid fa-rotate-right"></i>
                             </button>
                             <!-- [냐냐 PATCH-6배치] 버튼은 아이콘만 (툴팁으로 이름 표시) -->
                             <button id="expand-all-btn" onclick="toggleExpandAllBtn()" title="전체 펼치기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
@@ -335,10 +333,13 @@
                             </button>
                         </div>
                     </div>
-                    </div><!-- /sticky search wrap -->
-
                     <!-- [냐냐 PATCH] 현재 필터/정렬 한 줄 표시 -->
-                    <div id="filter-summary" class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 px-1"></div>
+                    <!-- [냐냐 요청] 입력창과 함께 고정. 같은 줄 오른쪽에 페이지 이동 -->
+                    <div class="flex items-center justify-between gap-2 px-1 pt-2">
+                        <div id="filter-summary" class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 min-w-0"></div>
+                        <div id="vocab-pagination-sticky" class="shrink-0"></div>
+                    </div>
+                    </div><!-- /sticky search wrap -->
 
                     <!-- Vocabulary Grid List -->
                     <div id="vocabulary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1448,7 +1449,11 @@
     <!-- [냐냐 요청] 쓰기 연습 모달 제거 → 복습 탭 안의 #write-play-area 에서 인라인으로 진행 -->
 
     <!-- [냐냐 요청] AI 대화 패널 — 배경을 가리지 않아서 퀴즈·복습 하면서 계속 물어볼 수 있음 -->
-    <div id="ask-ai-panel" class="hidden fixed bottom-20 left-5 z-[46] w-[340px] max-w-[calc(100vw-2.5rem)] bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col" style="height: min(60vh, 520px);">
+    <div id="ask-ai-panel" class="hidden fixed bottom-20 left-5 z-[46] w-[340px] max-w-[calc(100vw-2.5rem)] bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col" style="height: min(60vh, 520px);">
+        <!-- [냐냐 요청] 우상단 드래그 핸들 — 위·오른쪽으로 커짐 (마우스·터치 둘 다) -->
+        <div id="ask-ai-resize-handle" title="드래그해서 크기 조절" class="absolute top-0 right-0 w-7 h-7 z-10 cursor-nesw-resize flex items-start justify-end p-1.5 text-slate-300 hover:text-violet-500 transition-colors touch-none select-none">
+            <i class="fa-solid fa-up-right-and-down-left-from-center text-[9px]"></i>
+        </div>
         <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
@@ -1472,6 +1477,15 @@
         <div id="ask-ai-thread" class="flex-1 min-h-0 overflow-y-auto no-scrollbar p-3 space-y-2.5"></div>
 
         <div class="p-3 border-t border-slate-100 shrink-0 space-y-2">
+            <!-- [냐냐 요청] 투명도 슬라이더 -->
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-droplet text-[10px] text-slate-300 shrink-0"></i>
+                <input id="ask-ai-opacity" type="range" min="30" max="100" value="100" step="5"
+                    oninput="setAskAiOpacity(this.value)"
+                    title="패널 투명도"
+                    class="flex-1 h-1 accent-violet-500 cursor-pointer">
+                <span id="ask-ai-opacity-label" class="text-[10px] font-bold text-slate-400 w-8 text-right shrink-0">100%</span>
+            </div>
             <textarea id="ask-ai-input" rows="2" onkeydown="askAiKeydown(event)" placeholder="예) por랑 para 차이가 뭐야?" class="w-full px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300 resize-none"></textarea>
             <button id="ask-ai-send-btn" onclick="submitAskAi()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-xl text-xs font-bold transition-all active:scale-95">물어보기 (Enter)</button>
         </div>
