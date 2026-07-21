@@ -2413,6 +2413,9 @@
             selectWriteScope(writeScope || 'not-mastered');
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.remove('hidden');
+            // [냐냐 요청] 인라인 진행 영역도 같이 정리 (진행 중이면 changeTab이 여기까지 안 옴)
+            const play = document.getElementById('write-play-area');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
         }
 
         // [냐냐 요청] 쓰기는 '단어'만. 관용구·예문은 단어 빈칸이 이미 다루므로 여기선 안 씀.
@@ -2435,7 +2438,16 @@
         //   1바퀴: 단어를 보면서 2번씩 쓰기 (익히기)
         //   2바퀴: 순서를 다시 섞고, 단어를 가린 채 뜻만 보고 1번 쓰기 (확인)
         //   isTodayReview면 2바퀴 첫 시도 결과로 망각곡선을 단어당 1회 반영 (점수는 안 건드림)
+        //   [냐냐 요청] 팝업 폐지 → 복습 탭 '✍️ 쓰기' 영역 안에서 진행.
+        //     단어장 ✍️ 버튼·헤더 📖 복습 배너에서 불러도 복습 탭으로 이동해서 거기서 푼다.
         function beginWritePractice(pool, opts) {
+            // ⚠️ 순서 중요: changeTab('review')는 진행 중이 아니면 resetReviewTab()을 부르므로
+            //    state를 세팅하기 '전에' 탭부터 옮긴다.
+            if (typeof changeTab === 'function' && typeof activeTab !== 'undefined' && activeTab !== 'review') {
+                changeTab('review');
+            }
+            if (typeof selectReviewMode === 'function') selectReviewMode('write');
+
             writePracticeState = {
                 pool: shuffleArray(pool.slice()),
                 index: 0,
@@ -2446,21 +2458,38 @@
                 isTodayReview: !!(opts && opts.isTodayReview),
                 onClose: (opts && opts.onClose) || null
             };
-            document.getElementById('write-practice-modal').classList.remove('hidden');
+
+            const setup = document.getElementById('write-setup');
+            const play = document.getElementById('write-play-area');
+            if (setup) setup.classList.add('hidden');
+            if (play) { play.classList.remove('hidden'); play.innerHTML = ''; }
             renderWritePractice();
         }
 
         function closeWritePractice() {
             const cb = writePracticeState && writePracticeState.onClose;
             writePracticeState = null;
-            document.getElementById('write-practice-modal').classList.add('hidden');
+            const play = document.getElementById('write-play-area');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            const setup = document.getElementById('write-setup');
+            if (setup) setup.classList.remove('hidden');
             if (typeof cb === 'function') { try { cb(); } catch (e) {} }
         }
 
         function renderWritePractice() {
             const s = writePracticeState;
-            const body = document.getElementById('write-practice-body');
+            const body = document.getElementById('write-play-area');
             if (!s || !body) return;
+
+            // [냐냐 요청] 인라인 카드 껍데기 — 다른 복습 모드(깜빡이·단어빈칸)와 같은 골격
+            const wrap = (inner) => `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="closeWritePractice()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-pen-to-square text-amber-500 mr-1"></i>보고 2번 → 가리고 1번</span>
+                    </div>
+                    ${inner}
+                </div>`;
 
             if (s.index >= s.pool.length) {
                 if (s.phase === 1) {
@@ -2471,13 +2500,13 @@
                     s.done = 0;
                     s.retry = false;
                     s.showDetail = false;
-                    body.innerHTML = `
+                    body.innerHTML = wrap(`
                         <div class="text-center space-y-4 py-6">
                             <div class="text-5xl">🙈</div>
                             <p class="text-lg font-bold text-slate-900">이제 가리고 써볼 차례!</p>
                             <p class="text-xs font-bold text-slate-500 leading-relaxed">뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.</p>
                             <button id="write-phase2-btn" onclick="renderWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">2바퀴 시작 (Enter) →</button>
-                        </div>`;
+                        </div>`);
                     // [냐냐 요청] 엔터로도 시작되게 버튼에 포커스
                     setTimeout(() => { const b = document.getElementById('write-phase2-btn'); if (b) b.focus(); }, 60);
                     return;
@@ -2493,15 +2522,15 @@
                         nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, 10)}개 이어서 →</button>`;
                     }
                 }
-                body.innerHTML = `
+                body.innerHTML = wrap(`
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
                         <p class="text-lg font-bold text-slate-900">${total}개 다 썼어요!</p>
                         <p class="text-sm font-bold text-slate-600">가리고 쓰기: <span class="text-emerald-600">${ok}개 성공</span>${s.wrongCount ? ` · <span class="text-rose-500">${s.wrongCount}개는 정답 보고 다시 씀</span>` : ''}</p>
                         ${reviewNote}
                         ${nextBtn}
-                        <button onclick="closeWritePractice()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">닫기</button>
-                    </div>`;
+                        <button onclick="closeWritePractice()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all active:scale-95">설정으로 돌아가기</button>
+                    </div>`);
                 return;
             }
 
@@ -2517,82 +2546,23 @@
                 ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
                 : '';
 
-            // [냐냐 요청] 관용구 (예전 형식 w.idiom 도 함께 지원)
-            const idiomList = (w.idioms && w.idioms.length)
-                ? w.idioms
-                : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
-            const idiomHtml = idiomList.length
-                ? `<div class="pt-2 mt-2 border-t border-slate-200 space-y-1 text-left">
-                       ${idiomList.map(it => `
-                           <p class="text-[11px] font-bold text-slate-600 leading-relaxed break-words">
-                               <span class="text-slate-400">·</span> ${escapeHtml(it.idiom || '')}
-                               ${it.idiomMeaning ? `<span class="text-slate-400 font-semibold"> — ${escapeHtml(it.idiomMeaning)}</span>` : ''}
-                           </p>`).join('')}
-                   </div>`
-                : '';
+            // [냐냐 요청] 1바퀴 카드는 "퀴즈 정답 화면"과 같은 양식으로 정보를 전부 펼쳐서 보여줌
+            //   (펴기/접기 없음. 관용구·예문·유의어·반의어·노트는 buildNotesHtml, 동사변형은 renderQuizConjugation이 담당)
 
-            // [냐냐 요청] 단어를 누르면 전체 정보 펼쳐보기 (연습은 그대로 유지)
-            let detailHtml = '';
-            if (s.showDetail) {
-                const rows = [];
-                if (w.example) {
-                    rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-0.5">예문</p>
-                        <p class="text-xs font-bold text-slate-700 leading-relaxed break-words">${escapeHtml(w.example)}</p>
-                        ${w.exampleMeaning ? `<p class="text-[11px] font-semibold text-slate-400 break-words">${escapeHtml(w.exampleMeaning)}</p>` : ''}</div>`);
-                }
-                // 유의어 / 반의어
-                const linkRow = (list, type) => (list || []).map(l => {
-                    const t = vocabulary.find(v => v.id === l.id);
-                    if (!t) return '';
-                    return `<span class="inline-block text-[11px] font-bold ${type === 'antonym' ? 'text-rose-600 bg-rose-50 border-rose-100' : 'text-sky-600 bg-sky-50 border-sky-100'} border rounded-lg px-2 py-0.5 m-0.5">${escapeHtml(t.word)}<span class="text-slate-400 font-semibold"> ${escapeHtml(t.meaning || '')}</span></span>`;
-                }).join('');
-                const synTxt = linkRow(w.synonyms, 'synonym');
-                const antTxt = linkRow(w.antonyms, 'antonym');
-                if (synTxt || antTxt) {
-                    rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-0.5">유의어 · 반의어</p><div class="-m-0.5">${synTxt}${antTxt}</div></div>`);
-                }
-                // 동사변형 (시제별)
-                const byTense = (w.conjugationsByTense && Object.keys(w.conjugationsByTense).length)
-                    ? w.conjugationsByTense
-                    : (w.conjugations ? { presente: w.conjugations } : {});
-                const persons = [['yo', 'yo'], ['tu', 'tú'], ['el', 'él'], ['nos', 'nos.'], ['vos', 'vos.'], ['ellos', 'ellos']];
-                const tenseHtml = Object.keys(byTense).map(k => {
-                    const c = byTense[k] || {};
-                    if (c.form) {
-                        const o = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS.find(t => t.key === k) : null;
-                        return `<div class="mb-1"><span class="text-[10px] font-bold text-indigo-600">${escapeHtml(o ? o.label : k)}</span>
-                                <span class="text-[11px] font-bold text-slate-700 ml-1">${escapeHtml(c.form)}</span></div>`;
-                    }
-                    const cells = persons.filter(([key]) => c[key]).map(([key, label]) =>
-                        `<span class="text-[11px] font-semibold text-slate-600"><span class="text-slate-400">${label}</span> ${escapeHtml(c[key])}</span>`).join('');
-                    if (!cells) return '';
-                    const o = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS.find(t => t.key === k) : null;
-                    return `<div class="mb-1.5">
-                        <p class="text-[10px] font-bold text-indigo-600 mb-0.5">${escapeHtml(o ? o.label : k)}</p>
-                        <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">${cells}</div></div>`;
-                }).join('');
-                if (tenseHtml) rows.push(`<div><p class="text-[10px] font-bold text-slate-400 mb-1">동사변형</p>${tenseHtml}</div>`);
-
-                detailHtml = rows.length
-                    ? `<div class="pt-2 mt-2 border-t border-slate-200 space-y-2.5 text-left">${rows.join('')}</div>`
-                    : `<p class="pt-2 mt-2 border-t border-slate-200 text-[11px] font-bold text-slate-300 text-center">더 등록된 정보가 없어요</p>`;
-            }
-
-            // [냐냐 요청] 바퀴별 카드 — 1바퀴: 단어 보임 / 2바퀴: 가림(뜻만) / 2바퀴 틀림: 정답 공개
+            // [냐냐 요청] 바퀴별 카드 — 1바퀴: 전체 정보 / 2바퀴: 가림(뜻만) / 2바퀴 틀림: 정답 공개
             let cardHtml, inputLabel, placeholder;
             if (s.phase === 1) {
+                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w) : '';
+                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+                const parts = [badges, notes].filter(x => x && x.trim());
                 cardHtml = `
-                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[38vh] overflow-y-auto no-scrollbar">
-                        <div onclick="toggleWritePracticeDetail()" class="text-center space-y-1 cursor-pointer select-none" title="눌러서 전체 정보 보기">
-                            ${posHtml}
+                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
+                        <div class="text-center space-y-1">
                             <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
-                            <p class="text-[10px] font-bold text-slate-400 pt-0.5">
-                                <i class="fa-solid fa-chevron-${s.showDetail ? 'up' : 'down'} mr-1"></i>${s.showDetail ? '접기' : '단어 정보 보기'}
-                            </p>
                         </div>
-                        ${idiomHtml}
-                        ${detailHtml}
+                        ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                        <div id="write-conj-box" class="hidden"></div>
                     </div>`;
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = w.word;
@@ -2617,7 +2587,7 @@
                 placeholder = w.word;
             }
 
-            body.innerHTML = `
+            body.innerHTML = wrap(`
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
@@ -2644,7 +2614,11 @@
                         <button onclick="skipWritePractice()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">건너뛰기</button>
                         <button onclick="closeWritePractice()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
                     </div>
-                </div>`;
+                </div>`);
+            // [냐냐 요청] 1바퀴에서 동사면 등록된 시제 전부 (퀴즈 정답 화면과 동일한 렌더러 재사용)
+            if (s.phase === 1 && typeof renderQuizConjugation === 'function') {
+                renderQuizConjugation(w, null, 'write-conj-box');
+            }
             setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
             // [냐냐 요청] 1바퀴(보고 쓰기)에서만 단어를 읽어줌. 2바퀴는 정답이 새어나가므로 안 읽음.
             if (s.phase === 1 && s.done === 0 && typeof speakSpanishVoice === 'function') {
