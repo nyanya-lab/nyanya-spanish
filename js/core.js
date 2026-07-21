@@ -1465,6 +1465,7 @@ let vocabulary = [];
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
                     ['깜박이', '+0.2', '−2'],
                     ['단어 빈칸', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
+                    ['쓰기 연습 · 복습', '가리고 쓰기 정답 +0.4', '가리고 쓰기 오답 −2'],
                     ['문법표 빈칸', '단어 점수 무관', '마스터한 표를 틀리면 마스터 해제']
                 ]}
             ];
@@ -2822,14 +2823,14 @@ let vocabulary = [];
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3">${escapeHtml(t.desc).replace(/\n/g, '<br>')}</p>` : ''}
+                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3 whitespace-pre-wrap">${escapeHtml(t.desc)}</p>` : ''}
                             <div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
                                     ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>
-                            ${t.note ? `<div class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1">${escapeHtml(t.note).replace(/\n/g, '<br>')}</span></div>` : ''}
+                            ${t.note ? `<div class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1 whitespace-pre-wrap">${escapeHtml(t.note)}</span></div>` : ''}
                         </div>
                     </div>
                 `;
@@ -3408,12 +3409,22 @@ let vocabulary = [];
             renderGrammarEditorFields();
         }
 
+        // [냐냐 요청] 앞뒤 빈 줄만 걷어내고, 줄 앞 스페이스 들여쓰기는 살려두는 정리 함수
+        function trimBlankLines(str) {
+            return String(str == null ? '' : str)
+                .replace(/^(?:[ \t]*\r?\n)+/, '')    // 맨 앞 빈 줄들
+                .replace(/(?:\r?\n[ \t]*)+$/, '')    // 맨 뒤 빈 줄들
+                .replace(/[ \t]+$/, '');             // 마지막 줄 끝 공백
+        }
+
         async function saveGrammarEditor() {
             const s = grammarEditorState;
             s.icon = document.getElementById('ge-icon').value.trim() || '📋';
             s.title = document.getElementById('ge-title').value.trim();
-            s.desc = document.getElementById('ge-desc').value.trim();
-            s.note = document.getElementById('ge-note').value.trim();
+            // [냐냐 요청] 스페이스 들여쓰기 보존 — .trim()은 첫 줄 앞 공백까지 날려버려서
+            //   앞뒤 '빈 줄'만 정리하고 줄머리 들여쓰기는 그대로 둔다
+            s.desc = trimBlankLines(document.getElementById('ge-desc').value);
+            s.note = trimBlankLines(document.getElementById('ge-note').value);
             if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
 
             // 빈 행 정리 (모든 칸이 비어있으면 제거)
@@ -3567,7 +3578,8 @@ let vocabulary = [];
                 const reviewInProgress =
                     (typeof reviewState !== 'undefined' && reviewState) ||
                     (typeof fillState !== 'undefined' && fillState) ||
-                    (typeof gfillState !== 'undefined' && gfillState);
+                    (typeof gfillState !== 'undefined' && gfillState) ||
+                    (typeof writePracticeState !== 'undefined' && writePracticeState);
                 if (typeof resetReviewTab === 'function' && !reviewInProgress) resetReviewTab();
             } else if (tabId === 'ai-feedback') {
                 // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
