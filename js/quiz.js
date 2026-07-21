@@ -667,23 +667,47 @@ let quizSession = null;
 
         // [냐냐 PATCH] 노트/관용구/예문/성수를 색 구분된 HTML로 (제목색 ≠ 내용색)
         // [냐냐 PATCH-1배치] 결과 화면 상단 배지 — 품사 · 성별 · 통합 점수
-        function buildWordBadgesHtml(word) {
+        // [냐냐 요청] 단어장 카드와 똑같은 영어 약어 뱃지 (M./F./N./V./Adj./Adv./Prep./Conj./Pron./Int./Phr.)
+        //   형용사 성·수 변화도 설명문 대신 품사 옆 뱃지로만 표시
+        //   opts.align === 'left' 면 왼쪽 정렬 (쓰기연습용), 기본은 가운데 (퀴즈 결과화면용)
+        function buildWordBadgesHtml(word, opts) {
             if (!word) return '';
+            opts = opts || {};
             const chips = [];
-            const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[word.pos]) ? POS_LABELS[word.pos] : word.pos;
-            if (posLabel) chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black bg-indigo-50 text-indigo-600">${escapeHtml(posLabel)}</span>`);
-            if (word.pos === 'noun' && word.gender) {
-                // [냐냐 PATCH-버그] 저장값은 'masculine'/'feminine' 인데 'm'/'f'로 비교해서 전부 남녀공용으로 나오던 버그
-                const g = word.gender === 'feminine' ? ['여성 (la)', 'bg-rose-50 text-rose-600']
-                        : word.gender === 'masculine' ? ['남성 (el)', 'bg-blue-50 text-blue-600']
-                        : ['남녀공용 (el/la)', 'bg-violet-50 text-violet-600'];
-                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${g[1]}">${g[0]}</span>`);
+            const B = (cls, txt) => `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full ${cls} shadow-sm">${txt}</span>`;
+
+            if (word.pos === 'noun') {
+                if (word.gender === 'masculine') chips.push(B('bg-blue-100 text-blue-600', 'M.'));
+                else if (word.gender === 'feminine') chips.push(B('bg-rose-100 text-rose-600', 'F.'));
+                else chips.push(B('bg-slate-100 text-slate-600', 'N.'));
+            } else if (word.pos === 'verb') {
+                chips.push(B('bg-orange-100 text-orange-600', 'V.'));
+            } else if (word.pos === 'adjective') {
+                chips.push(B('bg-amber-100 text-amber-700', 'Adj.'));
+                const AG = 'bg-amber-50 text-amber-600 border border-amber-200';
+                if (word.adjAgreement === 'no-gender') chips.push(B(AG, '성 변화 X'));
+                else if (word.adjAgreement === 'no-number') chips.push(B(AG, '수 변화 X'));
+                else if (word.adjAgreement === 'invariable') chips.push(B(AG, '변화 X'));
+            } else if (word.pos === 'adverb') {
+                chips.push(B('bg-emerald-100 text-emerald-700', 'Adv.'));
+            } else if (word.pos === 'preposition') {
+                chips.push(B('bg-teal-100 text-teal-700', 'Prep.'));
+            } else if (word.pos === 'conjunction') {
+                chips.push(B('bg-cyan-100 text-cyan-700', 'Conj.'));
+            } else if (word.pos === 'pronoun') {
+                chips.push(B('bg-pink-100 text-pink-700', 'Pron.'));
+            } else if (word.pos === 'interrogative') {
+                chips.push(B('bg-indigo-100 text-indigo-700', 'Int.'));
+            } else if (word.pos === 'phrase') {
+                chips.push(B('bg-purple-100 text-purple-600', 'Phr.'));
             }
+
             if (typeof getWordGrade === 'function' && typeof GRADE_INFO !== 'undefined') {
                 const gi = GRADE_INFO[getWordGrade(word)];
                 chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label}">${formatScore(word)}</span>`);
             }
-            return chips.length ? `<div class="flex items-center justify-center gap-1.5 flex-wrap">${chips.join('')}</div>` : '';
+            const justify = (opts.align === 'left') ? '' : ' justify-center';
+            return chips.length ? `<div class="flex items-center${justify} gap-1.5 flex-wrap">${chips.join('')}</div>` : '';
         }
 
         function buildNotesHtml(word, opts) {
@@ -697,23 +721,8 @@ let quizSession = null;
                         <span class="block text-sm text-slate-700 leading-relaxed">"${word.word}" (${word.meaning}) 단어의 관용구예요.</span>
                     </div>`);
             }
-            // 성·수 변화 (형용사)
-            const agr = adjAgreementText(word);
-            if (agr) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-fuchsia-500 mb-1.5">🔤 성·수 변화</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed">${agr}</span>
-                    </div>`);
-            }
-            // 노트
-            if (word.notes) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-amber-600 mb-1.5">📝 노트</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed">${escapeHtml(word.notes)}</span>
-                    </div>`);
-            }
+            // [냐냐 요청] 성·수 변화 설명문은 제거 — 품사 뱃지 옆 '성 변화 X' 칩으로 대체됨
+            //   (adjAgreementText()는 다른 데서 쓸 수 있으니 함수 자체는 남겨둠)
             // 관용구
             const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
             if (idiomList.length > 0) {
@@ -731,6 +740,14 @@ let quizSession = null;
                         <span class="block text-xs font-black text-sky-600 mb-1.5">✍️ 예문</span>
                         <span class="block text-sm text-slate-700 italic leading-relaxed">${escapeHtml(word.example)}</span>
                         ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
+                    </div>`);
+            }
+            // [냐냐 요청] 노트는 예문 밑으로
+            if (word.notes) {
+                sections.push(`
+                    <div>
+                        <span class="block text-xs font-black text-amber-600 mb-1.5">📝 노트</span>
+                        <span class="block text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(word.notes)}</span>
                     </div>`);
             }
             // [냐냐 PATCH-5배치] 유의어 / 반의어 (퀴즈 결과·복습 화면에도 표시)
@@ -812,7 +829,6 @@ let quizSession = null;
                         ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
-                    ${isIrr ? '<p class="text-[10px] text-slate-400 text-center py-1.5 border-t border-slate-100">파란 글씨가 불규칙으로 바뀌는 부분이에요</p>' : ''}
                 </div>`;
             }).filter(Boolean).join('');
 
