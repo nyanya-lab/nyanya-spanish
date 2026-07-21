@@ -3884,6 +3884,16 @@ let vocabulary = [];
             }
             rtSyncState(id);
         }
+        // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기
+        //   굵게 표시는 <b> 안에, 뒤 공백은 밖에 둬서 이어 치는 글자는 굵어지지 않음
+        function rtInsertLabel(id, txt) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+            try { document.execCommand('insertHTML', false, `<b>${escapeHtml(txt)}</b>&nbsp;`); } catch (e) {}
+            rtSyncState(id);
+        }
+
         // 서식 싹 지우기 (선택 영역)
         function rtClearFormat(id) {
             const el = rtFocusEditor(id);
