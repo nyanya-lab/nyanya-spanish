@@ -103,26 +103,34 @@ html {
             position: relative;
             margin: 0.15em 0;
         }
-        /* 기호칸: 폭 = 한 단위 − 간격, 오른쪽 정렬
-           → 기호 글자 폭이 달라도(▸ 넓고 · 좁음) 글씨까지 간격이 항상 같음 */
+        /* 기호칸 — 왼쪽 정렬
+           [냐냐 요청] 들여쓰기 간격의 기준은 '내용 시작점'.
+           기호를 오른쪽 정렬하면 기호 폭이 달라서(▸ 넓고 · 좁음) 기호 왼쪽 끝이
+           0.95em, 1.00em 처럼 제각각 벌어져 보였음 → 왼쪽 정렬로 바꿔서
+           기호 계단도 내용 계단과 똑같이 --rt-indent 씩 벌어지게 맞춤.
+           기호 폭 차이는 아래 font-size 로 보정. */
         .nyanya-rt li::before, .nyanya-rt-edit li::before {
             content: '▸';
             position: absolute;
             left: calc(-1 * var(--rt-indent));
             width: calc(var(--rt-indent) - var(--rt-gap));
-            text-align: right;
+            text-align: left;
             color: #7c3aed;
             font-weight: 700;
+            font-size: 0.85em;   /* ▸ 는 원래 넓어서 살짝 줄임 */
+            line-height: inherit;
         }
         /* 2단계 – */
         .nyanya-rt ul ul li::before, .nyanya-rt-edit ul ul li::before {
             content: '–';
             color: #64748b;
+            font-size: 1em;
         }
         /* 3단계 이하 · */
         .nyanya-rt ul ul ul li::before, .nyanya-rt-edit ul ul ul li::before {
             content: '·';
             color: #94a3b8;
+            font-size: 1.35em;   /* · 는 원래 좁아서 키움 (폭·존재감 보정) */
         }
 
         /* 글머리 없는 문단의 들여쓰기 — 목록 글씨 시작점과 동일하게 맞춤 */
