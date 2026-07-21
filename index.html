@@ -421,11 +421,12 @@
                 <div id="tab-quiz" class="hidden space-y-6">
                     <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-3">
                     <!-- [냐냐 PATCH-4배치] 복습/퀴즈 통합 서브메뉴 (복습 탭과 동일) -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                        <button onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">👁️ 깜빡이</button>
-                        <button onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">✏️ 단어 빈칸</button>
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                        <button onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">✍️ 쓰기</button>
+                        <button onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📝 단어 빈칸</button>
                         <button class="py-3.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-sm">🎯 퀴즈</button>
                         <button onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📋 문법표 빈칸</button>
+                        <button onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">👁️ 깜빡이</button>
                     </div>
                     <!-- [냐냐 PATCH] 제목 카드 제거 (서브탭이 이미 어딘지 알려줌). 진행 표시만 남김 -->
                     <div id="quiz-combo-box" class="hidden items-center justify-center gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
@@ -568,12 +569,45 @@
                     <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-3">
 
                     <!-- [냐냐 PATCH] 복습 방식 서브메뉴 -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                        <button id="review-mode-blink-btn" onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all">👁️ 깜빡이</button>
-                        <button id="review-mode-fill-btn" onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">✏️ 단어 빈칸</button>
+                    <!-- [냐냐 요청] 쓰기 연습을 맨 앞으로, 깜빡이는 맨 뒤로 -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                        <button id="review-mode-write-btn" onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all">✍️ 쓰기</button>
+                        <button id="review-mode-fill-btn" onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📝 단어 빈칸</button>
                         <button id="review-mode-quiz-btn" onclick="selectReviewMode('quiz')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🎯 퀴즈</button>
                         <button id="review-mode-gfill-btn" onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📋 문법표 빈칸</button>
+                        <button id="review-mode-blink-btn" onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all">👁️ 깜빡이</button>
                     </div>
+                    </div>
+
+                    <!-- ===== 쓰기 연습 모드 ([냐냐 요청]) ===== -->
+                    <div id="review-mode-write" class="hidden">
+                        <div id="write-setup" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-6">
+                            <div class="text-5xl">✍️</div>
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900">몇 개나 써볼까요?</h3>
+                                <p class="text-xs text-slate-400 mt-1">1바퀴는 <b>보면서 2번</b>, 2바퀴는 <b>가리고 1번</b> 써요.</p>
+                            </div>
+                            <div class="flex justify-center gap-3 flex-wrap">
+                                <button onclick="selectWriteCount(5)" data-write-count="5" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">5개</button>
+                                <button onclick="selectWriteCount(10)" data-write-count="10" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">10개</button>
+                                <button onclick="selectWriteCount(20)" data-write-count="20" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">20개</button>
+                            </div>
+
+                            <div class="max-w-sm mx-auto text-left space-y-3">
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-bold text-slate-500">범위</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <button onclick="selectWriteScope('weak')" data-write-scope="weak" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점</button>
+                                        <button onclick="selectWriteScope('not-mastered')" data-write-scope="not-mastered" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">📖 안 외운</button>
+                                        <button onclick="selectWriteScope('all')" data-write-scope="all" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🗂️ 전체</button>
+                                    </div>
+                                    <p id="write-scope-count" class="text-xs font-bold text-slate-400">범위를 선택하세요</p>
+                                </div>
+
+                            </div>
+
+                            <button onclick="startWriteReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">쓰기 시작하기</button>
+                        </div>
                     </div>
 
                     <!-- ===== 깜빡이 모드 ===== -->
