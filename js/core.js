@@ -1349,17 +1349,17 @@ let vocabulary = [];
         // ============================================================
         // [냐냐 PATCH-0배치] 점수 통합 — 약점점수/마스터점수 두 축을 하나(score)로
         //   score: -10 ~ +10 (0.1 단위)
-        //     +8 이상  = 완벽 (찐초록)
-        //     +5 ~ +7  = 마스터 (연초록)  ※ 주관식 정답 경험(subjectivePassed) 필요
-        //     -2 ~ +4  = 일반 (회색)
-        //     -3 ~ -7  = 약점 (노랑)
+        //     +8 이상    = 완벽 (찐초록)
+        //     +4.5 ~ +7.9 = 마스터 (연초록)  ※ 주관식 정답 경험(subjectivePassed) 필요
+        //     -4.4 ~ +4.4 = 일반 (회색)
+        //     -4.5 ~ -7.9 = 약점 (노랑)
         //     -8 이하  = 치명적 약점 (빨강)
         // ============================================================
         const SCORE_MIN = -10;
         const SCORE_MAX = 10;
-        const SCORE_MASTER = 5;   // 마스터 기준선
-        const SCORE_PERFECT = 8;  // 완벽 기준선
-        const SCORE_WEAK = -3;    // 약점 기준선
+        const SCORE_MASTER = 4.5;  // [냐냐 요청] 마스터 기준선 (5 → 4.5)
+        const SCORE_PERFECT = 8;   // 완벽 기준선
+        const SCORE_WEAK = -4.5;   // [냐냐 요청] 약점 기준선 (-3 → -4.5)
         const SCORE_CRITICAL = -8; // 치명적 약점 기준선
 
         function clampScore(n) {
@@ -1516,9 +1516,9 @@ let vocabulary = [];
         function buildHelpHtml() {
             const gradeRows = [
                 ['+8 ~ +10', '완벽', 'bg-emerald-600 text-white', '찐초록 — 확실히 내 것'],
-                ['+5 ~ +7', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
-                ['-2 ~ +4', '일반', 'bg-slate-100 text-slate-600', '아직 연습 중'],
-                ['-3 ~ -7', '약점', 'bg-amber-100 text-amber-700', '자주 틀리는 단어'],
+                ['+4.5 ~ +7.9', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
+                ['-4.4 ~ +4.4', '일반', 'bg-slate-100 text-slate-600', '아직 연습 중'],
+                ['-4.5 ~ -7.9', '약점', 'bg-amber-100 text-amber-700', '자주 틀리는 단어'],
                 ['-10 ~ -8', '치명적 약점', 'bg-red-100 text-red-600', '집중 공략 대상']
             ].map(([range, name, cls, desc]) => `
                 <tr class="border-b border-slate-100 last:border-0">
@@ -1556,10 +1556,10 @@ let vocabulary = [];
                 </tr>`).join('')).join('');
 
             const manualRows = [
-                ['⭐ 별표 1번 클릭', '−3점 (약점)'],
+                ['⭐ 별표 1번 클릭', '−4.5점 (약점)'],
                 ['⭐ 별표 2번 클릭', '−8점 (치명적 약점)'],
                 ['⭐ 별표 3번 클릭', '0점 (해제)'],
-                ['✅ 마스터 1번 클릭', '+5점 (마스터)'],
+                ['✅ 마스터 1번 클릭', '+4.5점 (마스터)'],
                 ['✅ 마스터 2번 클릭', '+8점 (완벽)'],
                 ['✅ 마스터 3번 클릭', '0점 (해제)']
             ].map(([act, res]) => `
