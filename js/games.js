@@ -646,7 +646,9 @@
             // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
             if (typeof resetFillSetup === 'function') resetFillSetup();
             if (typeof resetGrammarFillSetup === 'function') resetGrammarFillSetup();
-            if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'blink');
+            // [냐냐 요청] 쓰기 모드 설정도 초기화 + 기본 모드는 쓰기
+            if (typeof resetWriteSetup === 'function') resetWriteSetup();
+            if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'write');
         }
 
         function selectReviewCount(n) {
@@ -889,10 +891,10 @@
                 changeTab('review');
             }
             reviewMode = mode;
-            const containers = { blink: 'review-mode-blink', fill: 'review-mode-fill', gfill: 'review-mode-gfill' };
+            const containers = { blink: 'review-mode-blink', fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write' };
             Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
             // [냐냐 PATCH] 퀴즈 버튼도 목록에 포함 (빠져 있어서 혼자 글씨색이 달랐음)
-            const btns = { blink: 'review-mode-blink-btn', fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn' };
+            const btns = { blink: 'review-mode-blink-btn', fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
             Object.entries(btns).forEach(([m, id]) => {
