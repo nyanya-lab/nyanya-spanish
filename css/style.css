@@ -82,26 +82,35 @@ html {
 
         /* ============================================================
            [냐냐 요청] 문법·개념 노트 — 서식 편집기 (rich text)
+           · 들여쓰기 한 단위 = --rt-indent (기호 + 기호~글씨 간격 전부 포함)
+             → 글머리 없는 문단(rt-in1~3)과 목록 1·2·3단계의 글씨 시작점이 정확히 일치
            · 글머리 기호 3단계: ▸ → – → ·
-           · 조회 화면(.nyanya-rt)과 편집 화면(.nyanya-rt-edit) 동일 스타일
            ============================================================ */
-        .nyanya-rt, .nyanya-rt-edit { line-height: 1.65; word-break: break-word; }
+        .nyanya-rt, .nyanya-rt-edit {
+            --rt-indent: 1.5em;   /* 한 단계 들여쓰기 폭 (기호칸 + 간격) */
+            --rt-gap: 0.35em;     /* 기호와 글씨 사이 간격 */
+            line-height: 1.65;
+            word-break: break-word;
+        }
 
-        /* 목록 — 기본 마커 끄고 직접 그림 (단계별 기호 지정 위해) */
+        /* 목록 — 기본 마커 끄고 직접 그림 */
         .nyanya-rt ul, .nyanya-rt-edit ul {
             list-style: none;
-            padding-left: 1.25em;
+            padding-left: var(--rt-indent);
             margin: 0.2em 0;
         }
         .nyanya-rt li, .nyanya-rt-edit li {
             position: relative;
             margin: 0.15em 0;
         }
-        /* 1단계 ▸ */
+        /* 기호칸: 폭 = 한 단위 − 간격, 오른쪽 정렬
+           → 기호 글자 폭이 달라도(▸ 넓고 · 좁음) 글씨까지 간격이 항상 같음 */
         .nyanya-rt li::before, .nyanya-rt-edit li::before {
             content: '▸';
             position: absolute;
-            left: -1.1em;
+            left: calc(-1 * var(--rt-indent));
+            width: calc(var(--rt-indent) - var(--rt-gap));
+            text-align: right;
             color: #7c3aed;
             font-weight: 700;
         }
@@ -110,16 +119,16 @@ html {
             content: '–';
             color: #64748b;
         }
-        /* 3단계 · */
+        /* 3단계 이하 · */
         .nyanya-rt ul ul ul li::before, .nyanya-rt-edit ul ul ul li::before {
             content: '·';
             color: #94a3b8;
         }
-        /* 4단계 이상은 3단계 기호 유지 */
-        .nyanya-rt ul ul ul ul li::before, .nyanya-rt-edit ul ul ul ul li::before {
-            content: '·';
-            color: #94a3b8;
-        }
+
+        /* 글머리 없는 문단의 들여쓰기 — 목록 글씨 시작점과 동일하게 맞춤 */
+        .nyanya-rt .rt-in1, .nyanya-rt-edit .rt-in1 { padding-left: calc(1 * var(--rt-indent)); }
+        .nyanya-rt .rt-in2, .nyanya-rt-edit .rt-in2 { padding-left: calc(2 * var(--rt-indent)); }
+        .nyanya-rt .rt-in3, .nyanya-rt-edit .rt-in3 { padding-left: calc(3 * var(--rt-indent)); }
 
         /* 소제목 */
         .nyanya-rt h4, .nyanya-rt-edit h4 {
@@ -152,7 +161,6 @@ html {
             max-height: 22rem;
             overflow-y: auto;
             outline: none;
-            white-space: pre-wrap;
         }
         .nyanya-rt-edit:focus { box-shadow: 0 0 0 2px #8b5cf6; }
         /* 비었을 때 안내 문구 */
