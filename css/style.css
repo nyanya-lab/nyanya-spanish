@@ -40,3 +40,42 @@ html {
         /* [냐냐 PATCH] 사이드바 고정 시 스크롤바 숨김 (내용은 스크롤 가능) */
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        /* [냐냐 요청] AI 패널 투명도 슬라이더 — 동그라미 작게 + 바·동그라미 연보라 */
+        .nyanya-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            height: 12px;           /* 터치 영역은 확보 (보이는 바는 아래 track 두께) */
+            cursor: pointer;
+        }
+        /* 바 (트랙) */
+        .nyanya-slider::-webkit-slider-runnable-track {
+            height: 3px;
+            border-radius: 999px;
+            background: #ddd6fe;    /* violet-200 = 연보라 */
+        }
+        .nyanya-slider::-moz-range-track {
+            height: 3px;
+            border-radius: 999px;
+            background: #ddd6fe;
+        }
+        /* 조절 동그라미 (thumb) — 작게 */
+        .nyanya-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 9px;
+            height: 9px;
+            margin-top: -3px;       /* 3px 트랙 기준 세로 중앙 정렬 */
+            border-radius: 999px;
+            background: #a78bfa;    /* violet-400 = 연보라 */
+            border: none;
+        }
+        .nyanya-slider::-moz-range-thumb {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: #a78bfa;
+            border: none;
+        }
+        .nyanya-slider:focus { outline: none; }
