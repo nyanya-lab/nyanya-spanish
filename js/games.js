@@ -957,7 +957,7 @@
         // [냐냐 요청] 헤더의 '복습' 배너 → 쓰기 복습으로 원클릭.
         //   랜덤 10개 · 1바퀴 보고 2번 → 2바퀴 가리고 1번 · 2바퀴 첫 시도로 망각곡선 반영.
         //   모달로 돌아서 탭 이동이 필요 없음 (어느 화면에서든 바로 시작).
-        const TODAY_REVIEW_BATCH = 5;
+        const TODAY_REVIEW_BATCH = 10;
         function startTodayReviewShortcut() {
             const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
