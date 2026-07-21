@@ -2849,7 +2849,7 @@ let vocabulary = [];
             let tables = getAllGrammarTables();
             if (query) {
                 tables = tables.filter(t => {
-                    const haystack = [t.title, t.desc, t.note, ...(t.headers || []), ...((t.rows || []).flat())].join(' ').toLowerCase();
+                    const haystack = [t.title, richTextToPlain(t.desc), richTextToPlain(t.note), ...(t.headers || []), ...((t.rows || []).flat())].join(' ').toLowerCase();
                     return haystack.includes(query);
                 });
             }
@@ -2898,6 +2898,9 @@ let vocabulary = [];
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
                 const isMastered = !!masteredGrammar[t.id]; // [냐냐 PATCH] 문법표 마스터 여부
+                // [냐냐 요청] 표 없이 노트만 있는 항목 허용 — 내용이 하나도 없으면 표를 안 그림
+                const hasTable = ((t.headers || []).some(h => (h || '').toString().trim())
+                              || (t.rows || []).some(r => (r || []).some(c => (c || '').toString().trim())));
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
                         <button onclick="toggleMasterGrammar('${t.id}')" title="${isMastered ? '마스터 해제' : '마스터 표시'}" class="w-7 h-7 rounded-lg transition-colors ${isMastered ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}"><i class="fa-solid fa-circle-check text-xs"></i></button>
@@ -2923,14 +2926,14 @@ let vocabulary = [];
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5" data-grammar-body="${t.id}">
-                            ${t.desc ? `<p class="text-sm text-slate-800 leading-relaxed mb-3 whitespace-pre-wrap">${escapeHtml(t.desc)}</p>` : ''}
-                            <div class="overflow-x-auto rounded-xl border border-slate-100">
+                            ${t.desc ? `<div class="nyanya-rt text-sm text-slate-800 mb-3">${renderRichText(t.desc)}</div>` : ''}
+                            ${hasTable ? `<div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
                                     ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
-                            </div>
-                            ${t.note ? `<div class="text-sm text-slate-700 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5 flex gap-2"><span class="shrink-0">💡</span><span class="flex-1 whitespace-pre-wrap">${escapeHtml(t.note)}</span></div>` : ''}
+                            </div>` : ''}
+                            ${t.note ? `<div class="text-sm text-slate-700 ${hasTable ? 'mt-3' : ''} bg-slate-50 rounded-lg px-3 py-2.5 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(t.note)}</span></div>` : ''}
                         </div>
                     </div>
                 `;
@@ -3362,8 +3365,15 @@ let vocabulary = [];
             if (!s) return;
             renderGeIconPicker(s.icon || '📘'); // [냐냐 PATCH] 주제 콤보박스 채우고 현재 값 선택
             document.getElementById('ge-title').value = s.title;
-            document.getElementById('ge-desc').value = s.desc;
-            document.getElementById('ge-note').value = s.note;
+            // [냐냐 요청] 서식 편집기에 불러오기 (예전 글자 데이터는 자동 변환)
+            const setRt = (id, val, key) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.dataset.stateKey = key;
+                el.innerHTML = val ? renderRichText(val) : '';
+            };
+            setRt('ge-desc', s.desc, 'desc');
+            setRt('ge-note', s.note, 'note');
 
             // 편집 중인 표의 칸 강조 상태 (id 기준)
             const hl = (s.id && grammarCellHighlights[s.id]) ? grammarCellHighlights[s.id] : {};
@@ -3517,14 +3527,281 @@ let vocabulary = [];
                 .replace(/[ \t]+$/, '');             // 마지막 줄 끝 공백
         }
 
+        // ============================================================
+        // [냐냐 요청] 문법·개념 노트 — 서식 편집기 엔진
+        //   저장 데이터가 글자가 아니라 HTML이 되므로, 반드시 허용 목록으로 걸러서 쓴다.
+        //   허용 태그 외에는 전부 글자로 취급 → 웹에서 복붙해도 이상한 게 안 딸려옴
+        // ============================================================
+        const RT_ALLOWED_TAGS = ['UL', 'LI', 'B', 'STRONG', 'I', 'EM', 'U', 'MARK', 'SPAN', 'H4', 'BR', 'DIV', 'P'];
+
+        function rtIsReddish(color) {
+            if (!color) return false;
+            const c = color.toString().toLowerCase().replace(/\s/g, '');
+            if (c.includes('dc2626') || c.includes('ef4444') || c === 'red' || c.includes('e11d48')) return true;
+            const m = c.match(/rgba?\((\d+),(\d+),(\d+)/);
+            if (m) {
+                const r = +m[1], g = +m[2], b = +m[3];
+                return r > 120 && r > g * 1.6 && r > b * 1.6;
+            }
+            return false;
+        }
+
+        function rtHasBg(color) {
+            if (!color) return false;
+            const c = color.toString().toLowerCase().replace(/\s/g, '');
+            if (!c || c === 'transparent' || c === 'initial') return false;
+            const m = c.match(/rgba?\(([^)]+)\)/);
+            if (m) {
+                const parts = m[1].split(',').map(Number);
+                if (parts.length >= 4 && parts[3] === 0) return false;    // 완전 투명
+                if (parts[0] === 255 && parts[1] === 255 && parts[2] === 255) return false; // 흰색은 강조 아님
+            }
+            return true;
+        }
+
+        // HTML 정화 — 허용 태그만 남기고, 색/배경 인라인 스타일은 mark/rt-red 로 정규화
+        function sanitizeRichHtml(html) {
+            if (!html) return '';
+            const doc = document.implementation.createHTMLDocument('rt');
+            const root = doc.body;
+            root.innerHTML = String(html);
+
+            const walk = (node) => {
+                Array.from(node.childNodes).forEach(child => {
+                    if (child.nodeType === 3) return;                 // 텍스트는 통과
+                    if (child.nodeType !== 1) { child.remove(); return; } // 주석 등 제거
+                    const tag = child.tagName;
+
+                    // 스크립트/스타일은 내용까지 통째로 제거
+                    if (tag === 'SCRIPT' || tag === 'STYLE') { child.remove(); return; }
+
+                    walk(child); // 자식 먼저 정리
+
+                    // execCommand가 만든 <font> → 의미 태그로 변환
+                    if (tag === 'FONT') {
+                        const col = child.getAttribute('color');
+                        if (rtIsReddish(col)) {
+                            const rep = doc.createElement('span');
+                            rep.className = 'rt-red';
+                            while (child.firstChild) rep.appendChild(child.firstChild);
+                            child.replaceWith(rep);
+                        } else {
+                            const frag = doc.createDocumentFragment();
+                            while (child.firstChild) frag.appendChild(child.firstChild);
+                            child.replaceWith(frag);
+                        }
+                        return;
+                    }
+
+                    if (!RT_ALLOWED_TAGS.includes(tag)) {
+                        // 허용 안 된 태그는 껍데기만 벗기고 내용은 살림
+                        const frag = doc.createDocumentFragment();
+                        while (child.firstChild) frag.appendChild(child.firstChild);
+                        child.replaceWith(frag);
+                        return;
+                    }
+
+                    // 스타일 → mark / rt-red 로 정규화
+                    const style = child.getAttribute('style') || '';
+                    const bgM = style.match(/background(?:-color)?\s*:\s*([^;]+)/i);
+                    const fgM = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
+                    // ⚠️ 이미 저장된 rt-red 는 스타일이 없으므로 class 도 같이 봐야 함
+                    //    (안 보면 저장→다시 열기 때 빨간 글씨가 풀려버림)
+                    const hadRed = child.classList && child.classList.contains('rt-red');
+                    const wantMark = !!(bgM && rtHasBg(bgM[1]));
+                    const wantRed = hadRed || !!(fgM && rtIsReddish(fgM[1]));
+                    const wantBold = /font-weight\s*:\s*(bold|[7-9]00)/i.test(style);
+
+                    // 속성 전부 제거 (class는 아래에서 다시 지정)
+                    Array.from(child.attributes).forEach(a => child.removeAttribute(a.name));
+
+                    let target = child;
+                    if (wantMark && tag !== 'MARK') {
+                        const mk = doc.createElement('mark');
+                        while (target.firstChild) mk.appendChild(target.firstChild);
+                        target.appendChild(mk);
+                        target = mk;
+                    }
+                    if (wantRed) {
+                        if (child.tagName === 'SPAN') child.className = 'rt-red';
+                        else {
+                            const sp = doc.createElement('span');
+                            sp.className = 'rt-red';
+                            while (target.firstChild) sp.appendChild(target.firstChild);
+                            target.appendChild(sp);
+                        }
+                    }
+                    if (wantBold && !['B', 'STRONG', 'H4'].includes(child.tagName)) {
+                        const bb = doc.createElement('b');
+                        while (target.firstChild) bb.appendChild(target.firstChild);
+                        target.appendChild(bb);
+                    }
+                    // 의미 없는 빈 span 은 껍데기 제거
+                    if (child.tagName === 'SPAN' && !child.className) {
+                        const frag = doc.createDocumentFragment();
+                        while (child.firstChild) frag.appendChild(child.firstChild);
+                        child.replaceWith(frag);
+                    }
+                });
+            };
+            walk(root);
+            return root.innerHTML;
+        }
+
+        // 예전에 저장된 '그냥 글자'를 서식 HTML로 변환 (· 로 시작하는 줄은 목록으로)
+        function rtPlainToHtml(text) {
+            const lines = String(text == null ? '' : text).split(/\r?\n/);
+            let out = '', inList = false;
+            const esc = (t) => escapeHtml(t).replace(/ {2}/g, ' &nbsp;');
+            lines.forEach(line => {
+                const m = line.match(/^(\s*)[·•*\-]\s+(.*)$/);
+                if (m) {
+                    const depth = Math.min(2, Math.floor((m[1] || '').length / 2)); // 공백 2칸 = 한 단계
+                    if (!inList) { out += '<ul>'.repeat(depth + 1); inList = depth + 1; }
+                    else if (depth + 1 > inList) { out += '<ul>'.repeat(depth + 1 - inList); inList = depth + 1; }
+                    else if (depth + 1 < inList) { out += '</ul>'.repeat(inList - (depth + 1)); inList = depth + 1; }
+                    out += `<li>${esc(m[2])}</li>`;
+                } else {
+                    if (inList) { out += '</ul>'.repeat(inList); inList = 0; }
+                    out += line.trim() ? `<div>${esc(line)}</div>` : '<div><br></div>';
+                }
+            });
+            if (inList) out += '</ul>'.repeat(inList);
+            return out;
+        }
+
+        // 저장값이 HTML인지 판별 (아니면 예전 글자 → 변환)
+        function rtLooksLikeHtml(v) {
+            return /<(ul|li|div|p|b|strong|mark|span|h4|br|i|em|u)\b[^>]*>/i.test(String(v || ''));
+        }
+
+        // 조회 화면 출력용 — 예전 글자면 변환하고, 항상 정화해서 내보냄
+        function renderRichText(v) {
+            if (!v) return '';
+            const html = rtLooksLikeHtml(v) ? v : rtPlainToHtml(v);
+            return sanitizeRichHtml(html);
+        }
+
+        // 검색·미리보기용 — 태그를 걷어낸 순수 글자
+        function richTextToPlain(v) {
+            if (!v) return '';
+            const d = document.implementation.createHTMLDocument('rt');
+            // 블록이 붙어버리면 검색이 안 되므로(ser본질…) 블록 경계에 공백을 넣어줌
+            const spaced = (rtLooksLikeHtml(v) ? sanitizeRichHtml(v) : escapeHtml(v))
+                .replace(/<\/(li|div|p|h4|ul)>/gi, ' ')
+                .replace(/<br\s*\/?>/gi, ' ');
+            d.body.innerHTML = spaced;
+            return (d.body.textContent || '').replace(/\s+/g, ' ').trim();
+        }
+
+        // ── 툴바 명령 ───────────────────────────────────────────────
+        let rtActiveEditorId = null;
+
+        function rtFocusEditor(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            rtActiveEditorId = id;
+            if (document.activeElement !== el) el.focus();
+            return el;
+        }
+
+        function rtExec(id, cmd, val) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+            try { document.execCommand(cmd, false, val === undefined ? null : val); } catch (e) {}
+            rtSyncState(id);
+        }
+
+        // 형광펜 — 브라우저별 명령 이름이 달라서 둘 다 시도
+        function rtHighlight(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+            let ok = false;
+            try { ok = document.execCommand('hiliteColor', false, '#fef08a'); } catch (e) {}
+            if (!ok) { try { document.execCommand('backColor', false, '#fef08a'); } catch (e) {} }
+            rtSyncState(id);
+        }
+
+        function rtRed(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+            try { document.execCommand('foreColor', false, '#dc2626'); } catch (e) {}
+            rtSyncState(id);
+        }
+
+        // 소제목 — 이미 소제목이면 일반 문단으로 되돌림 (토글)
+        function rtHeading(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            const sel = window.getSelection();
+            let node = sel && sel.anchorNode;
+            let isH = false;
+            while (node && node !== el) {
+                if (node.nodeType === 1 && node.tagName === 'H4') { isH = true; break; }
+                node = node.parentNode;
+            }
+            try { document.execCommand('formatBlock', false, isH ? 'div' : 'h4'); } catch (e) {}
+            rtSyncState(id);
+        }
+
+        // 글머리 기호 넣기/빼기 (토글)
+        function rtToggleList(id) { rtExec(id, 'insertUnorderedList'); }
+        // 수준 내리기 / 올리기
+        function rtIndent(id) { rtExec(id, 'indent'); }
+        function rtOutdent(id) { rtExec(id, 'outdent'); }
+        // 서식 싹 지우기 (선택 영역)
+        function rtClearFormat(id) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('removeFormat', false, null); } catch (e) {}
+            rtSyncState(id);
+        }
+
+        // 편집 중 내용을 state에 반영
+        function rtSyncState(id) {
+            const el = document.getElementById(id);
+            if (!el || !grammarEditorState) return;
+            const key = el.dataset.stateKey;
+            if (key) grammarEditorState[key] = el.innerHTML;
+        }
+
+        // 목록 안에서 Tab = 수준 내리기 / Shift+Tab = 올리기
+        function rtKeydown(e, id) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                if (e.shiftKey) rtOutdent(id); else rtIndent(id);
+            }
+        }
+
+        // 붙여넣기는 항상 정화해서 삽입 (웹에서 복사한 서식이 통째로 딸려오는 것 방지)
+        function rtPaste(e, id) {
+            e.preventDefault();
+            const cb = e.clipboardData || window.clipboardData;
+            if (!cb) return;
+            const html = cb.getData('text/html');
+            const text = cb.getData('text/plain');
+            const safe = html ? sanitizeRichHtml(html) : escapeHtml(text || '').replace(/\r?\n/g, '<br>');
+            try { document.execCommand('insertHTML', false, safe); } catch (err) {}
+            rtSyncState(id);
+        }
+
         async function saveGrammarEditor() {
             const s = grammarEditorState;
             s.icon = document.getElementById('ge-icon').value.trim() || '📋';
             s.title = document.getElementById('ge-title').value.trim();
-            // [냐냐 요청] 스페이스 들여쓰기 보존 — .trim()은 첫 줄 앞 공백까지 날려버려서
-            //   앞뒤 '빈 줄'만 정리하고 줄머리 들여쓰기는 그대로 둔다
-            s.desc = trimBlankLines(document.getElementById('ge-desc').value);
-            s.note = trimBlankLines(document.getElementById('ge-note').value);
+            // [냐냐 요청] 서식 편집기 → 정화한 HTML로 저장
+            const readRt = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return '';
+                const html = sanitizeRichHtml(el.innerHTML);
+                // 알맹이가 없으면(빈 태그만) 빈 값으로
+                return richTextToPlain(html) ? html : '';
+            };
+            s.desc = readRt('ge-desc');
+            s.note = readRt('ge-note');
             if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
 
             // 빈 행 정리 (모든 칸이 비어있으면 제거)
