@@ -963,7 +963,7 @@
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
             const picked = shuffleArray(due.slice()).slice(0, TODAY_REVIEW_BATCH);
             if (typeof beginWritePractice === 'function') {
-                beginWritePractice(picked, { isTodayReview: true });
+                beginWritePractice(picked, { isTodayReview: true, batchSize: TODAY_REVIEW_BATCH });
             }
         }
 
