@@ -906,6 +906,14 @@
             return parts.join('\n');
         }
 
+        // 단어장 항목이 '단어/짧은 표현'인지 (문장 통째로 등록된 건 미션 재료로 안 씀)
+        function isSimpleWordEntry(w) {
+            const s = ((w && w.word) || '').trim();
+            if (!s || s.length > 24) return false;
+            if (/[?¿!¡.,;:\[\]()]/.test(s)) return false;   // 문장부호가 있으면 문장·표현
+            return s.split(/\s+/).length <= 3;              // 'el disco duro' 정도까지만
+        }
+
         // 내용이 있는 문법 노트 중에서 하나를 무작위로
         function pickMissionGrammarNote() {
             const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
@@ -951,8 +959,10 @@
             // [냐냐 요청] 문법표 1개를 골라 문맥으로 주고, 단어장에서 몇 개 더 섞는다
             const grammarNote = pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
+            //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
+            //   문장·표현 통째로 등록된 것도 있어서, 그런 걸 섞으라고 주면 억지로 우겨넣은 이상한 문장이 나온다
             const extraWords = (typeof shuffleArray === 'function' ? shuffleArray(vocabulary.slice()) : vocabulary.slice())
-                .filter(w => w !== targetWord).slice(0, 3);
+                .filter(w => w !== targetWord && isSimpleWordEntry(w)).slice(0, 2);
 
             const originalBtnHtml = genBtn.innerHTML;
             genBtn.disabled = true;
@@ -969,8 +979,10 @@ ${grammarContext}
 위 문법을 실제로 써야만 번역할 수 있는 문장으로 만들어 주세요. 노트의 설명까지 읽고, 그 문법이 자연스럽게 필요한 상황을 잡으세요.
 아래 표 안의 스페인어는 참고용일 뿐이며, 만들 문장에는 절대 넣지 마세요.` : ''}
 ${extraWords.length ? `
-[내 단어장에서 같이 쓰면 좋은 단어] ${extraWords.map(w => `${w.word}(${w.meaning})`).join(', ')}
-자연스러우면 이 중 1~2개의 '뜻'을 문장에 녹여 주세요. 억지스러우면 안 써도 됩니다.` : ''}
+[참고: 내 단어장에 있는 다른 단어] ${extraWords.map(w => `${w.word}(${w.meaning})`).join(', ')}
+이 중 하나가 위 문법과 정말 자연스럽게 어울릴 때만 그 '뜻'을 슬쩍 녹여 주세요.
+어울리지 않으면 하나도 안 쓰는 게 낫습니다. 여러 단어를 억지로 한 문장에 몰아넣지 마세요 —
+문장이 어색해지면 실패입니다. 문장은 짧고 자연스러운 게 최우선입니다.` : ''}
             ${buildLearnerProfileSummary()}`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
             const schema = {
