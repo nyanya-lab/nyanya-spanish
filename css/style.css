@@ -121,9 +121,9 @@ html {
             color: #7c3aed;
             font-weight: 700;
         }
-        /* 2단계 – */
+        /* 2단계 − (뺄셈 기호 U+2212 — 엔대시보다 짧고 세로 중앙 정렬이 안정적) */
         .nyanya-rt ul ul li::before, .nyanya-rt-edit ul ul li::before {
-            content: '–';
+            content: '\2212';
             color: #64748b;
         }
         /* 3단계 이하 · */
