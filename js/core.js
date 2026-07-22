@@ -2849,7 +2849,7 @@ let vocabulary = [];
             let tables = getAllGrammarTables();
             if (query) {
                 tables = tables.filter(t => {
-                    const haystack = [t.title, richTextToPlain(t.desc), richTextToPlain(t.note), ...(t.headers || []), ...((t.rows || []).flat())].join(' ').toLowerCase();
+                    const haystack = [t.title, richTextToPlain(t.desc), richTextToPlain(t.note), ...getHeaderRows(t).flat(), ...((t.rows || []).flat())].join(' ').toLowerCase();
                     return haystack.includes(query);
                 });
             }
@@ -2874,8 +2874,22 @@ let vocabulary = [];
             container.innerHTML = tables.map((t, idx) => {
                 const cellHl = grammarCellHighlights[t.id] || {}; // [냐냐 PATCH] {"ri-ci": true} 강조된 칸
                 const hlCols = t.highlightCols || [0]; // [냐냐 PATCH] 열 강조 (글씨체)
-                const headerRow = (t.headers || []).map((h, ci) => {
-                    return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`;
+                // [냐냐 요청] 헤더 여러 줄 + 헤더 병합
+                //   헤더 줄끼리 색 차이는 두지 않는다 — 전부 같은 파랑 + 흰 글씨, 층은 칸 테두리로만 구분
+                const hRows = getHeaderRows(t);
+                const hMerges = t.headerMerges || {};
+                const hHidden = buildMergeHidden(hMerges);
+                const headerRow = hRows.map((hr, hi) => {
+                    const bg = 'text-white bg-[#649fd0] border-[#5590c2]';
+                    const cells = hr.map((h, ci) => {
+                        if (hHidden.has(`${hi}-${ci}`)) return '';
+                        const mg = hMerges[`${hi}-${ci}`];
+                        const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                        const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                        const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                        return `<th class="text-center px-3 py-2.5 text-sm font-black align-middle border ${bg}"${spanAttr}>${escapeHtml(h)}</th>`;
+                    }).join('');
+                    return cells ? `<tr>${cells}</tr>` : '';
                 }).join('');
                 // [냐냐 요청] 셀 병합 — 대표 칸만 rowspan/colspan 으로 그리고 덮인 칸은 건너뜀
                 const tMerges = t.merges || {};
@@ -2899,7 +2913,7 @@ let vocabulary = [];
                         const cellContent = grammarWordLookupMode
                             ? buildLookupCellHtml(c || '')
                             : escapeHtml(c || '');
-                        return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#e1edf7] ${colHl} ${cellBg}"${spanAttr}>${cellContent}</td>`;
+                        return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}>${cellContent}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
                 }).join('');
@@ -2907,7 +2921,7 @@ let vocabulary = [];
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
                 const isMastered = !!masteredGrammar[t.id]; // [냐냐 PATCH] 문법표 마스터 여부
                 // [냐냐 요청] 표 없이 노트만 있는 항목 허용 — 내용이 하나도 없으면 표를 안 그림
-                const hasTable = ((t.headers || []).some(h => (h || '').toString().trim())
+                const hasTable = (hRows.some(hr => hr.some(h => (h || '').toString().trim()))
                               || (t.rows || []).some(r => (r || []).some(c => (c || '').toString().trim())));
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
@@ -2937,7 +2951,7 @@ let vocabulary = [];
                             ${t.desc ? `<div class="nyanya-rt text-sm text-slate-800 mb-3">${renderRichText(t.desc)}</div>` : ''}
                             ${hasTable ? `<div class="overflow-x-auto rounded-xl border border-slate-100">
                                 <table class="w-full border-collapse">
-                                    ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
+                                    ${headerRow ? `<thead>${headerRow}</thead>` : ''}
                                     <tbody>${bodyRows}</tbody>
                                 </table>
                             </div>` : ''}
@@ -3221,6 +3235,10 @@ let vocabulary = [];
         function openGrammarEditor(id) {
             if (id) {
                 const existing = getAllGrammarTables().find(t => t.id === id);
+                // [냐냐 요청] 헤더 줄들을 꺼내서 열 개수에 맞게 폭을 맞춰둠 (본문이 더 넓은 옛 표 대비)
+                const hSrc = getHeaderRows(existing);
+                const width = Math.max(1, (hSrc[0] || []).length, ...((existing.rows || []).map(r => (r || []).length)));
+                const headerRows = hSrc.map(r => { const a = r.slice(); while (a.length < width) a.push(''); return a; });
                 // 깊은 복사
                 grammarEditorState = JSON.parse(JSON.stringify({
                     id: existing.id,
@@ -3228,7 +3246,8 @@ let vocabulary = [];
                     title: existing.title || '',
                     desc: existing.desc || '',
                     note: existing.note || '',
-                    headers: existing.headers || ['', ''],
+                    headerRows: headerRows,                     // [냐냐 요청] 헤더 여러 줄 (여기가 원본, headers 는 저장할 때 만들어짐)
+                    headerMerges: existing.headerMerges || {},   // [냐냐 요청] 헤더 병합
                     rows: existing.rows || [['', '']],
                     highlightCols: existing.highlightCols || [0],
                     merges: existing.merges || {},          // [냐냐 요청] 셀 병합
@@ -3241,7 +3260,8 @@ let vocabulary = [];
                     title: '',
                     desc: '',
                     note: '',
-                    headers: ['뜻', '스페인어'],
+                    headerRows: [['뜻', '스페인어']],           // [냐냐 요청] 헤더 여러 줄
+                    headerMerges: {},                            // [냐냐 요청] 헤더 병합
                     rows: [['', ''], ['', '']],
                     highlightCols: [0],
                     merges: {},                              // [냐냐 요청] 셀 병합
@@ -3388,23 +3408,50 @@ let vocabulary = [];
             // 편집 중인 표의 칸 강조 상태 (id 기준)
             const hl = (s.id && grammarCellHighlights[s.id]) ? grammarCellHighlights[s.id] : {};
 
-            // 표 그리드 (헤더 행 + 데이터 행들)
+            // 표 그리드 (열 조작줄 + 헤더 줄들 + 데이터 행들)
             const grid = document.getElementById('ge-grid');
-            const colCount = s.headers.length;
+            const colCount = geColCount();
+            // ① 열 조작줄 — 열 이동 ◀▶ 과 열 강조는 따로 빼둔다
+            //    (헤더를 가로로 병합해도 열마다 버튼이 그대로 남아 있어야 열을 옮길 수 있음)
             let html = '<table class="border-collapse w-full"><thead><tr>';
-            s.headers.forEach((h, ci) => {
-                // [냐냐 PATCH] 열 강조(글씨체) 버튼을 열 제목 '위'에 배치
+            for (let ci = 0; ci < colCount; ci++) {
                 const isColHl = (s.highlightCols || []).includes(ci);
-                html += `<th class="p-1 align-top">
+                html += `<th class="p-1 align-bottom">
                     <div class="flex items-center justify-center gap-1 mb-1">
                         <button type="button" onclick="moveGeCol(${ci}, -1)" title="왼쪽으로" class="w-5 h-5 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors flex items-center justify-center ${ci === 0 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-left text-[9px]"></i></button>
                         <button type="button" onclick="moveGeCol(${ci}, 1)" title="오른쪽으로" class="w-5 h-5 rounded text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors flex items-center justify-center ${ci === colCount - 1 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-right text-[9px]"></i></button>
                     </div>
-                    <button type="button" onclick="toggleGeHighlight(${ci})" class="mb-1 w-full text-[10px] font-bold rounded-md py-1 transition-all ${isColHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isColHl ? '★ 열 강조 켬' : '☆ 열 강조'}</button>
-                    <input value="${escapeAttr(h)}" oninput="updateGeHeader(${ci}, this.value)" placeholder="열 제목" class="w-full min-w-[90px] bg-[#f3f8fd] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#5896cb]">
+                    <button type="button" onclick="toggleGeHighlight(${ci})" class="w-full text-[10px] font-bold rounded-md py-1 transition-all ${isColHl ? 'bg-[#5896cb] text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}">${isColHl ? '★ 열 강조 켬' : '☆ 열 강조'}</button>
                 </th>`;
+            }
+            html += `<th class="p-1 w-16"></th></tr>`;
+
+            // ② 헤더 줄들 — 칸 우클릭으로 헤더끼리 병합, 오른쪽 버튼으로 줄 순서 바꾸기·삭제
+            const hRows = s.headerRows;
+            const hMerges = s.headerMerges || {};
+            const hHidden = buildMergeHidden(hMerges);
+            hRows.forEach((hr, hi) => {
+                html += '<tr>';
+                for (let ci = 0; ci < colCount; ci++) {
+                    if (hHidden.has(`${hi}-${ci}`)) continue;   // 다른 헤더 칸에 덮임
+                    const mg = hMerges[`${hi}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                    // [냐냐 요청] 병합 표시는 따로 안 넣는다 — 입력칸이 합쳐진 넓이·높이만큼 늘어나는 걸로 충분
+                    html += `<th class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${hi}, ${ci}, 'header')">
+                        <input value="${escapeAttr(hr[ci] || '')}" oninput="updateGeHeader(${hi}, ${ci}, this.value)" placeholder="열 제목" class="ge-cell w-full min-w-[90px] bg-[#f3f8fd] border border-[#cfdeeb] rounded-lg px-2 py-1.5 text-xs font-bold text-[#2c5578] focus:outline-none focus:ring-1 focus:ring-[#5896cb]">
+                    </th>`;
+                }
+                html += `<th class="p-1 align-middle">
+                    <div class="flex items-center justify-center gap-0.5">
+                        <button type="button" onclick="moveGeHeaderRow(${hi}, -1)" title="헤더 줄 위로" class="w-4 h-5 rounded text-slate-300 hover:text-violet-600 ${hi === 0 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-up text-[9px]"></i></button>
+                        <button type="button" onclick="moveGeHeaderRow(${hi}, 1)" title="헤더 줄 아래로" class="w-4 h-5 rounded text-slate-300 hover:text-violet-600 ${hi === hRows.length - 1 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-down text-[9px]"></i></button>
+                        <button type="button" onclick="removeGeHeaderRow(${hi})" title="헤더 줄 삭제" class="w-4 h-5 rounded text-slate-300 hover:text-red-500 ${hRows.length <= 1 ? 'invisible' : ''}"><i class="fa-solid fa-circle-minus text-[9px]"></i></button>
+                    </div>
+                </th></tr>`;
             });
-            html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
+            html += `</thead><tbody>`;
             // [냐냐 요청] 병합된 칸은 대표 칸만 그리고, 덮인 칸은 건너뜀
             const merges = s.merges || {};
             const hidden = buildMergeHidden(merges);
@@ -3419,17 +3466,24 @@ let vocabulary = [];
                     const val = row[ci] || '';
                     // [냐냐 PATCH] 각 칸에 별표 → 클릭하면 연분홍 강조 토글 (편집 중에도 가능)
                     const isHl = !!hl[`${ri}-${ci}`];
-                    const cellBg = isHl ? 'bg-[#ffe0ec]' : 'bg-slate-50';
                     const starColor = isHl ? 'text-pink-400' : 'text-slate-300 hover:text-pink-300';
-                    const mergedRing = (cs > 1 || rs > 1) ? ' ring-1 ring-violet-300' : '';
-                    html += `<td class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${ri}, ${ci})">
-                        <div class="flex items-center gap-1 ${cellBg}${mergedRing} rounded-lg px-1 h-full">
+                    // [냐냐 요청] 병합 표시는 따로 안 넣는다 — 기본 배경이 합쳐진 넓이·높이만큼 늘어나는 걸로 충분
+                    const cellBg = isHl ? 'bg-[#ffe0ec]' : 'bg-slate-50';
+                    html += `<td class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${ri}, ${ci}, 'body')">
+                        <div class="ge-cell flex items-center gap-1 ${cellBg} rounded-lg px-1">
                             <button type="button" onclick="toggleGeCellHighlight(${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
                             <input value="${escapeAttr(val)}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${ri}, ${ci})" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
                         </div>
                     </td>`;
                 }
-                html += `<td class="p-1"><button onclick="removeGeRow(${ri})" title="행 삭제" class="text-slate-300 hover:text-red-500 px-1"><i class="fa-solid fa-circle-minus"></i></button></td>`;
+                // [냐냐 요청] 행 이동 ▲▼ 과 삭제를 헤더 줄처럼 한 줄로 나란히
+                html += `<td class="p-1 align-middle">
+                    <div class="flex items-center justify-center gap-0.5">
+                        <button type="button" onclick="moveGeRow(${ri}, -1)" title="행 위로" class="w-4 h-5 rounded text-slate-300 hover:text-violet-600 transition-colors ${ri === 0 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-up text-[9px]"></i></button>
+                        <button type="button" onclick="moveGeRow(${ri}, 1)" title="행 아래로" class="w-4 h-5 rounded text-slate-300 hover:text-violet-600 transition-colors ${ri === s.rows.length - 1 ? 'invisible' : ''}"><i class="fa-solid fa-chevron-down text-[9px]"></i></button>
+                        <button type="button" onclick="removeGeRow(${ri})" title="행 삭제" class="w-4 h-5 rounded text-slate-300 hover:text-red-500 transition-colors"><i class="fa-solid fa-circle-minus text-[9px]"></i></button>
+                    </div>
+                </td>`;
                 html += '</tr>';
             });
             html += '</tbody></table>';
@@ -3454,7 +3508,56 @@ let vocabulary = [];
         function escapeAttr(s) {
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
-        function updateGeHeader(ci, val) { grammarEditorState.headers[ci] = val; }
+        function updateGeHeader(hi, ci, val) { grammarEditorState.headerRows[hi][ci] = val; }
+
+        // ── [냐냐 요청] 헤더 줄 추가 / 삭제 / 순서 바꾸기 ──────────
+        //   새 줄은 '맨 위'에 생김 — 기존 제목 줄 위에 '인칭' 같은 묶음 제목을 얹는 게 제일 흔해서
+        function addGeHeaderRow() {
+            const s = grammarEditorState;
+            if (!s) return;
+            if (s.headerRows.length >= GRAMMAR_MAX_HEADER_ROWS) {
+                showToast(`헤더는 최대 ${GRAMMAR_MAX_HEADER_ROWS}줄까지예요`, "error");
+                return;
+            }
+            s.headerRows.unshift(new Array(geColCount()).fill(''));
+            s.headerMerges = remapMerges(s.headerMerges || {}, { insertRow: 0 });
+            renderGrammarEditorFields();
+        }
+
+        function removeGeHeaderRow(hi) {
+            const s = grammarEditorState;
+            if (!s) return;
+            if (s.headerRows.length <= 1) { showToast("헤더는 최소 한 줄은 있어야 해요", "error"); return; }
+            const doRemove = () => {
+                s.headerRows.splice(hi, 1);
+                s.headerMerges = remapMerges(s.headerMerges || {}, { removeRow: hi });
+                renderGrammarEditorFields();
+            };
+            // 내용이 있을 때만 물어봄 (빈 줄은 그냥 지움)
+            const kept = (s.headerRows[hi] || []).map(h => (h || '').toString().trim()).filter(Boolean);
+            if (!kept.length) { doRemove(); return; }
+            showConfirm(
+                "이 헤더 줄을 지울까요?",
+                `지워지는 제목: ${geLostPreview(kept)}`,
+                doRemove,
+                { okLabel: '지울래요', cancelLabel: '아니요' }
+            );
+        }
+
+        function moveGeHeaderRow(hi, dir) {
+            const s = grammarEditorState;
+            if (!s) return;
+            const nh = hi + dir;
+            if (nh < 0 || nh >= s.headerRows.length) return;
+            // 세로 병합을 가로지르는 이동은 표가 무너지므로 막는다 (열 이동과 같은 규칙)
+            if (mergeBlocksSwap(s.headerMerges || {}, hi, nh, 'row')) {
+                showToast("세로로 합쳐진 헤더가 있어서 줄을 못 옮겨요. 먼저 병합을 분리해 주세요", "error");
+                return;
+            }
+            [s.headerRows[hi], s.headerRows[nh]] = [s.headerRows[nh], s.headerRows[hi]];
+            s.headerMerges = remapMerges(s.headerMerges || {}, { swapRows: [hi, nh] });
+            renderGrammarEditorFields();
+        }
         // [냐냐 PATCH] 열 강조(글씨체) 토글 — 편집 중
         function toggleGeHighlight(ci) {
             if (!grammarEditorState.highlightCols) grammarEditorState.highlightCols = [];
@@ -3469,9 +3572,19 @@ let vocabulary = [];
             const s = grammarEditorState;
             if (!s) return;
             const nc = ci + dir;
-            if (nc < 0 || nc >= s.headers.length) return;
-            // 헤더 스왑
-            [s.headers[ci], s.headers[nc]] = [s.headers[nc], s.headers[ci]];
+            if (nc < 0 || nc >= geColCount()) return;
+            // [냐냐 요청] 가로 병합 한가운데를 가로지르는 이동은 막는다 (예전엔 병합이 조용히 풀렸음)
+            if (mergeBlocksSwap(s.headerMerges || {}, ci, nc, 'col')) {
+                showToast("가로로 합쳐진 헤더가 있어서 열을 못 옮겨요. 먼저 병합을 분리해 주세요", "error");
+                return;
+            }
+            if (mergeBlocksSwap(s.merges || {}, ci, nc, 'col')) {
+                showToast("가로로 합쳐진 칸이 있어서 열을 못 옮겨요. 먼저 병합을 분리해 주세요", "error");
+                return;
+            }
+            // 헤더 줄마다 스왑
+            s.headerRows.forEach(hr => { [hr[ci], hr[nc]] = [hr[nc], hr[ci]]; });
+            s.headerMerges = remapMerges(s.headerMerges || {}, { swapCols: [ci, nc] });
             // 각 행의 셀 스왑
             s.rows.forEach(row => {
                 const a = row[ci] || '', b = row[nc] || '';
@@ -3481,7 +3594,7 @@ let vocabulary = [];
             if (s.highlightCols) {
                 s.highlightCols = s.highlightCols.map(x => x === ci ? nc : (x === nc ? ci : x));
             }
-            // [냐냐 요청] 병합 좌표도 열 위치 반영 (가로 병합된 칸은 좌표가 꼬여서 병합 해제됨)
+            // [냐냐 요청] 병합 좌표도 열 위치 반영
             s.merges = remapMerges(s.merges || {}, { swapCols: [ci, nc] });
             // 칸 강조(grammarCellHighlights)도 열 위치 반영
             if (s.id && grammarCellHighlights[s.id]) {
@@ -3503,7 +3616,7 @@ let vocabulary = [];
             const s = grammarEditorState;
             if (!s) return;
             const rowCount = s.rows.length;
-            const colCount = s.headers.length;
+            const colCount = geColCount();
             let nr = ri + 1, nc = ci;
             if (nr >= rowCount) {
                 // 아래 칸 없으면 다음 열의 맨 위로
@@ -3515,41 +3628,93 @@ let vocabulary = [];
             if (next) { next.focus(); next.select(); }
         }
         function addGeRow() {
-            grammarEditorState.rows.push(new Array(grammarEditorState.headers.length).fill(''));
+            grammarEditorState.rows.push(new Array(geColCount()).fill(''));
             renderGrammarEditorFields();
         }
-        function removeGeRow(ri) {
+        // [냐냐 요청] 본문 행 위·아래로 옮기기 (헤더 줄 이동과 같은 규칙 — 헤더와는 안 섞임)
+        function moveGeRow(ri, dir) {
             const s = grammarEditorState;
-            if (s.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
-            s.rows.splice(ri, 1);
-            // [냐냐 요청] 병합·칸강조 좌표도 같이 당겨줌 (안 하면 엉뚱한 칸이 합쳐져 보임)
-            s.merges = remapMerges(s.merges || {}, { removeRow: ri });
+            if (!s) return;
+            const nr = ri + dir;
+            if (nr < 0 || nr >= s.rows.length) return;
+            // 세로 병합 한가운데를 가로지르는 이동은 표가 무너지므로 막는다
+            if (mergeBlocksSwap(s.merges || {}, ri, nr, 'row')) {
+                showToast("세로로 합쳐진 칸이 있어서 행을 못 옮겨요. 먼저 병합을 분리해 주세요", "error");
+                return;
+            }
+            [s.rows[ri], s.rows[nr]] = [s.rows[nr], s.rows[ri]];
+            s.merges = remapMerges(s.merges || {}, { swapRows: [ri, nr] });
             if (s.id && grammarCellHighlights[s.id]) {
-                grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { removeRow: ri });
+                grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { swapRows: [ri, nr] });
             }
             renderGrammarEditorFields();
         }
+        // [냐냐 요청] 지워질 내용 미리보기 — 너무 길면 뒤는 '외 N개'로 줄임
+        function geLostPreview(values) {
+            const v = values.slice(0, 5).join(', ');
+            return v + (values.length > 5 ? ` 외 ${values.length - 5}개` : '');
+        }
+
+        function removeGeRow(ri) {
+            const s = grammarEditorState;
+            if (s.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
+            const doRemove = () => {
+                s.rows.splice(ri, 1);
+                // [냐냐 요청] 병합·칸강조 좌표도 같이 당겨줌 (안 하면 엉뚱한 칸이 합쳐져 보임)
+                s.merges = remapMerges(s.merges || {}, { removeRow: ri });
+                if (s.id && grammarCellHighlights[s.id]) {
+                    grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { removeRow: ri });
+                }
+                renderGrammarEditorFields();
+            };
+            // [냐냐 요청] 내용이 있을 때만 물어봄 (빈 행은 그냥 지움)
+            const kept = (s.rows[ri] || []).map(c => (c || '').toString().trim()).filter(Boolean);
+            if (!kept.length) { doRemove(); return; }
+            showConfirm(
+                "이 행을 지울까요?",
+                `지워지는 내용: ${geLostPreview(kept)}`,
+                doRemove,
+                { okLabel: '지울래요', cancelLabel: '아니요' }
+            );
+        }
         function addGeColumn() {
-            grammarEditorState.headers.push('');
+            grammarEditorState.headerRows.forEach(hr => hr.push(''));
             grammarEditorState.rows.forEach(r => r.push(''));
             renderGrammarEditorFields();
         }
         function removeGeColumn() {
-            if (grammarEditorState.headers.length <= 1) { showToast("최소 한 열은 있어야 해요", "error"); return; }
-            const lastIdx = grammarEditorState.headers.length - 1;
-            grammarEditorState.headers.pop();
-            grammarEditorState.rows.forEach(r => r.pop());
-            // 강조 목록에서 삭제된 열 제거
-            if (grammarEditorState.highlightCols) {
-                grammarEditorState.highlightCols = grammarEditorState.highlightCols.filter(ci => ci !== lastIdx);
-            }
-            // [냐냐 요청] 병합·칸강조도 삭제된 열 반영
-            grammarEditorState.merges = remapMerges(grammarEditorState.merges || {}, { removeCol: lastIdx });
-            if (grammarEditorState.id && grammarCellHighlights[grammarEditorState.id]) {
-                grammarCellHighlights[grammarEditorState.id] =
-                    remapCellHighlights(grammarCellHighlights[grammarEditorState.id], { removeCol: lastIdx });
-            }
-            renderGrammarEditorFields();
+            const s = grammarEditorState;
+            if (geColCount() <= 1) { showToast("최소 한 열은 있어야 해요", "error"); return; }
+            const lastIdx = geColCount() - 1;
+            const doRemove = () => {
+                s.headerRows.forEach(hr => hr.pop());
+                s.rows.forEach(r => r.pop());
+                // [냐냐 요청] 헤더 병합도 삭제된 열 반영
+                s.headerMerges = remapMerges(s.headerMerges || {}, { removeCol: lastIdx });
+                // 강조 목록에서 삭제된 열 제거
+                if (s.highlightCols) {
+                    s.highlightCols = s.highlightCols.filter(ci => ci !== lastIdx);
+                }
+                // [냐냐 요청] 병합·칸강조도 삭제된 열 반영
+                s.merges = remapMerges(s.merges || {}, { removeCol: lastIdx });
+                if (s.id && grammarCellHighlights[s.id]) {
+                    grammarCellHighlights[s.id] =
+                        remapCellHighlights(grammarCellHighlights[s.id], { removeCol: lastIdx });
+                }
+                renderGrammarEditorFields();
+            };
+            // [냐냐 요청] 마지막 열의 헤더 제목·본문 내용이 있으면 물어봄 (빈 열은 그냥 지움)
+            const kept = [
+                ...s.headerRows.map(hr => hr[lastIdx]),
+                ...s.rows.map(r => r[lastIdx])
+            ].map(v => (v || '').toString().trim()).filter(Boolean);
+            if (!kept.length) { doRemove(); return; }
+            showConfirm(
+                "맨 오른쪽 열을 지울까요?",
+                `지워지는 내용: ${geLostPreview(kept)}`,
+                doRemove,
+                { okLabel: '지울래요', cancelLabel: '아니요' }
+            );
         }
 
         // [냐냐 요청] 앞뒤 빈 줄만 걷어내고, 줄 앞 스페이스 들여쓰기는 살려두는 정리 함수
@@ -4039,10 +4204,20 @@ let vocabulary = [];
                     else if (x < c) c--;
                     if (cs < 1) return;
                 }
+                if (opts.insertRow !== undefined) {
+                    const x = opts.insertRow;
+                    if (x <= r) r++;                          // 위에 줄이 끼어듦 → 통째로 아래로 밀림
+                    else if (x < r + rs) rs++;                // 병합 한가운데 끼어듦 → 높이가 늘어남
+                }
                 if (opts.swapCols) {
                     const [a, b] = opts.swapCols;
-                    if (cs > 1) return;                       // 가로 병합된 칸은 열 이동에서 제외 (좌표가 꼬임)
-                    if (c === a) c = b; else if (c === b) c = a;
+                    // 가로 병합은 좌표를 안 건드림 — 병합을 '가로지르는' 이동은 호출 쪽(moveGeCol)에서 미리 막는다
+                    if (cs === 1) { if (c === a) c = b; else if (c === b) c = a; }
+                }
+                if (opts.swapRows) {
+                    const [a, b] = opts.swapRows;
+                    // 세로 병합도 마찬가지 — 가로지르는 줄 이동은 호출 쪽에서 미리 막는다
+                    if (rs === 1) { if (r === a) r = b; else if (r === b) r = a; }
                 }
                 if (rs === 1 && cs === 1) return;             // 병합이 풀린 건 기록할 필요 없음
                 out[`${r}-${c}`] = { cs, rs };
@@ -4067,32 +4242,102 @@ let vocabulary = [];
                     const [a, b] = opts.swapCols;
                     if (c === a) c = b; else if (c === b) c = a;
                 }
+                if (opts.swapRows) {
+                    const [a, b] = opts.swapRows;
+                    if (r === a) r = b; else if (r === b) r = a;
+                }
                 out[`${r}-${c}`] = true;
             });
             return out;
         }
 
-        // ── 편집기: 우클릭 메뉴 / 병합 / 분리 ──────────────────────
-        let geMenuCell = null;   // { ri, ci }
+        // ============================================================
+        // [냐냐 요청] 헤더 여러 줄 (최대 3줄) + 헤더 전용 병합
+        //   저장 형태: t.headerRows   = [['인칭','인칭','뜻'], ['단수','복수','']]
+        //             t.headerMerges = { "헤더줄-열": {cs, rs} }
+        //   헤더 좌표와 본문 좌표가 안 섞이도록 병합 맵을 따로 둔다 (본문은 t.merges 그대로)
+        //   옛 데이터(headers 한 줄짜리)는 읽을 때 자동으로 한 줄 headerRows 로 승격됨
+        // ============================================================
+        const GRAMMAR_MAX_HEADER_ROWS = 3;
 
-        function geMerges() {
-            const s = grammarEditorState;
-            if (!s) return {};
-            if (!s.merges) s.merges = {};
-            return s.merges;
+        function getHeaderRows(t) {
+            const src = (t && Array.isArray(t.headerRows) && t.headerRows.length)
+                ? t.headerRows
+                : [(t && t.headers) || []];
+            const n = Math.max(0, ...src.map(r => (r || []).length));
+            return src.map(r => {
+                const a = (r || []).slice(0, n).map(x => (x == null ? '' : x));
+                while (a.length < n) a.push('');
+                return a;
+            });
         }
 
-        // 칸 우클릭 → 방향 메뉴 띄우기
-        function openGeCellMenu(ev, ri, ci) {
+        // 열 하나의 제목을 위에서부터 이어 붙임 → '인칭 - 단수' (AI 채점에 보낼 문맥용)
+        function grammarColumnLabel(t, ci) {
+            const hRows = getHeaderRows(t);
+            const hM = (t && t.headerMerges) || {};
+            const parts = [];
+            hRows.forEach((_, hi) => {
+                const a = findMergeAnchor(hM, hi, ci);        // 병합에 덮인 칸이면 대표 칸 글자를 가져옴
+                const v = ((hRows[a.r] && hRows[a.r][a.c]) || '').toString().trim();
+                if (v && !parts.includes(v)) parts.push(v);
+            });
+            return parts.join(' - ');
+        }
+
+        // 두 열(또는 두 줄)을 맞바꾸는 게 병합 한가운데를 가로지르는지 검사
+        //   가로지르면 표가 소리 없이 무너지므로 이동 자체를 막는다
+        function mergeBlocksSwap(merges, a, b, axis) {
+            return Object.keys(merges || {}).some(k => {
+                const m = merges[k] || {};
+                const [ar, ac] = k.split('-').map(Number);
+                const size = Math.max(1, (axis === 'col' ? m.cs : m.rs) || 1);
+                if (size === 1) return false;
+                const p1 = (axis === 'col' ? ac : ar), p2 = p1 + size - 1;
+                const inA = a >= p1 && a <= p2, inB = b >= p1 && b <= p2;
+                return inA !== inB;                           // 한쪽만 병합 안에 있으면 가로지름
+            });
+        }
+
+        // ── 편집기: 우클릭 메뉴 / 병합 / 분리 ──────────────────────
+        let geMenuCell = null;   // { ri, ci, scope }  scope: 'body' | 'header'
+
+        // 편집 중인 표의 열 개수 (헤더 첫 줄 기준)
+        function geColCount() {
+            const s = grammarEditorState;
+            if (!s || !s.headerRows || !s.headerRows[0]) return 0;
+            return s.headerRows[0].length;
+        }
+
+        // 스코프별로 '칸 배열 + 병합 맵'을 한 쌍으로 넘겨줌 (병합 로직을 헤더·본문이 그대로 공유)
+        function geGrid(scope) {
+            const s = grammarEditorState;
+            if (!s) return { cells: [], merges: {}, rowCount: 0 };
+            if (scope === 'header') {
+                if (!s.headerMerges) s.headerMerges = {};
+                return { cells: s.headerRows, merges: s.headerMerges, rowCount: s.headerRows.length };
+            }
+            if (!s.merges) s.merges = {};
+            return { cells: s.rows, merges: s.merges, rowCount: s.rows.length };
+        }
+
+        function geMerges(scope) {
+            return geGrid(scope).merges;
+        }
+
+        // 칸 우클릭 → 방향 메뉴 띄우기 (scope: 'body' | 'header' — 헤더는 헤더끼리만 합쳐짐)
+        function openGeCellMenu(ev, ri, ci, scope) {
             ev.preventDefault();
             ev.stopPropagation();
             const s = grammarEditorState;
             if (!s) return;
-            geMenuCell = { ri, ci };
-            const merges = geMerges();
+            scope = scope === 'header' ? 'header' : 'body';
+            geMenuCell = { ri, ci, scope };
+            const g = geGrid(scope);
+            const merges = g.merges;
             const anchor = findMergeAnchor(merges, ri, ci);
             const isMerged = anchor.cs > 1 || anchor.rs > 1;
-            const rowCount = s.rows.length, colCount = s.headers.length;
+            const rowCount = g.rowCount, colCount = geColCount();
 
             const item = (label, icon, onclick, disabled) => `
                 <button type="button" ${disabled ? 'disabled' : `onclick="${onclick}"`}
@@ -4134,9 +4379,10 @@ let vocabulary = [];
         function mergeGeCell(dir) {
             const s = grammarEditorState;
             if (!s || !geMenuCell) return;
-            const { ri, ci } = geMenuCell;
+            const { ri, ci, scope } = geMenuCell;
             closeGeCellMenu();
-            const merges = geMerges();
+            const g = geGrid(scope);
+            const merges = g.merges;
             const a = findMergeAnchor(merges, ri, ci);
 
             // 현재 칸이 차지한 사각형에서 원하는 방향으로 한 칸 넓힘
@@ -4146,7 +4392,7 @@ let vocabulary = [];
             else if (dir === 'left') rect.c1--;
             else if (dir === 'right') rect.c2++;
 
-            if (rect.r1 < 0 || rect.c1 < 0 || rect.r2 >= s.rows.length || rect.c2 >= s.headers.length) {
+            if (rect.r1 < 0 || rect.c1 < 0 || rect.r2 >= g.rowCount || rect.c2 >= geColCount()) {
                 showToast("더 이상 합칠 칸이 없어요", "error");
                 return;
             }
@@ -4155,41 +4401,54 @@ let vocabulary = [];
 
             // 대표 칸(왼쪽 위) 외에 내용이 있는 칸 확인
             const keepR = rect.r1, keepC = rect.c1;
+            const cells = g.cells;
             const lost = [];
             for (let r = rect.r1; r <= rect.r2; r++) {
                 for (let c = rect.c1; c <= rect.c2; c++) {
                     if (r === keepR && c === keepC) continue;
-                    const v = (s.rows[r] && s.rows[r][c] || '').toString().trim();
+                    const v = (cells[r] && cells[r][c] || '').toString().trim();
                     if (v) lost.push(v);
                 }
             }
-            if (lost.length) {
-                const preview = lost.slice(0, 5).join(', ') + (lost.length > 5 ? ` 외 ${lost.length - 5}개` : '');
-                if (!confirm(`합치면 아래 내용이 지워져요.\n\n${preview}\n\n계속할까요?`)) return;
+            // [냐냐 요청] 대표 칸(왼쪽 위)이 비어 있고 살릴 글자가 딱 하나면 그 글자를 대표 칸으로 끌어올린다
+            //   헤더 줄을 위에 새로 얹고 '뜻' 열을 세로로 합칠 때 글자가 사라지는 걸 막아줌
+            if (lost.length === 1 && !((cells[keepR] && cells[keepR][keepC]) || '').toString().trim()) {
+                if (!cells[keepR]) cells[keepR] = [];
+                cells[keepR][keepC] = lost[0];
+                lost.length = 0;
             }
-
-            // 사각형 안의 기존 병합 제거 후 새 대표 칸 등록
-            Object.keys(merges).forEach(k => {
-                const [r, c] = k.split('-').map(Number);
-                if (r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2) delete merges[k];
-            });
-            for (let r = rect.r1; r <= rect.r2; r++) {
-                for (let c = rect.c1; c <= rect.c2; c++) {
-                    if (r === keepR && c === keepC) continue;
-                    if (s.rows[r]) s.rows[r][c] = '';
+            const applyMerge = () => {
+                // 사각형 안의 기존 병합 제거 후 새 대표 칸 등록
+                Object.keys(merges).forEach(k => {
+                    const [r, c] = k.split('-').map(Number);
+                    if (r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2) delete merges[k];
+                });
+                for (let r = rect.r1; r <= rect.r2; r++) {
+                    for (let c = rect.c1; c <= rect.c2; c++) {
+                        if (r === keepR && c === keepC) continue;
+                        if (cells[r]) cells[r][c] = '';
+                    }
                 }
-            }
-            const cs = rect.c2 - rect.c1 + 1, rs = rect.r2 - rect.r1 + 1;
-            if (cs > 1 || rs > 1) merges[`${keepR}-${keepC}`] = { cs, rs };
-            renderGrammarEditorFields();
+                const cs = rect.c2 - rect.c1 + 1, rs = rect.r2 - rect.r1 + 1;
+                if (cs > 1 || rs > 1) merges[`${keepR}-${keepC}`] = { cs, rs };
+                renderGrammarEditorFields();
+            };
+            if (!lost.length) { applyMerge(); return; }
+            // [냐냐 요청] 앱 기본 확인창으로 — 브라우저 기본 confirm 은 차단되면 그냥 '아니요'가 돼버림
+            showConfirm(
+                "합치면 내용이 지워져요",
+                `지워지는 내용: ${geLostPreview(lost)}`,
+                applyMerge,
+                { okLabel: '합칠래요', cancelLabel: '아니요' }
+            );
         }
 
         function splitGeCell() {
             const s = grammarEditorState;
             if (!s || !geMenuCell) return;
-            const { ri, ci } = geMenuCell;
+            const { ri, ci, scope } = geMenuCell;
             closeGeCellMenu();
-            const merges = geMerges();
+            const merges = geMerges(scope);
             const a = findMergeAnchor(merges, ri, ci);
             delete merges[`${a.r}-${a.c}`];
             renderGrammarEditorFields();
@@ -4234,11 +4493,16 @@ let vocabulary = [];
                     grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { removeRow: ri });
                 }
             }
-            if (s.rows.length === 0) { s.rows = [new Array(s.headers.length).fill('')]; s.merges = {}; }
+            if (s.rows.length === 0) { s.rows = [new Array(geColCount()).fill('')]; s.merges = {}; }
 
+            // [냐냐 요청] headers 는 '본문 바로 위 헤더 줄'의 사본 — 옛 코드·백업 데이터 호환용으로 계속 채워둔다
+            const headerRows = s.headerRows.map(hr => hr.map(h => (h == null ? '' : h.toString())));
             const tableData = {
                 id: s.id, icon: s.icon, title: s.title, desc: s.desc, note: s.note,
-                headers: s.headers, rows: s.rows, highlightCols: s.highlightCols || [0],
+                headers: headerRows[headerRows.length - 1].slice(),
+                headerRows: headerRows,                  // [냐냐 요청] 헤더 여러 줄
+                headerMerges: s.headerMerges || {},      // [냐냐 요청] 헤더 병합
+                rows: s.rows, highlightCols: s.highlightCols || [0],
                 merges: s.merges || {},          // [냐냐 요청] 셀 병합 — 이게 빠져서 저장이 안 됐음
                 _edited: true
             };

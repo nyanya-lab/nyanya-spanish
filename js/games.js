@@ -1353,7 +1353,8 @@ Return JSON only, no markdown.`;
         function buildGrammarFillProblem(t) {
             const hlCols = t.highlightCols || [0];
             const rows = t.rows || [];
-            const numCols = Math.max((t.headers || []).length, ...rows.map(r => r.length), 0);
+            const gHeaderRows = (typeof getHeaderRows === 'function') ? getHeaderRows(t) : [t.headers || []];
+            const numCols = Math.max(...gHeaderRows.map(r => r.length), ...rows.map(r => r.length), 0);
             const blanks = [];
             // [냐냐 요청] 병합에 덮인 칸은 화면에 없으므로 출제 대상에서 제외
             const hidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(t.merges || {}) : new Set();
@@ -1383,7 +1384,23 @@ Return JSON only, no markdown.`;
             const blankIndexOf = {};
             problem.blanks.forEach((b, i) => { blankIndexOf[`${b.ri}-${b.ci}`] = i; });
 
-            const headerRow = (t.headers || []).map(h => `<th class="text-center px-2 py-2 text-xs font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`).join('');
+            // [냐냐 요청] 노트와 똑같은 모양으로 — 헤더 여러 줄 + 헤더 병합 그대로 출제
+            const hRows = (typeof getHeaderRows === 'function') ? getHeaderRows(t) : [t.headers || []];
+            const hMerges = t.headerMerges || {};
+            const hHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(hMerges) : new Set();
+            const headerRow = hRows.map((hr, hi) => {
+                // 헤더 줄끼리 색 차이 없이 전부 같은 파랑 + 흰 글씨 (노트 화면과 같은 규칙)
+                const bg = 'text-white bg-[#649fd0] border-[#5590c2]';
+                const cells = hr.map((h, ci) => {
+                    if (hHidden.has(`${hi}-${ci}`)) return '';
+                    const mg = hMerges[`${hi}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                    return `<th class="text-center px-2 py-2 text-xs font-black align-middle border ${bg}"${spanAttr}>${escapeHtml(h)}</th>`;
+                }).join('');
+                return cells ? `<tr>${cells}</tr>` : '';
+            }).join('');
             // [냐냐 요청] 셀 병합을 표 모양 그대로 출제 — 대표 칸만 그리고 덮인 칸은 건너뜀
             const tMerges = t.merges || {};
             const tHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(tMerges) : new Set();
@@ -1399,9 +1416,9 @@ Return JSON only, no markdown.`;
                     const key = `${ri}-${ci}`;
                     if (key in blankIndexOf) {
                         const bi = blankIndexOf[key];
-                        return `<td class="px-1 py-1 align-middle border border-[#e1edf7] ${rowBg}"${spanAttr}><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                        return `<td class="px-1 py-1 align-middle border border-[#c3d9ec] ${rowBg}"${spanAttr}><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
                     }
-                    return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#e1edf7] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
+                    return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#c3d9ec] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
                 }).join('');
                 return `<tr class="${rowBg}">${cells}</tr>`;
             }).join('');
@@ -1422,7 +1439,7 @@ Return JSON only, no markdown.`;
                     <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
                     <div class="overflow-x-auto rounded-xl border border-slate-100">
                         <table class="w-full border-collapse">
-                            ${headerRow ? `<thead><tr>${headerRow}</tr></thead>` : ''}
+                            ${headerRow ? `<thead>${headerRow}</thead>` : ''}
                             <tbody>${bodyRows}</tbody>
                         </table>
                     </div>
@@ -1462,7 +1479,10 @@ Return JSON only, no markdown.`;
             // 각 빈칸에 문맥(행 대표값=강조열, 열 제목) 부여
             const ctxItems = blanks.map((b, i) => {
                 const rowLabel = (t.rows[b.ri] && hlCols.length) ? (t.rows[b.ri][hlCols[0]] || '') : '';
-                const colHeader = (t.headers && t.headers[b.ci]) ? t.headers[b.ci] : '';
+                // [냐냐 요청] 헤더가 여러 줄이면 위에서부터 이어 붙여서 보냄 ('인칭 - 단수')
+                const colHeader = (typeof grammarColumnLabel === 'function')
+                    ? grammarColumnLabel(t, b.ci)
+                    : ((t.headers && t.headers[b.ci]) ? t.headers[b.ci] : '');
                 return { index: i, rowLabel, column: colHeader, expected: b.expected, studentAnswer: answers[i] };
             });
 

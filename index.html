@@ -1605,6 +1605,8 @@
                 <div class="flex items-center justify-between">
                     <label class="block text-xs font-bold text-slate-500">표 내용 <span class="font-semibold text-slate-400">(선택 — 비워두면 노트만 저장돼요)</span></label>
                     <div class="flex gap-1">
+                        <!-- [냐냐 요청] 헤더 줄 추가 — 새 줄은 맨 위에 생김 (묶음 제목용). 줄 삭제·순서는 헤더 줄 오른쪽 버튼으로 -->
+                        <button onclick="addGeHeaderRow()" title="헤더 줄을 맨 위에 추가 (최대 3줄)" class="text-[11px] font-bold bg-[#e8f2fb] text-[#2c5578] px-2 py-1 rounded-lg hover:bg-[#d8e9f7]"><i class="fa-solid fa-plus"></i> 헤더줄</button>
                         <button onclick="addGeColumn()" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button onclick="removeGeColumn()" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
                     </div>
