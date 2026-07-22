@@ -1388,6 +1388,7 @@ Return JSON only, no markdown.`;
             if (!gfillState) return;
             if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
             gfillState.phase = 'input';
+            gfillState.hintUsed = false;   // [냐냐 요청] 문제마다 힌트 사용 여부를 새로 센다
             const play = document.getElementById('gfill-play-area');   // ⚠️ 병합 작업 때 실수로 지웠던 줄
             if (!play) return;
             const t = gfillState.pool[gfillState.index];
@@ -1401,10 +1402,16 @@ Return JSON only, no markdown.`;
             const blocksHtml = problem.blocks.map((blk, bi) => {
                 if (blk.type === 'text') {
                     if (!blk.html || !richTextToPlain(blk.html)) return '';
-                    if (blk.style === 'tip') {
-                        return `<div class="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(blk.html)}</span></div>`;
-                    }
-                    return `<div class="nyanya-rt text-xs text-slate-600">${renderRichText(blk.html)}</div>`;
+                    const body = blk.style === 'tip'
+                        ? `<div class="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(blk.html)}</span></div>`
+                        : `<div class="nyanya-rt text-xs text-slate-600">${renderRichText(blk.html)}</div>`;
+                    // [냐냐 요청] 설명·팁에 답이 적혀 있는 경우가 많아서 가려둔다. 채점하면 자동으로 풀림
+                    return `<div class="relative" data-gfill-note="${bi}">
+                        <div class="gfill-note-body select-none">${body}</div>
+                        <button type="button" onclick="revealGfillNote(${bi})" class="gfill-note-cover absolute inset-0 flex items-center justify-center rounded-lg">
+                            <span class="text-[11px] font-bold text-slate-500 bg-white/90 border border-slate-200 rounded-full px-3 py-1 shadow-sm hover:text-indigo-600 hover:border-indigo-300 transition-colors"><i class="fa-solid fa-eye mr-1"></i>힌트 보기</span>
+                        </button>
+                    </div>`;
                 }
                 const hlCols = blk.highlightCols || [0];
                 const hMerges = blk.headerMerges || {};
@@ -1471,6 +1478,17 @@ Return JSON only, no markdown.`;
                 </div>
             `;
             setTimeout(() => { const first = document.getElementById('gfill-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        // [냐냐 요청] 가려둔 설명·팁 열어보기 — 이 문제는 '힌트 봤음'으로 기록된다
+        function revealGfillNote(bi) {
+            const box = document.querySelector(`[data-gfill-note="${bi}"]`);
+            if (!box) return;
+            box.classList.add('gfill-note-revealed');
+            if (gfillState) gfillState.hintUsed = true;
+        }
+        function revealAllGfillNotes() {
+            document.querySelectorAll('[data-gfill-note]').forEach(el => el.classList.add('gfill-note-revealed'));
         }
 
         function gfillInputKeydown(e, idx) {
@@ -1546,7 +1564,7 @@ Return JSON only, no markdown.`;
                 correct: graded[i].correct, correctAnswer: graded[i].correctAnswer
             }));
             const allCorrect = detail.every(d => d.correct);
-            gfillState.results.push({ table: t, blanks: detail, allCorrect });
+            gfillState.results.push({ table: t, blanks: detail, allCorrect, hintUsed: !!gfillState.hintUsed });
 
             // [냐냐 PATCH-0배치] 마스터된 문법표를 틀리면 → 마스터 자동 해제
             let unmastered = false;
@@ -1565,6 +1583,7 @@ Return JSON only, no markdown.`;
         }
 
         function applyGrammarFillResults(detail) {
+            revealAllGfillNotes();   // [냐냐 요청] 채점하면 가려뒀던 설명·팁을 다 열어준다
             detail.forEach((d, i) => {
                 const el = document.getElementById('gfill-input-' + i);
                 if (!el) return;
@@ -1580,7 +1599,11 @@ Return JSON only, no markdown.`;
                 const unmasterBanner = (gfillState && gfillState.lastUnmastered)
                     ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-triangle-exclamation"></i> 마스터했던 표라서 <b>마스터가 해제됐어요.</b> 다시 정복해봐요!</div>`
                     : '';
-                fb.innerHTML = unmasterBanner + detail.map(d => {
+                // [냐냐 요청] 힌트(설명·팁)를 열어봤으면 표시해 준다
+                const hintBanner = (gfillState && gfillState.hintUsed)
+                    ? `<div class="bg-slate-50 border border-slate-200 text-slate-500 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-eye"></i> 이 문제는 <b>힌트를 봤어요.</b></div>`
+                    : '';
+                fb.innerHTML = unmasterBanner + hintBanner + detail.map(d => {
                     const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
                     const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;

@@ -197,3 +197,12 @@ html {
         .ny-gtable th, .ny-gtable td { border-width: 0 1px 1px 0; }
         .ny-gtable tr > *:last-child { border-right-width: 0; }
         .ny-gtable tbody tr:last-child > * { border-bottom-width: 0; }
+
+        /* ============================================================
+           [냐냐 요청] 문법표 빈칸 복습 — 설명·팁 가리기
+             노트 글에 답이 그대로 적혀 있는 경우가 많아서 힌트가 돼버린다.
+             채점 전까지 흐리게 가려두고, '힌트 보기'를 누르거나 채점하면 풀린다.
+           ============================================================ */
+        .gfill-note-body { filter: blur(5px); transition: filter .25s ease; }
+        .gfill-note-revealed .gfill-note-body { filter: none; }
+        .gfill-note-revealed .gfill-note-cover { display: none; }
