@@ -28,6 +28,7 @@
     </style>
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col antialiased">
+<script>document.addEventListener("click", function(e){ if(!e.target.closest || !e.target.closest("#ge-cell-menu")) { if(typeof closeGeCellMenu==="function") closeGeCellMenu(); } });</script>
 
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none"></div>
@@ -1447,6 +1448,9 @@
     </div>
 
     <!-- [냐냐 PATCH-0배치] 사이트 설명 모달 (점수·등급 규칙) -->
+    <!-- [냐냐 요청] 표 칸 우클릭 메뉴 (상하좌우 합치기 / 분리하기) -->
+    <div id="ge-cell-menu" class="hidden fixed z-[80] w-[170px] bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden"></div>
+
     <!-- [냐냐 요청] 쓰기 연습 모달 제거 → 복습 탭 안의 #write-play-area 에서 인라인으로 진행 -->
 
     <!-- [냐냐 요청] AI 대화 패널 — 배경을 가리지 않아서 퀴즈·복습 하면서 계속 물어볼 수 있음 -->
