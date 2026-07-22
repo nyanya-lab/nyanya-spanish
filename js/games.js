@@ -1355,9 +1355,12 @@ Return JSON only, no markdown.`;
             const rows = t.rows || [];
             const numCols = Math.max((t.headers || []).length, ...rows.map(r => r.length), 0);
             const blanks = [];
+            // [냐냐 요청] 병합에 덮인 칸은 화면에 없으므로 출제 대상에서 제외
+            const hidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(t.merges || {}) : new Set();
             for (let ci = 0; ci < numCols; ci++) {
                 if (hlCols.includes(ci)) continue;         // 강조 열은 공개
                 for (let ri = 0; ri < rows.length; ri++) {
+                    if (hidden.has(`${ri}-${ci}`)) continue;
                     const c = rows[ri][ci];
                     if (!(c || '').toString().trim()) continue; // 빈 칸은 스킵
                     blanks.push({ ri, ci, expected: c });
@@ -1379,21 +1382,27 @@ Return JSON only, no markdown.`;
             problem.blanks.forEach((b, i) => { blankIndexOf[`${b.ri}-${b.ci}`] = i; });
 
             const headerRow = (t.headers || []).map(h => `<th class="text-center px-2 py-2 text-xs font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`).join('');
+            // [냐냐 요청] 셀 병합을 표 모양 그대로 출제 — 대표 칸만 그리고 덮인 칸은 건너뜀
+            const tMerges = t.merges || {};
+            const tHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(tMerges) : new Set();
             const bodyRows = (t.rows || []).map((r, ri) => {
                 const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
                 const cells = r.map((c, ci) => {
+                    if (tHidden.has(`${ri}-${ci}`)) return '';
+                    const mg = tMerges[`${ri}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800';
                     const key = `${ri}-${ci}`;
                     if (key in blankIndexOf) {
                         const bi = blankIndexOf[key];
-                        return `<td class="px-1 py-1 border border-[#e1edf7] ${rowBg}"><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                        return `<td class="px-1 py-1 align-middle border border-[#e1edf7] ${rowBg}"${spanAttr}><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
                     }
-                    return `<td class="px-2 py-1.5 text-xs text-center border border-[#e1edf7] ${colHl}">${escapeHtml(c || '')}</td>`;
+                    return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#e1edf7] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
                 }).join('');
                 return `<tr class="${rowBg}">${cells}</tr>`;
             }).join('');
-
-            const play = document.getElementById('gfill-play-area');
             play.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
                     <div class="flex items-center justify-between">
