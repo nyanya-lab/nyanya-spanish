@@ -4214,12 +4214,33 @@ let vocabulary = [];
             if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
 
             // 빈 행 정리 (모든 칸이 비어있으면 제거)
-            s.rows = s.rows.filter(r => r.some(c => (c || '').trim()));
-            if (s.rows.length === 0) s.rows = [new Array(s.headers.length).fill('')];
+            // ⚠️ 세로 병합에 덮인 행은 내용이 비어 있는 게 정상이라 그냥 지우면 표가 무너짐
+            //    → 병합에 걸린 행은 남기고, 지운 행만큼 병합·강조 좌표를 보정한다
+            const rowsCoveredByMerge = () => {
+                const set = new Set();
+                Object.keys(s.merges || {}).forEach(k => {
+                    const m = s.merges[k];
+                    const r = Number(k.split('-')[0]);
+                    for (let dr = 0; dr < Math.max(1, m.rs || 1); dr++) set.add(r + dr);
+                });
+                return set;
+            };
+            for (let ri = s.rows.length - 1; ri >= 0; ri--) {
+                const hasText = s.rows[ri].some(c => (c || '').trim());
+                if (hasText || rowsCoveredByMerge().has(ri)) continue;
+                s.rows.splice(ri, 1);
+                s.merges = remapMerges(s.merges || {}, { removeRow: ri });
+                if (s.id && grammarCellHighlights[s.id]) {
+                    grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { removeRow: ri });
+                }
+            }
+            if (s.rows.length === 0) { s.rows = [new Array(s.headers.length).fill('')]; s.merges = {}; }
 
             const tableData = {
                 id: s.id, icon: s.icon, title: s.title, desc: s.desc, note: s.note,
-                headers: s.headers, rows: s.rows, highlightCols: s.highlightCols || [0], _edited: true
+                headers: s.headers, rows: s.rows, highlightCols: s.highlightCols || [0],
+                merges: s.merges || {},          // [냐냐 요청] 셀 병합 — 이게 빠져서 저장이 안 됐음
+                _edited: true
             };
 
             // 기존 사용자 표면 교체, 아니면 추가
