@@ -185,3 +185,15 @@ html {
            ============================================================ */
         #ge-grid td, #ge-grid th { height: 1px; }
         #ge-grid .ge-cell { height: 100%; box-sizing: border-box; }
+
+        /* ============================================================
+           [냐냐 요청] 노트 표 — 둥근 모서리에 격자가 깎여 보이던 문제
+             border-collapse:collapse 는 칸에 둥글기가 안 먹어서, 감싼 상자의
+             둥근 모서리에 네모난 격자가 잘려 모서리만 얇아 보였다.
+             → separate + 간격0 으로 바꾸고 칸은 '오른쪽·아래'만 그린다.
+               바깥 테두리 한 바퀴는 감싼 상자가 대신 그려서 겹침이 없다.
+           ============================================================ */
+        .ny-gtable { border-collapse: separate; border-spacing: 0; }
+        .ny-gtable th, .ny-gtable td { border-width: 0 1px 1px 0; }
+        .ny-gtable tr > *:last-child { border-right-width: 0; }
+        .ny-gtable tbody tr:last-child > * { border-bottom-width: 0; }

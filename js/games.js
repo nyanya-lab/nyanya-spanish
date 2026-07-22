@@ -1332,10 +1332,20 @@ Return JSON only, no markdown.`;
                 return true; // all
             });
         }
+        // [냐냐 요청] 노트 안의 표 블록을 전부 합쳐서 센다 (노트 하나 = 문제 하나)
         function countGrammarBlanks(t) {
-            const hlCols = t.highlightCols || [0];
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : [];
             let n = 0;
-            (t.rows || []).forEach(r => r.forEach((c, ci) => { if (!hlCols.includes(ci) && (c || '').toString().trim()) n++; }));
+            blocks.forEach(b => {
+                if (b.type !== 'table') return;
+                const hlCols = b.highlightCols || [0];
+                const hidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(b.merges || {}) : new Set();
+                (b.rows || []).forEach((r, ri) => (r || []).forEach((c, ci) => {
+                    if (hlCols.includes(ci)) return;                 // 강조 열은 공개
+                    if (hidden.has(`${ri}-${ci}`)) return;           // 병합에 덮인 칸은 화면에 없음
+                    if ((c || '').toString().trim()) n++;
+                }));
+            });
             return n;
         }
 
@@ -1350,24 +1360,28 @@ Return JSON only, no markdown.`;
         }
 
         // [냐냐 PATCH] 열 우선(세로) 순서로 빈칸 수집 → 엔터가 한 열을 쭉 내려간 뒤 다음 열로
+        // [냐냐 요청] 노트 하나 = 문제 하나 — 노트 안 표 블록을 순서대로 돌며 빈칸을 모은다
         function buildGrammarFillProblem(t) {
-            const hlCols = t.highlightCols || [0];
-            const rows = t.rows || [];
-            const gHeaderRows = (typeof getHeaderRows === 'function') ? getHeaderRows(t) : [t.headers || []];
-            const numCols = Math.max(...gHeaderRows.map(r => r.length), ...rows.map(r => r.length), 0);
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : [];
             const blanks = [];
-            // [냐냐 요청] 병합에 덮인 칸은 화면에 없으므로 출제 대상에서 제외
-            const hidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(t.merges || {}) : new Set();
-            for (let ci = 0; ci < numCols; ci++) {
-                if (hlCols.includes(ci)) continue;         // 강조 열은 공개
-                for (let ri = 0; ri < rows.length; ri++) {
-                    if (hidden.has(`${ri}-${ci}`)) continue;
-                    const c = rows[ri][ci];
-                    if (!(c || '').toString().trim()) continue; // 빈 칸은 스킵
-                    blanks.push({ ri, ci, expected: c });
+            blocks.forEach((b, bi) => {
+                if (b.type !== 'table') return;
+                const hlCols = b.highlightCols || [0];
+                const rows = b.rows || [];
+                const numCols = Math.max(...(b.headerRows || []).map(r => r.length), ...rows.map(r => (r || []).length), 0);
+                // [냐냐 요청] 병합에 덮인 칸은 화면에 없으므로 출제 대상에서 제외
+                const hidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(b.merges || {}) : new Set();
+                for (let ci = 0; ci < numCols; ci++) {
+                    if (hlCols.includes(ci)) continue;         // 강조 열은 공개
+                    for (let ri = 0; ri < rows.length; ri++) {
+                        if (hidden.has(`${ri}-${ci}`)) continue;
+                        const c = (rows[ri] || [])[ci];
+                        if (!(c || '').toString().trim()) continue; // 빈 칸은 스킵
+                        blanks.push({ bi, ri, ci, expected: c });
+                    }
                 }
-            }
-            return { table: t, blanks };
+            });
+            return { table: t, blocks, blanks };
         }
 
         function renderGrammarFillProblem() {
@@ -1379,49 +1393,62 @@ Return JSON only, no markdown.`;
             const t = gfillState.pool[gfillState.index];
             const problem = buildGrammarFillProblem(t);
             gfillState.current = problem;
-            const hlCols = t.highlightCols || [0];
-            // 빈칸 key → input index
+            // 빈칸 key(블록-행-열) → input index
             const blankIndexOf = {};
-            problem.blanks.forEach((b, i) => { blankIndexOf[`${b.ri}-${b.ci}`] = i; });
+            problem.blanks.forEach((b, i) => { blankIndexOf[`${b.bi}-${b.ri}-${b.ci}`] = i; });
 
-            // [냐냐 요청] 노트와 똑같은 모양으로 — 헤더 여러 줄 + 헤더 병합 그대로 출제
-            const hRows = (typeof getHeaderRows === 'function') ? getHeaderRows(t) : [t.headers || []];
-            const hMerges = t.headerMerges || {};
-            const hHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(hMerges) : new Set();
-            const headerRow = hRows.map((hr, hi) => {
-                // 헤더 줄끼리 색 차이 없이 전부 같은 파랑 + 흰 글씨 (노트 화면과 같은 규칙)
-                const bg = 'text-white bg-[#649fd0] border-[#5590c2]';
-                const cells = hr.map((h, ci) => {
-                    if (hHidden.has(`${hi}-${ci}`)) return '';
-                    const mg = hMerges[`${hi}-${ci}`];
-                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
-                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
-                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
-                    return `<th class="text-center px-2 py-2 text-xs font-black align-middle border ${bg}"${spanAttr}>${escapeHtml(h)}</th>`;
-                }).join('');
-                return cells ? `<tr>${cells}</tr>` : '';
-            }).join('');
-            // [냐냐 요청] 셀 병합을 표 모양 그대로 출제 — 대표 칸만 그리고 덮인 칸은 건너뜀
-            const tMerges = t.merges || {};
-            const tHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(tMerges) : new Set();
-            const bodyRows = (t.rows || []).map((r, ri) => {
-                const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
-                const cells = r.map((c, ci) => {
-                    if (tHidden.has(`${ri}-${ci}`)) return '';
-                    const mg = tMerges[`${ri}-${ci}`];
-                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
-                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
-                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
-                    const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800';
-                    const key = `${ri}-${ci}`;
-                    if (key in blankIndexOf) {
-                        const bi = blankIndexOf[key];
-                        return `<td class="px-1 py-1 align-middle border border-[#c3d9ec] ${rowBg}"${spanAttr}><input id="gfill-input-${bi}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${bi})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+            // [냐냐 요청] 노트와 똑같은 모양으로 — 글 블록과 표 블록을 저장된 순서 그대로 출제
+            const blocksHtml = problem.blocks.map((blk, bi) => {
+                if (blk.type === 'text') {
+                    if (!blk.html || !richTextToPlain(blk.html)) return '';
+                    if (blk.style === 'tip') {
+                        return `<div class="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(blk.html)}</span></div>`;
                     }
-                    return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#c3d9ec] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
+                    return `<div class="nyanya-rt text-xs text-slate-600">${renderRichText(blk.html)}</div>`;
+                }
+                const hlCols = blk.highlightCols || [0];
+                const hMerges = blk.headerMerges || {};
+                const hHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(hMerges) : new Set();
+                const headerRow = (blk.headerRows || []).map((hr, hi) => {
+                    // 헤더 줄끼리 색 차이 없이 전부 같은 파랑 + 흰 글씨 (노트 화면과 같은 규칙)
+                    const cells = hr.map((h, ci) => {
+                        if (hHidden.has(`${hi}-${ci}`)) return '';
+                        const mg = hMerges[`${hi}-${ci}`];
+                        const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                        const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                        const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                        return `<th class="text-center px-2 py-2 text-xs font-black align-middle border text-white bg-[#649fd0] border-[#5590c2]"${spanAttr}>${escapeHtml(h)}</th>`;
+                    }).join('');
+                    return cells ? `<tr>${cells}</tr>` : '';
                 }).join('');
-                return `<tr class="${rowBg}">${cells}</tr>`;
-            }).join('');
+                // 셀 병합을 표 모양 그대로 출제 — 대표 칸만 그리고 덮인 칸은 건너뜀
+                const tMerges = blk.merges || {};
+                const tHidden = (typeof buildMergeHidden === 'function') ? buildMergeHidden(tMerges) : new Set();
+                const bodyRows = (blk.rows || []).map((r, ri) => {
+                    const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
+                    const cells = (r || []).map((c, ci) => {
+                        if (tHidden.has(`${ri}-${ci}`)) return '';
+                        const mg = tMerges[`${ri}-${ci}`];
+                        const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                        const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                        const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                        const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800';
+                        const key = `${bi}-${ri}-${ci}`;
+                        if (key in blankIndexOf) {
+                            const idx = blankIndexOf[key];
+                            return `<td class="px-1 py-1 align-middle border border-[#c3d9ec] ${rowBg}"${spanAttr}><input id="gfill-input-${idx}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${idx})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                        }
+                        return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#c3d9ec] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
+                    }).join('');
+                    return `<tr class="${rowBg}">${cells}</tr>`;
+                }).join('');
+                return `<div class="overflow-x-auto rounded-xl border border-[#c3d9ec]">
+                    <table class="w-full ny-gtable">
+                        ${headerRow ? `<thead>${headerRow}</thead>` : ''}
+                        <tbody>${bodyRows}</tbody>
+                    </table>
+                </div>`;
+            }).filter(Boolean).join('');
             play.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
                     <div class="flex items-center justify-between">
@@ -1435,15 +1462,8 @@ Return JSON only, no markdown.`;
                         <span class="text-lg shrink-0">${t.icon || '📋'}</span>
                         <h3 class="font-extrabold text-slate-900 text-sm">${escapeHtml(t.title || '(제목 없음)')}</h3>
                     </div>
-                    ${t.desc ? `<div class="nyanya-rt text-xs text-slate-600">${renderRichText(t.desc)}</div>` : ''}
                     <p class="text-[11px] font-bold text-indigo-400">✏️ 빈칸을 채워보세요 (엔터로 이동, 마지막 칸 엔터=채점)</p>
-                    <div class="overflow-x-auto rounded-xl border border-slate-100">
-                        <table class="w-full border-collapse">
-                            ${headerRow ? `<thead>${headerRow}</thead>` : ''}
-                            <tbody>${bodyRows}</tbody>
-                        </table>
-                    </div>
-                    ${t.note ? `<div class="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 flex gap-2"><span class="shrink-0">💡</span><span class="nyanya-rt flex-1">${renderRichText(t.note)}</span></div>` : ''}
+                    <div class="space-y-3">${blocksHtml}</div>
                     <div id="gfill-feedback" class="hidden space-y-1"></div>
                     <div class="flex justify-end">
                         <button id="gfill-action-btn" onclick="submitGrammarFillProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
@@ -1469,21 +1489,27 @@ Return JSON only, no markdown.`;
         async function submitGrammarFillProblem() {
             if (!gfillState || !gfillState.current || gfillState.phase !== 'input') return;
             const t = gfillState.current.table;
-            const hlCols = t.highlightCols || [0];
+            const blocks = gfillState.current.blocks;
             const blanks = gfillState.current.blanks;
             const answers = blanks.map((b, i) => { const el = document.getElementById('gfill-input-' + i); return el ? el.value.trim() : ''; });
             gfillState.phase = 'grading';
             const actionBtn = document.getElementById('gfill-action-btn');
             if (actionBtn) { actionBtn.disabled = true; actionBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...`; }
 
-            // 각 빈칸에 문맥(행 대표값=강조열, 열 제목) 부여
+            // 각 빈칸에 문맥(어느 표인지, 행 대표값=강조열, 열 제목) 부여
+            // [냐냐 요청] 노트에 표가 여러 개일 수 있으므로 '몇 번째 표'인지도 같이 보낸다
+            const tableOrder = {};
+            blocks.forEach((blk, bi) => { if (blk.type === 'table') tableOrder[bi] = Object.keys(tableOrder).length + 1; });
+            const tableCount = Object.keys(tableOrder).length;
             const ctxItems = blanks.map((b, i) => {
-                const rowLabel = (t.rows[b.ri] && hlCols.length) ? (t.rows[b.ri][hlCols[0]] || '') : '';
+                const blk = blocks[b.bi] || {};
+                const hlCols = blk.highlightCols || [0];
+                const rowLabel = ((blk.rows || [])[b.ri] && hlCols.length) ? (blk.rows[b.ri][hlCols[0]] || '') : '';
                 // [냐냐 요청] 헤더가 여러 줄이면 위에서부터 이어 붙여서 보냄 ('인칭 - 단수')
-                const colHeader = (typeof grammarColumnLabel === 'function')
-                    ? grammarColumnLabel(t, b.ci)
-                    : ((t.headers && t.headers[b.ci]) ? t.headers[b.ci] : '');
-                return { index: i, rowLabel, column: colHeader, expected: b.expected, studentAnswer: answers[i] };
+                const colHeader = (typeof grammarColumnLabel === 'function') ? grammarColumnLabel(blk, b.ci) : '';
+                const item = { index: i, rowLabel, column: colHeader, expected: b.expected, studentAnswer: answers[i] };
+                if (tableCount > 1) item.table = `표 ${tableOrder[b.bi]}`;
+                return item;
             });
 
             let graded = null;
@@ -1514,7 +1540,7 @@ Return JSON only, no markdown.`;
             }
 
             const detail = blanks.map((b, i) => ({
-                ri: b.ri, ci: b.ci,
+                bi: b.bi, ri: b.ri, ci: b.ci,
                 rowLabel: ctxItems[i].rowLabel, column: ctxItems[i].column,
                 expected: b.expected, userAnswer: answers[i],
                 correct: graded[i].correct, correctAnswer: graded[i].correctAnswer
