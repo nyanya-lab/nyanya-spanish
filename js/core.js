@@ -2877,10 +2877,18 @@ let vocabulary = [];
                 const headerRow = (t.headers || []).map((h, ci) => {
                     return `<th class="text-center px-3 py-2.5 text-sm font-black text-white bg-[#5896cb] border border-[#4a85bb]">${escapeHtml(h)}</th>`;
                 }).join('');
+                // [냐냐 요청] 셀 병합 — 대표 칸만 rowspan/colspan 으로 그리고 덮인 칸은 건너뜀
+                const tMerges = t.merges || {};
+                const tHidden = buildMergeHidden(tMerges);
                 const bodyRows = (t.rows || []).map((r, ri) => {
                     // 행마다 번갈아 배경색 (줄무늬) — 부드러운 파랑
                     const rowBg = ri % 2 === 0 ? 'bg-white' : 'bg-[#f3f8fd]';
                     const cells = r.map((c, ci) => {
+                        if (tHidden.has(`${ri}-${ci}`)) return '';
+                        const mg = tMerges[`${ri}-${ci}`];
+                        const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                        const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                        const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
                         // [냐냐 PATCH] 칸마다 별표 아이콘 → 클릭하면 연분홍 배경 강조 토글
                         const key = `${ri}-${ci}`;
                         const isHl = !!cellHl[key];
@@ -2891,7 +2899,7 @@ let vocabulary = [];
                         const cellContent = grammarWordLookupMode
                             ? buildLookupCellHtml(c || '')
                             : escapeHtml(c || '');
-                        return `<td class="px-3 py-2 text-sm text-center border border-[#e1edf7] ${colHl} ${cellBg}">${cellContent}</td>`;
+                        return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#e1edf7] ${colHl} ${cellBg}"${spanAttr}>${cellContent}</td>`;
                     }).join('');
                     return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
                 }).join('');
@@ -3223,6 +3231,7 @@ let vocabulary = [];
                     headers: existing.headers || ['', ''],
                     rows: existing.rows || [['', '']],
                     highlightCols: existing.highlightCols || [0],
+                    merges: existing.merges || {},          // [냐냐 요청] 셀 병합
                     _isBaseId: !!GRAMMAR_TABLES.find(b => b.id === existing.id)
                 }));
             } else {
@@ -3235,12 +3244,13 @@ let vocabulary = [];
                     headers: ['뜻', '스페인어'],
                     rows: [['', ''], ['', '']],
                     highlightCols: [0],
+                    merges: {},                              // [냐냐 요청] 셀 병합
                     _isBaseId: false
                 };
             }
             document.getElementById('grammar-editor-modal').classList.remove('hidden');
             applyGrammarEditorWidth(); // [냐냐 PATCH] 저장된/기본 너비 적용
-            document.getElementById('grammar-editor-title').innerText = id ? '표 수정' : '새 표 만들기';
+            document.getElementById('grammar-editor-title').innerText = id ? '내용 수정' : '새로 만들기';
             renderGrammarEditorFields();
         }
 
@@ -3395,16 +3405,25 @@ let vocabulary = [];
                 </th>`;
             });
             html += `<th class="p-1 w-8"></th></tr></thead><tbody>`;
+            // [냐냐 요청] 병합된 칸은 대표 칸만 그리고, 덮인 칸은 건너뜀
+            const merges = s.merges || {};
+            const hidden = buildMergeHidden(merges);
             s.rows.forEach((row, ri) => {
                 html += '<tr>';
                 for (let ci = 0; ci < colCount; ci++) {
+                    if (hidden.has(`${ri}-${ci}`)) continue;      // 다른 칸에 덮임
+                    const mg = merges[`${ri}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1;
+                    const rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
                     const val = row[ci] || '';
                     // [냐냐 PATCH] 각 칸에 별표 → 클릭하면 연분홍 강조 토글 (편집 중에도 가능)
                     const isHl = !!hl[`${ri}-${ci}`];
                     const cellBg = isHl ? 'bg-[#ffe0ec]' : 'bg-slate-50';
                     const starColor = isHl ? 'text-pink-400' : 'text-slate-300 hover:text-pink-300';
-                    html += `<td class="p-1">
-                        <div class="flex items-center gap-1 ${cellBg} rounded-lg px-1">
+                    const mergedRing = (cs > 1 || rs > 1) ? ' ring-1 ring-violet-300' : '';
+                    html += `<td class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${ri}, ${ci})">
+                        <div class="flex items-center gap-1 ${cellBg}${mergedRing} rounded-lg px-1 h-full">
                             <button type="button" onclick="toggleGeCellHighlight(${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
                             <input value="${escapeAttr(val)}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${ri}, ${ci})" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
                         </div>
@@ -3462,6 +3481,8 @@ let vocabulary = [];
             if (s.highlightCols) {
                 s.highlightCols = s.highlightCols.map(x => x === ci ? nc : (x === nc ? ci : x));
             }
+            // [냐냐 요청] 병합 좌표도 열 위치 반영 (가로 병합된 칸은 좌표가 꼬여서 병합 해제됨)
+            s.merges = remapMerges(s.merges || {}, { swapCols: [ci, nc] });
             // 칸 강조(grammarCellHighlights)도 열 위치 반영
             if (s.id && grammarCellHighlights[s.id]) {
                 const newHl = {};
@@ -3498,8 +3519,14 @@ let vocabulary = [];
             renderGrammarEditorFields();
         }
         function removeGeRow(ri) {
-            if (grammarEditorState.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
-            grammarEditorState.rows.splice(ri, 1);
+            const s = grammarEditorState;
+            if (s.rows.length <= 1) { showToast("최소 한 줄은 있어야 해요", "error"); return; }
+            s.rows.splice(ri, 1);
+            // [냐냐 요청] 병합·칸강조 좌표도 같이 당겨줌 (안 하면 엉뚱한 칸이 합쳐져 보임)
+            s.merges = remapMerges(s.merges || {}, { removeRow: ri });
+            if (s.id && grammarCellHighlights[s.id]) {
+                grammarCellHighlights[s.id] = remapCellHighlights(grammarCellHighlights[s.id], { removeRow: ri });
+            }
             renderGrammarEditorFields();
         }
         function addGeColumn() {
@@ -3515,6 +3542,12 @@ let vocabulary = [];
             // 강조 목록에서 삭제된 열 제거
             if (grammarEditorState.highlightCols) {
                 grammarEditorState.highlightCols = grammarEditorState.highlightCols.filter(ci => ci !== lastIdx);
+            }
+            // [냐냐 요청] 병합·칸강조도 삭제된 열 반영
+            grammarEditorState.merges = remapMerges(grammarEditorState.merges || {}, { removeCol: lastIdx });
+            if (grammarEditorState.id && grammarCellHighlights[grammarEditorState.id]) {
+                grammarCellHighlights[grammarEditorState.id] =
+                    remapCellHighlights(grammarCellHighlights[grammarEditorState.id], { removeCol: lastIdx });
             }
             renderGrammarEditorFields();
         }
@@ -3884,13 +3917,12 @@ let vocabulary = [];
             }
             rtSyncState(id);
         }
-        // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기
-        //   굵게 표시는 <b> 안에, 뒤 공백은 밖에 둬서 이어 치는 글자는 굵어지지 않음
+        // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기 (서식 없이 그냥 글자로)
         function rtInsertLabel(id, txt) {
             const el = rtFocusEditor(id);
             if (!el) return;
             try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
-            try { document.execCommand('insertHTML', false, `<b>${escapeHtml(txt)}</b>&nbsp;`); } catch (e) {}
+            try { document.execCommand('insertHTML', false, `${escapeHtml(txt)}&nbsp;`); } catch (e) {}
             rtSyncState(id);
         }
 
@@ -3930,6 +3962,239 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
+        // ============================================================
+        // [냐냐 요청] 문법표 셀 병합 엔진 (가로 + 세로)
+        //   저장 형태: t.merges = { "행-열": {cs, rs} }  ← 병합의 '대표 칸'만 기록
+        //   rows/headers 구조는 그대로라 기존 데이터·복습 기능이 안 깨짐
+        // ============================================================
+
+        // 대표 칸이 덮고 있는(= 화면에 안 그려지는) 칸들의 집합
+        function buildMergeHidden(merges) {
+            const hidden = new Set();
+            Object.keys(merges || {}).forEach(k => {
+                const m = merges[k] || {};
+                const [r, c] = k.split('-').map(Number);
+                const cs = Math.max(1, m.cs || 1), rs = Math.max(1, m.rs || 1);
+                for (let dr = 0; dr < rs; dr++) {
+                    for (let dc = 0; dc < cs; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        hidden.add(`${r + dr}-${c + dc}`);
+                    }
+                }
+            });
+            return hidden;
+        }
+
+        // (r,c)를 덮고 있는 대표 칸 찾기 (자기 자신이 대표면 자기 자신)
+        function findMergeAnchor(merges, r, c) {
+            const self = merges[`${r}-${c}`];
+            if (self) return { r, c, cs: self.cs || 1, rs: self.rs || 1 };
+            for (const k of Object.keys(merges || {})) {
+                const m = merges[k];
+                const [ar, ac] = k.split('-').map(Number);
+                const cs = Math.max(1, m.cs || 1), rs = Math.max(1, m.rs || 1);
+                if (r >= ar && r < ar + rs && c >= ac && c < ac + cs) return { r: ar, c: ac, cs, rs };
+            }
+            return { r, c, cs: 1, rs: 1 };
+        }
+
+        // 직사각형이 기존 병합을 자르지 않도록, 걸치는 병합들을 흡수해 사각형을 넓힘
+        function expandMergeRect(merges, rect) {
+            let { r1, c1, r2, c2 } = rect;
+            for (let guard = 0; guard < 30; guard++) {
+                let grew = false;
+                Object.keys(merges || {}).forEach(k => {
+                    const m = merges[k];
+                    const [ar, ac] = k.split('-').map(Number);
+                    const br = ar + Math.max(1, m.rs || 1) - 1;
+                    const bc = ac + Math.max(1, m.cs || 1) - 1;
+                    const overlap = !(br < r1 || ar > r2 || bc < c1 || ac > c2);
+                    if (!overlap) return;
+                    if (ar < r1) { r1 = ar; grew = true; }
+                    if (br > r2) { r2 = br; grew = true; }
+                    if (ac < c1) { c1 = ac; grew = true; }
+                    if (bc > c2) { c2 = bc; grew = true; }
+                });
+                if (!grew) break;
+            }
+            return { r1, c1, r2, c2 };
+        }
+
+        // 행/열이 추가·삭제될 때 병합 좌표를 따라 옮김 (안 하면 엉뚱한 칸이 합쳐져 보임)
+        function remapMerges(merges, opts) {
+            const out = {};
+            Object.keys(merges || {}).forEach(k => {
+                const m = merges[k];
+                let [r, c] = k.split('-').map(Number);
+                let rs = Math.max(1, m.rs || 1), cs = Math.max(1, m.cs || 1);
+                if (opts.removeRow !== undefined) {
+                    const x = opts.removeRow;
+                    if (x >= r && x < r + rs) rs--;          // 병합 안쪽 행이 사라짐 → 높이 축소
+                    else if (x < r) r--;                      // 위쪽 행이 사라짐 → 위로 이동
+                    if (rs < 1) return;
+                }
+                if (opts.removeCol !== undefined) {
+                    const x = opts.removeCol;
+                    if (x >= c && x < c + cs) cs--;
+                    else if (x < c) c--;
+                    if (cs < 1) return;
+                }
+                if (opts.swapCols) {
+                    const [a, b] = opts.swapCols;
+                    if (cs > 1) return;                       // 가로 병합된 칸은 열 이동에서 제외 (좌표가 꼬임)
+                    if (c === a) c = b; else if (c === b) c = a;
+                }
+                if (rs === 1 && cs === 1) return;             // 병합이 풀린 건 기록할 필요 없음
+                out[`${r}-${c}`] = { cs, rs };
+            });
+            return out;
+        }
+
+        // 칸 강조도 같은 규칙으로 따라 옮김 (기존에 안 되어 있어서 행 삭제 시 강조가 어긋났음)
+        function remapCellHighlights(hl, opts) {
+            const out = {};
+            Object.keys(hl || {}).forEach(k => {
+                let [r, c] = k.split('-').map(Number);
+                if (opts.removeRow !== undefined) {
+                    if (r === opts.removeRow) return;
+                    if (r > opts.removeRow) r--;
+                }
+                if (opts.removeCol !== undefined) {
+                    if (c === opts.removeCol) return;
+                    if (c > opts.removeCol) c--;
+                }
+                if (opts.swapCols) {
+                    const [a, b] = opts.swapCols;
+                    if (c === a) c = b; else if (c === b) c = a;
+                }
+                out[`${r}-${c}`] = true;
+            });
+            return out;
+        }
+
+        // ── 편집기: 우클릭 메뉴 / 병합 / 분리 ──────────────────────
+        let geMenuCell = null;   // { ri, ci }
+
+        function geMerges() {
+            const s = grammarEditorState;
+            if (!s) return {};
+            if (!s.merges) s.merges = {};
+            return s.merges;
+        }
+
+        // 칸 우클릭 → 방향 메뉴 띄우기
+        function openGeCellMenu(ev, ri, ci) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const s = grammarEditorState;
+            if (!s) return;
+            geMenuCell = { ri, ci };
+            const merges = geMerges();
+            const anchor = findMergeAnchor(merges, ri, ci);
+            const isMerged = anchor.cs > 1 || anchor.rs > 1;
+            const rowCount = s.rows.length, colCount = s.headers.length;
+
+            const item = (label, icon, onclick, disabled) => `
+                <button type="button" ${disabled ? 'disabled' : `onclick="${onclick}"`}
+                    class="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-left transition-colors ${disabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'}">
+                    <i class="fa-solid ${icon} w-3.5 text-[10px]"></i>${label}
+                </button>`;
+
+            const canUp = anchor.r > 0;
+            const canDown = anchor.r + anchor.rs < rowCount;
+            const canLeft = anchor.c > 0;
+            const canRight = anchor.c + anchor.cs < colCount;
+
+            const menu = document.getElementById('ge-cell-menu');
+            menu.innerHTML = `
+                <div class="py-1">
+                    ${item('위와 합치기', 'fa-arrow-up', 'mergeGeCell(\'up\')', !canUp)}
+                    ${item('아래와 합치기', 'fa-arrow-down', 'mergeGeCell(\'down\')', !canDown)}
+                    ${item('왼쪽과 합치기', 'fa-arrow-left', 'mergeGeCell(\'left\')', !canLeft)}
+                    ${item('오른쪽과 합치기', 'fa-arrow-right', 'mergeGeCell(\'right\')', !canRight)}
+                    ${isMerged ? '<div class="h-px bg-slate-100 my-1"></div>' + item('병합 분리하기', 'fa-table-cells', 'splitGeCell()') : ''}
+                </div>`;
+            menu.classList.remove('hidden');
+
+            // 화면 밖으로 안 나가게 위치 보정
+            const mw = 170, mh = menu.offsetHeight || 190;
+            let x = ev.clientX, y = ev.clientY;
+            if (x + mw > window.innerWidth - 8) x = window.innerWidth - mw - 8;
+            if (y + mh > window.innerHeight - 8) y = Math.max(8, window.innerHeight - mh - 8);
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+        }
+
+        function closeGeCellMenu() {
+            const menu = document.getElementById('ge-cell-menu');
+            if (menu) menu.classList.add('hidden');
+            geMenuCell = null;
+        }
+
+        function mergeGeCell(dir) {
+            const s = grammarEditorState;
+            if (!s || !geMenuCell) return;
+            const { ri, ci } = geMenuCell;
+            closeGeCellMenu();
+            const merges = geMerges();
+            const a = findMergeAnchor(merges, ri, ci);
+
+            // 현재 칸이 차지한 사각형에서 원하는 방향으로 한 칸 넓힘
+            let rect = { r1: a.r, c1: a.c, r2: a.r + a.rs - 1, c2: a.c + a.cs - 1 };
+            if (dir === 'up') rect.r1--;
+            else if (dir === 'down') rect.r2++;
+            else if (dir === 'left') rect.c1--;
+            else if (dir === 'right') rect.c2++;
+
+            if (rect.r1 < 0 || rect.c1 < 0 || rect.r2 >= s.rows.length || rect.c2 >= s.headers.length) {
+                showToast("더 이상 합칠 칸이 없어요", "error");
+                return;
+            }
+            // 다른 병합을 자르지 않도록 사각형 확장
+            rect = expandMergeRect(merges, rect);
+
+            // 대표 칸(왼쪽 위) 외에 내용이 있는 칸 확인
+            const keepR = rect.r1, keepC = rect.c1;
+            const lost = [];
+            for (let r = rect.r1; r <= rect.r2; r++) {
+                for (let c = rect.c1; c <= rect.c2; c++) {
+                    if (r === keepR && c === keepC) continue;
+                    const v = (s.rows[r] && s.rows[r][c] || '').toString().trim();
+                    if (v) lost.push(v);
+                }
+            }
+            if (lost.length) {
+                const preview = lost.slice(0, 5).join(', ') + (lost.length > 5 ? ` 외 ${lost.length - 5}개` : '');
+                if (!confirm(`합치면 아래 내용이 지워져요.\n\n${preview}\n\n계속할까요?`)) return;
+            }
+
+            // 사각형 안의 기존 병합 제거 후 새 대표 칸 등록
+            Object.keys(merges).forEach(k => {
+                const [r, c] = k.split('-').map(Number);
+                if (r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2) delete merges[k];
+            });
+            for (let r = rect.r1; r <= rect.r2; r++) {
+                for (let c = rect.c1; c <= rect.c2; c++) {
+                    if (r === keepR && c === keepC) continue;
+                    if (s.rows[r]) s.rows[r][c] = '';
+                }
+            }
+            const cs = rect.c2 - rect.c1 + 1, rs = rect.r2 - rect.r1 + 1;
+            if (cs > 1 || rs > 1) merges[`${keepR}-${keepC}`] = { cs, rs };
+            renderGrammarEditorFields();
+        }
+
+        function splitGeCell() {
+            const s = grammarEditorState;
+            if (!s || !geMenuCell) return;
+            const { ri, ci } = geMenuCell;
+            closeGeCellMenu();
+            const merges = geMerges();
+            const a = findMergeAnchor(merges, ri, ci);
+            delete merges[`${a.r}-${a.c}`];
+            renderGrammarEditorFields();
+        }
+
         async function saveGrammarEditor() {
             const s = grammarEditorState;
             s.icon = document.getElementById('ge-icon').value.trim() || '📋';
@@ -3944,6 +4209,8 @@ let vocabulary = [];
             };
             s.desc = readRt('ge-desc');
             s.note = readRt('ge-note');
+            // [냐냐 요청] 셀 병합 정보 (대표 칸만 기록)
+            s.merges = s.merges || {};
             if (!s.title) { showToast("표 제목을 입력해 주세요!", "error"); return; }
 
             // 빈 행 정리 (모든 칸이 비어있으면 제거)
