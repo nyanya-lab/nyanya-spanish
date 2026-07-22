@@ -1373,6 +1373,8 @@ Return JSON only, no markdown.`;
             if (!gfillState) return;
             if (gfillState.index >= gfillState.pool.length) { endGrammarFillReview(); return; }
             gfillState.phase = 'input';
+            const play = document.getElementById('gfill-play-area');   // ⚠️ 병합 작업 때 실수로 지웠던 줄
+            if (!play) return;
             const t = gfillState.pool[gfillState.index];
             const problem = buildGrammarFillProblem(t);
             gfillState.current = problem;
