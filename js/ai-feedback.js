@@ -2,6 +2,9 @@
         let currentAiMode = 'ko-es';
         let aiCurrentWordForMission = null;
         let aiCurrentKoreanSentence = "";
+        // [냐냐 요청] 이번 미션이 참고한 문법 노트와 같이 섞은 단어들 (첨삭 때 근거로 같이 넘김)
+        let aiCurrentGrammarForMission = null;
+        let aiCurrentExtraWordsForMission = [];
 
         // [냐냐 요청] 첨삭 결과가 나올 때, sticky 입력영역에 상단이 가리지 않도록 스크롤.
         //   scrollIntoView 기본값은 결과 맨 위를 화면 맨 위에 붙이는데, sticky 입력칸이
@@ -848,6 +851,69 @@
         // [PATCH] 내 단어장 기반으로 AI가 실시간으로 자연스러운 한국어 미션 문장을 생성
         // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
         //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
+        // [냐냐 요청] 첨삭 결과 아래에 '이번 미션이 참고한 문법·단어'를 보여준다.
+        //   문제 풀기 전에 보이면 답 힌트가 되므로 채점 후에만 연다.
+        function renderAiMissionRefs() {
+            const box = document.getElementById('ai-mission-refs');
+            if (!box) return;
+            const g = aiCurrentGrammarForMission;
+            const words = [aiCurrentWordForMission, ...(aiCurrentExtraWordsForMission || [])].filter(Boolean);
+            if (!g && !words.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            const wordChips = words.map(w =>
+                `<span class="inline-flex items-baseline gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                    <b class="text-slate-800">${escapeHtml(w.word || '')}</b>
+                    <span class="text-slate-400">${escapeHtml(w.meaning || '')}</span>
+                </span>`).join('');
+            box.innerHTML = `
+                <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-book-open text-violet-500"></i><span>이번 미션이 참고한 내용</span>
+                </div>
+                ${g ? `<button type="button" onclick="openGrammarNoteFromMission('${g.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
+                    <span class="text-[10px] font-bold text-violet-500">문법</span>
+                    <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.icon || '📋')} ${escapeHtml(g.title || '')}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
+                </button>` : ''}
+                ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}`;
+            box.classList.remove('hidden');
+        }
+
+        // 참조 문법 카드를 누르면 문법·개념 탭에서 그 노트를 펼쳐 보여준다
+        function openGrammarNoteFromMission(id) {
+            if (typeof grammarOpenState !== 'undefined') grammarOpenState[id] = true;
+            if (typeof switchTab === 'function') switchTab('grammar');
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            setTimeout(() => {
+                const el = document.querySelector(`[data-grammar-body="${id}"]`);
+                if (el && el.parentElement) el.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 120);
+        }
+
+        // [냐냐 요청] 문법 노트 한 개를 AI에게 넘길 글로 요약 — 표 칸뿐 아니라 노트에 쓴 설명까지 통째로
+        function buildGrammarContextForMission(note) {
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(note) : [];
+            const parts = [];
+            blocks.forEach(b => {
+                if (b.type === 'text') {
+                    const t = (typeof richTextToPlain === 'function') ? richTextToPlain(b.html) : '';
+                    if (t.trim()) parts.push('설명: ' + t.trim());
+                    return;
+                }
+                const head = (b.headerRows || []).map(hr => (hr || []).join(' | ')).filter(h => h.replace(/[|\s]/g, ''));
+                const rows = (b.rows || []).map(r => (r || []).join(' | ')).filter(r => r.replace(/[|\s]/g, ''));
+                if (head.length) parts.push('표 제목줄: ' + head.join(' / '));
+                if (rows.length) parts.push('표 내용:\n' + rows.join('\n'));
+            });
+            return parts.join('\n');
+        }
+
+        // 내용이 있는 문법 노트 중에서 하나를 무작위로
+        function pickMissionGrammarNote() {
+            const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const usable = all.filter(t => buildGrammarContextForMission(t).trim().length > 0);
+            if (!usable.length) return null;
+            return usable[Math.floor(Math.random() * usable.length)];
+        }
+
         async function generateAiMission() {
             const missionHeading = document.getElementById('ai-mission-korean');
             const resultBox = document.getElementById('ai-feedback-result');
@@ -858,6 +924,11 @@
             hintBox.classList.add('hidden');
             isAiHintVisible = false;
             document.getElementById('ai-user-input').value = '';
+            // [냐냐 요청] 새 미션을 뽑으면 지난 미션의 참고 내용은 감춘다 (힌트 방지)
+            const refsBox = document.getElementById('ai-mission-refs');
+            if (refsBox) { refsBox.classList.add('hidden'); refsBox.innerHTML = ''; }
+            aiCurrentGrammarForMission = null;
+            aiCurrentExtraWordsForMission = [];
 
             if (vocabulary.length === 0) {
                 missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
@@ -877,6 +948,11 @@
 
             const randIdx = Math.floor(Math.random() * vocabulary.length);
             const targetWord = vocabulary[randIdx];
+            // [냐냐 요청] 문법표 1개를 골라 문맥으로 주고, 단어장에서 몇 개 더 섞는다
+            const grammarNote = pickMissionGrammarNote();
+            const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
+            const extraWords = (typeof shuffleArray === 'function' ? shuffleArray(vocabulary.slice()) : vocabulary.slice())
+                .filter(w => w !== targetWord).slice(0, 3);
 
             const originalBtnHtml = genBtn.innerHTML;
             genBtn.disabled = true;
@@ -885,6 +961,16 @@
 
             const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
             매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 단어를 한국어 문장 안에 그대로 노출하면 절대 안 됩니다. 의미는 한국어 뜻("${targetWord.meaning}")으로만 표현하세요.
+${grammarContext ? `
+[이번에 같이 연습할 문법 — 학생이 직접 정리해 둔 노트입니다]
+제목: ${grammarNote.title || ''}
+${grammarContext}
+
+위 문법을 실제로 써야만 번역할 수 있는 문장으로 만들어 주세요. 노트의 설명까지 읽고, 그 문법이 자연스럽게 필요한 상황을 잡으세요.
+아래 표 안의 스페인어는 참고용일 뿐이며, 만들 문장에는 절대 넣지 마세요.` : ''}
+${extraWords.length ? `
+[내 단어장에서 같이 쓰면 좋은 단어] ${extraWords.map(w => `${w.word}(${w.meaning})`).join(', ')}
+자연스러우면 이 중 1~2개의 '뜻'을 문장에 녹여 주세요. 억지스러우면 안 써도 됩니다.` : ''}
             ${buildLearnerProfileSummary()}`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
             const schema = {
@@ -907,6 +993,9 @@
 
                 aiCurrentWordForMission = targetWord;
                 aiCurrentKoreanSentence = candidateSentence;
+                // [냐냐 요청] 첨삭 때 근거로 쓰려고 이번 미션이 참고한 것들을 기억해 둔다
+                aiCurrentGrammarForMission = grammarNote || null;
+                aiCurrentExtraWordsForMission = extraWords;
                 missionHeading.innerText = aiCurrentKoreanSentence;
                 AudioFX.playPunch();
             } catch (e) {
@@ -950,10 +1039,18 @@
             showToast("Gemini AI가 냐냐님의 답변을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
+            // [냐냐 요청] 이 미션이 어떤 문법 노트를 보고 나왔는지 첨삭 AI에게도 알려준다
+            const refGrammar = aiCurrentGrammarForMission
+                ? `\n            Grammar note this mission was built from (the student's own notes — judge against THIS):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
+                : '';
+            const refWords = (aiCurrentExtraWordsForMission || []).length
+                ? `\n            Other words from the student's vocabulary that were offered: ${aiCurrentExtraWordsForMission.map(w => `${w.word}(${w.meaning})`).join(', ')}\n`
+                : '';
+
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
             Student's Spanish Answer: "${userText}"
-            
+${refGrammar}${refWords}
             Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
             CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
@@ -1029,6 +1126,7 @@
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
+                renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 resultBox.classList.remove('hidden');
 
                 if (feedback.isCorrect) {
