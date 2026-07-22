@@ -1845,6 +1845,20 @@
     </div>
 
 
+    <!-- [개발 전용] localhost / file:// 로 열었을 때만 js/dev-local.js 를 불러온다.
+         그 파일은 .gitignore 에 있어 깃에 안 올라가고, 배포된 사이트에는 아예 존재하지 않는다.
+         (없어도 그냥 무시되고 앱은 정상 동작 — 그때는 설정에서 키를 직접 넣으면 됨) -->
+    <script>
+        (function () {
+            var h = location.hostname;
+            if (h === 'localhost' || h === '127.0.0.1' || h === '') {
+                var s = document.createElement('script');
+                s.src = 'js/dev-local.js';
+                s.onerror = function () { /* 파일이 없으면 조용히 넘어감 */ };
+                document.head.appendChild(s);
+            }
+        })();
+    </script>
     <script src="js/dictionary-data.js"></script>
     <script src="js/creatures.js"></script>
     <script src="js/core.js"></script>
