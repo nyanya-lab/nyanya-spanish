@@ -387,7 +387,10 @@ const OFFLINE_DICT_DB = {
             // 체감 응답속도를 크게 끌어올림. (minimal/low = 가장 빠름)
             payload.generationConfig = {
                 thinkingConfig: { thinkingLevel: thinkingLevel.toUpperCase() },
-                maxOutputTokens: 768
+                // [냐냐 요청] 768은 너무 빠듯했음 — 첨삭 응답(총평+단어분석+수정내역+팁)이
+                //   한국어라 토큰을 많이 먹어서 JSON이 중간에 잘리는 일이 잦았다.
+                //   상한일 뿐이라 짧은 응답은 그대로 짧게 끝나고 요금도 안 늘어난다.
+                maxOutputTokens: 2048
             };
             if (jsonSchema) {
                 payload.generationConfig.responseMimeType = "application/json";

@@ -176,6 +176,8 @@ let vocabulary = [];
                 pinnedGrammar: pinnedGrammar,
                 hiddenDefaultGrammar: hiddenDefaultGrammar,
                 masteredGrammar: masteredGrammar,
+                grammarScores: grammarScores,             // [냐냐 요청] 문법표 점수
+                grammarTransUsed: grammarTransUsed,       // [냐냐 요청] 번역에서 써본 문법 (마스터 자격)
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 grammarTopics: GRAMMAR_ICONS,
@@ -286,6 +288,8 @@ let vocabulary = [];
                 pinnedGrammar = payload.pinnedGrammar || {};
                 hiddenDefaultGrammar = payload.hiddenDefaultGrammar || [];
                 masteredGrammar = payload.masteredGrammar || {};
+                grammarScores = payload.grammarScores || {};             // [냐냐 요청] 문법표 점수
+                grammarTransUsed = payload.grammarTransUsed || {};       // [냐냐 요청] 번역에서 써본 문법
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
@@ -307,6 +311,8 @@ let vocabulary = [];
                 pinnedGrammar = {};
                 hiddenDefaultGrammar = [];
                 masteredGrammar = {};
+                grammarScores = {};
+                grammarTransUsed = {};
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 eggState = defaultEggState();
@@ -685,6 +691,14 @@ let vocabulary = [];
             d.perfectTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'perfect').length;
             d.weakTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'weak').length;
             d.criticalTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'critical').length;
+
+            // [냐냐 요청] 문법표도 같은 방식으로 스냅샷 — 문법표 성장 그래프의 비율용
+            if (typeof getAllGrammarTables === 'function' && typeof getGrammarGrade === 'function') {
+                const gt = getAllGrammarTables();
+                d.grammarTotal = gt.length;
+                d.grammarMasteredTotal = gt.filter(t => ['mastered', 'perfect'].includes(getGrammarGrade(t.id))).length;
+                d.grammarWeakTotal = gt.filter(t => ['weak', 'critical'].includes(getGrammarGrade(t.id))).length;
+            }
         }
 
         // ============================================================
@@ -1450,6 +1464,72 @@ let vocabulary = [];
             return w.score;
         }
 
+        // ============================================================
+        // [냐냐 요청] 문법표 점수 — 단어와 같은 척도(-10~+10)·같은 등급을 그대로 쓴다
+        //   빈칸 복습:  delta = 1.5 × clamp((정답률 − 0.7) / 0.3, −1, +1)   ← 표 하나당 한 번
+        //   번역 미션:  제대로 씀 +2 / 썼는데 틀림 −2 / 안 쓰고 문장 맞음 0 / 안 쓰고 문장도 틀림 −2
+        //   ⚠️ 마스터·완벽은 점수만으로는 안 붙는다. 번역 미션에서 그 문법을 한 번이라도
+        //      제대로 써봐야(grammarTransUsed) 열린다 — 단어의 subjectivePassed 와 같은 장치.
+        // ============================================================
+        const GRAMMAR_FILL_MAX = 1.5;   // 빈칸 복습 만점/최저점
+        const GRAMMAR_TRANS_OK = 2;     // 번역에서 문법을 제대로 씀
+        const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
+
+        function getGrammarScore(id) {
+            const s = grammarScores[id];
+            return (typeof s === 'number') ? s : 0;
+        }
+
+        // 정답률(0~1) → 빈칸 복습 점수. 0점 기준 70%, 40% 이하는 바닥
+        function grammarFillDelta(rate) {
+            const t = (rate - 0.7) / 0.3;
+            return clampScore(GRAMMAR_FILL_MAX * Math.max(-1, Math.min(1, t)));
+        }
+
+        function addGrammarScore(id, delta, opts = {}) {
+            if (!id) return 0;
+            const before = getGrammarScore(id);
+            grammarScores[id] = clampScore(before + (delta || 0));
+            if (opts.transUsed) grammarTransUsed[id] = true;   // 번역에서 제대로 써봤음 = 마스터 자격
+            syncGrammarMastered(id, before);
+            return grammarScores[id];
+        }
+
+        // 수동으로 마스터 박기 (✅ 버튼) — 단어의 별표처럼 점수를 기준선으로 못박는다
+        function setGrammarScore(id, value, opts = {}) {
+            if (!id) return 0;
+            const before = getGrammarScore(id);
+            grammarScores[id] = clampScore(value);
+            if (opts.transUsed) grammarTransUsed[id] = true;
+            syncGrammarMastered(id, before);
+            return grammarScores[id];
+        }
+
+        function getGrammarGrade(id) {
+            const s = getGrammarScore(id);
+            const canMaster = !!grammarTransUsed[id];   // 번역에서 써봐야 마스터가 열림
+            if (s >= SCORE_PERFECT && canMaster) return 'perfect';
+            if (s >= SCORE_MASTER && canMaster) return 'mastered';
+            if (s <= SCORE_CRITICAL) return 'critical';
+            if (s <= SCORE_WEAK) return 'weak';
+            return 'normal';
+        }
+
+        // 점수가 바뀔 때 masteredGrammar(표시용)와 일지 카운트를 따라 맞춘다
+        function syncGrammarMastered(id, beforeScore) {
+            const grade = getGrammarGrade(id);
+            const nowMastered = (grade === 'mastered' || grade === 'perfect');
+            const wasMastered = !!masteredGrammar[id];
+            if (nowMastered === wasMastered) return;
+            if (nowMastered) {
+                masteredGrammar[id] = true;
+                if (typeof logAction === 'function') logAction('new-grammar-mastered');
+            } else {
+                delete masteredGrammar[id];
+                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered');
+            }
+        }
+
         // 수동 설정 (별표/마스터 버튼용) — 점수를 특정 값으로 못박음
         function setWordScore(wordOrId, value, opts = {}) {
             const w = (typeof wordOrId === 'string')
@@ -1603,6 +1683,45 @@ let vocabulary = [];
             <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
                 <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-hand-pointer text-amber-500"></i> 직접 누르는 버튼</h4>
                 <table class="w-full text-xs"><tbody>${manualRows}</tbody></table>
+            </div>
+
+            <!-- [냐냐 요청] 문법표 점수 규칙 -->
+            <div class="bg-[#eef5fb] rounded-2xl border border-[#c3d9ec] p-4 space-y-3">
+                <h4 class="text-sm font-black text-[#2c5578] flex items-center gap-2"><i class="fa-solid fa-book-open text-[#5896cb]"></i> 문법표 점수</h4>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    문법·개념 노트도 <b>단어와 똑같은 −10 ~ +10 점수·등급 5단계</b>를 써요.
+                </p>
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
+                    <thead>
+                        <tr class="border-b-2 border-slate-200 text-[11px] text-slate-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">활동</th>
+                            <th class="py-2 px-3 text-left">점수</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">문법표 빈칸 <b>다 맞음</b> (100%)</td><td class="py-2 px-3 font-black text-emerald-600">+1.5</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.0 / +0.5</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 <b>70%</b></td><td class="py-2 px-3 font-bold text-slate-400">0 (본전)</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.5 / −1.5</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">번역 미션에서 <b>그 문법을 제대로 씀</b></td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">번역에서 그 문법을 <b>틀리게 씀</b></td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장은 맞음</td><td class="py-2 px-3 font-bold text-slate-400">0</td></tr>
+                        <tr><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장도 틀림</td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed pt-1">
+                    빈칸은 <b>표 하나 풀 때 한 번만</b> 반영돼요 (칸마다가 아니라 정답률로).
+                    정답률 70%가 본전이고, 그보다 잘하면 오르고 못하면 내려가요.
+                </p>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    ⚠️ <b>문법표도 점수만으로는 마스터가 안 돼요.</b>
+                    <b class="text-[#5896cb]">번역 미션에서 그 문법을 한 번이라도 제대로 써야</b> 마스터가 열려요.
+                    (빈칸만 반복해서는 '외운 것'이지 '쓸 줄 아는 것'은 아니니까요)
+                </p>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    번역에서 <b>단어를 틀려도 문법표 점수는 안 깎여요.</b> 문법이 맞았으면 문법은 맞은 거예요.
+                    반대로 번역 결과가 <b>단어 점수를 바꾸지도 않아요</b> — 번역은 유의어·문맥에 따라 답이 여러 개라서요.
+                </p>
             </div>
 
             <div class="bg-violet-50 rounded-2xl border border-violet-200 p-4 space-y-3">
@@ -1996,7 +2115,11 @@ let vocabulary = [];
                     perfectTotal: (log && log.perfectTotal !== undefined) ? log.perfectTotal : null,
                     weakTotal: (log && log.weakTotal !== undefined) ? log.weakTotal : null,
                     criticalTotal: (log && log.criticalTotal !== undefined) ? log.criticalTotal : null,
-                    newPerfectCount: (log && log.newPerfectCount) || 0
+                    newPerfectCount: (log && log.newPerfectCount) || 0,
+                    // [냐냐 요청] 문법표 등급별 총계 (문법표 점수가 생긴 날부터 쌓임)
+                    grammarTotal: (log && log.grammarTotal) || 0,
+                    grammarMasteredTotal: (log && log.grammarMasteredTotal) || 0,
+                    grammarWeakTotal: (log && log.grammarWeakTotal) || 0
                 };
             });
 
@@ -2529,6 +2652,14 @@ let vocabulary = [];
                 masRun = Math.max(0, masRun - (series[i].newGrammarMasteredCount || 0));
             }
             const masteredRatioOf = (i) => regByDay[i] > 0 ? (masByDay[i] / regByDay[i]) * 100 : 0;
+            // [냐냐 요청] 약점 비율 — 문법표 점수가 생긴 뒤 찍히는 스냅샷(grammarWeakTotal)을 쓴다.
+            //   그 이전 날짜엔 데이터가 없으므로 0으로 둔다 (단어장 등급 스냅샷도 같은 방식으로 시작했음)
+            const weakRatioOf = (i) => {
+                const d = series[i] || {};
+                const tot = d.grammarTotal || 0;
+                return tot > 0 ? ((d.grammarWeakTotal || 0) / tot) * 100 : 0;
+            };
+            const hasWeakData = series.some(d => (d && d.grammarTotal) > 0);
 
             // [냐냐 요청] 왼쪽 축 하단을 0이 아니라 '조회 시작일의 문법표 수'로
             const gAxis = growthAxisRange(regByDay);
@@ -2546,8 +2677,16 @@ let vocabulary = [];
             let bars = '';
             series.forEach((d, i) => {
                 const mBarH = (masteredRatioOf(i) / 100) * chartH;
-                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
-                const text = `${fmtDateSlash(d.date)}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%`.replace(/'/g, "\\'");
+                const wBarH = (weakRatioOf(i) / 100) * chartH;
+                if (hasWeakData) {
+                    // 마스터·약점을 나란히 (단어장 성장과 같은 구성)
+                    const half = barWidth / 2;
+                    bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${half.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
+                    bars += `<rect x="${xOf(i).toFixed(1)}" y="${(baseY - wBarH).toFixed(1)}" width="${half.toFixed(1)}" height="${wBarH.toFixed(1)}" fill="#f43f5e" opacity="0.6" rx="1.5"/>`;
+                } else {
+                    bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
+                }
+                const text = `${fmtDateSlash(d.date)}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%${hasWeakData ? ` · 약점 비율 ${Math.round(weakRatioOf(i))}%` : ''}`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
             });
 
@@ -2622,7 +2761,10 @@ let vocabulary = [];
         // ============================================================
         let grammarOpenState = {}; // 표별 펼침 상태 기억
         let pinnedGrammar = {}; // [냐냐 PATCH] 고정된 문법 표 (항상 위+열림)
-        let masteredGrammar = {}; // [냐냐 PATCH] 마스터한 문법 표 {tableId: true}
+        let masteredGrammar = {}; // [냐냐 PATCH] 마스터한 문법 표 {tableId: true} — 이제 점수에서 자동으로 채워짐
+        // [냐냐 요청] 문법표 점수 — 단어와 같은 척도(-10~+10)·같은 등급을 쓴다
+        let grammarScores = {};        // {tableId: -10~+10}
+        let grammarTransUsed = {};     // {tableId: true} 번역 미션에서 그 문법을 제대로 써본 적 있음 (마스터 자격)
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
@@ -2863,6 +3005,8 @@ let vocabulary = [];
             // [냐냐 PATCH] 마스터 상태 필터
             if (grammarFilterMastery === 'mastered') tables = tables.filter(t => masteredGrammar[t.id]);
             else if (grammarFilterMastery === 'not-mastered') tables = tables.filter(t => !masteredGrammar[t.id]);
+            // [냐냐 요청] 약점 문법표만 보기 (단어장의 약점 필터와 같은 기준)
+            else if (grammarFilterMastery === 'weak') tables = tables.filter(t => ['weak', 'critical'].includes(getGrammarGrade(t.id)));
             // [냐냐 PATCH] 아이콘 주제 필터 (여러 개 선택 가능, 빈 배열=전체)
             if (grammarFilterTopics.length > 0) tables = tables.filter(t => grammarFilterTopics.includes(grammarTopicKey(t)));
 
@@ -2904,6 +3048,14 @@ let vocabulary = [];
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
                                         ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
+                                        ${(() => {
+                                            // [냐냐 요청] 단어처럼 등급 배지 (일반은 안 보여줌 — 목록이 지저분해져서)
+                                            const gr = getGrammarGrade(t.id);
+                                            if (gr === 'normal') return '';
+                                            const gi = GRADE_INFO[gr];
+                                            const sc = getGrammarScore(t.id);
+                                            return `<span class="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md ${gi.badge}" title="문법표 점수 ${sc > 0 ? '+' : ''}${sc}">${gi.emoji} ${gi.label}</span>`;
+                                        })()}
                                     </div>
                                 </div>
                             </button>
@@ -3032,14 +3184,18 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 문법표 마스터 토글 (헤더 문법 마스터 통계 + 일지 기록 연동)
+        // [냐냐 요청] 수동 마스터 버튼 — 단어의 별표처럼 '점수를 못박는' 방식으로 통합
+        //   마스터로 박으면 점수를 기준선(+4.5)까지 올리고 마스터 자격도 같이 준다.
+        //   해제하면 점수를 0으로 되돌린다 (계속 쌓인 기록이 아니라 '내가 정한 상태'라서)
         function toggleMasterGrammar(id) {
             if (masteredGrammar[id]) {
+                setGrammarScore(id, 0);
+                delete grammarTransUsed[id];
                 delete masteredGrammar[id];
                 if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); // [냐냐 PATCH] 일지/그래프도 감소
                 showToast("마스터를 해제했어요", "info");
             } else {
-                masteredGrammar[id] = true;
-                if (typeof logAction === 'function') logAction('new-grammar-mastered'); // 일지 기록
+                setGrammarScore(id, SCORE_MASTER, { transUsed: true });
                 showToast("문법표를 마스터했어요! 🎉", "success");
             }
             renderGrammarTables();
@@ -3174,6 +3330,7 @@ let vocabulary = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
+            else if (grammarFilterMastery === 'weak') chips.push('약점만');
             const sortLabel = grammarSortMode === 'newest' ? '최신순' : (grammarSortMode === 'topic' ? '주제순' : '오래된순');
             const filterPart = chips.length > 0
                 ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${escapeHtml(c)}</span>`).join('')
@@ -4796,6 +4953,8 @@ let vocabulary = [];
                     delete pinnedGrammar[id];
                     // [냐냐 PATCH] 일지/그래프 감소 — 삭제 시 등록/마스터 카운트도 취소
                     if (masteredGrammar[id]) { delete masteredGrammar[id]; if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); }
+                    delete grammarScores[id];        // [냐냐 요청] 점수·마스터 자격도 같이 정리
+                    delete grammarTransUsed[id];
                     if (typeof logAction === 'function') logAction('undo-new-grammar');
                     renderGrammarTables();
                     await saveToStorage();

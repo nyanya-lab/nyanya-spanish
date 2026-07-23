@@ -1566,15 +1566,20 @@ Return JSON only, no markdown.`;
             const allCorrect = detail.every(d => d.correct);
             gfillState.results.push({ table: t, blanks: detail, allCorrect, hintUsed: !!gfillState.hintUsed });
 
-            // [냐냐 PATCH-0배치] 마스터된 문법표를 틀리면 → 마스터 자동 해제
-            let unmastered = false;
-            if (!allCorrect && typeof masteredGrammar !== 'undefined' && masteredGrammar[t.id]) {
-                delete masteredGrammar[t.id];
-                unmastered = true;
-                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered');
-                showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");
+            // [냐냐 요청] 문법표 점수 반영 — 표 하나당 한 번, 정답률 기준
+            //   100%→+1.5 / 80%→+0.5 / 70%→0 / 60%→−0.5 / 40% 이하→−1.5
+            //   마스터 해제는 addGrammarScore 안에서 점수에 따라 자동으로 처리된다
+            const wasMastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[t.id];
+            let gDelta = 0;
+            if (typeof addGrammarScore === 'function' && detail.length) {
+                const rate = detail.filter(d => d.correct).length / detail.length;
+                gDelta = grammarFillDelta(rate);
+                addGrammarScore(t.id, gDelta);
             }
+            const unmastered = wasMastered && !masteredGrammar[t.id];
+            if (unmastered) showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");
             gfillState.lastUnmastered = unmastered;
+            gfillState.lastScoreDelta = gDelta;
 
             if (typeof logAction === 'function') logAction('review');
 
@@ -1599,11 +1604,20 @@ Return JSON only, no markdown.`;
                 const unmasterBanner = (gfillState && gfillState.lastUnmastered)
                     ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-triangle-exclamation"></i> 마스터했던 표라서 <b>마스터가 해제됐어요.</b> 다시 정복해봐요!</div>`
                     : '';
+                // [냐냐 요청] 이번 복습으로 문법표 점수가 얼마나 움직였는지
+                const d = gfillState ? gfillState.lastScoreDelta : 0;
+                const okCnt = detail.filter(x => x.correct).length;
+                const scoreBanner = (typeof d === 'number' && detail.length)
+                    ? `<div class="rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5 border ${d > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : d < 0 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-slate-50 border-slate-200 text-slate-500'}">
+                        <i class="fa-solid fa-chart-line"></i> ${okCnt}/${detail.length} 정답 (${Math.round(okCnt / detail.length * 100)}%) →
+                        문법표 점수 <b>${d > 0 ? '+' : ''}${d}</b>${d === 0 ? ' (변화 없음)' : ''}
+                       </div>`
+                    : '';
                 // [냐냐 요청] 힌트(설명·팁)를 열어봤으면 표시해 준다
                 const hintBanner = (gfillState && gfillState.hintUsed)
                     ? `<div class="bg-slate-50 border border-slate-200 text-slate-500 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-eye"></i> 이 문제는 <b>힌트를 봤어요.</b></div>`
                     : '';
-                fb.innerHTML = unmasterBanner + hintBanner + detail.map(d => {
+                fb.innerHTML = scoreBanner + unmasterBanner + hintBanner + detail.map(d => {
                     const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
                     const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;

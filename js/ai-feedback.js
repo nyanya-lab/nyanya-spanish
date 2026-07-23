@@ -5,6 +5,7 @@
         // [냐냐 요청] 이번 미션이 참고한 문법 노트와 같이 섞은 단어들 (첨삭 때 근거로 같이 넘김)
         let aiCurrentGrammarForMission = null;
         let aiCurrentExtraWordsForMission = [];
+        let aiLastGrammarDelta = null;   // [냐냐 요청] 직전 첨삭에서 문법표 점수가 얼마나 움직였는지
 
         // [냐냐 요청] 첨삭 결과가 나올 때, sticky 입력영역에 상단이 가리지 않도록 스크롤.
         //   scrollIntoView 기본값은 결과 맨 위를 화면 맨 위에 붙이는데, sticky 입력칸이
@@ -871,6 +872,14 @@
                 ${g ? `<button type="button" onclick="openGrammarNoteFromMission('${g.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
                     <span class="text-[10px] font-bold text-violet-500">문법</span>
                     <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.icon || '📋')} ${escapeHtml(g.title || '')}</div>
+                    ${aiLastGrammarDelta ? (() => {
+                        const u = aiLastGrammarDelta.usage, d = aiLastGrammarDelta.delta;
+                        const txt = u === 'correct' ? '이 문법을 제대로 썼어요'
+                                  : u === 'wrong' ? '이 문법을 쓰긴 했는데 틀렸어요'
+                                  : (d < 0 ? '이 문법을 안 쓰고 번역했는데 문장도 틀렸어요' : '이 문법을 안 쓰고 번역했어요 (점수 변화 없음)');
+                        const cls = d > 0 ? 'text-emerald-600' : d < 0 ? 'text-rose-500' : 'text-slate-400';
+                        return `<div class="text-[10px] font-bold ${cls} mt-1">${txt}${d !== 0 ? ` · 점수 ${d > 0 ? '+' : ''}${d}` : ''}</div>`;
+                    })() : ''}
                     <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
                 </button>` : ''}
                 ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}`;
@@ -937,6 +946,7 @@
             if (refsBox) { refsBox.classList.add('hidden'); refsBox.innerHTML = ''; }
             aiCurrentGrammarForMission = null;
             aiCurrentExtraWordsForMission = [];
+            aiLastGrammarDelta = null;
 
             if (vocabulary.length === 0) {
                 missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
@@ -1081,7 +1091,8 @@ ${refGrammar}${refWords}
                "changes": [
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "Short Korean reason WHY it changed, e.g. '스페인어는 형용사가 명사 뒤에 와요' or '관사가 더 자연스러워요'. 1 sentence." }
                ],
-               "tip": "One short, useful grammatical tip in Korean, 1 sentence."
+               "tip": "One short, useful grammatical tip in Korean, 1 sentence.",
+               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."
             }
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
@@ -1118,9 +1129,11 @@ ${refGrammar}${refWords}
                             required: ["from", "to", "why"]
                         }
                     },
-                    tip: { type: "STRING" }
+                    tip: { type: "STRING" },
+                    // [냐냐 요청] 참조 문법을 제대로 썼는지 — 문장 전체 정오(isCorrect)와 별개로 판정
+                    grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage"]
             };
 
             try {
@@ -1137,6 +1150,20 @@ ${refGrammar}${refWords}
                 const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
+
+                // [냐냐 요청] 참조 문법표 점수 반영 — 제대로 씀 +2 / 틀림 −2 /
+                //   안 쓰고 문장은 맞음 0 / 안 쓰고 문장도 틀림 −2
+                //   ⚠️ 단어 점수는 여기서 건드리지 않는다 (번역은 유의어·문맥 탓에 단어 오답 판정이 부정확)
+                aiLastGrammarDelta = null;
+                if (aiCurrentGrammarForMission && typeof addGrammarScore === 'function') {
+                    const usage = (feedback.grammarPointUsage || 'unused').toString().toLowerCase();
+                    let gDelta = 0, transUsed = false;
+                    if (usage === 'correct') { gDelta = GRAMMAR_TRANS_OK; transUsed = true; }
+                    else if (usage === 'wrong') { gDelta = GRAMMAR_TRANS_BAD; }
+                    else if (!feedback.isCorrect) { gDelta = GRAMMAR_TRANS_BAD; }   // 안 쓰고 문장도 틀림
+                    if (gDelta !== 0 || transUsed) addGrammarScore(aiCurrentGrammarForMission.id, gDelta, { transUsed });
+                    aiLastGrammarDelta = { usage, delta: gDelta };
+                }
 
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 resultBox.classList.remove('hidden');
