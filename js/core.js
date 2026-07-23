@@ -3031,10 +3031,17 @@ let vocabulary = [];
                     .join('');
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
-                const isMastered = !!masteredGrammar[t.id]; // [냐냐 PATCH] 문법표 마스터 여부
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
-                        <button onclick="toggleMasterGrammar('${t.id}')" title="${isMastered ? '마스터 해제' : '마스터 표시'}" class="w-7 h-7 rounded-lg transition-colors ${isMastered ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}"><i class="fa-solid fa-circle-check text-xs"></i></button>
+                        ${(() => {
+                            // [냐냐 요청] 마스터 버튼 3단계 (단어장과 같은 색): 일반 → 마스터 → 완벽
+                            const gr = getGrammarGrade(t.id);
+                            const cls = gr === 'perfect' ? 'bg-emerald-600 border-2 border-emerald-700 text-white shadow-sm'
+                                      : gr === 'mastered' ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm'
+                                      : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50';
+                            const tip = gr === 'perfect' ? '마스터 해제' : gr === 'mastered' ? '완벽으로 올리기' : '마스터 표시';
+                            return `<button onclick="toggleMasterGrammar('${t.id}')" title="${tip}" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${cls}"><i class="fa-solid fa-circle-check text-xs"></i></button>`;
+                        })()}
                         ${(() => {
                             // [냐냐 요청] 약점 별표 — 단어장과 같은 3단계 순환 (해제 → 약점 → 치명적)
                             const gr = getGrammarGrade(t.id);
@@ -3049,8 +3056,16 @@ let vocabulary = [];
                         <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
                         <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
+                // [냐냐 요청] 배지 대신 카드 테두리·배경색으로 등급 표시 (단어장 카드와 같은 방식)
+                const grade = getGrammarGrade(t.id);
+                const cardStyle =
+                      grade === 'perfect'  ? 'border-2 border-emerald-500 bg-emerald-50/70 shadow-sm'
+                    : grade === 'mastered' ? 'border border-emerald-200 bg-emerald-50/30 shadow-xs'
+                    : grade === 'critical' ? 'border-2 border-red-300 bg-red-50/60 shadow-xs'
+                    : grade === 'weak'     ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
+                    :                        'border border-slate-200 shadow-sm bg-white';
                 return `
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="rounded-2xl overflow-hidden ${cardStyle}">
                         <div class="w-full flex items-center justify-between gap-2 px-5 py-2.5">
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-2xl shrink-0">${t.icon || '📋'}</span>
@@ -3058,15 +3073,6 @@ let vocabulary = [];
                                     ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-1 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
-                                        ${isMastered ? '<span class="shrink-0 text-emerald-500" title="마스터한 표"><i class="fa-solid fa-circle-check text-xs"></i></span>' : ''}
-                                        ${(() => {
-                                            // [냐냐 요청] 단어처럼 등급 배지 (일반은 안 보여줌 — 목록이 지저분해져서)
-                                            const gr = getGrammarGrade(t.id);
-                                            if (gr === 'normal') return '';
-                                            const gi = GRADE_INFO[gr];
-                                            const sc = getGrammarScore(t.id);
-                                            return `<span class="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md ${gi.badge}" title="문법표 점수 ${sc > 0 ? '+' : ''}${sc}">${gi.emoji} ${gi.label}</span>`;
-                                        })()}
                                     </div>
                                 </div>
                             </button>
@@ -3221,15 +3227,23 @@ let vocabulary = [];
         //   마스터로 박으면 점수를 기준선(+4.5)까지 올리고 마스터 자격도 같이 준다.
         //   해제하면 점수를 0으로 되돌린다 (계속 쌓인 기록이 아니라 '내가 정한 상태'라서)
         function toggleMasterGrammar(id) {
-            if (masteredGrammar[id]) {
+            // [냐냐 요청] 단어 마스터 버튼과 똑같은 3단계 순환
+            //   해제 → 마스터(+4.5) → 완벽(+8) → 해제(0)
+            const t = getAllGrammarTables().find(x => x.id === id);
+            const title = t ? (t.title || '이 표') : '이 표';
+            const grade = getGrammarGrade(id);
+            if (grade === 'perfect') {
                 setGrammarScore(id, 0);
                 delete grammarTransUsed[id];
-                delete masteredGrammar[id];
-                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); // [냐냐 PATCH] 일지/그래프도 감소
-                showToast("마스터를 해제했어요", "info");
+                showToast(`"${title}" 마스터를 해제했어요`, "info");
+            } else if (grade === 'mastered') {
+                setGrammarScore(id, SCORE_PERFECT, { transUsed: true });   // 8점
+                if (typeof AudioFX !== 'undefined') AudioFX.playBell();
+                showToast(`"${title}" 완벽으로 올렸어요! 🏆 (8점)`, "success");
             } else {
-                setGrammarScore(id, SCORE_MASTER, { transUsed: true });
-                showToast("문법표를 마스터했어요! 🎉", "success");
+                setGrammarScore(id, SCORE_MASTER, { transUsed: true });    // 4.5점
+                if (typeof AudioFX !== 'undefined') AudioFX.playBell();
+                showToast(`"${title}" 마스터 완료! ✅ (4.5점)`, "success");
             }
             renderGrammarTables();
             saveToStorage();
