@@ -1515,8 +1515,10 @@ let vocabulary = [];
             return 'normal';
         }
 
-        // 점수가 바뀔 때 masteredGrammar(표시용)와 일지 카운트를 따라 맞춘다
+        // 점수가 바뀔 때 masteredGrammar(표시용)·헤더 통계·일지 카운트를 따라 맞춘다
         function syncGrammarMastered(id, beforeScore) {
+            // [냐냐 요청] 헤더의 문법 보유/마스터/약점 숫자를 항상 최신으로
+            if (typeof updateStats === 'function') setTimeout(updateStats, 0);
             const grade = getGrammarGrade(id);
             const nowMastered = (grade === 'mastered' || grade === 'perfect');
             const wasMastered = !!masteredGrammar[id];
@@ -5147,6 +5149,10 @@ let vocabulary = [];
             const weak = vocabulary.filter(w => w.weak).length;
             const grammarTotal = (typeof getGrammarTotalCount === 'function') ? getGrammarTotalCount() : 0;
             const grammarMastered = (typeof getGrammarMasteredCount === 'function') ? getGrammarMasteredCount() : 0;
+            // [냐냐 요청] 문법표 약점 개수도 헤더에 (약점 + 치명적 약점)
+            const grammarWeak = (typeof getAllGrammarTables === 'function' && typeof getGrammarGrade === 'function')
+                ? getAllGrammarTables().filter(t => ['weak', 'critical'].includes(getGrammarGrade(t.id))).length
+                : 0;
 
             const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
             setTxt('header-total-vocab', `${total}개`);
@@ -5154,6 +5160,7 @@ let vocabulary = [];
             setTxt('header-weak-vocab', `${weak}개`);
             setTxt('header-total-grammar', `${grammarTotal}개`);
             setTxt('header-mastered-grammar', `${grammarMastered}개`);
+            setTxt('header-weak-grammar', `${grammarWeak}개`);
             // 모바일 핵심 통계
             setTxt('header-total-vocab-m', `${total}`);
             setTxt('header-mastered-vocab-m', `${mastered}`);
