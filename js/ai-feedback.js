@@ -888,13 +888,15 @@
 
         // 참조 문법 카드를 누르면 문법·개념 탭에서 그 노트를 펼쳐 보여준다
         function openGrammarNoteFromMission(id) {
-            if (typeof grammarOpenState !== 'undefined') grammarOpenState[id] = true;
-            if (typeof switchTab === 'function') switchTab('grammar');
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            // ⚠️ 순서 주의: changeTab 이 문법 탭을 다시 그리면서 펼침 상태를 초기화하므로
+            //    탭을 먼저 옮기고 → 그 다음에 펼침 표시 → 다시 그리기
+            if (typeof changeTab === 'function') changeTab('grammar');   // switchTab 이 아니라 changeTab
             setTimeout(() => {
+                if (typeof grammarOpenState !== 'undefined') grammarOpenState[id] = true;
+                if (typeof renderGrammarTables === 'function') renderGrammarTables();
                 const el = document.querySelector(`[data-grammar-body="${id}"]`);
                 if (el && el.parentElement) el.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 120);
+            }, 80);
         }
 
         // [냐냐 요청] 문법 노트 한 개를 AI에게 넘길 글로 요약 — 표 칸뿐 아니라 노트에 쓴 설명까지 통째로

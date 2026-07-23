@@ -1329,6 +1329,10 @@ Return JSON only, no markdown.`;
                 const mastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[t.id];
                 if (gfillMastery === 'mastered') return mastered;
                 if (gfillMastery === 'not-mastered') return !mastered;
+                // [냐냐 요청] 약점만 — 문법표 점수가 낮은(약점·치명적) 표만 골라 복습
+                if (gfillMastery === 'weak') {
+                    return (typeof getGrammarGrade === 'function') && ['weak', 'critical'].includes(getGrammarGrade(t.id));
+                }
                 return true; // all
             });
         }

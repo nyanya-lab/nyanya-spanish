@@ -3033,6 +3033,15 @@ let vocabulary = [];
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
                         <button onclick="toggleMasterGrammar('${t.id}')" title="${isMastered ? '마스터 해제' : '마스터 표시'}" class="w-7 h-7 rounded-lg transition-colors ${isMastered ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}"><i class="fa-solid fa-circle-check text-xs"></i></button>
+                        ${(() => {
+                            // [냐냐 요청] 약점 별표 — 단어장과 같은 3단계 순환 (해제 → 약점 → 치명적)
+                            const gr = getGrammarGrade(t.id);
+                            const cls = gr === 'critical' ? 'text-red-500 bg-red-50'
+                                      : gr === 'weak' ? 'text-amber-500 bg-amber-50'
+                                      : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50';
+                            const tip = gr === 'critical' ? '약점 표시 해제' : gr === 'weak' ? '치명적 약점으로' : '약점으로 표시';
+                            return `<button onclick="toggleWeakGrammar('${t.id}', event)" title="${tip}" class="w-7 h-7 rounded-lg transition-colors ${cls}"><i class="fa-solid fa-star text-xs"></i></button>`;
+                        })()}
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
                         <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
@@ -3184,6 +3193,28 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 문법표 마스터 토글 (헤더 문법 마스터 통계 + 일지 기록 연동)
+        // [냐냐 요청] 약점 문법표(별표) 수동 토글 — 단어의 toggleWeakWord 와 같은 3단계 순환
+        //   해제 → 약점(-4.5) → 치명적 약점(-8) → 해제(0)
+        function toggleWeakGrammar(id, event) {
+            if (event) event.stopPropagation();
+            const t = getAllGrammarTables().find(x => x.id === id);
+            const title = t ? (t.title || '이 표') : '이 표';
+            const grade = getGrammarGrade(id);
+            if (grade === 'critical') {
+                setGrammarScore(id, 0);
+                showToast(`"${title}" 약점 표시를 해제했어요`, "info");
+            } else if (grade === 'weak') {
+                setGrammarScore(id, SCORE_CRITICAL);
+                showToast(`"${title}" 치명적 약점으로 표시했어요 🟥`, "success");
+            } else {
+                setGrammarScore(id, SCORE_WEAK);
+                showToast(`"${title}" 약점 문법표로 표시했어요 🟨`, "success");
+            }
+            if (typeof logAction === 'function') logAction('snapshot');
+            renderGrammarTables();
+            saveToStorage();
+        }
+
         // [냐냐 요청] 수동 마스터 버튼 — 단어의 별표처럼 '점수를 못박는' 방식으로 통합
         //   마스터로 박으면 점수를 기준선(+4.5)까지 올리고 마스터 자격도 같이 준다.
         //   해제하면 점수를 0으로 되돌린다 (계속 쌓인 기록이 아니라 '내가 정한 상태'라서)
