@@ -6,6 +6,15 @@
         let aiCurrentGrammarForMission = null;
         let aiCurrentExtraWordsForMission = [];
         let aiLastGrammarDelta = null;   // [냐냐 요청] 직전 첨삭에서 문법표 점수가 얼마나 움직였는지
+        let aiForcedGrammarId = null;    // [냐냐 요청] 노트에서 '이 문법으로 번역 연습'을 눌렀을 때 딱 한 번 쓰임
+
+        // [냐냐 요청] 문법 노트 → AI 첨삭으로 바로 가서 그 문법으로 미션 생성
+        function startTranslationWithGrammar(id) {
+            aiForcedGrammarId = id;
+            if (typeof changeTab === 'function') changeTab('ai-feedback');
+            if (typeof switchAiMode === 'function') switchAiMode('ko-es');
+            setTimeout(() => { generateAiMission(); }, 80);
+        }
 
         // [냐냐 요청] 첨삭 결과가 나올 때, sticky 입력영역에 상단이 가리지 않도록 스크롤.
         //   scrollIntoView 기본값은 결과 맨 위를 화면 맨 위에 붙이는데, sticky 입력칸이
@@ -969,7 +978,12 @@
             const randIdx = Math.floor(Math.random() * vocabulary.length);
             const targetWord = vocabulary[randIdx];
             // [냐냐 요청] 문법표 1개를 골라 문맥으로 주고, 단어장에서 몇 개 더 섞는다
-            const grammarNote = pickMissionGrammarNote();
+            //   노트에서 '이 문법으로 번역 연습'을 눌러 들어왔으면 그 문법을 쓴다 (한 번만)
+            const forced = aiForcedGrammarId
+                ? (typeof getAllGrammarTables === 'function' ? getAllGrammarTables().find(t => t.id === aiForcedGrammarId) : null)
+                : null;
+            aiForcedGrammarId = null;
+            const grammarNote = forced || pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
             //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
             //   문장·표현 통째로 등록된 것도 있어서, 그런 걸 섞으라고 주면 억지로 우겨넣은 이상한 문장이 나온다

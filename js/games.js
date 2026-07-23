@@ -1353,6 +1353,22 @@ Return JSON only, no markdown.`;
             return n;
         }
 
+        // [냐냐 요청] 문법 노트 → 그 표 하나만 바로 빈칸 채우기
+        function startGrammarFillForTable(id) {
+            const t = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables().find(x => x.id === id) : null;
+            if (!t) return;
+            if (countGrammarBlanks(t) <= 0) {
+                showToast("이 표는 빈칸으로 낼 칸이 없어요 (강조 열만 있거나 내용이 비어 있어요)", "error");
+                return;
+            }
+            if (typeof changeTab === 'function') changeTab('review');
+            if (typeof selectReviewMode === 'function') selectReviewMode('gfill');
+            gfillState = { pool: [t], index: 0, total: 1, results: [], current: null, phase: 'input' };
+            document.getElementById('gfill-setup')?.classList.add('hidden');
+            document.getElementById('gfill-play-area')?.classList.remove('hidden');
+            renderGrammarFillProblem();
+        }
+
         function startGrammarFillReview() {
             const pool = getGrammarFillPool();
             if (pool.length < 1) { showToast("복습할 문법표가 없어요! (마스터 필터/강조열 조건 확인)", "error"); return; }

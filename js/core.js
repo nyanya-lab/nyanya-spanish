@@ -3049,12 +3049,12 @@ let vocabulary = [];
                                       : gr === 'weak' ? 'text-amber-500 bg-amber-50'
                                       : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50';
                             const tip = gr === 'critical' ? '약점 표시 해제' : gr === 'weak' ? '치명적 약점으로' : '약점으로 표시';
-                            return `<button onclick="toggleWeakGrammar('${t.id}', event)" title="${tip}" class="w-7 h-7 rounded-lg transition-colors ${cls}"><i class="fa-solid fa-star text-xs"></i></button>`;
+                            return `<button onclick="toggleWeakGrammar('${t.id}', event)" title="${tip}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${cls}"><i class="fa-solid fa-star text-xs"></i></button>`;
                         })()}
-                        <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
-                        <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
-                        <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
-                        <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
+                        <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
+                        <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
+                        <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
                 // [냐냐 요청] 배지 대신 카드 테두리·배경색으로 등급 표시 (단어장 카드와 같은 방식)
                 const grade = getGrammarGrade(t.id);
@@ -3081,6 +3081,15 @@ let vocabulary = [];
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}">
                             ${blocksHtml}
+                            <!-- [냐냐 요청] 읽다가 바로 연습으로 이어가기 (헤더 아이콘이 많아서 여기에 둠) -->
+                            <div class="flex gap-2 pt-1">
+                                <button type="button" onclick="startTranslationWithGrammar('${t.id}')" class="flex-1 py-2 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-all active:scale-95">
+                                    <i class="fa-solid fa-pen-nib mr-1"></i> 이 문법으로 번역 연습
+                                </button>
+                                <button type="button" onclick="startGrammarFillForTable('${t.id}')" class="flex-1 py-2 rounded-xl border border-[#c3d9ec] bg-[#eef5fb] hover:bg-[#dfeaf6] text-[#2c5578] text-xs font-bold transition-all active:scale-95">
+                                    <i class="fa-solid fa-table-cells mr-1"></i> 빈칸 채우기
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
