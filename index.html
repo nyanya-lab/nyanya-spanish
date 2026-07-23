@@ -1012,10 +1012,8 @@
                             <div id="ai-user-translation" class="hidden border-t border-red-100 pt-2.5 text-sm text-slate-600 font-semibold"></div>
                         </div>
 
-                        <div class="space-y-2">
-                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">단어 하나하나 쪼개서 핵심 분석 🔍</span>
-                            <div id="ai-word-breakdown" class="flex flex-col bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden"></div>
-                        </div>
+                        <!-- [냐냐 요청] 이번 미션이 어떤 문법 노트·단어를 보고 나왔는지 (첨삭 후에만 공개 — 미리 보면 힌트가 됨) -->
+                        <div id="ai-mission-refs" class="hidden"></div>
 
                         <div class="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
                             <div class="flex items-center gap-2 text-amber-800 text-xs font-bold mb-1">
@@ -1025,8 +1023,10 @@
                             <p id="ai-coach-tip" class="text-sm text-amber-900/80 leading-relaxed font-medium"></p>
                         </div>
 
-                        <!-- [냐냐 요청] 이번 미션이 어떤 문법 노트·단어를 보고 나왔는지 (첨삭 후에만 공개 — 미리 보면 힌트가 됨) -->
-                        <div id="ai-mission-refs" class="hidden border-t border-slate-200 pt-5"></div>
+                        <div class="border-t border-slate-200 pt-5 space-y-2">
+                            <span class="text-[10px] font-bold text-slate-400 block tracking-wider">단어 하나하나 쪼개서 핵심 분석 🔍</span>
+                            <div id="ai-word-breakdown" class="flex flex-col bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden"></div>
+                        </div>
 
                         <!-- AI 첨삭 Q&A -->
                         <div class="border-t border-slate-200 pt-5 space-y-4">
