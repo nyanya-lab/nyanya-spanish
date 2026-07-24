@@ -3172,7 +3172,30 @@ let vocabulary = [];
 
         function expandAllGrammar(open) {
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
+            grammarAllExpanded = open;
             renderGrammarTables();
+            syncGrammarExpandBtn();
+        }
+
+        // [냐냐 요청] 단어장처럼 '펼치기 ↔ 접기' 아이콘 하나로 토글
+        let grammarAllExpanded = false;
+        function toggleExpandAllGrammar() {
+            expandAllGrammar(!grammarAllExpanded);
+        }
+        function syncGrammarExpandBtn() {
+            const btn = document.getElementById('grammar-expand-all-btn');
+            if (!btn) return;
+            btn.title = grammarAllExpanded ? '전체 접기' : '전체 펼치기';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = grammarAllExpanded ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center';
+        }
+
+        // [냐냐 요청] 문법 목록 새로고침 (점수·약점 변동 반영) — 단어장 새로고침과 같은 역할
+        function refreshGrammarList() {
+            const icon = document.getElementById('grammar-refresh-icon');
+            if (icon) { icon.classList.add('animate-spin'); setTimeout(() => icon.classList.remove('animate-spin'), 500); }
+            renderGrammarTables();
+            if (typeof updateStats === 'function') updateStats();
         }
 
         // [냐냐 PATCH] 문법표 칸 강조 토글 (별표 클릭 → 노란색)
