@@ -3023,7 +3023,56 @@ let vocabulary = [];
             // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 정렬된 순서 유지)
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
 
-            container.innerHTML = tables.map((t, idx) => {
+            // [냐냐 요청] 검색·필터 중이 아니면 주제별로 묶어서 보여준다
+            //   (주제 헤더는 펼친 채로 노트 제목을 나열하고, 노트 상세만 접힘)
+            const useGroups = !query && grammarFilterTopics.length === 0 && grammarFilterMastery === 'all';
+            container.innerHTML = useGroups
+                ? renderGrammarGrouped(tables)
+                : tables.map(t => renderGrammarNoteCard(t, query)).join('');
+
+            // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
+            if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
+            if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
+            if (typeof syncGrammarExpandBtn === 'function') syncGrammarExpandBtn();
+        }
+
+        // [냐냐 요청] 주제별 그룹 렌더 — 주제 헤더(접기 가능) 아래에 그 주제 노트들
+        let grammarGroupCollapsed = {}; // {주제키: true} 접힌 주제. 없으면 펼침(기본)
+        function toggleGrammarGroup(key) {
+            grammarGroupCollapsed[key] = !grammarGroupCollapsed[key];
+            renderGrammarTables();
+        }
+        function renderGrammarGrouped(tables) {
+            if (!tables.length) return '';
+            // 주제별로 묶기 (tables 는 이미 정렬·고정 반영된 순서라 그룹 안 순서도 그대로 유지됨)
+            const groups = {};
+            tables.forEach(t => { const k = grammarTopicKey(t); (groups[k] = groups[k] || []).push(t); });
+            // 주제 순서: 주제 관리에서 정한 순서 → 맨 끝에 '기타'
+            const order = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(k => groups[k]);
+            if (groups[GRAMMAR_OTHER_TOPIC]) order.push(GRAMMAR_OTHER_TOPIC);
+            return order.map(key => {
+                const list = groups[key];
+                const collapsed = !!grammarGroupCollapsed[key];
+                const c = grammarTopicColor(key);
+                const icon = key === GRAMMAR_OTHER_TOPIC ? '⭐' : key;
+                const label = grammarTopicLabel(key);
+                const cards = list.map(t => renderGrammarNoteCard(t, '')).join('');
+                return `
+                    <div class="space-y-2">
+                        <button type="button" onclick="toggleGrammarGroup('${key}')" class="w-full flex items-center gap-2 px-1 py-1.5 text-left">
+                            <i class="fa-solid fa-chevron-down text-slate-400 text-[11px] transition-transform shrink-0" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
+                            <span class="text-base shrink-0">${icon}</span>
+                            <span class="text-sm font-extrabold ${c.t}">${escapeHtml(label)}</span>
+                            <span class="text-[11px] font-bold text-slate-400">${list.length}</span>
+                            <span class="flex-1 border-b border-dashed border-slate-200 ml-1"></span>
+                        </button>
+                        <div class="${collapsed ? 'hidden' : ''} space-y-3">${cards}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        // [냐냐 요청] 노트 카드 하나 — 그룹 모드·일반 모드가 공유
+        function renderGrammarNoteCard(t, query) {
                 // [냐냐 요청] 노트 = 블록 목록 — 글 블록과 표 블록을 저장된 순서 그대로 그린다
                 const blocksHtml = getNoteBlocks(t)
                     .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
@@ -3093,11 +3142,6 @@ let vocabulary = [];
                         </div>
                     </div>
                 `;
-            }).join('');
-
-            // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
-            if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
-            if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
         }
 
         // [냐냐 요청] 조회 화면 — 글 블록
