@@ -1179,7 +1179,13 @@ Return JSON only, no markdown.`;
                 addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
                 // ⚠️ addWordScore는 correct===true 일 때만 subjective를 반영한다.
                 //   단어 칸은 맞고 예문 칸만 틀린 경우도 인정해야 하므로 여기서 직접 세운다.
-                if (wordBlankPassed) fillState.current.word.subjectivePassed = true;
+                //   [냐냐 요청] 세운 뒤 syncWordFlags 를 다시 불러야 마스터 플래그가 그 자리에서 붙는다.
+                //   안 그러면 점수·주관식을 다 채웠는데도 w.mastered 가 false 로 남아서
+                //   등급 표시는 '마스터' 인데 헤더 통계·필터에서는 빠지는 어긋남이 생긴다.
+                if (wordBlankPassed && !fillState.current.word.subjectivePassed) {
+                    fillState.current.word.subjectivePassed = true;
+                    if (typeof syncWordFlags === 'function') syncWordFlags(fillState.current.word);
+                }
                 // [냐냐 요청] 배너(오늘의 복습)로 시작한 경우에만 '오늘 복습함'으로 인정
                 if (fillState.isTodayReview && typeof markWordReviewedToday === 'function') {
                     markWordReviewedToday(fillState.current.word.id, !coreWrong);
@@ -1608,21 +1614,30 @@ Return JSON only, no markdown.`;
             //   안 해두니까 자동으로 제외되고, 단어 시험처럼 쓰는 표만 반영된다.
             gfillState.lastWordScores = [];
             if (typeof getCellWord === 'function' && typeof addWordScore === 'function') {
-                const acc = {};   // {단어id: {w, delta, allCorrect}}
+                const acc = {};   // {단어id: {w, delta, allCorrect, anyCorrect}}
                 detail.forEach(d => {
                     const blk = blocks[d.bi];
                     if (!blk || blk.type !== 'table') return;
                     const w = getCellWord(t.id, blk.id, d.ri, d.ci);
                     if (!w) return;
-                    const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true });
+                    const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true, anyCorrect: false });
                     a.delta += d.correct ? 1.5 : -2;
-                    if (!d.correct) a.allCorrect = false;
+                    if (d.correct) a.anyCorrect = true; else a.allCorrect = false;
                 });
                 Object.keys(acc).forEach(id => {
                     const a = acc[id];
                     a.delta = Math.round(a.delta * 100) / 100;
-                    // 스페인어 칸을 직접 써서 맞혔으면 주관식 정답 → 마스터 자격 (addWordScore 는 정답일 때만 반영)
                     addWordScore(id, a.delta, { correct: a.allCorrect, subjective: true });
+                    // [냐냐 요청] 표에서 그 단어를 직접 써서 맞혔으면 주관식 정답으로 인정한다 (마스터 자격).
+                    //   ⚠️ addWordScore 는 correct===true 일 때만 subjective 를 반영해서, 한 단어가
+                    //      여러 칸에 걸려 있고 그중 하나만 틀리면 정작 맞힌 칸이 인정을 못 받았다.
+                    //      단어 빈칸 복습(wordBlankPassed)과 같은 방식으로 맞춘다.
+                    //   세운 뒤 syncWordFlags 를 다시 불러야 마스터 플래그와 일지 카운트가 그 자리에서 갱신된다
+                    //   (addWordScore 안의 syncWordFlags 는 subjectivePassed 를 세우기 전에 이미 지나갔다)
+                    if (a.anyCorrect && !a.w.subjectivePassed) {
+                        a.w.subjectivePassed = true;
+                        if (typeof syncWordFlags === 'function') syncWordFlags(a.w);
+                    }
                     gfillState.lastWordScores.push({ word: a.w.word, delta: a.delta });
                 });
             }
