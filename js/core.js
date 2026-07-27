@@ -4723,26 +4723,140 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
+        // ── 글머리 기호 빼기 ──────────────────────────────────────
+        //   예전엔 execCommand('outdent') 를 목록에서 빠져나올 때까지 반복했는데,
+        //   커서 위치에 따라 결과가 제각각이었다:
+        //     · 1수준에 커서를 두면 li 없는 빈 <ul> 이 남고
+        //     · 두 줄을 선택하면 아래 목록이 윗줄 <div> 안으로 들어가서 한 단계 더 들어가 보였다
+        //       (2수준 글씨가 41px 이어야 하는데 49px — div 의 padding 과 ul 의 padding 이 겹침)
+        //   그래서 목록을 '줄 + 단계' 로 펼친 뒤 다시 쌓는다. 커서가 어디 있든 결과가 같다.
+
+        // 목록을 훑어서 [{node: li, depth}] 로 펼친다. <ul><ul> 도 <li><ul> 도 같이 받는다
+        function rtListLines(ul, depth, out) {
+            Array.prototype.forEach.call(ul.children, n => {
+                if (n.tagName === 'LI') {
+                    out.push({ node: n, depth: depth });
+                    Array.prototype.forEach.call(n.children, c => {
+                        if (c.tagName === 'UL') rtListLines(c, depth + 1, out);
+                    });
+                } else if (n.tagName === 'UL') {
+                    rtListLines(n, depth + 1, out);
+                }
+            });
+        }
+
+        // 선택에 걸친 '가장 바깥 <ul>' 들.
+        //   커서만 있으면 그 목록 하나, 여러 줄을 범위로 잡았으면 걸친 목록 전부.
+        //   ⚠️ 편집기 전체를 선택하면 커서(anchorNode)가 목록 밖이라 예전엔 목록을 못 찾고
+        //      '글머리 넣기' 로 잘못 빠졌다 — 그때 첫 줄이 깨졌다. 그래서 범위도 같이 본다.
+        function rtSelectedLists(id) {
+            const el = document.getElementById(id);
+            const sel = window.getSelection();
+            if (!el || !sel || !sel.rangeCount) return [];
+            let n = sel.anchorNode, outer = null;
+            while (n && n !== el) { if (n.nodeType === 1 && n.tagName === 'UL') outer = n; n = n.parentNode; }
+            if (outer) return [outer];
+            const range = sel.getRangeAt(0);
+            if (range.collapsed) return [];
+            return Array.prototype.filter.call(el.children, c => {
+                if (c.tagName !== 'UL') return false;
+                try { return range.intersectsNode(c); } catch (e) { return false; }
+            });
+        }
+
+        function rtUnbullet(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const lists = rtSelectedLists(id);
+            if (!lists.length) return;
+            // 목록을 갈아끼우면 선택 범위가 무효가 되니, 대상은 손대기 전에 전부 정해둔다
+            const plan = lists.map(outer => {
+                const lines = [];
+                rtListLines(outer, 1, lines);
+                return { outer, lines, targets: rtPickUnbulletTargets(lines) };
+            });
+            let lastDiv = null;
+            plan.forEach(p => { lastDiv = rtUnbulletOne(p) || lastDiv; });
+            if (lastDiv) {
+                const sel = window.getSelection();
+                const r = document.createRange();
+                r.selectNodeContents(lastDiv);
+                r.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(r);
+            }
+        }
+
+        // 어떤 줄의 기호를 뺄지 — 커서만 있으면 그 줄, 범위로 잡았으면 걸친 줄 전부
+        function rtPickUnbulletTargets(lines) {
+            const sel = window.getSelection();
+            const range = (sel && sel.rangeCount) ? sel.getRangeAt(0) : null;
+            const targets = new Set();
+            if (range && !range.collapsed) {
+                lines.forEach(ln => { try { if (range.intersectsNode(ln.node)) targets.add(ln.node); } catch (e) {} });
+            } else if (sel && sel.anchorNode) {
+                // 커서를 담은 가장 안쪽 li
+                let best = null;
+                lines.forEach(ln => { if (ln.node.contains(sel.anchorNode) && (!best || best.contains(ln.node))) best = ln.node; });
+                if (best) targets.add(best);
+            }
+            if (!targets.size && lines.length) targets.add(lines[0].node);
+            return targets;
+        }
+
+        function rtUnbulletOne(plan) {
+            const outer = plan.outer, lines = plan.lines, targets = plan.targets;
+            if (!lines.length) return null;
+
+            // 하위 목록은 이미 별도 줄로 뽑았으니 옮길 때 빼고 옮긴다
+            const moveKids = (from, to) => {
+                Array.prototype.slice.call(from.childNodes).forEach(c => {
+                    if (c.nodeType === 1 && c.tagName === 'UL') return;
+                    to.appendChild(c);
+                });
+                if (!to.childNodes.length) to.appendChild(document.createElement('br'));
+            };
+
+            const frag = document.createDocumentFragment();
+            let stack = [], firstDiv = null;
+            lines.forEach(ln => {
+                if (targets.has(ln.node)) {
+                    stack = [];                       // 목록을 끊고 문단으로 내보낸다
+                    const div = document.createElement('div');
+                    // 기호만 빼고 '있던 자리'는 유지 — 목록 N단계의 글씨 시작점 = rt-in{N}
+                    if (ln.depth > 0) div.className = 'rt-in' + Math.min(RT_MAX_LEVEL, ln.depth);
+                    moveKids(ln.node, div);
+                    frag.appendChild(div);
+                    if (!firstDiv) firstDiv = div;
+                } else {
+                    while (stack.length > ln.depth) stack.pop();
+                    while (stack.length < ln.depth) {
+                        const ul = document.createElement('ul');
+                        (stack.length ? stack[stack.length - 1] : frag).appendChild(ul);
+                        stack.push(ul);
+                    }
+                    const li = document.createElement('li');
+                    moveKids(ln.node, li);
+                    stack[stack.length - 1].appendChild(li);
+                }
+            });
+            outer.parentNode.replaceChild(frag, outer);
+            return firstDiv;   // 커서는 rtUnbullet 이 마지막 문단에 다시 놓아준다
+        }
+
         // 글머리 기호 넣기/빼기
         //   ⚠️ execCommand('insertUnorderedList')는 중첩 목록에서 한 단계만 벗겨져서
         //      3단계에 있으면 세 번 눌러야 지워졌음 → 몇 단계든 한 번에 제거하도록 직접 처리
         function rtToggleList(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
-            if (rtInList(id)) {
-                const depth = rtListDepth(id);
-                let guard = 0;
-                while (rtInList(id) && guard++ < 8) {
-                    try { document.execCommand('outdent'); } catch (e) { break; }
-                }
-                // [냐냐 요청] 기호만 빼고 '있던 자리'는 그대로 유지
-                //   목록 N단계의 글씨 시작점 = N × --rt-indent = rt-in{N} 과 같음
-                const b = rtEnsureBlock(id);
-                if (b && depth >= 1) rtSetLevel(b, Math.min(RT_MAX_LEVEL, depth));
+            // 편집기 전체를 선택한 경우도 '목록 안' 으로 쳐야 한다 (rtInList 는 커서만 본다)
+            if (rtSelectedLists(id).length) {
+                rtUnbullet(id);
             } else {
                 const b = rtBlockOf(id);
                 const lv = b ? rtGetLevel(b) : 0;
-                if (b) rtSetLevel(b, 0);       // 문단 들여쓰기는 목록 단계로 넘김
+                if (b) { rtSetLevel(b, 0); if (!b.className) b.removeAttribute('class'); }  // 빈 class="" 껍데기 안 남기기
                 try { document.execCommand('insertUnorderedList'); } catch (e) {}
                 // insertUnorderedList 자체가 이미 1단계를 만드므로 나머지만 추가로 내림
                 for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
