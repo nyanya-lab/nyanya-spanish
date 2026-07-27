@@ -3383,13 +3383,20 @@ let vocabulary = [];
                     const cellBg = cellHl[`${ri}-${ci}`] ? 'bg-[#ffe0ec]' : '';
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                     // 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
-                    let cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
-                    // [냐냐 요청] 단어장과 이어둔 칸은 점선 밑줄로 티를 낸다 — 빈칸에서 틀리면 단어 점수도 움직이는 칸
+                    const cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
+                    // [냐냐 요청] 단어장과 이어둔 칸 표시 — 빈칸에서 틀리면 단어 점수도 움직이는 칸.
+                    //   예전엔 글자에 보라 점선 밑줄을 그었는데, 강조 열 글씨도 보라(text-violet-600)라
+                    //   둘이 섞여 지저분했다. 이제 글자는 그대로 두고 칸 오른쪽 위 구석에 점만 찍는다.
+                    //   색은 연결창 미리보기에서 '이어둠' 을 초록으로 칠한 것과 맞췄다.
                     const linked = getCellWord(t.id, b.id, ri, ci);
+                    let dot = '', cellTitle = '';
                     if (linked && !grammarWordLookupMode) {
-                        cellContent = `<span class="border-b-2 border-dotted border-violet-400" title="단어장 연결: ${escapeHtml(linked.word)}${linked.meaning ? ' — ' + escapeHtml(linked.meaning) : ''}">${cellContent}</span>`;
+                        dot = `<span class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>`;
+                        // 따옴표까지 막아야 뜻에 " 가 들어가도 속성이 안 깨진다
+                        const tip = `단어장 연결: ${linked.word}${linked.meaning ? ' — ' + linked.meaning : ''}`;
+                        cellTitle = ` title="${escapeHtml(tip).replace(/"/g, '&quot;')}"`;
                     }
-                    return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}>${cellContent}</td>`;
+                    return `<td class="relative px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}${cellTitle}>${dot}${cellContent}</td>`;
                 }).join('');
                 return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
             }).join('');
