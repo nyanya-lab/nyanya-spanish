@@ -758,6 +758,11 @@
             const w = vocabulary.find(v => v.id === nextId);
             if (!w) { processSynonymQueue(); return; }
             _inSynonymFill = true;
+            // [냐냐 요청] 문법 표의 단어 연결에서 온 흐름이면 연결창(z-[60])이 살아 있는데,
+            //   단어창은 z-50 이라 그 뒤에 깔린다. 창이 "아예 안 뜨는" 것처럼 보이던 원인.
+            //   열기 전에 숨겨두고, 큐가 다 끝나면 closeWordModal 이 되돌린다.
+            //   (연결창 흐름이 아니면 숨길 게 없어서 그냥 지나간다)
+            if (typeof hideWordLinkForWordModal === 'function') hideWordLinkForWordModal();
             // openWordModal이 이 단어의 저장된 유의어 링크(원래 단어 포함)를 폼에 복원해줌
             openWordModal(nextId);
             // 자동완성은 "빈 칸만" 채우도록(forceOverwrite=false) → 이미 걸려있는 유의어 링크를 지우지 않음
@@ -772,9 +777,13 @@
             if (box) { box.innerHTML = ''; addTenseBlock('presente', {}, 'regular', 'none'); }
         }
 
-        function closeWordModal() {
+        // keepHidden: 유의어 창을 이어서 열 거라 연결창을 아직 되돌리면 안 될 때
+        function closeWordModal(opts = {}) {
             document.getElementById('word-modal').classList.add('hidden');
             hideAiLoadingOverlay();
+            // 다음 유의어 창이 바로 열린다 — 지금 연결창을 되돌리면 그 창을 또 덮는다.
+            //   깜빡임도 없애려고 아예 숨긴 채로 넘긴다. 마지막 창을 닫을 때 한 번만 되돌린다.
+            if (opts.keepHidden) return;
             // [냐냐 요청] 단어 연결 화면에서 열었던 경우 — 숨겨뒀던 그 화면을 다시 띄우고,
             //   방금 고치거나 새로 등록한 내용을 반영해서 다시 그린다
             if (typeof restoreWordLinkAfterWordModal === 'function' && restoreWordLinkAfterWordModal()) {
@@ -1744,8 +1753,9 @@
             // [냐냐 PATCH] 지금 저장한 게 '유의어 자동채우기 큐'로 열린 단어라면
             //   → 팝업 없이 조용히 다음 큐로 넘어감 (또는 큐 끝이면 마무리)
             if (_inSynonymFill) {
-                closeWordModal();
-                if (_synonymFillQueue.length > 0) {
+                const hasNext = _synonymFillQueue.length > 0;
+                closeWordModal({ keepHidden: hasNext });   // 이어서 열 거면 연결창은 계속 숨겨둔다
+                if (hasNext) {
                     setTimeout(() => processSynonymQueue(), 250);
                 } else {
                     _inSynonymFill = false;
