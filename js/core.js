@@ -5185,15 +5185,19 @@ let vocabulary = [];
 
                 let right;
                 if (cur) {
+                    // [냐냐 요청] 이어둔 단어를 눌러서 어떤 단어인지 확인할 수 있게 (단어창이 위로 열린다)
                     right = `
-                        <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg truncate max-w-[45%]" title="${escapeHtml(cur.meaning || '')}">
+                        <button type="button" onclick="wordLinkPeek('${cur.id}')" title="${escapeHtml(cur.meaning || '')} — 눌러서 단어창 열기"
+                            class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-2 py-1 rounded-lg truncate max-w-[45%] transition-colors">
                             <i class="fa-solid fa-link text-[9px]"></i> ${escapeHtml(cur.word)}
-                        </span>
+                        </button>
                         <button type="button" onclick="wordLinkUnset(${i})" title="연결 해제" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"><i class="fa-solid fa-link-slash text-xs"></i></button>`;
                 } else if (cands.length) {
                     const opts = cands.map(w => `<option value="${w.id}">${escapeHtml(w.word)} — ${escapeHtml((w.meaning || '').slice(0, 20))}</option>`).join('');
                     right = `
-                        <select id="word-link-sel-${i}" class="min-w-0 max-w-[45%] bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">${opts}</select>
+                        <select id="word-link-sel-${i}" class="min-w-0 max-w-[38%] bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">${opts}</select>
+                        <!-- 잇기 전에 어떤 단어인지 먼저 보기 -->
+                        <button type="button" onclick="wordLinkPeekSelected(${i})" title="고른 단어 확인하기" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
                         <button type="button" onclick="wordLinkSet(${i})" class="shrink-0 text-[11px] font-bold bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1.5 rounded-lg transition-all active:scale-95">연결</button>`;
                 } else {
                     right = `
@@ -5212,6 +5216,19 @@ let vocabulary = [];
                         <span class="px-2 py-1 rounded-lg bg-amber-100 text-amber-700">단어장에 없음 ${missing}</span>
                     </div>`;
             }
+        }
+
+        // [냐냐 요청] 어떤 단어인지 확인 — 단어창을 그대로 띄운다 (연결 화면은 z-40 이라 뒤에 남는다).
+        //   단어창을 닫으면 연결 화면이 그대로 보이고, 거기서 뜻을 고쳤어도 다시 그려서 반영한다
+        function wordLinkPeek(wordId) {
+            if (!wordId) return;
+            openWordModal(wordId);
+            _skipContinueRegisterPrompt = true;   // 확인하러 연 거라 '계속 등록?' 은 안 물어봄
+        }
+
+        function wordLinkPeekSelected(i) {
+            const sel = document.getElementById('word-link-sel-' + i);
+            if (sel && sel.value) wordLinkPeek(sel.value);
         }
 
         function wordLinkSet(i) {

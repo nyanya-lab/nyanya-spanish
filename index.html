@@ -1635,7 +1635,9 @@
     </div>
 
     <!-- [냐냐 요청] 단어 연결 — 표 칸을 단어장 단어에 미리 이어두는 화면 -->
-    <div id="word-link-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <!-- z-40 인 이유: 여기서 단어창(word-modal, z-50)을 열면 그게 위로 와야 한다.
+         같은 z-50 이면 DOM 순서상 이 모달이 뒤에 있어서 단어창이 뒤로 깔린다 -->
+    <div id="word-link-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-extrabold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-link text-violet-500"></i> 단어 연결</h3>

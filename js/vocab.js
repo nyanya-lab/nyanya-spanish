@@ -775,6 +775,10 @@
         function closeWordModal() {
             document.getElementById('word-modal').classList.add('hidden');
             hideAiLoadingOverlay();
+            // [냐냐 요청] 단어 연결 화면 위에서 단어창을 열었던 경우 — 방금 고치거나 새로 등록한 걸 바로 반영
+            if (typeof wordLinkState !== 'undefined' && wordLinkState && typeof renderGrammarWordLink === 'function') {
+                renderGrammarWordLink();
+            }
         }
 
         function showConfirm(title, desc, onOk, options = {}) {
