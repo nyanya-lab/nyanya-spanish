@@ -38,6 +38,7 @@ let vocabulary = [];
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
             if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
+            if (typeof initGrammarGroupsCollapsed === 'function') initGrammarGroupsCollapsed(); // [냐냐 요청] 문법·개념은 주제까지 접힌 상태로 시작
             renderWordList();
             updateStats();
             renderDiary();
@@ -3055,14 +3056,14 @@ let vocabulary = [];
                 const icon = key === GRAMMAR_OTHER_TOPIC ? '⭐' : key;
                 const label = grammarTopicLabel(key);
                 const cards = list.map(t => renderGrammarNoteCard(t, '')).join('');
+                // [냐냐 요청] 주제 줄은 배경색 + 큰 글씨로 강조 (접혀 있을 때 이게 목차 역할)
                 return `
                     <div class="space-y-2">
-                        <button type="button" onclick="toggleGrammarGroup('${key}')" class="w-full flex items-center gap-2 px-1 py-1.5 text-left">
-                            <i class="fa-solid fa-chevron-down text-slate-400 text-[11px] transition-transform shrink-0" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
-                            <span class="text-base shrink-0">${icon}</span>
-                            <span class="text-sm font-extrabold ${c.t}">${escapeHtml(label)}</span>
-                            <span class="text-[11px] font-bold text-slate-400">${list.length}</span>
-                            <span class="flex-1 border-b border-dashed border-slate-200 ml-1"></span>
+                        <button type="button" onclick="toggleGrammarGroup('${key}')" class="w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl border ${c.b} ${c.r} hover:brightness-95 transition-all text-left">
+                            <i class="fa-solid fa-chevron-down ${c.t} text-xs transition-transform shrink-0" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
+                            <span class="text-xl shrink-0">${icon}</span>
+                            <span class="text-base font-extrabold ${c.t} flex-1 min-w-0 truncate">${escapeHtml(label)}</span>
+                            <span class="text-xs font-black ${c.t} opacity-60 shrink-0">${list.length}</span>
                         </button>
                         <div class="${collapsed ? 'hidden' : ''} space-y-3">${cards}</div>
                     </div>`;
@@ -3116,9 +3117,11 @@ let vocabulary = [];
                     <div class="rounded-2xl overflow-hidden ${cardStyle}">
                         <div class="w-full flex items-center justify-between gap-2 px-5 py-2.5">
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
-                                <span class="text-2xl shrink-0">${t.icon || '📋'}</span>
+                                <!-- [냐냐 요청] 노트 아이콘은 주제 아이콘과 같아서 뺐다 (그룹 헤더에 이미 있음).
+                                     그룹으로 안 묶이는 검색·필터 중에만 표시 -->
+                                ${showTopicBadge ? `<span class="text-2xl shrink-0">${t.icon || '📋'}</span>` : ''}
                                 <div class="min-w-0 flex-1">
-                                    <!-- [냐냐 요청] 주제 배지는 그룹 헤더에 이미 있어서 뺐다 (그룹으로 안 묶이는 검색·필터 중에만 표시) -->
+                                    <!-- 주제 배지도 마찬가지 -->
                                     ${showTopicBadge && grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-1 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
@@ -3222,27 +3225,32 @@ let vocabulary = [];
         }
 
         // ============================================================
-        // [냐냐 요청] ⤢ 버튼 3단계 순환
-        //   default   : 주제만 펼침 (노트 제목 나열, 상세는 접힘)  ← 기본
-        //   all-open  : 노트 상세까지 전부 펼침
-        //   all-closed: 주제까지 전부 접음 (주제 줄만 남음)
+        // [냐냐 요청] ⤢ 버튼 3단계 순환 — 접힌 데서 시작해 점점 펼쳐진다
+        //   default    : 주제까지 다 접힘 (주제 줄만 = 목차)  ← 기본
+        //   topics-open: 주제 펼침 (노트 제목 나열, 상세는 접힘)
+        //   all-open   : 노트 상세까지 전부 펼침
         // ============================================================
         let grammarViewMode = 'default';
+        // 기본이 '주제까지 접힘'이라, 처음 열 때 모든 주제를 접어둔다
+        function initGrammarGroupsCollapsed() {
+            grammarGroupCollapsed = {};
+            getAllGrammarTables().forEach(t => { grammarGroupCollapsed[grammarTopicKey(t)] = true; });
+        }
         function toggleExpandAllGrammar() {
             if (grammarViewMode === 'default') {
+                // → 주제 펼치기 (노트 제목까지)
+                getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
+                grammarGroupCollapsed = {};
+                grammarViewMode = 'topics-open';
+            } else if (grammarViewMode === 'topics-open') {
                 // → 노트 상세까지 전부 펼치기
                 getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = true; });
                 grammarGroupCollapsed = {};
                 grammarViewMode = 'all-open';
-            } else if (grammarViewMode === 'all-open') {
-                // → 주제까지 전부 접기
-                getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
-                getAllGrammarTables().forEach(t => { grammarGroupCollapsed[grammarTopicKey(t)] = true; });
-                grammarViewMode = 'all-closed';
             } else {
-                // → 기본 (주제만 펼침)
+                // → 기본 (주제까지 다 접기)
                 getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
-                grammarGroupCollapsed = {};
+                initGrammarGroupsCollapsed();
                 grammarViewMode = 'default';
             }
             renderGrammarTables();
@@ -3251,9 +3259,9 @@ let vocabulary = [];
             const btn = document.getElementById('grammar-expand-all-btn');
             if (!btn) return;
             const info = {
-                'default':    { tip: '노트 내용까지 전부 펼치기', icon: 'fa-solid fa-up-right-and-down-left-from-center' },
-                'all-open':   { tip: '주제까지 전부 접기',        icon: 'fa-solid fa-down-left-and-up-right-to-center' },
-                'all-closed': { tip: '주제 펼치기 (기본 보기)',   icon: 'fa-solid fa-list' }
+                'default':     { tip: '주제 펼치기 (노트 제목 보기)', icon: 'fa-solid fa-list' },
+                'topics-open': { tip: '노트 내용까지 전부 펼치기',    icon: 'fa-solid fa-up-right-and-down-left-from-center' },
+                'all-open':    { tip: '전부 접기 (주제만 보기)',      icon: 'fa-solid fa-down-left-and-up-right-to-center' }
             }[grammarViewMode] || {};
             btn.title = info.tip || '전체 펼치기';
             const icon = btn.querySelector('i');
