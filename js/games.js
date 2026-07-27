@@ -1601,7 +1601,9 @@ Return JSON only, no markdown.`;
             gfillState.lastUnmastered = unmastered;
             gfillState.lastScoreDelta = gDelta;
 
-            // [냐냐 요청] '단어 연결'이 된 칸은 단어 점수도 같이 움직인다 — 단어 빈칸과 같은 +0.7 / -0.5.
+            // [냐냐 요청] '단어 연결'이 된 칸은 단어 점수도 같이 움직인다 — 정답 +1.5 / 오답 -2.
+            //   단어 빈칸 복습(+0.7/-0.5)보다 세게 매긴다. 뜻을 보고 스페인어를 직접 쓰는 거라
+            //   더 어렵고, 틀렸으면 확실히 모르는 것으로 본다.
             //   연결이 없는 칸은 안 건드린다. 문법 구조 표(소유형용사·목적격 대명사 등)는 연결을
             //   안 해두니까 자동으로 제외되고, 단어 시험처럼 쓰는 표만 반영된다.
             gfillState.lastWordScores = [];
@@ -1613,7 +1615,7 @@ Return JSON only, no markdown.`;
                     const w = getCellWord(t.id, blk.id, d.ri, d.ci);
                     if (!w) return;
                     const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true });
-                    a.delta += d.correct ? 0.7 : -0.5;
+                    a.delta += d.correct ? 1.5 : -2;
                     if (!d.correct) a.allCorrect = false;
                 });
                 Object.keys(acc).forEach(id => {
