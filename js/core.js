@@ -5135,19 +5135,22 @@ let vocabulary = [];
             const s = grammarEditorState;
             const b = geBlock(bi);
             if (!s || !b || b.type !== 'table') return;
-            const hlCols = b.highlightCols || [0];
             const cells = [];
             (b.rows || []).forEach((row, ri) => {
                 (row || []).forEach((c, ci) => {
                     if (!isSpanishCell(c)) return;
+                    // [냐냐 요청] 행 이름(row[hlCols[0]])은 뺐다. '스페인어|뜻|스페인어|뜻' 처럼 짝지어진
+                    //   표에서는 한 행의 모든 칸에 같은 뜻이 붙어서 calor 옆에 '감기' 가 뜨는 식으로 어긋난다.
+                    //   표 생김새가 제각각이라 제대로 짝짓기가 어려워, 틀린 뜻을 보여주느니 안 보여준다.
                     cells.push({
                         ri, ci, text: String(c).trim(),
-                        rowLabel: (row[hlCols[0]] || '').toString().trim(),
                         colHeader: (typeof grammarColumnLabel === 'function') ? grammarColumnLabel(b, ci) : ''
                     });
                 });
             });
-            wordLinkState = { tableId: s.id, blockId: b.id, title: s.title || '(제목 없음)', cells };
+            // [냐냐 요청] 1열을 다 하고 2열로 넘어가는 순서. 표를 세로로 읽으며 이어주기 편하게.
+            cells.sort((a, z) => (a.ci - z.ci) || (a.ri - z.ri));
+            wordLinkState = { tableId: s.id, blockId: b.id, bi, title: s.title || '(제목 없음)', cells };
             renderGrammarWordLink();
             document.getElementById('word-link-modal').classList.remove('hidden');
         }
@@ -5158,10 +5161,77 @@ let vocabulary = [];
             renderGrammarTables();   // 조회 화면의 연결 표시 갱신
         }
 
+        // [냐냐 요청] 연결창 안에 그 표를 같이 그린다 — 창을 옆으로 밀지 않아도 어떤 칸인지 보인다.
+        //   목록과 같은 번호를 칸에도 달아서 표 ↔ 목록이 눈으로 이어지고, 칸을 누르면 그 줄로 간다.
+        //   색: 초록=이어둠, 보라=후보 있음, 노랑=단어장에 없음, 회색=이을 수 없는 칸(뜻·빈칸)
+        function renderWordLinkTablePreview() {
+            const st = wordLinkState;
+            const box = document.getElementById('word-link-table');
+            if (!box) return;
+            const b = st ? geBlock(st.bi) : null;
+            if (!st || !b) { box.innerHTML = ''; return; }
+
+            const numOf = {};   // "행-열" → 목록에서 몇 번째인가
+            st.cells.forEach((c, i) => { numOf[`${c.ri}-${c.ci}`] = i + 1; });
+
+            const hMerges = b.headerMerges || {};
+            const hHidden = buildMergeHidden(hMerges);
+            const headerRow = (b.headerRows || []).map((hr, hi) => {
+                const cells = hr.map((h, ci) => {
+                    if (hHidden.has(`${hi}-${ci}`)) return '';
+                    const mg = hMerges[`${hi}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1, rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const span = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                    return `<th class="px-2 py-1.5 text-[11px] font-black text-white bg-[#649fd0] border border-[#5590c2]"${span}>${escapeHtml(h)}</th>`;
+                }).join('');
+                return cells ? `<tr>${cells}</tr>` : '';
+            }).join('');
+
+            const tMerges = b.merges || {};
+            const tHidden = buildMergeHidden(tMerges);
+            const bodyRows = (b.rows || []).map((r, ri) => {
+                const cells = (r || []).map((c, ci) => {
+                    if (tHidden.has(`${ri}-${ci}`)) return '';
+                    const mg = tMerges[`${ri}-${ci}`];
+                    const cs = mg ? Math.max(1, mg.cs || 1) : 1, rs = mg ? Math.max(1, mg.rs || 1) : 1;
+                    const span = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
+                    const n = numOf[`${ri}-${ci}`];
+                    if (!n) return `<td class="px-2 py-1 text-[11px] text-center text-slate-400 border border-[#c3d9ec] bg-white"${span}>${escapeHtml(c || '')}</td>`;
+                    const linked = getCellWord(st.tableId, st.blockId, ri, ci);
+                    const tone = linked ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : (findVocabCandidates(c).length ? 'bg-violet-50 border-violet-200 text-violet-800'
+                            : 'bg-amber-50 border-amber-200 text-amber-800');
+                    return `<td class="p-0 border ${tone}"${span}>
+                        <button type="button" onclick="wordLinkFocusCell(${n - 1})" title="목록에서 보기"
+                            class="w-full px-2 py-1 flex items-center justify-center gap-1 text-[11px] font-bold hover:brightness-95">
+                            <span class="text-[9px] opacity-50 tabular-nums shrink-0">${n}</span>
+                            <span class="truncate">${escapeHtml(c || '')}</span>
+                        </button></td>`;
+                }).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
+
+            box.innerHTML = `<div class="rounded-xl border border-[#c3d9ec] overflow-hidden">
+                <table class="w-full">${headerRow ? `<thead>${headerRow}</thead>` : ''}<tbody>${bodyRows}</tbody></table>
+            </div>`;
+        }
+
+        // 표의 칸을 누르면 아래 목록의 그 줄로 데려간다
+        function wordLinkFocusCell(i) {
+            const el = document.getElementById('word-link-row-' + i);
+            if (!el) return;
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            // 테두리는 인라인으로 — CDN Tailwind 라 나중에 붙인 클래스는 안 만들어질 수 있다
+            el.style.outline = '2px solid #8b5cf6';
+            el.style.outlineOffset = '2px';
+            setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 1200);
+        }
+
         function renderGrammarWordLink() {
             const st = wordLinkState;
             const box = document.getElementById('word-link-list');
             const sum = document.getElementById('word-link-summary');
+            renderWordLinkTablePreview();
             if (!st || !box) return;
 
             if (!st.cells.length) {
@@ -5176,11 +5246,19 @@ let vocabulary = [];
                 const cands = findVocabCandidates(c.text);
                 if (cur) linked++; else if (cands.length) candidate++; else missing++;
 
-                const where = [c.rowLabel && c.rowLabel !== c.text ? c.rowLabel : '', c.colHeader].filter(Boolean).join(' · ');
+                // 열이 바뀌는 자리에 그 열의 머리글을 끼워넣는다 (1열 묶음 → 2열 묶음 순서가 눈에 보이게)
+                const prev = st.cells[i - 1];
+                const colHead = (!prev || prev.ci !== c.ci)
+                    ? `<div class="flex items-center gap-2 px-1 ${i ? 'pt-3' : ''} pb-1">
+                           <span class="text-[11px] font-extrabold text-violet-600">${c.ci + 1}열</span>
+                           ${c.colHeader ? `<span class="text-[11px] font-bold text-slate-400 truncate">${escapeHtml(c.colHeader)}</span>` : ''}
+                           <span class="flex-1 h-px bg-slate-100"></span>
+                       </div>`
+                    : '';
                 const left = `
+                    <span class="w-5 shrink-0 text-[11px] font-bold text-slate-300 text-right tabular-nums">${i + 1}</span>
                     <div class="min-w-0 flex-1">
                         <div class="text-sm font-extrabold text-slate-800 truncate">${escapeHtml(c.text)}</div>
-                        ${where ? `<div class="text-[10px] text-slate-400 truncate">${escapeHtml(where)}</div>` : ''}
                     </div>`;
 
                 let right;
@@ -5200,12 +5278,18 @@ let vocabulary = [];
                         <button type="button" onclick="wordLinkPeekSelected(${i})" title="고른 단어 확인하기" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
                         <button type="button" onclick="wordLinkSet(${i})" class="shrink-0 text-[11px] font-bold bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1.5 rounded-lg transition-all active:scale-95">연결</button>`;
                 } else {
+                    // [냐냐 요청] 골라서 한 번에 등록 — 기본은 꺼둔다. la·mi 같은 문법 낱말이 섞여 있어서
+                    //   '전부 등록' 은 일부러 안 만들었다 (켠 것만 등록한다)
                     right = `
+                        <label class="shrink-0 flex items-center gap-1.5 text-[10px] font-bold text-slate-500 cursor-pointer select-none" title="한 번에 등록할 목록에 넣기">
+                            <input type="checkbox" class="word-link-pick w-4 h-4 accent-violet-600 cursor-pointer" data-i="${i}">
+                            고르기
+                        </label>
                         <span class="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg shrink-0">단어장에 없음</span>
                         <button type="button" onclick="wordLinkAddWord(${i})" class="shrink-0 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg transition-all active:scale-95"><i class="fa-solid fa-plus"></i> 추가</button>`;
                 }
 
-                return `<div class="flex items-center gap-2 px-3 py-2 rounded-xl border ${cur ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'}">${left}${right}</div>`;
+                return colHead + `<div id="word-link-row-${i}" class="flex items-center gap-2 px-3 py-2 rounded-xl border ${cur ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'}">${left}${right}</div>`;
             }).join('');
 
             if (sum) {
@@ -5219,37 +5303,41 @@ let vocabulary = [];
         }
 
         // [냐냐 요청] 어떤 단어인지 확인 — 단어창을 띄운다.
-        //   연결 화면(z-[60])이 단어창(z-50)보다 위라, z 로 다투는 대신 이 창을 잠깐 숨긴다.
-        //   단어창을 닫으면 closeWordModal 이 다시 열어주고, 거기서 고친 내용도 반영해서 다시 그린다.
-        //   ⚠️ 연결창만 숨기면 그 뒤의 노트 수정창(z-50)이 남는데, 단어창도 z-50 이고
-        //      DOM 에서 수정창이 더 뒤라 수정창이 단어창을 덮는다. 그래서 둘 다 숨겼다 되돌린다.
-        let wordLinkHiddenModals = null;   // 숨겨둔 모달 id 목록 (되돌릴 것)
+        //   예전엔 연결창(z-60)이 단어창(z-50)을 덮어서 연결창을 아예 숨겼는데, 그러면 뒤의 표까지
+        //   사라져서 어떤 칸을 이어주는 중인지 알 수가 없었다. 이제 숨기지 않고 단어창을 위로 올린다.
+        //   배경 어둠도 옅게 줄여서 뒤의 연결창·표가 그대로 보인다. 단어창은 제목줄을 잡고 옮길 수 있다.
+        //   z 는 클래스 대신 인라인으로 준다 — Tailwind 를 CDN 으로 쓰고 있어서 나중에 붙인
+        //   z-[65] 같은 클래스는 만들어지지 않을 수 있다.
+        let wordModalLifted = false;
 
-        function hideWordLinkForWordModal() {
-            const ids = ['word-link-modal', 'grammar-editor-modal'];
-            const hidden = [];
-            ids.forEach(id => {
-                const el = document.getElementById(id);
-                if (el && !el.classList.contains('hidden')) { el.classList.add('hidden'); hidden.push(id); }
-            });
-            if (hidden.length) wordLinkHiddenModals = hidden;
+        function liftWordModalOverWordLink() {
+            const link = document.getElementById('word-link-modal');
+            if (!link || link.classList.contains('hidden')) return;   // 연결창 흐름이 아니면 그대로 둔다
+            const el = document.getElementById('word-modal');
+            if (!el) return;
+            el.style.zIndex = '65';                       // 연결창(60) 위, 확인창(70) 아래
+            el.style.backgroundColor = 'rgba(0,0,0,0.2)'; // 뒤가 비쳐 보이게
+            el.style.backdropFilter = 'none';
+            wordModalLifted = true;
         }
 
         // 단어창이 닫힐 때 vocab.js 의 closeWordModal 이 부른다
-        function restoreWordLinkAfterWordModal() {
-            if (!wordLinkHiddenModals) return false;
-            wordLinkHiddenModals.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.classList.remove('hidden');
-            });
-            wordLinkHiddenModals = null;
+        function dropWordModalAfterWordLink() {
+            if (!wordModalLifted) return false;
+            wordModalLifted = false;
+            const el = document.getElementById('word-modal');
+            if (el) { el.style.zIndex = ''; el.style.backgroundColor = ''; el.style.backdropFilter = ''; }
+            // 골라서 등록하는 중이면 다음 칸으로 넘어간다.
+            //   유의어 자동채우기가 도는 중이면 그게 먼저 — 그 큐가 끝나고 이어서 간다.
+            const inSyn = (typeof _inSynonymFill !== 'undefined') && _inSynonymFill;
+            if (wordLinkRegQueue.length && !inSyn) setTimeout(() => processWordLinkRegQueue(), 250);
             return true;
         }
 
         function wordLinkPeek(wordId) {
             if (!wordId) return;
-            hideWordLinkForWordModal();
             openWordModal(wordId);
+            liftWordModalOverWordLink();          // 연 다음에 올린다 (openWordModal 이 위치를 되돌리므로)
             _skipContinueRegisterPrompt = true;   // 확인하러 연 거라 '계속 등록?' 은 안 물어봄
         }
 
@@ -5301,13 +5389,49 @@ let vocabulary = [];
             });
         }
 
+        // ── [냐냐 요청] 단어장에 없는 칸 골라서 한 번에 등록 ──────────
+        //   '전부 등록' 버튼은 일부러 안 만들었다. 실제로 세어보니 못 찾는 칸의 대부분이
+        //   la·las·mi·mis·su 같은 문법 낱말이라, 통째로 넣으면 단어장이 오염되고 단어 시험에도 나온다.
+        //   그래서 켠 것만 등록한다. 등록창은 한 창씩 차례로 열려서 확인하며 저장하면 된다.
+        let wordLinkRegQueue = [];   // 등록 대기 중인 칸 번호들
+
+        function wordLinkPickedIndexes() {
+            return Array.prototype.slice.call(document.querySelectorAll('.word-link-pick:checked'))
+                .map(el => Number(el.dataset.i));
+        }
+
+        function toggleAllWordLinkPicks() {
+            const boxes = document.querySelectorAll('.word-link-pick');
+            if (!boxes.length) return;
+            const turnOn = wordLinkPickedIndexes().length < boxes.length;   // 하나라도 꺼져 있으면 전부 켜기
+            boxes.forEach(el => { el.checked = turnOn; });
+        }
+
+        function startWordLinkBulkRegister() {
+            const picked = wordLinkPickedIndexes();
+            if (!picked.length) { showToast("등록할 칸을 먼저 골라주세요 ('고르기' 체크)", "info"); return; }
+            const names = picked.map(i => (wordLinkState.cells[i] || {}).text).filter(Boolean);
+            showConfirm(
+                `${picked.length}개를 등록할까요?`,
+                `${names.slice(0, 6).join(', ')}${names.length > 6 ? ` 외 ${names.length - 6}개` : ''}\n등록창이 한 창씩 차례로 열려요. 창을 닫으면 다음으로 넘어가요.`,
+                () => { wordLinkRegQueue = picked.slice(); processWordLinkRegQueue(); },
+                { okLabel: '등록 시작', cancelLabel: '취소', okStyle: 'primary', icon: 'happy' }
+            );
+        }
+
+        function processWordLinkRegQueue() {
+            if (!wordLinkRegQueue.length) return;
+            const i = wordLinkRegQueue.shift();
+            wordLinkAddWord(i);   // 한 칸 등록하는 기존 흐름을 그대로 쓴다
+        }
+
         // 단어장에 없는 칸 → 등록창을 열어준다 (돋보기의 등록 흐름을 그대로 씀).
         //   등록을 마치고 '다시 찾기'를 누르면 후보로 잡힌다
         function wordLinkAddWord(i) {
             const st = wordLinkState; if (!st) return;
             const c = st.cells[i]; if (!c) return;
-            hideWordLinkForWordModal();
             openWordModal();
+            liftWordModalOverWordLink();
             _skipContinueRegisterPrompt = true;
             const input = document.getElementById('input-word');
             if (input) {
@@ -5315,7 +5439,9 @@ let vocabulary = [];
                 if (typeof handleWordInput === 'function') handleWordInput(c.text);
             }
             setTimeout(() => { if (typeof triggerAiAutofill === 'function') triggerAiAutofill(); }, 250);
-            showToast("등록을 마치면 '다시 찾기'를 눌러주세요!", "info");
+            showToast(wordLinkRegQueue.length
+                ? `${c.text} — 저장하면 다음으로 넘어가요 (${wordLinkRegQueue.length}개 남음)`
+                : "등록을 마치면 '다시 찾기'를 눌러주세요!", "info");
         }
 
         // ── 편집기: 우클릭 메뉴 / 병합 / 분리 ──────────────────────

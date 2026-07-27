@@ -1648,10 +1648,15 @@
                 이어두지 않은 칸은 지금처럼 문법 점수만 받아요. 그래서 <b>단어 시험처럼 외우는 표에만</b> 이어주면 돼요.
                 후보가 여러 개면 직접 골라주세요 — 예를 들어 <b>frío</b> 는 <b>freír(튀기다)</b> 의 변형이기도 하거든요.
             </p>
+            <!-- 표를 같이 보여준다 — 창을 옆으로 밀지 않아도 어떤 칸을 잇는 중인지 보이게 -->
+            <div id="word-link-table" class="max-h-[38vh] overflow-auto"></div>
             <div id="word-link-summary"></div>
             <div id="word-link-list" class="space-y-2"></div>
             <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
                 <button type="button" onclick="wordLinkAutoAll()" class="flex-1 min-w-[120px] py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 후보 하나뿐인 것 자동 연결</button>
+                <!-- 단어장에 없는 칸: '고르기' 를 켠 것만 차례로 등록한다 (전부 등록은 일부러 없음) -->
+                <button type="button" onclick="startWordLinkBulkRegister()" class="py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-all active:scale-95"><i class="fa-solid fa-plus mr-1"></i> 고른 것 등록</button>
+                <button type="button" onclick="toggleAllWordLinkPicks()" title="'단어장에 없음' 칸 전부 켜기/끄기" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95"><i class="fa-regular fa-square-check"></i></button>
                 <button type="button" onclick="renderGrammarWordLink()" title="단어를 새로 등록한 뒤 눌러주세요" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95"><i class="fa-solid fa-rotate"></i> 다시 찾기</button>
                 <button type="button" onclick="wordLinkClearAll()" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl text-sm transition-all active:scale-95">전부 해제</button>
                 <button type="button" onclick="closeGrammarWordLink()" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">닫기</button>
