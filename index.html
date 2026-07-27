@@ -1063,11 +1063,23 @@
                                 <p class="text-xs text-slate-400 mt-0.5">등록 단어, 마스터 단어, 퀴즈, AI 첨삭 기록을 한눈에 봐요</p>
                             </div>
                         </div>
-                        <div class="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-                            <button id="range-btn-7d" onclick="setRecordRange('7d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">1주일</button>
-                            <button id="range-btn-30d" onclick="setRecordRange('30d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">한달</button>
-                            <button id="range-btn-1y" onclick="setRecordRange('1y')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">1년</button>
-                            <button id="range-btn-custom" onclick="setRecordRange('custom')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">기간설정</button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <div class="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+                                <button id="range-btn-7d" onclick="setRecordRange('7d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">1주일</button>
+                                <button id="range-btn-30d" onclick="setRecordRange('30d')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">한달</button>
+                                <button id="range-btn-1y" onclick="setRecordRange('1y')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">1년</button>
+                                <button id="range-btn-custom" onclick="setRecordRange('custom')" class="record-range-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">기간설정</button>
+                            </div>
+                            <!-- [냐냐 요청] 그래프 가로축을 일/주/월 중에 골라서 볼 수 있게.
+                                 기간을 바꾸면 그 기간에 어울리는 단위로 자동으로 맞춰지고, 그 뒤에 직접 바꿀 수 있다. -->
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[10px] font-bold text-slate-400 shrink-0">단위</span>
+                                <div class="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                    <button id="unit-btn-day" onclick="setRecordUnit('day')" class="record-unit-btn px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">일</button>
+                                    <button id="unit-btn-week" onclick="setRecordUnit('week')" class="record-unit-btn px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">주</button>
+                                    <button id="unit-btn-month" onclick="setRecordUnit('month')" class="record-unit-btn px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500">월</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

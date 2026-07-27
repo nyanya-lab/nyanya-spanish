@@ -706,15 +706,10 @@ let vocabulary = [];
         // [냐냐 PATCH] 연속 학습일(streak) 계산 — nyanyaDiary(날짜별 기록) 기반
         // ============================================================
         function calcStreak() {
-            const dates = Object.keys(nyanyaDiary || {}).filter(d => {
-                const log = nyanyaDiary[d];
-                // 하루 총 활동이 5개 이상인 날만 "학습한 날"로 인정
-                //   [냐냐 PATCH] 복습(reviewCount)·게임(gameCount)도 포함 — 안 세서 복습만 한 날이 streak에서 빠지던 버그
-                if (!log) return false;
-                const total = (log.quizTotal || 0) + (log.aiSessions || 0) + (log.newWordsCount || 0)
-                            + (log.reviewCount || 0) + (log.gameCount || 0);
-                return total >= 5;
-            }).sort(); // 오름차순
+            // [냐냐 요청] 학습장에서 뭐든 하나만 해도 그날은 "학습한 날" (예전엔 5개 이상이어야 인정했다).
+            //   달력의 ✗ 표시와 같은 기준(dayActivity)을 쓰므로 둘이 어긋나지 않는다.
+            //   앱을 켜기만 한 날은 touchDiarySnapshot() 이 만든 빈 기록이라 0 → 자동으로 제외됨
+            const dates = Object.keys(nyanyaDiary || {}).filter(d => dayActivity(d) >= 1).sort(); // 오름차순
             if (dates.length === 0) return 0;
 
             const toDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
@@ -985,10 +980,13 @@ let vocabulary = [];
         let calYear = new Date().getFullYear();
         let calMonth = new Date().getMonth(); // 0-11
 
+        // [냐냐 요청] 그날 학습장에서 한 일의 개수 — 달력 진하기·✗ 표시·연속 학습일이 전부 이 하나를 쓴다.
+        //   '한 일'만 센다: 마스터/완벽 달성 수는 퀴즈·복습의 결과라 같이 세면 한 번 한 걸 두 번 세게 됨.
         function dayActivity(dateStr) {
             const d = nyanyaDiary[dateStr];
             if (!d) return 0;
-            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0);
+            return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0)
+                 + (d.reviewCount || 0) + (d.gameCount || 0) + (d.newGrammarCount || 0);
         }
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
@@ -1481,6 +1479,13 @@ let vocabulary = [];
             return (typeof s === 'number') ? s : 0;
         }
 
+        // 표시용 문자열 (+5 / -3.5 / 0) — 단어의 formatScore 와 같은 규칙
+        function formatGrammarScore(id) {
+            const s = getGrammarScore(id);
+            const txt = (Math.round(s * 10) / 10).toString();
+            return s > 0 ? '+' + txt : txt;
+        }
+
         // 정답률(0~1) → 빈칸 복습 점수. 0점 기준 70%, 40% 이하는 바닥
         function grammarFillDelta(rate) {
             const t = (rate - 0.7) / 0.3;
@@ -1944,6 +1949,29 @@ let vocabulary = [];
         // ============================================================
         let currentRecordRange = '7d';
 
+        // [냐냐 요청] 그래프 가로축 단위 — 'day' | 'week' | 'month'
+        //   기간을 바꾸면 그 기간에 어울리는 단위로 자동으로 맞춘 뒤, 냐냐가 직접 바꿀 수 있다.
+        //   (1년치 365개를 700px 에 넣으면 점 하나가 2px 라 막대가 안 보인다 — 그래서 기본이 '월')
+        let currentRecordUnit = 'day';
+        let lastRecordSpan = null;   // {start, end} — 단위만 바꿔서 다시 그릴 때 쓴다
+
+        function defaultRecordUnit(days) {
+            if (days <= 45) return 'day';
+            if (days <= 190) return 'week';   // 반년까지는 주
+            return 'month';
+        }
+
+        //   redraw:false 면 버튼 모양만 맞춘다 (기간을 바꿀 때 — 어차피 곧바로 다시 그리니까)
+        function setRecordUnit(unit, redraw = true) {
+            currentRecordUnit = unit;
+            document.querySelectorAll('.record-unit-btn').forEach(btn => {
+                btn.className = "record-unit-btn px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500";
+            });
+            const activeBtn = document.getElementById({ day: 'unit-btn-day', week: 'unit-btn-week', month: 'unit-btn-month' }[unit]);
+            if (activeBtn) activeBtn.className = "record-unit-btn px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+            if (redraw && lastRecordSpan) renderRecordsForRange(lastRecordSpan.start, lastRecordSpan.end);
+        }
+
         // [냐냐 PATCH] 학습기록 그래프 카드 접기/펼치기
         // [냐냐 PATCH] 학습 수준 데이터를 사용자가 직접 볼 수 있게 보기 좋게 렌더링
         function renderLearnerProfileDisplay() {
@@ -2033,6 +2061,9 @@ let vocabulary = [];
             if (range === '30d') days = 30;
             else if (range === '1y') days = 365;
 
+            // [냐냐 요청] 기간에 어울리는 단위로 자동 전환 (1년 → 월). 그 뒤에 단위 버튼으로 바꿀 수 있다
+            setRecordUnit(defaultRecordUnit(days), false);
+
             const end = new Date();
             const start = new Date();
             start.setDate(end.getDate() - (days - 1));
@@ -2052,6 +2083,9 @@ let vocabulary = [];
                 showToast("시작일이 종료일보다 늦을 수 없어요!", "error");
                 return;
             }
+            // 직접 고른 기간도 길이에 맞는 단위로 시작 (그 뒤 단위 버튼으로 변경 가능)
+            const spanDays = Math.round((end - start) / 86400000) + 1;
+            setRecordUnit(defaultRecordUnit(spanDays), false);
             renderRecordsForRange(start, end);
         }
 
@@ -2068,7 +2102,100 @@ let vocabulary = [];
             return dates;
         }
 
+        // ============================================================
+        // [냐냐 요청] 일별 series 를 주/월 단위로 접기
+        //   항목마다 합치는 방법이 다르다:
+        //     · 횟수(퀴즈·복습·게임·신규 등록…)  → 그 묶음의 합계
+        //     · 누적 스냅샷(등록 단어 수·마스터 수) → 그 묶음의 마지막 값 (= 월말/주말 시점)
+        //   정답률처럼 비율로 쓰는 값은 그래프 쪽에서 합계로 다시 계산하니까 여기선 안 건드린다.
+        //   (합계의 비율이라 '평균의 평균'이 되지 않는다)
+        // ============================================================
+        const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
+                                   'reviewCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
+        const RECORD_LAST_FIELDS = ['registeredTotal', 'masteredTotal', 'perfectTotal', 'weakTotal', 'criticalTotal',
+                                    'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal'];
+
+        // 그 날짜가 속한 주의 시작(일요일) — 달력이 일요일 시작이라 맞춰준다
+        function weekStartOf(ds) {
+            const [y, m, d] = ds.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            dt.setDate(dt.getDate() - dt.getDay());
+            return getLocalDateString(dt);
+        }
+
+        // [냐냐 요청] 주 라벨은 날짜(07/21)보다 '7월 4주'가 알아보기 쉽다.
+        //   주가 시작하는 날(일요일)이 그 달의 몇째 주인지로 센다 — 1~7일=1주, 8~14일=2주 …
+        function weekLabelOf(weekStart) {
+            const mm = Number(weekStart.slice(5, 7));
+            const dd = Number(weekStart.slice(8, 10));
+            return `${mm}월 ${Math.floor((dd - 1) / 7) + 1}주`;
+        }
+
+        // [냐냐 요청] 일 라벨도 주·월과 같은 말투로 — '07/21' 대신 '7월 21일'
+        function dayLabelOf(ds) {
+            return `${Number(ds.slice(5, 7))}월 ${Number(ds.slice(8, 10))}일`;
+        }
+
+        // 묶음의 시작~끝 (같은 달이면 뒤쪽 달은 생략) — '7월 12일 ~ 18일'
+        function spanLabelOf(first, last) {
+            if (first === last) return dayLabelOf(first);
+            return first.slice(0, 7) === last.slice(0, 7)
+                ? `${dayLabelOf(first)} ~ ${Number(last.slice(8, 10))}일`
+                : `${dayLabelOf(first)} ~ ${dayLabelOf(last)}`;
+        }
+
+        function aggregateRecordSeries(daily, unit) {
+            const keyOf = unit === 'month' ? (d => d.date.slice(0, 7))
+                        : unit === 'week'  ? (d => weekStartOf(d.date))
+                        : (d => d.date);
+
+            const buckets = [];
+            const byKey = {};
+            daily.forEach(d => {
+                const k = keyOf(d);
+                let b = byKey[k];
+                if (!b) {
+                    b = byKey[k] = { _key: k, _days: [] };
+                    RECORD_SUM_FIELDS.forEach(f => b[f] = 0);
+                    RECORD_LAST_FIELDS.forEach(f => b[f] = null);
+                    buckets.push(b);
+                }
+                b._days.push(d.date);
+                RECORD_SUM_FIELDS.forEach(f => b[f] += (d[f] || 0));
+                // 마지막 '값이 있는' 날의 스냅샷 (등급별 총계는 예전 날짜엔 null 이라 건너뛴다)
+                RECORD_LAST_FIELDS.forEach(f => { if (d[f] !== null && d[f] !== undefined) b[f] = d[f]; });
+            });
+
+            buckets.forEach(b => {
+                const first = b._days[0];
+                const last = b._days[b._days.length - 1];
+                b.date = first;                 // 툴팁·정렬용 대표 날짜 (묶음의 첫날)
+                // label = 달까지 적은 형태, labelShort = 달을 뗀 형태.
+                //   [냐냐 요청] 가로축에서 앞 라벨과 같은 달이면 달을 안 적는다 (7월 21일 · 22일 · 23일 …)
+                //   labelMonth 는 그 '같은 달인지' 비교용
+                if (unit === 'month') {
+                    b.labelMonth = b._key;
+                    b.label = b.labelShort = `${Number(b._key.slice(5, 7))}월`;
+                    b.fullLabel = `${b._key.slice(0, 4)}년 ${Number(b._key.slice(5, 7))}월`;
+                } else if (unit === 'week') {
+                    // 라벨은 '7월 4주', 툴팁엔 실제 날짜까지 — 묶음 첫날이 지난달이면 그 달 기준으로 적힌다
+                    b.labelMonth = b._key.slice(0, 7);
+                    b.label = weekLabelOf(b._key);
+                    b.labelShort = b.label.split(' ')[1];                 // '4주'
+                    b.fullLabel = `${b._key.slice(0, 4)}년 ${weekLabelOf(b._key)} (${spanLabelOf(first, last)})`;
+                } else {
+                    b.labelMonth = first.slice(0, 7);
+                    b.label = dayLabelOf(first);
+                    b.labelShort = `${Number(first.slice(8, 10))}일`;
+                    b.fullLabel = `${first.slice(0, 4)}년 ${dayLabelOf(first)}`;
+                }
+                delete b._days;
+            });
+            return buckets;
+        }
+
         function renderRecordsForRange(start, end) {
+            lastRecordSpan = { start, end };   // 단위 버튼으로 다시 그릴 때 쓴다
             const dateKeys = getDateRangeArray(start, end);
             const allKeysSorted = Object.keys(nyanyaDiary).sort();
 
@@ -2083,7 +2210,7 @@ let vocabulary = [];
 
             let prevRegistered = null;
             let prevMastered = null;
-            const series = dateKeys.map(date => {
+            const dailySeries = dateKeys.map(date => {
                 const log = nyanyaDiary[date];
                 if (log) {
                     if (log.registeredTotal !== undefined) lastRegistered = log.registeredTotal;
@@ -2126,6 +2253,9 @@ let vocabulary = [];
                 };
             });
 
+            // [냐냐 요청] 여기서 일/주/월로 접는다. 그래프 4개는 점 개수만 줄어들 뿐 그대로 동작한다
+            const series = aggregateRecordSeries(dailySeries, currentRecordUnit);
+
             const totalQuiz = series.reduce((sum, d) => sum + d.quizTotal, 0);
             const totalQuizCorrect = series.reduce((sum, d) => sum + d.quizCorrect, 0);
             const totalAi = series.reduce((sum, d) => sum + d.aiSessions, 0);
@@ -2166,15 +2296,57 @@ let vocabulary = [];
         function fmtDateSlash(ds) { return (ds || '').replace(/-/g, '/'); }
         function fmtDateShort(ds) { return (ds || '').slice(5).replace('-', '/'); }
 
+        // [냐냐 요청] 가로축 라벨. 예전엔 '전체의 1/7 간격'이라 09/17, 11/08 처럼 아무 날짜에나 찍혀서 지저분했다.
+        //   · 일 단위(11일 이상): 1·5·10·15·20·25일 같은 떨어지는 날에만 찍는다
+        //   · 그 밖에는 균등 간격이되, 단위별로 넣을 수 있는 개수를 다르게 (월 라벨은 짧아서 더 많이 들어감)
         function recordChartXLabels(series, xOf, height) {
-            const labelEvery = Math.max(1, Math.ceil(series.length / 7));
-            let html = '';
-            series.forEach((d, i) => {
-                if (i % labelEvery === 0 || i === series.length - 1) {
-                    html += `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">${fmtDateShort(d.date)}</text>`;
+            const n = series.length;
+            if (!n) return '';
+            const MAX_LABELS = 14;      // 700px 기준으로 이 정도까진 안 겹친다
+            // 라벨 사이 최소 간격 (viewBox 단위 ≈ px). 한글 라벨('7월 21일')은 넓어서 넉넉히 띄운다
+            const MIN_GAP = currentRecordUnit === 'week' ? 58 : (currentRecordUnit === 'month' ? 30 : 52);
+
+            let idxs;
+            if (currentRecordUnit === 'day' && n > 10) {
+                // 떨어지는 날에만 — 30·31일은 다음 달 1일과 붙어버리니 뺀다.
+                // 기간이 길면 후보를 점점 성기게 (1·5·10… → 1·15 → 1일만)
+                const rules = [
+                    dd => dd === 1 || (dd % 5 === 0 && dd <= 25),
+                    dd => dd === 1 || dd === 15,
+                    dd => dd === 1
+                ];
+                for (const ok of rules) {
+                    idxs = series.map((d, i) => i).filter(i => ok(Number(series[i].date.slice(8, 10))));
+                    if (idxs.length <= MAX_LABELS) break;
                 }
+                if (idxs.length > MAX_LABELS) {   // 2년치처럼 1일만 찍어도 많으면 솎아낸다
+                    const every = Math.ceil(idxs.length / MAX_LABELS);
+                    idxs = idxs.filter((_, k) => k % every === 0);
+                }
+            } else {
+                const every = Math.max(1, Math.ceil(n / MAX_LABELS));
+                idxs = series.map((d, i) => i).filter(i => i % every === 0 || i === n - 1);
+            }
+
+            // 그래도 붙는 라벨이 있으면 뒤엣것을 버린다.
+            // 마지막 라벨은 항상 살리되, 그 바로 앞이 너무 가까우면 앞엣것을 대신 뺀다
+            const kept = [];
+            let lastX = -Infinity;
+            idxs.forEach(i => {
+                const x = xOf(i);
+                if (x - lastX >= MIN_GAP) { kept.push(i); lastX = x; }
+                else if (i === n - 1) { kept.pop(); kept.push(i); lastX = x; }
             });
-            return html;
+
+            // [냐냐 요청] 화면에 실제로 남은 라벨끼리 비교해서, 앞엣것과 같은 달이면 달을 뗀다.
+            //   (라벨이 듬성듬성해지면 앞뒤 달이 달라지니 자동으로 달이 다시 붙는다)
+            let prevMonth = null;
+            return kept.map(i => {
+                const d = series[i];
+                const txt = (d.labelMonth && d.labelMonth === prevMonth ? d.labelShort : d.label) || fmtDateShort(d.date);
+                prevMonth = d.labelMonth;
+                return `<text x="${xOf(i).toFixed(1)}" y="${height - 8}" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">${txt}</text>`;
+            }).join('');
         }
 
         // [PATCH] 차트 너비를 기간 길이에 비례해서 늘리지 않고 항상 화면(컨테이너) 폭에 맞춤.
@@ -2315,7 +2487,7 @@ let vocabulary = [];
                     bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}" opacity="0.85" rx="1"/>`;
                     acc += h;
                 });
-                const txt = `${fmtDateSlash(d.date)}: 완벽 ${Math.round(d.rPerfect || 0)}% · 마스터 ${Math.round(d.rMastered || 0)}% · 약점 ${Math.round(d.rWeak || 0)}% · 치명적 ${Math.round(d.rCritical || 0)}%`.replace(/'/g, "\\'");
+                const txt = `${d.fullLabel}: 완벽 ${Math.round(d.rPerfect || 0)}% · 마스터 ${Math.round(d.rMastered || 0)}% · 약점 ${Math.round(d.rWeak || 0)}% · 치명적 ${Math.round(d.rCritical || 0)}%`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${txt}')"/>`;
             });
 
@@ -2324,7 +2496,7 @@ let vocabulary = [];
             const lineDots = withRatio.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
                 const cy = yOfCount(d.registeredTotal).toFixed(1);
-                const txt = `${fmtDateSlash(d.date)}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
+                const txt = `${d.fullLabel}: 등록 단어 ${d.registeredTotal}개`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${txt}')"/>`;
             }).join('');
 
@@ -2393,7 +2565,7 @@ let vocabulary = [];
                 bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - rH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${rH.toFixed(1)}" fill="#8b5cf6" opacity="0.8" rx="1.5"/>`;
                 bars += `<rect x="${mx.toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mH.toFixed(1)}" fill="#6ee7b7" opacity="0.9" rx="1.5"/>`;
                 bars += `<rect x="${px.toFixed(1)}" y="${(baseY - pH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${pH.toFixed(1)}" fill="#059669" opacity="0.9" rx="1.5"/>`;
-                const text = `${fmtDateSlash(d.date)}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0}+문법 ${d.newGrammarCount||0}) · 신규 마스터 ${d._newMasteredTotal}개 · 신규 완벽 ${d.newPerfectCount||0}개`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 신규 등록 ${d._newTotal}개 (단어 ${d.newWordsCount||0}+문법 ${d.newGrammarCount||0}) · 신규 마스터 ${d._newMasteredTotal}개 · 신규 완벽 ${d.newPerfectCount||0}개`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth * 3 + 3, 16) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth * 3 + 3, 16).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-growth-daily-chart-tooltip', '${text}')"/>`;
             });
 
@@ -2448,7 +2620,7 @@ let vocabulary = [];
                 const barH = (d.wrongRate / 100) * chartH;
                 const barX = (xOf(i) - barWidth / 2).toFixed(1);
                 const barY = (baseY - barH).toFixed(1);
-                const text = `${fmtDateSlash(d.date)}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
                 bars += `<rect x="${barX}" y="${barY}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
                 // 막대가 너무 얇아서 탭하기 어려우므로, 막대 전체 높이를 덮는 투명한 클릭 영역을 따로 추가
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
@@ -2460,7 +2632,7 @@ let vocabulary = [];
             const lineDots = withRate.map((d, i) => {
                 const cx = xOf(i).toFixed(1);
                 const cy = yOfTotal(d.quizTotal).toFixed(1);
-                const text = `${fmtDateSlash(d.date)}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
                 return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
             }).join('');
 
@@ -2497,7 +2669,7 @@ let vocabulary = [];
             let bars = '';
             series.forEach((d, i) => {
                 const barH = (d.aiSessions / maxVal) * chartH;
-                const text = `${fmtDateSlash(d.date)}: ${d.aiSessions}회`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: ${d.aiSessions}회`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
                 bars += `<rect x="${(xOfGroup(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-ai-chart-tooltip', '${text}')"/>`;
             });
@@ -2583,7 +2755,7 @@ let vocabulary = [];
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
                     }
                 });
-                const text = `${fmtDateSlash(d.date)}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
                 const hitW = Math.max(totalW, 14);
                 bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
@@ -2689,7 +2861,7 @@ let vocabulary = [];
                 } else {
                     bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mBarH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${mBarH.toFixed(1)}" fill="#14b8a6" opacity="0.7" rx="1.5"/>`;
                 }
-                const text = `${fmtDateSlash(d.date)}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%${hasWeakData ? ` · 약점 비율 ${Math.round(weakRatioOf(i))}%` : ''}`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 등록 문법 ${regByDay[i]}개 · 마스터 비율 ${Math.round(masteredRatioOf(i))}%${hasWeakData ? ` · 약점 비율 ${Math.round(weakRatioOf(i))}%` : ''}`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-grammar-chart-tooltip', '${text}')"/>`;
             });
 
@@ -3124,7 +3296,8 @@ let vocabulary = [];
                                     <!-- 주제 배지도 마찬가지 -->
                                     ${showTopicBadge && grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-1 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
                                     <div class="flex items-center gap-1.5 min-w-0">
-                                        <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
+                                        <!-- [냐냐 요청] 제목은 살짝 연한 회색 (주제 줄이 강조라 노트 제목까지 새까맣면 무거움) -->
+                                        <span class="font-extrabold text-slate-600 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
                                     </div>
                                 </div>
                             </button>
@@ -3134,13 +3307,18 @@ let vocabulary = [];
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}">
                             ${blocksHtml}
                             <!-- [냐냐 요청] 읽다가 바로 연습으로 이어가기 (헤더 아이콘이 많아서 여기에 둠) -->
-                            <div class="flex gap-2 pt-1">
+                            <div class="flex items-center gap-2 pt-1">
                                 <button type="button" onclick="startTranslationWithGrammar('${t.id}')" class="flex-1 py-2 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-all active:scale-95">
                                     <i class="fa-solid fa-pen-nib mr-1"></i> 이 문법으로 번역 연습
                                 </button>
                                 <button type="button" onclick="startGrammarFillForTable('${t.id}')" class="flex-1 py-2 rounded-xl border border-[#c3d9ec] bg-[#eef5fb] hover:bg-[#dfeaf6] text-[#2c5578] text-xs font-bold transition-all active:scale-95">
                                     <i class="fa-solid fa-table-cells mr-1"></i> 빈칸 채우기
                                 </button>
+                                <!-- [냐냐 요청] 이 노트의 점수 — 단어 카드의 점수 배지와 같은 색·같은 척도 -->
+                                ${(() => {
+                                    const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
+                                    return `<span class="shrink-0 px-2.5 py-2 rounded-xl text-[11px] font-black ${gi.badge} select-none" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
+                                })()}
                             </div>
                         </div>
                     </div>
