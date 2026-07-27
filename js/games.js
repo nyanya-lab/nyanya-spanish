@@ -1620,14 +1620,21 @@ Return JSON only, no markdown.`;
                     if (!blk || blk.type !== 'table') return;
                     const w = getCellWord(t.id, blk.id, d.ri, d.ci);
                     if (!w) return;
-                    const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true, anyCorrect: false });
+                    const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true, anyCorrect: false, nRight: 0, nWrong: 0 });
                     a.delta += d.correct ? 1.5 : -2;
-                    if (d.correct) a.anyCorrect = true; else a.allCorrect = false;
+                    if (d.correct) { a.anyCorrect = true; a.nRight++; } else { a.allCorrect = false; a.nWrong++; }
                 });
                 Object.keys(acc).forEach(id => {
                     const a = acc[id];
                     a.delta = Math.round(a.delta * 100) / 100;
-                    addWordScore(id, a.delta, { correct: a.allCorrect, subjective: true });
+                    // [냐냐 요청] 정답·오답 횟수는 칸 하나당 하나씩 센다 (정답률 배지에 쓰이는 숫자).
+                    //   한 단어가 한 칸만 걸려 있으면 지금까지와 똑같고, 여러 칸에 걸어두면 푼 만큼 센다.
+                    //   correct 는 그대로 '전부 맞았나' — 복습 대상 판정(lastWrongDate)은 한 칸이라도
+                    //   틀리면 걸리는 게 맞다.
+                    addWordScore(id, a.delta, {
+                        correct: a.allCorrect, subjective: true,
+                        correctCount: a.nRight, wrongCount: a.nWrong
+                    });
                     // [냐냐 요청] 표에서 그 단어를 직접 써서 맞혔으면 주관식 정답으로 인정한다 (마스터 자격).
                     //   ⚠️ addWordScore 는 correct===true 일 때만 subjective 를 반영해서, 한 단어가
                     //      여러 칸에 걸려 있고 그중 하나만 틀리면 정작 맞힌 칸이 인정을 못 받았다.

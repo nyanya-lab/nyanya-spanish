@@ -1446,11 +1446,16 @@ let vocabulary = [];
             if (typeof w.score !== 'number') w.score = 0;
 
             // 정답률 카운터 + 틀린 날짜
+            // [냐냐 요청] 한 번에 여러 칸을 채점한 경우엔 칸 하나당 하나씩 센다.
+            //   correctCount/wrongCount 를 안 주면 지금까지처럼 correct 에 따라 1회만 센다.
+            const cCount = (typeof opts.correctCount === 'number') ? opts.correctCount : (opts.correct === true ? 1 : 0);
+            const wCount = (typeof opts.wrongCount === 'number') ? opts.wrongCount : (opts.correct === false ? 1 : 0);
+            if (cCount) w.correctTotal = (w.correctTotal || 0) + cCount;
+            if (wCount) w.wrongTotal = (w.wrongTotal || 0) + wCount;
+
             if (opts.correct === true) {
-                w.correctTotal = (w.correctTotal || 0) + 1;
                 if (opts.subjective) w.subjectivePassed = true; // 마스터 필수 조건
             } else if (opts.correct === false) {
-                w.wrongTotal = (w.wrongTotal || 0) + 1;
                 // [냐냐 요청] skipReviewDate가 true면 망각곡선 복습 대상에서 제외
                 //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
                 if (!opts.skipReviewDate) {
