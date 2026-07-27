@@ -3096,17 +3096,32 @@ let vocabulary = [];
             return Object.keys(masteredGrammar).filter(id => masteredGrammar[id] && ids.has(id)).length;
         }
 
-        // [냐냐 PATCH] 문법표 정렬 모드 ('newest' | 'oldest'), 기본 최신순
-        let grammarSortMode = 'newest';
-        function toggleGrammarSort() {
-            grammarSortMode = grammarSortMode === 'newest' ? 'oldest' : 'newest';
-            const btn = document.getElementById('grammar-sort-btn');
-            if (btn) {
-                btn.innerHTML = grammarSortMode === 'newest'
-                    ? '<i class="fa-solid fa-arrow-down-wide-short mr-1"></i>최신순'
-                    : '<i class="fa-solid fa-arrow-up-wide-short mr-1"></i>오래된순';
-            }
+        // [냐냐 요청] 문법표 정렬 — 단어장과 같은 방식.
+        //   기준은 '등록순' 과 '가나다순' 둘. 같은 버튼을 또 누르면 오름/내림이 뒤집힌다.
+        //   기본은 가나다순 (제목으로 찾는 일이 제일 많아서)
+        const GSORT_KEY_OF = { newest: 'reg', oldest: 'reg', 'alpha-asc': 'alpha', 'alpha-desc': 'alpha' };
+        const GSORT_DEFAULT_OF = { reg: 'newest', alpha: 'alpha-asc' };   // 처음 누를 때의 방향
+        const GSORT_FLIP_OF = { newest: 'oldest', oldest: 'newest', 'alpha-asc': 'alpha-desc', 'alpha-desc': 'alpha-asc' };
+        const GSORT_BTN_LABEL = { newest: '등록순 ↓', oldest: '등록순 ↑', 'alpha-asc': '가나다 ↓', 'alpha-desc': '가나다 ↑' };
+        const GSORT_BASE_LABEL = { reg: '등록순', alpha: '가나다순' };
+
+        let grammarSortMode = 'alpha-asc';
+
+        // [냐냐 요청] 주제별 묶기 ↔ 그냥 목록. 목록일 땐 카드마다 주제 배지를 달아준다
+        //   ⚠️ 아래쪽 grammarViewMode 는 '전체 펼치기 3단계' 용이라 이름이 다르다
+        let grammarGroupView = 'group';   // 'group' | 'list'
+        function toggleGrammarViewMode() {
+            grammarGroupView = (grammarGroupView === 'group') ? 'list' : 'group';
+            saveGrammarFilterPrefs();
             renderGrammarTables();
+        }
+        function syncGrammarViewBtn() {
+            const ico = document.getElementById('grammar-view-icon');
+            const btn = document.getElementById('grammar-view-btn');
+            if (!ico || !btn) return;
+            const grouped = (grammarGroupView === 'group');
+            ico.className = grouped ? 'fa-solid fa-layer-group' : 'fa-solid fa-list';
+            btn.title = grouped ? '주제별로 묶여 있어요 — 눌러서 목록으로' : '목록으로 보고 있어요 — 눌러서 주제별로';
         }
 
         // ============================================================
@@ -3201,16 +3216,18 @@ let vocabulary = [];
 
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
-            // [냐냐 요청] 정렬: 최신순 / 오래된순 (주제순은 주제별 그룹으로 대체돼서 없앴다)
-            if (grammarSortMode === 'newest') {
-                tables = [...tables].reverse();
-            }
+            // [냐냐 요청] 정렬: 등록순(최신/오래된) · 가나다순(오름/내림). 'oldest' 는 원래 순서 그대로
+            const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ko');
+            if (grammarSortMode === 'newest') tables = [...tables].reverse();
+            else if (grammarSortMode === 'alpha-asc') tables = [...tables].sort(byTitle);
+            else if (grammarSortMode === 'alpha-desc') tables = [...tables].sort((a, b) => byTitle(b, a));
             // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 정렬된 순서 유지)
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
 
             // [냐냐 요청] 검색·필터 중이 아니면 주제별로 묶어서 보여준다
             //   (주제 헤더는 펼친 채로 노트 제목을 나열하고, 노트 상세만 접힘)
-            const useGroups = !query && grammarFilterTopics.length === 0 && grammarFilterMastery === 'all';
+            //   '목록으로 보기' 를 켜두면 검색·필터가 없어도 묶지 않는다
+            const useGroups = grammarGroupView === 'group' && !query && grammarFilterTopics.length === 0 && grammarFilterMastery === 'all';
             container.innerHTML = useGroups
                 ? renderGrammarGrouped(tables)
                 : tables.map(t => renderGrammarNoteCard(t, query, true)).join('');
@@ -3219,6 +3236,7 @@ let vocabulary = [];
             if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
             if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
             if (typeof syncGrammarExpandBtn === 'function') syncGrammarExpandBtn();
+            if (typeof syncGrammarViewBtn === 'function') syncGrammarViewBtn();
         }
 
         // [냐냐 요청] 주제별 그룹 렌더 — 주제 헤더(접기 가능) 아래에 그 주제 노트들
@@ -3289,6 +3307,15 @@ let vocabulary = [];
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
                         <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
+                        ${(() => {
+                            // [냐냐 요청] 연결 상태를 노트를 펼치지 않고도 보게 — 이어둔 칸 수를 배지로.
+                            //   누르면 수정창 + 연결창까지 바로 열린다
+                            const n = noteCellWordCount(t);
+                            const cls = n ? 'text-violet-600 bg-violet-50' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50';
+                            const tip = n ? `단어 연결 ${n}칸 — 눌러서 보기·고치기` : '단어 연결 (표 칸을 단어장과 이어두기)';
+                            const badge = n ? `<span class="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-white text-[8px] font-black flex items-center justify-center">${n}</span>` : '';
+                            return `<button onclick="openGrammarWordLinkFor('${t.id}')" title="${tip}" class="relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${cls}"><i class="fa-solid fa-link text-xs"></i>${badge}</button>`;
+                        })()}
                         <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
                 // [냐냐 요청] 배지 대신 카드 테두리·배경색으로 등급 표시 (단어장 카드와 같은 방식)
@@ -3384,19 +3411,18 @@ let vocabulary = [];
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                     // 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
                     const cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
-                    // [냐냐 요청] 단어장과 이어둔 칸 표시 — 빈칸에서 틀리면 단어 점수도 움직이는 칸.
-                    //   예전엔 글자에 보라 점선 밑줄을 그었는데, 강조 열 글씨도 보라(text-violet-600)라
-                    //   둘이 섞여 지저분했다. 이제 글자는 그대로 두고 칸 오른쪽 위 구석에 점만 찍는다.
-                    //   색은 연결창 미리보기에서 '이어둠' 을 초록으로 칠한 것과 맞췄다.
+                    // [냐냐 요청] 표 안에는 연결 표시를 하지 않는다 (밑줄도 점도 없앰).
+                    //   노트 카드의 연결 아이콘으로 상태를 보고, 어느 칸인지는 연결창의 표
+                    //   미리보기가 색으로 보여준다. 표 자체는 깔끔하게 둔다.
+                    //   툴팁은 남겨서 칸에 올리면 어떤 단어인지는 알 수 있다.
                     const linked = getCellWord(t.id, b.id, ri, ci);
-                    let dot = '', cellTitle = '';
+                    let cellTitle = '';
                     if (linked && !grammarWordLookupMode) {
-                        dot = `<span class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>`;
                         // 따옴표까지 막아야 뜻에 " 가 들어가도 속성이 안 깨진다
                         const tip = `단어장 연결: ${linked.word}${linked.meaning ? ' — ' + linked.meaning : ''}`;
                         cellTitle = ` title="${escapeHtml(tip).replace(/"/g, '&quot;')}"`;
                     }
-                    return `<td class="relative px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}${cellTitle}>${dot}${cellContent}</td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}${cellTitle}>${cellContent}</td>`;
                 }).join('');
                 return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
             }).join('');
@@ -3636,9 +3662,24 @@ let vocabulary = [];
             pendingGrammarMastery = btn.dataset.gmastery;
             document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b === btn));
         }
+        // 이미 고른 기준을 또 누르면 오름/내림 전환, 아니면 그 기준의 기본 방향 (단어장과 같은 규칙)
         function setGrammarFilterSort(btn) {
-            pendingGrammarSort = btn.dataset.gsort;
-            document.querySelectorAll('.grammar-sort-btn').forEach(b => styleFilterPill(b, b === btn));
+            const key = btn.dataset.gsort;
+            pendingGrammarSort = (GSORT_KEY_OF[pendingGrammarSort] === key)
+                ? GSORT_FLIP_OF[pendingGrammarSort]
+                : GSORT_DEFAULT_OF[key];
+            renderGrammarSortButtons();
+        }
+
+        // 정렬 버튼 라벨(↓↑)과 활성 상태 다시 그리기
+        function renderGrammarSortButtons() {
+            const activeKey = GSORT_KEY_OF[pendingGrammarSort];
+            document.querySelectorAll('.grammar-sort-btn').forEach(b => {
+                const key = b.dataset.gsort;
+                const on = (key === activeKey);
+                b.innerText = on ? GSORT_BTN_LABEL[pendingGrammarSort] : GSORT_BASE_LABEL[key];
+                styleFilterPill(b, on);
+            });
         }
 
         function syncGrammarFilterPanelUI() {
@@ -3647,7 +3688,7 @@ let vocabulary = [];
             pendingGrammarSort = grammarSortMode;
             renderGrammarTopicFilterButtons();
             document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.gmastery === pendingGrammarMastery));
-            document.querySelectorAll('.grammar-sort-btn').forEach(b => styleFilterPill(b, b.dataset.gsort === pendingGrammarSort));
+            renderGrammarSortButtons();
         }
         function toggleGrammarFilterPanel() {
             const panel = document.getElementById('grammar-filter-panel');
@@ -3692,7 +3733,7 @@ let vocabulary = [];
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
             else if (grammarFilterMastery === 'weak') chips.push('약점만');
-            const sortLabel = grammarSortMode === 'newest' ? '최신순' : '오래된순';
+            const sortLabel = { newest: '최신순', oldest: '오래된순', 'alpha-asc': '가나다순', 'alpha-desc': '가나다 역순' }[grammarSortMode] || '가나다순';
             const filterPart = chips.length > 0
                 ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${escapeHtml(c)}</span>`).join('')
                 : `<span class="text-slate-400">전체 표</span>`;
@@ -3701,7 +3742,7 @@ let vocabulary = [];
         function saveGrammarFilterPrefs() {
             try {
                 localStorage.setItem('nyanya_grammar_filters', JSON.stringify({
-                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode
+                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView
                 }));
             } catch (e) {}
         }
@@ -3712,9 +3753,9 @@ let vocabulary = [];
                 const f = JSON.parse(raw);
                 if (Array.isArray(f.topics)) grammarFilterTopics = f.topics;
                 if (f.mastery) grammarFilterMastery = f.mastery;
-                // [냐냐 요청] '주제순' 정렬은 없앴다 (이제 주제별 그룹으로 묶이니까).
-                //   예전에 저장해둔 값이 남아 있으면 최신순으로 되돌린다.
-                if (f.sort) grammarSortMode = (f.sort === 'topic') ? 'newest' : f.sort;
+                if (f.view === 'list' || f.view === 'group') grammarGroupView = f.view;
+                // 예전에 저장해둔 값('topic' 등 지금은 없는 것)이 남아 있으면 기본(가나다순)으로
+                if (f.sort) grammarSortMode = GSORT_KEY_OF[f.sort] ? f.sort : 'alpha-asc';
             } catch (e) {}
         }
 
@@ -5213,6 +5254,40 @@ let vocabulary = [];
         function noteHasCellWords(tableId) {
             const all = grammarCellWords[tableId];
             return !!(all && Object.keys(all).length);
+        }
+
+        // [냐냐 요청] 노트 카드에 보여줄 '살아있는' 연결 수.
+        //   저장된 키에는 칸이 지워졌거나(표 블록을 다시 만든 경우) 단어가 삭제된 것도 섞여 있다.
+        //   그대로 세면 연결창의 '연결됨 N' 과 숫자가 어긋나서, 실제로 남아 있는 것만 센다.
+        function noteCellWordCount(t) {
+            const all = t && grammarCellWords[t.id];
+            if (!all) return 0;
+            const ids = new Set(vocabulary.map(v => v.id));
+            let n = 0;
+            Object.keys(all).forEach(k => {
+                if (!ids.has(all[k])) return;                    // 단어가 지워짐
+                const i = k.indexOf(':');
+                if (i < 0) return;
+                const blockId = k.slice(0, i), rc = k.slice(i + 1).split('-');
+                const blk = (t.blocks || []).find(b => b.id === blockId);
+                const row = blk && (blk.rows || [])[+rc[0]];
+                const cell = row && row[+rc[1]];
+                if (cell !== undefined && cell !== null && String(cell).trim() !== '') n++;   // 칸이 남아있음
+            });
+            return n;
+        }
+
+        // 카드의 연결 아이콘 → 수정창을 열고 그 표의 연결창까지 한 번에 띄운다
+        //   (예전엔 수정 → 표 블록 찾기 → '단어 연결' 로 세 번 눌러야 했다)
+        function openGrammarWordLinkFor(tableId) {
+            if (typeof openGrammarEditor !== 'function') return;
+            openGrammarEditor(tableId);
+            const s = grammarEditorState;
+            if (!s) return;
+            const tableIdx = (s.blocks || []).map((b, i) => ({ b, i })).filter(x => x.b.type === 'table');
+            if (tableIdx.length === 1) openGrammarWordLink(tableIdx[0].i);
+            else if (tableIdx.length > 1) showToast("표가 여러 개예요 — 이을 표에서 '단어 연결'을 눌러주세요", "info");
+            else showToast("이 노트에는 표가 없어요", "info");
         }
 
         // [냐냐 요청] 셀 텍스트 → 단어장 후보들 (하나만 고르지 않고 다 보여주고 고르게 한다)

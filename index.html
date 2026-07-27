@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260727f">
+    <link rel="stylesheet" href="css/style.css?v=20260727i">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1244,6 +1244,10 @@
                             <button id="grammar-expand-all-btn" onclick="toggleExpandAllGrammar()" title="전체 펼치기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                 <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
                             </button>
+                            <!-- [냐냐 요청] 주제별 묶기 ↔ 그냥 목록 전환 -->
+                            <button id="grammar-view-btn" onclick="toggleGrammarViewMode()" title="주제별 묶기 / 목록으로 보기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
+                                <i id="grammar-view-icon" class="fa-solid fa-layer-group"></i>
+                            </button>
                             <div class="relative">
                                 <button onclick="event.stopPropagation(); toggleGrammarFilterPanel()" title="필터 & 정렬" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                     <i class="fa-solid fa-sliders"></i>
@@ -1270,8 +1274,9 @@
                                     <div class="space-y-1.5">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">정렬 기준</label>
                                         <div id="grammar-filter-sort-box" class="flex flex-wrap gap-1.5">
-                                            <button type="button" data-gsort="newest" onclick="setGrammarFilterSort(this)" class="grammar-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">최신순</button>
-                                            <button type="button" data-gsort="oldest" onclick="setGrammarFilterSort(this)" class="grammar-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">오래된순</button>
+                                            <!-- 같은 버튼을 또 누르면 오름/내림 전환 (단어장과 같은 방식) -->
+                                            <button type="button" data-gsort="alpha" onclick="setGrammarFilterSort(this)" class="grammar-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-violet-500 bg-violet-50 text-violet-600">가나다 ↓</button>
+                                            <button type="button" data-gsort="reg" onclick="setGrammarFilterSort(this)" class="grammar-sort-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">등록순</button>
                                         </div>
                                     </div>
                                     <!-- 초기화 / 취소 / 확인 -->
@@ -1915,13 +1920,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260727f"></script>
-    <script src="js/creatures.js?v=20260727f"></script>
-    <script src="js/core.js?v=20260727f"></script>
-    <script src="js/vocab.js?v=20260727f"></script>
-    <script src="js/flashcards.js?v=20260727f"></script>
-    <script src="js/quiz.js?v=20260727f"></script>
-    <script src="js/games.js?v=20260727f"></script>
-    <script src="js/ai-feedback.js?v=20260727f"></script>
+    <script src="js/dictionary-data.js?v=20260727i"></script>
+    <script src="js/creatures.js?v=20260727i"></script>
+    <script src="js/core.js?v=20260727i"></script>
+    <script src="js/vocab.js?v=20260727i"></script>
+    <script src="js/flashcards.js?v=20260727i"></script>
+    <script src="js/quiz.js?v=20260727i"></script>
+    <script src="js/games.js?v=20260727i"></script>
+    <script src="js/ai-feedback.js?v=20260727i"></script>
 </body>
 </html>
