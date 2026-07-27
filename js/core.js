@@ -5221,21 +5221,28 @@ let vocabulary = [];
         // [냐냐 요청] 어떤 단어인지 확인 — 단어창을 띄운다.
         //   연결 화면(z-[60])이 단어창(z-50)보다 위라, z 로 다투는 대신 이 창을 잠깐 숨긴다.
         //   단어창을 닫으면 closeWordModal 이 다시 열어주고, 거기서 고친 내용도 반영해서 다시 그린다.
-        let wordLinkHiddenForWordModal = false;
+        //   ⚠️ 연결창만 숨기면 그 뒤의 노트 수정창(z-50)이 남는데, 단어창도 z-50 이고
+        //      DOM 에서 수정창이 더 뒤라 수정창이 단어창을 덮는다. 그래서 둘 다 숨겼다 되돌린다.
+        let wordLinkHiddenModals = null;   // 숨겨둔 모달 id 목록 (되돌릴 것)
 
         function hideWordLinkForWordModal() {
-            const el = document.getElementById('word-link-modal');
-            if (!el || el.classList.contains('hidden')) return;
-            el.classList.add('hidden');
-            wordLinkHiddenForWordModal = true;
+            const ids = ['word-link-modal', 'grammar-editor-modal'];
+            const hidden = [];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.classList.contains('hidden')) { el.classList.add('hidden'); hidden.push(id); }
+            });
+            if (hidden.length) wordLinkHiddenModals = hidden;
         }
 
         // 단어창이 닫힐 때 vocab.js 의 closeWordModal 이 부른다
         function restoreWordLinkAfterWordModal() {
-            if (!wordLinkHiddenForWordModal) return false;
-            wordLinkHiddenForWordModal = false;
-            const el = document.getElementById('word-link-modal');
-            if (el && wordLinkState) el.classList.remove('hidden');
+            if (!wordLinkHiddenModals) return false;
+            wordLinkHiddenModals.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('hidden');
+            });
+            wordLinkHiddenModals = null;
             return true;
         }
 
