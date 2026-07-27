@@ -3014,11 +3014,9 @@ let vocabulary = [];
 
             document.getElementById('grammar-empty-msg')?.classList.toggle('hidden', tables.length > 0);
 
-            // [냐냐 PATCH] 정렬: 최신순 / 오래된순 / 주제순(오름차순)
+            // [냐냐 요청] 정렬: 최신순 / 오래된순 (주제순은 주제별 그룹으로 대체돼서 없앴다)
             if (grammarSortMode === 'newest') {
                 tables = [...tables].reverse();
-            } else if (grammarSortMode === 'topic') {
-                tables = [...tables].sort((a, b) => grammarTopicLabel(grammarTopicKey(a)).localeCompare(grammarTopicLabel(grammarTopicKey(b)), 'ko'));
             }
             // [냐냐 PATCH] 고정된 표를 맨 위로 정렬 (고정끼리는 정렬된 순서 유지)
             tables = [...tables].sort((a, b) => (pinnedGrammar[b.id] ? 1 : 0) - (pinnedGrammar[a.id] ? 1 : 0));
@@ -3028,7 +3026,7 @@ let vocabulary = [];
             const useGroups = !query && grammarFilterTopics.length === 0 && grammarFilterMastery === 'all';
             container.innerHTML = useGroups
                 ? renderGrammarGrouped(tables)
-                : tables.map(t => renderGrammarNoteCard(t, query)).join('');
+                : tables.map(t => renderGrammarNoteCard(t, query, true)).join('');
 
             // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
             if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
@@ -3072,7 +3070,8 @@ let vocabulary = [];
         }
 
         // [냐냐 요청] 노트 카드 하나 — 그룹 모드·일반 모드가 공유
-        function renderGrammarNoteCard(t, query) {
+        //   showTopicBadge: 그룹으로 안 묶일 때(검색·필터 중)만 카드에 주제를 적어준다
+        function renderGrammarNoteCard(t, query, showTopicBadge) {
                 // [냐냐 요청] 노트 = 블록 목록 — 글 블록과 표 블록을 저장된 순서 그대로 그린다
                 const blocksHtml = getNoteBlocks(t)
                     .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
@@ -3119,7 +3118,8 @@ let vocabulary = [];
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <span class="text-2xl shrink-0">${t.icon || '📋'}</span>
                                 <div class="min-w-0 flex-1">
-                                    ${grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-1 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
+                                    <!-- [냐냐 요청] 주제 배지는 그룹 헤더에 이미 있어서 뺐다 (그룹으로 안 묶이는 검색·필터 중에만 표시) -->
+                                    ${showTopicBadge && grammarTopicKey(t) !== GRAMMAR_OTHER_TOPIC ? (() => { const c = grammarTopicColor(grammarTopicKey(t)); return `<span class="inline-block mb-1 text-[10px] font-bold ${c.t} ${c.b} px-1.5 py-0.5 rounded-md">${escapeHtml(grammarTopicLabel(grammarTopicKey(t)))}</span>`; })() : ''}
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="font-extrabold text-slate-900 text-sm truncate">${escapeHtml(t.title || '(제목 없음)')}</span>
                                     </div>
@@ -3216,22 +3216,48 @@ let vocabulary = [];
 
         function expandAllGrammar(open) {
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
-            grammarAllExpanded = open;
+            grammarViewMode = open ? 'all-open' : 'default';
+            if (open) grammarGroupCollapsed = {};   // 다 펼칠 땐 접힌 주제도 열어준다
             renderGrammarTables();
-            syncGrammarExpandBtn();
         }
 
-        // [냐냐 요청] 단어장처럼 '펼치기 ↔ 접기' 아이콘 하나로 토글
-        let grammarAllExpanded = false;
+        // ============================================================
+        // [냐냐 요청] ⤢ 버튼 3단계 순환
+        //   default   : 주제만 펼침 (노트 제목 나열, 상세는 접힘)  ← 기본
+        //   all-open  : 노트 상세까지 전부 펼침
+        //   all-closed: 주제까지 전부 접음 (주제 줄만 남음)
+        // ============================================================
+        let grammarViewMode = 'default';
         function toggleExpandAllGrammar() {
-            expandAllGrammar(!grammarAllExpanded);
+            if (grammarViewMode === 'default') {
+                // → 노트 상세까지 전부 펼치기
+                getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = true; });
+                grammarGroupCollapsed = {};
+                grammarViewMode = 'all-open';
+            } else if (grammarViewMode === 'all-open') {
+                // → 주제까지 전부 접기
+                getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
+                getAllGrammarTables().forEach(t => { grammarGroupCollapsed[grammarTopicKey(t)] = true; });
+                grammarViewMode = 'all-closed';
+            } else {
+                // → 기본 (주제만 펼침)
+                getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
+                grammarGroupCollapsed = {};
+                grammarViewMode = 'default';
+            }
+            renderGrammarTables();
         }
         function syncGrammarExpandBtn() {
             const btn = document.getElementById('grammar-expand-all-btn');
             if (!btn) return;
-            btn.title = grammarAllExpanded ? '전체 접기' : '전체 펼치기';
+            const info = {
+                'default':    { tip: '노트 내용까지 전부 펼치기', icon: 'fa-solid fa-up-right-and-down-left-from-center' },
+                'all-open':   { tip: '주제까지 전부 접기',        icon: 'fa-solid fa-down-left-and-up-right-to-center' },
+                'all-closed': { tip: '주제 펼치기 (기본 보기)',   icon: 'fa-solid fa-list' }
+            }[grammarViewMode] || {};
+            btn.title = info.tip || '전체 펼치기';
             const icon = btn.querySelector('i');
-            if (icon) icon.className = grammarAllExpanded ? 'fa-solid fa-down-left-and-up-right-to-center' : 'fa-solid fa-up-right-and-down-left-from-center';
+            if (icon && info.icon) icon.className = info.icon;
         }
 
         // [냐냐 요청] 문법 목록 새로고침 (점수·약점 변동 반영) — 단어장 새로고침과 같은 역할
@@ -3454,7 +3480,7 @@ let vocabulary = [];
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
             else if (grammarFilterMastery === 'weak') chips.push('약점만');
-            const sortLabel = grammarSortMode === 'newest' ? '최신순' : (grammarSortMode === 'topic' ? '주제순' : '오래된순');
+            const sortLabel = grammarSortMode === 'newest' ? '최신순' : '오래된순';
             const filterPart = chips.length > 0
                 ? chips.map(c => `<span class="bg-violet-50 text-violet-600 font-bold px-2 py-0.5 rounded-full">${escapeHtml(c)}</span>`).join('')
                 : `<span class="text-slate-400">전체 표</span>`;
@@ -3474,7 +3500,9 @@ let vocabulary = [];
                 const f = JSON.parse(raw);
                 if (Array.isArray(f.topics)) grammarFilterTopics = f.topics;
                 if (f.mastery) grammarFilterMastery = f.mastery;
-                if (f.sort) grammarSortMode = f.sort;
+                // [냐냐 요청] '주제순' 정렬은 없앴다 (이제 주제별 그룹으로 묶이니까).
+                //   예전에 저장해둔 값이 남아 있으면 최신순으로 되돌린다.
+                if (f.sort) grammarSortMode = (f.sort === 'topic') ? 'newest' : f.sort;
             } catch (e) {}
         }
 
