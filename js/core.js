@@ -181,6 +181,7 @@ let vocabulary = [];
                 grammarTransUsed: grammarTransUsed,       // [냐냐 요청] 번역에서 써본 문법 (마스터 자격)
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
+                grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState
             };
@@ -293,6 +294,7 @@ let vocabulary = [];
                 grammarTransUsed = payload.grammarTransUsed || {};       // [냐냐 요청] 번역에서 써본 문법
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
+                grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
                     GRAMMAR_ICONS = payload.grammarTopics
@@ -316,6 +318,7 @@ let vocabulary = [];
                 grammarTransUsed = {};
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
+                grammarCellWords = {};
                 eggState = defaultEggState();
             }
 
@@ -2943,6 +2946,12 @@ let vocabulary = [];
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
+
+        // [냐냐 요청] 표 칸 ↔ 단어장 연결 {tableId: {"블록id:행-열": 단어id}}
+        //   칸 강조와 같은 방식으로 노트 바깥에 둔다 — 표를 편집해도 안 날아가고 동기화도 따라감.
+        //   ⚠️ 이 연결이 있는 칸만 빈칸 채점에서 단어 점수를 건드린다.
+        //      즉 "연결이 하나라도 있는 표 = 단어 시험" 이라 따로 켜고 끄는 스위치가 필요 없다.
+        let grammarCellWords = {};
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -3369,7 +3378,12 @@ let vocabulary = [];
                     const cellBg = cellHl[`${ri}-${ci}`] ? 'bg-[#ffe0ec]' : '';
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                     // 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
-                    const cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
+                    let cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
+                    // [냐냐 요청] 단어장과 이어둔 칸은 점선 밑줄로 티를 낸다 — 빈칸에서 틀리면 단어 점수도 움직이는 칸
+                    const linked = getCellWord(t.id, b.id, ri, ci);
+                    if (linked && !grammarWordLookupMode) {
+                        cellContent = `<span class="border-b-2 border-dotted border-violet-400" title="단어장 연결: ${escapeHtml(linked.word)}${linked.meaning ? ' — ' + escapeHtml(linked.meaning) : ''}">${cellContent}</span>`;
+                    }
                     return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}>${cellContent}</td>`;
                 }).join('');
                 return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
@@ -3948,6 +3962,8 @@ let vocabulary = [];
                         onkeydown="rtKeydown(event,'ge-rt-${bi}')" onpaste="rtPaste(event,'ge-rt-${bi}')" oninput="rtSyncState('ge-rt-${bi}')"
                         class="nyanya-rt-edit w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm"></div>` : `
                     <div class="flex justify-end gap-1">
+                        <!-- [냐냐 요청] 이 표의 칸을 단어장 단어에 이어두는 화면 (이어둔 칸만 빈칸 채점에서 단어 점수를 받음) -->
+                        <button type="button" onclick="openGrammarWordLink(${bi})" title="표 칸을 단어장 단어와 이어두기 — 단어 시험처럼 외우는 표에 쓰세요" class="mr-auto text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-link"></i> 단어 연결</button>
                         <button type="button" onclick="addGeHeaderRow(${bi})" title="헤더 줄을 맨 위에 추가 (최대 3줄)" class="text-[11px] font-bold bg-[#e8f2fb] text-[#2c5578] px-2 py-1 rounded-lg hover:bg-[#d8e9f7]"><i class="fa-solid fa-plus"></i> 헤더줄</button>
                         <button type="button" onclick="addGeColumn(${bi})" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button type="button" onclick="removeGeColumn(${bi})" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
@@ -5037,6 +5053,60 @@ let vocabulary = [];
             return out;
         }
 
+        // ── 칸 ↔ 단어 연결: 노트id → { "블록id:행-열": 단어id } ─────
+        function cellWordKey(blockId, ri, ci) { return `${blockId}:${ri}-${ci}`; }
+
+        function getCellWordId(tableId, blockId, ri, ci) {
+            const all = grammarCellWords[tableId];
+            return all ? (all[cellWordKey(blockId, ri, ci)] || null) : null;
+        }
+
+        // 연결된 단어 객체. 단어가 지워졌으면 연결도 같이 정리하고 null
+        function getCellWord(tableId, blockId, ri, ci) {
+            const id = getCellWordId(tableId, blockId, ri, ci);
+            if (!id) return null;
+            const w = vocabulary.find(v => v.id === id);
+            if (!w) { setCellWordLink(tableId, blockId, ri, ci, null); return null; }
+            return w;
+        }
+
+        function setCellWordLink(tableId, blockId, ri, ci, wordId) {
+            const key = cellWordKey(blockId, ri, ci);
+            if (!wordId) {
+                if (grammarCellWords[tableId]) {
+                    delete grammarCellWords[tableId][key];
+                    if (Object.keys(grammarCellWords[tableId]).length === 0) delete grammarCellWords[tableId];
+                }
+                return;
+            }
+            if (!grammarCellWords[tableId]) grammarCellWords[tableId] = {};
+            grammarCellWords[tableId][key] = wordId;
+        }
+
+        // 이 노트에 연결이 하나라도 있나 (= 단어 시험처럼 쓰는 표인가)
+        function noteHasCellWords(tableId) {
+            const all = grammarCellWords[tableId];
+            return !!(all && Object.keys(all).length);
+        }
+
+        // [냐냐 요청] 셀 텍스트 → 단어장 후보들 (하나만 고르지 않고 다 보여주고 고르게 한다)
+        //   findVocabWordByForm 은 vocabulary 순서상 먼저 걸리는 하나만 준다. 그래서 'frío' 가
+        //   freír(튀기다)의 1인칭 변형으로 잡히는 일이 생긴다 — 정확히 일치하는 걸 항상 앞에 둔다.
+        function findVocabCandidates(rawCell) {
+            const text = String(rawCell || '').trim();
+            if (!text || typeof normalizeSpanishAnswer !== 'function') return [];
+            const target = normalizeSpanishAnswer(text);
+            if (!target) return [];
+            const out = [];
+            const seen = new Set();
+            const push = (w) => { if (w && !seen.has(w.id)) { seen.add(w.id); out.push(w); } };
+            // 1순위: 표기가 그대로 일치 (관사 차이는 normalizeSpanishAnswer 가 이미 흡수한다)
+            vocabulary.forEach(v => { if (normalizeSpanishAnswer(v.word) === target) push(v); });
+            // 2순위: 변형형 역추적 (동사 활용·복수형·형용사 성수)
+            if (typeof findVocabWordByForm === 'function') push(findVocabWordByForm(text));
+            return out;
+        }
+
         function setNoteCellHighlights(tableId, blockId, map) {
             migrateCellHighlightKeys(tableId);
             const all = grammarCellHighlights[tableId] || {};
@@ -5044,6 +5114,163 @@ let vocabulary = [];
             Object.keys(map || {}).forEach(k => { all[`${blockId}:${k}`] = true; });
             if (Object.keys(all).length) grammarCellHighlights[tableId] = all;
             else delete grammarCellHighlights[tableId];
+        }
+
+        // ============================================================
+        // [냐냐 요청] 단어 연결 — 표의 스페인어 칸을 단어장 단어에 미리 이어둔다
+        //   여기서 이어둔 칸만 빈칸 채점에서 단어 점수를 받는다. 채점하는 순간에 글자로
+        //   추측하지 않는 게 핵심 — 'frío' 가 freír(튀기다)로 잡히는 사고를 여기서 막는다.
+        // ============================================================
+        let wordLinkState = null; // { tableId, blockId, title, cells:[{ri,ci,text,rowLabel,colHeader}] }
+
+        // 스페인어 칸만 고른다 — 한글이 들어간 칸(뜻 열)과 빈 칸은 뺀다
+        function isSpanishCell(text) {
+            const s = String(text || '').trim();
+            if (!s) return false;
+            if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(s)) return false;
+            return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(s);
+        }
+
+        function openGrammarWordLink(bi) {
+            const s = grammarEditorState;
+            const b = geBlock(bi);
+            if (!s || !b || b.type !== 'table') return;
+            const hlCols = b.highlightCols || [0];
+            const cells = [];
+            (b.rows || []).forEach((row, ri) => {
+                (row || []).forEach((c, ci) => {
+                    if (!isSpanishCell(c)) return;
+                    cells.push({
+                        ri, ci, text: String(c).trim(),
+                        rowLabel: (row[hlCols[0]] || '').toString().trim(),
+                        colHeader: (typeof grammarColumnLabel === 'function') ? grammarColumnLabel(b, ci) : ''
+                    });
+                });
+            });
+            wordLinkState = { tableId: s.id, blockId: b.id, title: s.title || '(제목 없음)', cells };
+            renderGrammarWordLink();
+            document.getElementById('word-link-modal').classList.remove('hidden');
+        }
+
+        function closeGrammarWordLink() {
+            document.getElementById('word-link-modal').classList.add('hidden');
+            wordLinkState = null;
+            renderGrammarTables();   // 조회 화면의 연결 표시 갱신
+        }
+
+        function renderGrammarWordLink() {
+            const st = wordLinkState;
+            const box = document.getElementById('word-link-list');
+            const sum = document.getElementById('word-link-summary');
+            if (!st || !box) return;
+
+            if (!st.cells.length) {
+                box.innerHTML = `<p class="text-center text-sm text-slate-400 py-8">이 표에는 이어줄 스페인어 칸이 없어요.<br><span class="text-xs">한글만 있는 칸과 빈 칸은 목록에서 빠져요.</span></p>`;
+                if (sum) sum.innerHTML = '';
+                return;
+            }
+
+            let linked = 0, candidate = 0, missing = 0;
+            box.innerHTML = st.cells.map((c, i) => {
+                const cur = getCellWord(st.tableId, st.blockId, c.ri, c.ci);
+                const cands = findVocabCandidates(c.text);
+                if (cur) linked++; else if (cands.length) candidate++; else missing++;
+
+                const where = [c.rowLabel && c.rowLabel !== c.text ? c.rowLabel : '', c.colHeader].filter(Boolean).join(' · ');
+                const left = `
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-extrabold text-slate-800 truncate">${escapeHtml(c.text)}</div>
+                        ${where ? `<div class="text-[10px] text-slate-400 truncate">${escapeHtml(where)}</div>` : ''}
+                    </div>`;
+
+                let right;
+                if (cur) {
+                    right = `
+                        <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg truncate max-w-[45%]" title="${escapeHtml(cur.meaning || '')}">
+                            <i class="fa-solid fa-link text-[9px]"></i> ${escapeHtml(cur.word)}
+                        </span>
+                        <button type="button" onclick="wordLinkUnset(${i})" title="연결 해제" class="w-7 h-7 shrink-0 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"><i class="fa-solid fa-link-slash text-xs"></i></button>`;
+                } else if (cands.length) {
+                    const opts = cands.map(w => `<option value="${w.id}">${escapeHtml(w.word)} — ${escapeHtml((w.meaning || '').slice(0, 20))}</option>`).join('');
+                    right = `
+                        <select id="word-link-sel-${i}" class="min-w-0 max-w-[45%] bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">${opts}</select>
+                        <button type="button" onclick="wordLinkSet(${i})" class="shrink-0 text-[11px] font-bold bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1.5 rounded-lg transition-all active:scale-95">연결</button>`;
+                } else {
+                    right = `
+                        <span class="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg shrink-0">단어장에 없음</span>
+                        <button type="button" onclick="wordLinkAddWord(${i})" class="shrink-0 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg transition-all active:scale-95"><i class="fa-solid fa-plus"></i> 추가</button>`;
+                }
+
+                return `<div class="flex items-center gap-2 px-3 py-2 rounded-xl border ${cur ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'}">${left}${right}</div>`;
+            }).join('');
+
+            if (sum) {
+                sum.innerHTML = `
+                    <div class="flex flex-wrap gap-1.5 text-[11px] font-bold">
+                        <span class="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">연결됨 ${linked}</span>
+                        <span class="px-2 py-1 rounded-lg bg-violet-100 text-violet-700">후보 있음 ${candidate}</span>
+                        <span class="px-2 py-1 rounded-lg bg-amber-100 text-amber-700">단어장에 없음 ${missing}</span>
+                    </div>`;
+            }
+        }
+
+        function wordLinkSet(i) {
+            const st = wordLinkState; if (!st) return;
+            const c = st.cells[i];
+            const sel = document.getElementById('word-link-sel-' + i);
+            if (!c || !sel || !sel.value) return;
+            setCellWordLink(st.tableId, st.blockId, c.ri, c.ci, sel.value);
+            saveToStorage();
+            renderGrammarWordLink();
+        }
+
+        function wordLinkUnset(i) {
+            const st = wordLinkState; if (!st) return;
+            const c = st.cells[i]; if (!c) return;
+            setCellWordLink(st.tableId, st.blockId, c.ri, c.ci, null);
+            saveToStorage();
+            renderGrammarWordLink();
+        }
+
+        // 후보가 하나뿐인 칸만 자동으로 잇는다. 여러 개면 어느 걸 고를지 사람이 정해야 하니 건너뛴다
+        function wordLinkAutoAll() {
+            const st = wordLinkState; if (!st) return;
+            let n = 0, skipped = 0;
+            st.cells.forEach(c => {
+                if (getCellWordId(st.tableId, st.blockId, c.ri, c.ci)) return;
+                const cands = findVocabCandidates(c.text);
+                if (cands.length === 1) { setCellWordLink(st.tableId, st.blockId, c.ri, c.ci, cands[0].id); n++; }
+                else if (cands.length > 1) skipped++;
+            });
+            saveToStorage();
+            renderGrammarWordLink();
+            showToast(n ? `${n}개를 이었어요!${skipped ? ` (후보가 여러 개인 ${skipped}개는 직접 골라주세요)` : ''}` : "자동으로 이을 게 없어요", n ? "success" : "info");
+        }
+
+        function wordLinkClearAll() {
+            const st = wordLinkState; if (!st) return;
+            showConfirm("이 표의 연결을 전부 해제할까요?", "단어 점수는 그대로 두고 연결만 끊어요. 다시 이으면 돼요!", () => {
+                st.cells.forEach(c => setCellWordLink(st.tableId, st.blockId, c.ri, c.ci, null));
+                saveToStorage();
+                renderGrammarWordLink();
+                showToast("연결을 전부 해제했어요", "info");
+            });
+        }
+
+        // 단어장에 없는 칸 → 등록창을 열어준다 (돋보기의 등록 흐름을 그대로 씀).
+        //   등록을 마치고 '다시 찾기'를 누르면 후보로 잡힌다
+        function wordLinkAddWord(i) {
+            const st = wordLinkState; if (!st) return;
+            const c = st.cells[i]; if (!c) return;
+            openWordModal();
+            _skipContinueRegisterPrompt = true;
+            const input = document.getElementById('input-word');
+            if (input) {
+                input.value = c.text;
+                if (typeof handleWordInput === 'function') handleWordInput(c.text);
+            }
+            setTimeout(() => { if (typeof triggerAiAutofill === 'function') triggerAiAutofill(); }, 250);
+            showToast("등록을 마치면 '다시 찾기'를 눌러주세요!", "info");
         }
 
         // ── 편집기: 우클릭 메뉴 / 병합 / 분리 ──────────────────────
@@ -5292,6 +5519,7 @@ let vocabulary = [];
                     if (masteredGrammar[id]) { delete masteredGrammar[id]; if (typeof logAction === 'function') logAction('undo-new-grammar-mastered'); }
                     delete grammarScores[id];        // [냐냐 요청] 점수·마스터 자격도 같이 정리
                     delete grammarTransUsed[id];
+                    delete grammarCellWords[id];     // [냐냐 요청] 단어 연결도 정리
                     if (typeof logAction === 'function') logAction('undo-new-grammar');
                     renderGrammarTables();
                     await saveToStorage();

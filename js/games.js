@@ -1601,6 +1601,30 @@ Return JSON only, no markdown.`;
             gfillState.lastUnmastered = unmastered;
             gfillState.lastScoreDelta = gDelta;
 
+            // [냐냐 요청] '단어 연결'이 된 칸은 단어 점수도 같이 움직인다 — 단어 빈칸과 같은 +0.7 / -0.5.
+            //   연결이 없는 칸은 안 건드린다. 문법 구조 표(소유형용사·목적격 대명사 등)는 연결을
+            //   안 해두니까 자동으로 제외되고, 단어 시험처럼 쓰는 표만 반영된다.
+            gfillState.lastWordScores = [];
+            if (typeof getCellWord === 'function' && typeof addWordScore === 'function') {
+                const acc = {};   // {단어id: {w, delta, allCorrect}}
+                detail.forEach(d => {
+                    const blk = blocks[d.bi];
+                    if (!blk || blk.type !== 'table') return;
+                    const w = getCellWord(t.id, blk.id, d.ri, d.ci);
+                    if (!w) return;
+                    const a = acc[w.id] || (acc[w.id] = { w, delta: 0, allCorrect: true });
+                    a.delta += d.correct ? 0.7 : -0.5;
+                    if (!d.correct) a.allCorrect = false;
+                });
+                Object.keys(acc).forEach(id => {
+                    const a = acc[id];
+                    a.delta = Math.round(a.delta * 100) / 100;
+                    // 스페인어 칸을 직접 써서 맞혔으면 주관식 정답 → 마스터 자격 (addWordScore 는 정답일 때만 반영)
+                    addWordScore(id, a.delta, { correct: a.allCorrect, subjective: true });
+                    gfillState.lastWordScores.push({ word: a.w.word, delta: a.delta });
+                });
+            }
+
             if (typeof logAction === 'function') logAction('review');
 
             applyGrammarFillResults(detail);
@@ -1637,7 +1661,15 @@ Return JSON only, no markdown.`;
                 const hintBanner = (gfillState && gfillState.hintUsed)
                     ? `<div class="bg-slate-50 border border-slate-200 text-slate-500 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5"><i class="fa-solid fa-eye"></i> 이 문제는 <b>힌트를 봤어요.</b></div>`
                     : '';
-                fb.innerHTML = scoreBanner + unmasterBanner + hintBanner + detail.map(d => {
+                // [냐냐 요청] 단어 연결이 된 칸이 있었으면 어느 단어가 얼마나 움직였는지도 알려준다
+                const ws = (gfillState && gfillState.lastWordScores) || [];
+                const wordBanner = ws.length
+                    ? `<div class="bg-violet-50 border border-violet-200 text-violet-700 rounded-xl px-3 py-2 text-[11px] font-bold mb-1.5">
+                        <i class="fa-solid fa-link"></i> 이어둔 단어 점수도 반영했어요 —
+                        ${ws.map(x => `${escapeHtml(x.word)} <b>${x.delta > 0 ? '+' : ''}${x.delta}</b>`).join(' · ')}
+                       </div>`
+                    : '';
+                fb.innerHTML = scoreBanner + wordBanner + unmasterBanner + hintBanner + detail.map(d => {
                     const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
                     const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
