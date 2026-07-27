@@ -775,9 +775,10 @@
         function closeWordModal() {
             document.getElementById('word-modal').classList.add('hidden');
             hideAiLoadingOverlay();
-            // [냐냐 요청] 단어 연결 화면 위에서 단어창을 열었던 경우 — 방금 고치거나 새로 등록한 걸 바로 반영
-            if (typeof wordLinkState !== 'undefined' && wordLinkState && typeof renderGrammarWordLink === 'function') {
-                renderGrammarWordLink();
+            // [냐냐 요청] 단어 연결 화면에서 열었던 경우 — 숨겨뒀던 그 화면을 다시 띄우고,
+            //   방금 고치거나 새로 등록한 내용을 반영해서 다시 그린다
+            if (typeof restoreWordLinkAfterWordModal === 'function' && restoreWordLinkAfterWordModal()) {
+                if (typeof renderGrammarWordLink === 'function') renderGrammarWordLink();
             }
         }
 

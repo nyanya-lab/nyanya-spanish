@@ -5218,10 +5218,30 @@ let vocabulary = [];
             }
         }
 
-        // [냐냐 요청] 어떤 단어인지 확인 — 단어창을 그대로 띄운다 (연결 화면은 z-40 이라 뒤에 남는다).
-        //   단어창을 닫으면 연결 화면이 그대로 보이고, 거기서 뜻을 고쳤어도 다시 그려서 반영한다
+        // [냐냐 요청] 어떤 단어인지 확인 — 단어창을 띄운다.
+        //   연결 화면(z-[60])이 단어창(z-50)보다 위라, z 로 다투는 대신 이 창을 잠깐 숨긴다.
+        //   단어창을 닫으면 closeWordModal 이 다시 열어주고, 거기서 고친 내용도 반영해서 다시 그린다.
+        let wordLinkHiddenForWordModal = false;
+
+        function hideWordLinkForWordModal() {
+            const el = document.getElementById('word-link-modal');
+            if (!el || el.classList.contains('hidden')) return;
+            el.classList.add('hidden');
+            wordLinkHiddenForWordModal = true;
+        }
+
+        // 단어창이 닫힐 때 vocab.js 의 closeWordModal 이 부른다
+        function restoreWordLinkAfterWordModal() {
+            if (!wordLinkHiddenForWordModal) return false;
+            wordLinkHiddenForWordModal = false;
+            const el = document.getElementById('word-link-modal');
+            if (el && wordLinkState) el.classList.remove('hidden');
+            return true;
+        }
+
         function wordLinkPeek(wordId) {
             if (!wordId) return;
+            hideWordLinkForWordModal();
             openWordModal(wordId);
             _skipContinueRegisterPrompt = true;   // 확인하러 연 거라 '계속 등록?' 은 안 물어봄
         }
@@ -5279,6 +5299,7 @@ let vocabulary = [];
         function wordLinkAddWord(i) {
             const st = wordLinkState; if (!st) return;
             const c = st.cells[i]; if (!c) return;
+            hideWordLinkForWordModal();
             openWordModal();
             _skipContinueRegisterPrompt = true;
             const input = document.getElementById('input-word');

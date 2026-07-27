@@ -1635,9 +1635,9 @@
     </div>
 
     <!-- [냐냐 요청] 단어 연결 — 표 칸을 단어장 단어에 미리 이어두는 화면 -->
-    <!-- z-40 인 이유: 여기서 단어창(word-modal, z-50)을 열면 그게 위로 와야 한다.
-         같은 z-50 이면 DOM 순서상 이 모달이 뒤에 있어서 단어창이 뒤로 깔린다 -->
-    <div id="word-link-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <!-- 노트 수정창(z-50) 위에서 열리므로 z-[60] (이 앱의 '모달 위 모달' 관례).
+         여기서 단어창(z-50)을 열 때는 z 로 다투지 않고 이 창을 잠깐 숨겼다가 되돌린다 -->
+    <div id="word-link-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-extrabold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-link text-violet-500"></i> 단어 연결</h3>
@@ -1659,7 +1659,8 @@
         </div>
     </div>
 
-    <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <!-- 확인창은 어떤 모달 위에서도 떠야 하므로 항상 맨 위 -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center space-y-4">
             <div id="confirm-modal-icon-box" class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto">
                 <i id="confirm-modal-icon" class="fa-solid fa-triangle-exclamation"></i>
