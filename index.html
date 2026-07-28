@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260728e">
+    <link rel="stylesheet" href="css/style.css?v=20260728g">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1652,21 +1652,30 @@
     <!-- 노트 수정창(z-50) 위에서 열리므로 z-[60] (이 앱의 '모달 위 모달' 관례).
          여기서 단어창(z-50)을 열 때는 z 로 다투지 않고 이 창을 잠깐 숨겼다가 되돌린다 -->
     <div id="word-link-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-extrabold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-link text-violet-500"></i> 단어 연결</h3>
-                <button onclick="closeGrammarWordLink()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        <!-- [냐냐 요청] 표는 붙박이로 두고 아래 목록만 스크롤한다.
+             표의 뜻과 목록을 번갈아 보며 이어줘야 하는데 같이 움직이면 비교가 안 됐다. -->
+        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl max-h-[90vh] flex flex-col">
+            <!-- 고정 구역 -->
+            <div class="shrink-0 p-6 pb-3 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-extrabold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-link text-violet-500"></i> 단어 연결</h3>
+                    <button onclick="closeGrammarWordLink()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <details class="text-xs text-slate-400 leading-relaxed">
+                    <summary class="cursor-pointer text-slate-400 hover:text-slate-600 font-bold select-none">이어두면 어떻게 되나요?</summary>
+                    <p class="pt-1.5">
+                        이 표의 칸을 단어장 단어에 이어두면, <b>빈칸 채우기에서 그 칸을 틀렸을 때 단어 점수도 같이 움직여요</b> (맞으면 +1.5 / 틀리면 −2 — 단어 빈칸보다 세요).
+                        이어두지 않은 칸은 지금처럼 문법 점수만 받아요. 그래서 <b>단어 시험처럼 외우는 표에만</b> 이어주면 돼요.
+                        후보가 여러 개면 직접 골라주세요 — 예를 들어 <b>frío</b> 는 <b>freír(튀기다)</b> 의 변형이기도 하거든요.
+                    </p>
+                </details>
+                <!-- 표는 여기 붙박이 (목록을 내려도 안 움직임) -->
+                <div id="word-link-table" class="max-h-[38vh] overflow-auto"></div>
+                <div id="word-link-summary"></div>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                이 표의 칸을 단어장 단어에 이어두면, <b>빈칸 채우기에서 그 칸을 틀렸을 때 단어 점수도 같이 움직여요</b> (맞으면 +1.5 / 틀리면 −2 — 단어 빈칸보다 세요).
-                이어두지 않은 칸은 지금처럼 문법 점수만 받아요. 그래서 <b>단어 시험처럼 외우는 표에만</b> 이어주면 돼요.
-                후보가 여러 개면 직접 골라주세요 — 예를 들어 <b>frío</b> 는 <b>freír(튀기다)</b> 의 변형이기도 하거든요.
-            </p>
-            <!-- 표를 같이 보여준다 — 창을 옆으로 밀지 않아도 어떤 칸을 잇는 중인지 보이게 -->
-            <div id="word-link-table" class="max-h-[38vh] overflow-auto"></div>
-            <div id="word-link-summary"></div>
-            <div id="word-link-list" class="space-y-2"></div>
-            <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <!-- 여기만 스크롤 -->
+            <div id="word-link-list" class="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-2"></div>
+            <div class="shrink-0 flex flex-wrap gap-2 p-6 pt-3 border-t border-slate-100">
                 <button type="button" onclick="wordLinkAutoAll()" class="flex-1 min-w-[120px] py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 후보 하나뿐인 것 자동 연결</button>
                 <!-- 단어장에 없는 칸: '고르기' 를 켠 것만 차례로 등록한다 (전부 등록은 일부러 없음) -->
                 <button type="button" onclick="startWordLinkBulkRegister()" class="py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-all active:scale-95"><i class="fa-solid fa-plus mr-1"></i> 고른 것 등록</button>
@@ -1927,13 +1936,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260728e"></script>
-    <script src="js/creatures.js?v=20260728e"></script>
-    <script src="js/core.js?v=20260728e"></script>
-    <script src="js/vocab.js?v=20260728e"></script>
-    <script src="js/flashcards.js?v=20260728e"></script>
-    <script src="js/quiz.js?v=20260728e"></script>
-    <script src="js/games.js?v=20260728e"></script>
-    <script src="js/ai-feedback.js?v=20260728e"></script>
+    <script src="js/dictionary-data.js?v=20260728g"></script>
+    <script src="js/creatures.js?v=20260728g"></script>
+    <script src="js/core.js?v=20260728g"></script>
+    <script src="js/vocab.js?v=20260728g"></script>
+    <script src="js/flashcards.js?v=20260728g"></script>
+    <script src="js/quiz.js?v=20260728g"></script>
+    <script src="js/games.js?v=20260728g"></script>
+    <script src="js/ai-feedback.js?v=20260728g"></script>
 </body>
 </html>

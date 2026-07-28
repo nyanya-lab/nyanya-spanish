@@ -5614,7 +5614,16 @@ let vocabulary = [];
         function wordLinkFocusCell(i) {
             const el = document.getElementById('word-link-row-' + i);
             if (!el) return;
-            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            // 목록 칸 안에서 그 줄이 가운데 오게 직접 계산한다.
+            //   scrollIntoView 는 스크롤 상자가 여럿일 때 엉뚱한 걸 움직이거나 아예 안 먹는 경우가 있다
+            const box = document.getElementById('word-link-list');
+            if (box) {
+                const r = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+                const top = box.scrollTop + (r.top - br.top) - (box.clientHeight - r.height) / 2;
+                box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+            } else {
+                el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
             // 테두리는 인라인으로 — CDN Tailwind 라 나중에 붙인 클래스는 안 만들어질 수 있다
             el.style.outline = '2px solid #8b5cf6';
             el.style.outlineOffset = '2px';
