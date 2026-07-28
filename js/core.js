@@ -4682,17 +4682,63 @@ let vocabulary = [];
         }
 
         // 소제목 — 이미 소제목이면 일반 문단으로 되돌림 (토글)
+        //   ⚠️ execCommand('formatBlock') 을 쓰면 글머리 목록 안에서 <li> 가 아니라 <ul> 전체를
+        //      <h4> 로 감싸버리고, 그 뒤엔 다시 눌러도 안 벗겨졌다 (h4 안에 div 만 하나 더 생김).
+        //      들여쓴 소제목을 풀 때 rt-in* 이 사라지는 문제도 있었다. 그래서 직접 바꾼다.
+
+        // 커서가 놓인 '한 줄'에 해당하는 요소 (목록 줄이면 li)
+        function rtLineBlock(id) {
+            const el = document.getElementById(id);
+            const sel = window.getSelection();
+            if (!el || !sel || !sel.rangeCount) return null;
+            let n = sel.anchorNode;
+            if (n && n.nodeType === 3) n = n.parentNode;
+            while (n && n !== el) {
+                if (n.nodeType === 1 && ['LI', 'H4', 'DIV', 'P'].includes(n.tagName)) return n;
+                n = n.parentNode;
+            }
+            return null;
+        }
+
         function rtHeading(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
-            const sel = window.getSelection();
-            let node = sel && sel.anchorNode;
-            let isH = false;
-            while (node && node !== el) {
-                if (node.nodeType === 1 && node.tagName === 'H4') { isH = true; break; }
-                node = node.parentNode;
+            const block = rtLineBlock(id);
+            if (!block) return;
+
+            const moveKids = (from, to) => { while (from.firstChild) to.appendChild(from.firstChild); };
+            const caretEnd = (node) => {
+                const r = document.createRange();
+                r.selectNodeContents(node); r.collapse(false);
+                const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            };
+
+            if (block.tagName === 'H4') {
+                const li = (block.parentNode && block.parentNode.tagName === 'LI') ? block.parentNode : null;
+                if (li) {                       // 목록 줄이면 li 안으로 그냥 풀어준다
+                    moveKids(block, li);
+                    block.remove();
+                    caretEnd(li);
+                } else {
+                    const div = document.createElement('div');
+                    if (block.className) div.className = block.className;   // 들여쓰기(rt-in*) 유지
+                    moveKids(block, div);
+                    block.parentNode.replaceChild(div, block);
+                    caretEnd(div);
+                }
+            } else if (block.tagName === 'LI') {
+                // 목록 줄은 li 를 그대로 두고 안쪽만 소제목으로 (li 를 h4 로 바꾸면 목록이 깨진다)
+                const h = document.createElement('h4');
+                moveKids(block, h);
+                block.appendChild(h);
+                caretEnd(h);
+            } else {
+                const h = document.createElement('h4');
+                if (block.className) h.className = block.className;         // 들여쓰기 유지
+                moveKids(block, h);
+                block.parentNode.replaceChild(h, block);
+                caretEnd(h);
             }
-            try { document.execCommand('formatBlock', false, isH ? 'div' : 'h4'); } catch (e) {}
             rtSyncState(id);
         }
 
@@ -5257,19 +5303,22 @@ let vocabulary = [];
         }
 
         // [냐냐 요청] 노트 카드에 보여줄 '살아있는' 연결 수.
-        //   저장된 키에는 칸이 지워졌거나(표 블록을 다시 만든 경우) 단어가 삭제된 것도 섞여 있다.
-        //   그대로 세면 연결창의 '연결됨 N' 과 숫자가 어긋나서, 실제로 남아 있는 것만 센다.
+        //   저장된 키에는 칸이 지워졌거나 단어가 삭제된 것도 섞일 수 있어서 남아 있는 것만 센다.
+        //   ⚠️ 반드시 getNoteBlocks 로 봐야 한다. t.blocks 를 직접 보면 옛 형식 노트
+        //      (표가 t.rows 에 있고 블록 id 가 'legacy-table')를 통째로 못 읽어서
+        //      멀쩡한 연결을 죽은 것으로 세어버린다.
         function noteCellWordCount(t) {
             const all = t && grammarCellWords[t.id];
             if (!all) return 0;
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
             const ids = new Set(vocabulary.map(v => v.id));
             let n = 0;
             Object.keys(all).forEach(k => {
                 if (!ids.has(all[k])) return;                    // 단어가 지워짐
                 const i = k.indexOf(':');
-                if (i < 0) return;
-                const blockId = k.slice(0, i), rc = k.slice(i + 1).split('-');
-                const blk = (t.blocks || []).find(b => b.id === blockId);
+                const blockId = (i < 0) ? LEGACY_TABLE_BLOCK_ID : k.slice(0, i);
+                const rc = (i < 0 ? k : k.slice(i + 1)).split('-');
+                const blk = blocks.find(b => b.id === blockId);
                 const row = blk && (blk.rows || [])[+rc[0]];
                 const cell = row && row[+rc[1]];
                 if (cell !== undefined && cell !== null && String(cell).trim() !== '') n++;   // 칸이 남아있음
