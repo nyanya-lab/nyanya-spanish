@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260728c">
+    <link rel="stylesheet" href="css/style.css?v=20260728d">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1291,10 +1291,7 @@
                             <button id="grammar-lookup-btn" onclick="toggleGrammarWordLookup()" title="🔍 단어 찾기 (표 안의 단어를 눌러 단어장으로)" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                 <i class="fa-solid fa-magnifying-glass"></i>
                             </button>
-                            <!-- [냐냐 요청] 주제 관리 (단어장엔 없는 문법 전용) -->
-                            <button onclick="openTopicManager()" title="주제 관리" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
-                                <i class="fa-solid fa-tags text-violet-500"></i>
-                            </button>
+                            <!-- [냐냐 요청] 주제 관리 버튼은 맨 윗줄이 복잡해져서 노트 편집기의 '주제' 옆으로 옮겼다 -->
                             <!-- 새로 만들기 (단어장의 + 등록과 같은 자리·모양) -->
                             <button onclick="openGrammarEditor()" title="새로 만들기" class="flex-1 sm:flex-initial sm:w-10 h-10 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
                                 <i class="fa-solid fa-plus"></i>
@@ -1599,10 +1596,16 @@
 
             <div class="space-y-1">
                 <label class="block text-xs font-bold text-slate-500">주제</label>
-                <select id="ge-icon" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    <!-- 주제 옵션이 JS로 채워짐 (value=아이콘) -->
-                </select>
-                <p class="text-[10px] text-slate-400">주제는 <b>주제 관리</b>에서 추가·수정할 수 있어요.</p>
+                <!-- [냐냐 요청] 주제를 고르다 '없네' 싶을 때 바로 추가할 수 있게 옆에 관리 버튼을 뒀다 -->
+                <div class="flex gap-2">
+                    <select id="ge-icon" class="flex-1 min-w-0 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500">
+                        <!-- 주제 옵션이 JS로 채워짐 (value=아이콘) -->
+                    </select>
+                    <button type="button" onclick="openTopicManager()" title="주제 관리 (추가·이름 변경·순서)" class="shrink-0 w-11 h-11 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm transition-all flex items-center justify-center">
+                        <i class="fa-solid fa-tags text-violet-500"></i>
+                    </button>
+                </div>
+                <p class="text-[10px] text-slate-400">옆의 <b>🏷 버튼</b>에서 주제를 추가·수정할 수 있어요.</p>
             </div>
 
             <div class="space-y-1">
@@ -1924,13 +1927,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260728c"></script>
-    <script src="js/creatures.js?v=20260728c"></script>
-    <script src="js/core.js?v=20260728c"></script>
-    <script src="js/vocab.js?v=20260728c"></script>
-    <script src="js/flashcards.js?v=20260728c"></script>
-    <script src="js/quiz.js?v=20260728c"></script>
-    <script src="js/games.js?v=20260728c"></script>
-    <script src="js/ai-feedback.js?v=20260728c"></script>
+    <script src="js/dictionary-data.js?v=20260728d"></script>
+    <script src="js/creatures.js?v=20260728d"></script>
+    <script src="js/core.js?v=20260728d"></script>
+    <script src="js/vocab.js?v=20260728d"></script>
+    <script src="js/flashcards.js?v=20260728d"></script>
+    <script src="js/quiz.js?v=20260728d"></script>
+    <script src="js/games.js?v=20260728d"></script>
+    <script src="js/ai-feedback.js?v=20260728d"></script>
 </body>
 </html>
