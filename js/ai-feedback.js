@@ -764,7 +764,7 @@
                 //   AI 코멘트는 아래 학습 팁·교정 표시와 겹쳐서 뺐다.
                 //   해석이 안 왔을 때만 박스가 비지 않게 코멘트로 대신한다 (feedback.message 는 Q&A 에 계속 쓰임)
                 coachMsg.innerHTML = feedback.userTranslation
-                    ? `<div class="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 text-sm"><span class="block text-[11px] text-sky-500 font-bold mb-0.5">💬 냐냐님이 쓴 문장의 실제 뜻</span><span class="text-slate-700 font-semibold">${feedback.userTranslation}</span></div>`
+                    ? `<span class="text-[11px] font-bold text-sky-500">💬 쓴 문장의 실제 뜻</span> <span class="font-semibold text-slate-800">${feedback.userTranslation}</span>`
                     : `<span>${feedback.message}</span>`;
 
                 resetBreakdown(breakdownGrid);
@@ -1606,7 +1606,7 @@ ${refGrammar}${refWords}
                 // [냐냐 PATCH] AI 코멘트 위에 '냐냐님 문장의 추정 해석' 표시 (의도 확인용)
                 // [냐냐 요청] 코멘트 박스엔 '추정 해석'만 남긴다 (위 질문 답변 화면과 같은 이유)
                 coachMsg.innerHTML = feedback.interpretation
-                    ? `<div class="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 text-sm"><span class="block text-[11px] text-sky-500 font-bold mb-0.5">📝 냐냐님 문장의 추정 해석</span><span class="text-slate-700 font-semibold">${feedback.interpretation}</span></div>`
+                    ? `<span class="text-[11px] font-bold text-sky-500">📝 추정 해석</span> <span class="font-semibold text-slate-800">${feedback.interpretation}</span>`
                     : `<span>${feedback.message}</span>`;
                 
                 resetBreakdown(breakdownGrid);
