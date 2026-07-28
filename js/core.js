@@ -5511,11 +5511,17 @@ let vocabulary = [];
         // ============================================================
         let wordLinkState = null; // { tableId, blockId, title, cells:[{ri,ci,text,rowLabel,colHeader}] }
 
+        // [냐냐 요청] 한 글자짜리 스페인어 낱말 — 전치사 a, 접속사 y·o·e·u.
+        //   2글자 이상만 받던 탓에 'a' 가 단어장에 있는데도 연결 목록에 아예 안 떴다.
+        //   아무 한 글자나 받으면 표의 기호·약자까지 딸려오니 실제로 쓰는 낱말만 허용한다.
+        const SINGLE_LETTER_ES = new Set(['a', 'y', 'o', 'e', 'u']);
+
         // 스페인어 칸만 고른다 — 한글이 들어간 칸(뜻 열)과 빈 칸은 뺀다
         function isSpanishCell(text) {
             const s = String(text || '').trim();
             if (!s) return false;
             if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(s)) return false;
+            if (SINGLE_LETTER_ES.has(s.toLowerCase())) return true;
             return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(s);
         }
 
