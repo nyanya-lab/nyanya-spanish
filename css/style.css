@@ -137,6 +137,15 @@ html {
         .nyanya-rt .rt-in2, .nyanya-rt-edit .rt-in2 { padding-left: calc(var(--rt-marker) + var(--rt-gap) + var(--rt-indent)); }
         .nyanya-rt .rt-in3, .nyanya-rt-edit .rt-in3 { padding-left: calc(var(--rt-marker) + var(--rt-gap) + 2 * var(--rt-indent)); }
 
+        /* [냐냐 요청] Ctrl+클릭으로 찍어둔 줄 — 서식 버튼이 찍힌 줄 전부에 적용된다.
+           브라우저가 여러 줄 동시 선택을 지원하지 않아서 직접 표시한다.
+           이 표시는 편집 중에만 쓰고 저장할 땐 떼어낸다 (rtStripMarks) */
+        .nyanya-rt-edit .rt-picked {
+            background: rgba(139, 92, 246, 0.14);
+            box-shadow: inset 3px 0 0 #8b5cf6;
+            border-radius: 4px;
+        }
+
         /* 소제목 */
         .nyanya-rt h4, .nyanya-rt-edit h4 {
             font-size: 1.02em;

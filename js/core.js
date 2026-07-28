@@ -4013,6 +4013,7 @@ let vocabulary = [];
                     <div id="ge-rt-${bi}" contenteditable="true" spellcheck="false"
                         data-placeholder="내용을 자유롭게 적어보세요"
                         onkeydown="rtKeydown(event,'ge-rt-${bi}')" onpaste="rtPaste(event,'ge-rt-${bi}')" oninput="rtSyncState('ge-rt-${bi}')"
+                        onclick="rtEditorClick(event,'ge-rt-${bi}')" title="Ctrl+클릭으로 줄을 여러 개 고를 수 있어요"
                         class="nyanya-rt-edit w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm"></div>` : `
                     <div class="flex justify-end gap-1">
                         <!-- [냐냐 요청] 이 표의 칸을 단어장 단어에 이어두는 화면 (이어둔 칸만 빈칸 채점에서 단어 점수를 받음) -->
@@ -4681,6 +4682,62 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
+        // ── [냐냐 요청] Ctrl+클릭으로 여러 줄 골라서 한번에 서식 주기 ──────
+        //   contenteditable 은 떨어진 줄을 동시에 선택하는 걸 브라우저가 지원하지 않는다
+        //   (Firefox 만 됨). 그래서 고른 줄을 직접 기억해 두고, 서식 버튼을 누르면
+        //   그 줄들에 차례로 적용한다. 표시용 클래스는 저장할 때 떼어낸다.
+        const RT_MARK_CLASS = 'rt-picked';
+
+        function rtMarkedLines(id) {
+            const el = document.getElementById(id);
+            return el ? Array.prototype.slice.call(el.querySelectorAll('.' + RT_MARK_CLASS)) : [];
+        }
+        function rtClearMarks(id) {
+            rtMarkedLines(id).forEach(n => {
+                n.classList.remove(RT_MARK_CLASS);
+                if (!n.className) n.removeAttribute('class');
+            });
+        }
+        // 저장 전에 표시를 떼어낸 HTML (노트에 보라 배경이 굳어버리면 안 되니까)
+        function rtStripMarks(html) {
+            return String(html || '')
+                .replace(new RegExp('\\s*class="' + RT_MARK_CLASS + '"', 'g'), '')
+                .replace(new RegExp('(class="[^"]*?)\\s*' + RT_MARK_CLASS + '\\s*', 'g'), '$1');
+        }
+
+        // 편집기 클릭 — Ctrl(맥은 ⌘)+클릭이면 그 줄을 찍고/뺀다. 그냥 클릭이면 표시를 지운다
+        function rtEditorClick(e, id) {
+            if (e.ctrlKey || e.metaKey) {
+                rtActiveEditorId = id;
+                let n = e.target;
+                const el = document.getElementById(id);
+                while (n && n !== el && !(n.nodeType === 1 && ['LI', 'H4', 'DIV', 'P'].includes(n.tagName))) n = n.parentNode;
+                if (n && n !== el) {
+                    n.classList.toggle(RT_MARK_CLASS);
+                    if (!n.className) n.removeAttribute('class');
+                    e.preventDefault();
+                }
+                return;
+            }
+            rtClearMarks(id);
+        }
+
+        // 찍어둔 줄이 있으면 그 줄마다 커서를 옮겨가며 fn 을 돌린다.
+        //   돌린 뒤 DOM 이 바뀔 수 있어서 살아있는 줄만 처리한다
+        function rtRunOnMarked(id, fn) {
+            const lines = rtMarkedLines(id);
+            if (!lines.length) return false;
+            rtClearMarks(id);
+            lines.forEach(node => {
+                if (!node.isConnected) return;
+                const r = document.createRange();
+                r.selectNodeContents(node); r.collapse(false);
+                const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+                fn();
+            });
+            return true;
+        }
+
         // 소제목 — 이미 소제목이면 일반 문단으로 되돌림 (토글)
         //   ⚠️ execCommand('formatBlock') 을 쓰면 글머리 목록 안에서 <li> 가 아니라 <ul> 전체를
         //      <h4> 로 감싸버리고, 그 뒤엔 다시 눌러도 안 벗겨졌다 (h4 안에 div 만 하나 더 생김).
@@ -4703,6 +4760,13 @@ let vocabulary = [];
         function rtHeading(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
+            // Ctrl+클릭으로 찍어둔 줄이 있으면 그 줄 전부에
+            if (rtRunOnMarked(id, () => rtHeadingOne(id))) { rtSyncState(id); return; }
+            rtHeadingOne(id);
+            rtSyncState(id);
+        }
+
+        function rtHeadingOne(id) {
             const block = rtLineBlock(id);
             if (!block) return;
 
@@ -4739,7 +4803,6 @@ let vocabulary = [];
                 block.parentNode.replaceChild(h, block);
                 caretEnd(h);
             }
-            rtSyncState(id);
         }
 
         // ── 들여쓰기 / 글머리 기호 ────────────────────────────────
@@ -4786,6 +4849,11 @@ let vocabulary = [];
         function rtIndent(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
+            if (rtRunOnMarked(id, () => rtIndentOne(id))) { rtSyncState(id); return; }
+            rtIndentOne(id);
+            rtSyncState(id);
+        }
+        function rtIndentOne(id) {
             if (rtInList(id)) {
                 if (rtListDepth(id) < RT_MAX_LEVEL) {
                     try { document.execCommand('indent'); } catch (e) {}
@@ -4794,20 +4862,23 @@ let vocabulary = [];
                 const b = rtEnsureBlock(id);
                 if (b) rtSetLevel(b, rtGetLevel(b) + 1);
             }
-            rtSyncState(id);
         }
 
         // 수준 올리기
         function rtOutdent(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
+            if (rtRunOnMarked(id, () => rtOutdentOne(id))) { rtSyncState(id); return; }
+            rtOutdentOne(id);
+            rtSyncState(id);
+        }
+        function rtOutdentOne(id) {
             if (rtInList(id)) {
                 try { document.execCommand('outdent'); } catch (e) {}
             } else {
                 const b = rtBlockOf(id);
                 if (b) rtSetLevel(b, Math.max(0, rtGetLevel(b) - 1));
             }
-            rtSyncState(id);
         }
 
         // ── 글머리 기호 빼기 ──────────────────────────────────────
@@ -4836,10 +4907,23 @@ let vocabulary = [];
         //   커서만 있으면 그 목록 하나, 여러 줄을 범위로 잡았으면 걸친 목록 전부.
         //   ⚠️ 편집기 전체를 선택하면 커서(anchorNode)가 목록 밖이라 예전엔 목록을 못 찾고
         //      '글머리 넣기' 로 잘못 빠졌다 — 그때 첫 줄이 깨졌다. 그래서 범위도 같이 본다.
+        let rtForcedTargets = null;   // Ctrl+클릭으로 찍어둔 li 들 (여러 줄 한번에 뺄 때)
+
         function rtSelectedLists(id) {
             const el = document.getElementById(id);
             const sel = window.getSelection();
-            if (!el || !sel || !sel.rangeCount) return [];
+            if (!el) return [];
+            // 찍어둔 줄이 있으면 그 줄들이 속한 목록 전부 (여러 목록에 걸쳐 있어도 된다)
+            if (rtForcedTargets && rtForcedTargets.size) {
+                const outers = [];
+                rtForcedTargets.forEach(li => {
+                    let n = li, outer = null;
+                    while (n && n !== el) { if (n.nodeType === 1 && n.tagName === 'UL') outer = n; n = n.parentNode; }
+                    if (outer && outers.indexOf(outer) < 0) outers.push(outer);
+                });
+                if (outers.length) return outers;
+            }
+            if (!sel || !sel.rangeCount) return [];
             let n = sel.anchorNode, outer = null;
             while (n && n !== el) { if (n.nodeType === 1 && n.tagName === 'UL') outer = n; n = n.parentNode; }
             if (outer) return [outer];
@@ -4876,6 +4960,11 @@ let vocabulary = [];
 
         // 어떤 줄의 기호를 뺄지 — 커서만 있으면 그 줄, 범위로 잡았으면 걸친 줄 전부
         function rtPickUnbulletTargets(lines) {
+            if (rtForcedTargets && rtForcedTargets.size) {
+                const t = new Set();
+                lines.forEach(ln => { if (rtForcedTargets.has(ln.node)) t.add(ln.node); });
+                if (t.size) return t;
+            }
             const sel = window.getSelection();
             const range = (sel && sel.rangeCount) ? sel.getRangeAt(0) : null;
             const targets = new Set();
@@ -4887,7 +4976,8 @@ let vocabulary = [];
                 lines.forEach(ln => { if (ln.node.contains(sel.anchorNode) && (!best || best.contains(ln.node))) best = ln.node; });
                 if (best) targets.add(best);
             }
-            if (!targets.size && lines.length) targets.add(lines[0].node);
+            // 찍어둔 줄로 고르는 중이면 '아무것도 안 걸린 목록' 은 그대로 둔다 (엉뚱한 줄이 빠지면 안 됨)
+            if (!targets.size && lines.length && !rtForcedTargets) targets.add(lines[0].node);
             return targets;
         }
 
@@ -4937,18 +5027,44 @@ let vocabulary = [];
         function rtToggleList(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
-            // 편집기 전체를 선택한 경우도 '목록 안' 으로 쳐야 한다 (rtInList 는 커서만 본다)
-            if (rtSelectedLists(id).length) {
-                rtUnbullet(id);
-            } else {
-                const b = rtBlockOf(id);
-                const lv = b ? rtGetLevel(b) : 0;
-                if (b) { rtSetLevel(b, 0); if (!b.className) b.removeAttribute('class'); }  // 빈 class="" 껍데기 안 남기기
-                try { document.execCommand('insertUnorderedList'); } catch (e) {}
-                // insertUnorderedList 자체가 이미 1단계를 만드므로 나머지만 추가로 내림
-                for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
+
+            // [냐냐 요청] Ctrl+클릭으로 찍어둔 줄이 있으면 그 줄들에만 적용한다.
+            //   빼는 쪽은 목록을 통째로 다시 쌓으므로 한 줄씩 돌리면 나머지 줄의 참조가 끊긴다.
+            //   그래서 찍어둔 li 를 대상 목록으로 한번에 넘긴다 (rtForcedTargets).
+            const marked = rtMarkedLines(id);
+            if (marked.length) {
+                rtClearMarks(id);
+                const lis = marked.map(n => (n.tagName === 'LI') ? n : n.closest('li')).filter(Boolean);
+                if (lis.length) {
+                    rtForcedTargets = new Set(lis);
+                    try { rtUnbullet(id); } finally { rtForcedTargets = null; }
+                } else {
+                    // 전부 문단이면 줄마다 글머리를 켠다
+                    marked.forEach(node => {
+                        if (!node.isConnected) return;
+                        const r = document.createRange();
+                        r.selectNodeContents(node); r.collapse(false);
+                        const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+                        rtAddBullet(id);
+                    });
+                }
+                rtSyncState(id);
+                return;
             }
+
+            // 편집기 전체를 선택한 경우도 '목록 안' 으로 쳐야 한다 (rtInList 는 커서만 본다)
+            if (rtSelectedLists(id).length) rtUnbullet(id);
+            else rtAddBullet(id);
             rtSyncState(id);
+        }
+
+        function rtAddBullet(id) {
+            const b = rtBlockOf(id);
+            const lv = b ? rtGetLevel(b) : 0;
+            if (b) { rtSetLevel(b, 0); if (!b.className) b.removeAttribute('class'); }  // 빈 class="" 껍데기 안 남기기
+            try { document.execCommand('insertUnorderedList'); } catch (e) {}
+            // insertUnorderedList 자체가 이미 1단계를 만드므로 나머지만 추가로 내림
+            for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
         }
         // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기 (서식 없이 그냥 글자로)
         function rtInsertLabel(id, txt) {
@@ -4973,14 +5089,16 @@ let vocabulary = [];
             if (!el || !grammarEditorState) return;
             const key = el.dataset.stateKey;
             if (!key) return;
+            // Ctrl+클릭 표시는 편집 중에만 쓰는 거라 저장할 내용에선 떼어낸다
+            const html = rtStripMarks(el.innerHTML);
             // [냐냐 요청] 블록 구조 — "blocks.2.html" 같은 경로도 받는다
             const m = key.match(/^blocks\.(\d+)\.html$/);
             if (m) {
                 const b = grammarEditorState.blocks && grammarEditorState.blocks[+m[1]];
-                if (b) b.html = el.innerHTML;
+                if (b) b.html = html;
                 return;
             }
-            grammarEditorState[key] = el.innerHTML;
+            grammarEditorState[key] = html;
         }
 
         // 목록 안에서 Tab = 수준 내리기 / Shift+Tab = 올리기
