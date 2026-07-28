@@ -365,9 +365,16 @@
             if (grammarEditorState && stateKey) grammarEditorState[stateKey] = textarea.value;
         }
 
+        // [냐냐 요청] 메모에서 Alt+Enter(또는 Shift+Enter) 는 줄바꿈, 그냥 Enter 는 저장.
+        //   예전엔 그냥 Enter 가 여기서 줄바꿈을 넣고, 그 이벤트가 창 전체 핸들러
+        //   (handleWordModalKey)까지 올라가서 저장까지 같이 돼버렸다.
+        //   줄바꿈을 넣을 때는 stopPropagation 으로 저장을 막는다.
         function handleNotesEnterKey(event) {
             if (event.key !== 'Enter') return;
+            //   AI 추천 전에는 창 핸들러가 저장을 안 하므로(빈 키가 되지 않게) 그때는 줄바꿈을 넣는다
+            if (!event.altKey && !event.shiftKey && aiAutofillCompleted) return;   // 저장은 handleWordModalKey 가 맡는다
             event.preventDefault();
+            event.stopPropagation();
             const textarea = event.target;
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
@@ -421,9 +428,103 @@
             row.innerHTML = `
                 <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <!-- [냐냐 요청] 관용구마다 AI 추천 — 비어 있으면 하나 추천해주고, 적어뒀으면 뜻을 채운다 -->
+                <button type="button" onclick="autofillIdiomRow('${rowId}')" title="AI 추천 (비어 있으면 관용구를 추천, 적어뒀으면 뜻을 채워요)" class="w-9 h-9 shrink-0 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
                 <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-9 h-9 shrink-0 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
             `;
             entriesBox.appendChild(row);
+        }
+
+        // [냐냐 요청] 관용구 행 하나만 AI로 채우기
+        //   칸이 비어 있으면 그 단어로 자주 쓰는 표현을 하나 추천하고,
+        //   이미 적어뒀으면 뜻을 채운다(철자·강세도 고쳐줌). 이미 있는 것과는 안 겹치게 보낸다.
+        async function autofillIdiomRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const idiomInp = row.querySelector('[data-idiom-field="idiom"]');
+            const meanInp = row.querySelector('[data-idiom-field="meaning"]');
+            const word = (document.getElementById('input-word') || {}).value || '';
+            if (!word.trim()) { showToast("먼저 단어를 입력해주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+
+            const btn = row.querySelector('[onclick^="autofillIdiomRow"]');
+            const icon = btn ? btn.querySelector('i') : null;
+            const prevCls = icon ? icon.className : '';
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+
+            try {
+                const cur = idiomInp ? idiomInp.value.trim() : '';
+                const meaning = (document.getElementById('input-meaning') || {}).value || '';
+                // 다른 줄에 이미 있는 관용구 — 추천이 겹치지 않게
+                const others = Array.prototype.slice.call(document.querySelectorAll('#idiom-entries-box [data-idiom-field="idiom"]'))
+                    .map(i => i.value.trim()).filter(v => v && v !== cur);
+
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        idiom: { type: "STRING", description: "스페인어 관용구/자주 쓰는 표현. 강세 부호 정확히" },
+                        meaning: { type: "STRING", description: "한국어 뜻 (짧고 자연스럽게)" }
+                    },
+                    required: ["idiom", "meaning"]
+                };
+                const prompt = cur
+                    ? `스페인어 표현 "${cur}" 의 한국어 뜻을 채워줘. 철자나 강세가 틀렸으면 idiom 에 고쳐서 넣어줘. (관련 단어: "${word}"${meaning ? `, 뜻: ${meaning}` : ''})`
+                    : `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 를 쓰는 자주 쓰이는 관용구나 표현을 하나만 추천해줘.${others.length ? ` 다음과 겹치지 않게: ${others.join(', ')}` : ''}`;
+                const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
+                const res = await callGemini(prompt, sys, schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+
+                if (idiomInp && data.idiom) idiomInp.value = data.idiom.trim();
+                if (meanInp && data.meaning) meanInp.value = data.meaning.trim();
+                showToast(cur ? "관용구 뜻을 채웠어요! ✨" : `"${(data.idiom || '').trim()}" 를 추천했어요! ✨`, "success");
+            } catch (e) {
+                showToast("AI 추천 중 문제가 생겼어요. 잠시 후 다시 시도해주세요", "error");
+            } finally {
+                if (icon) icon.className = prevCls || 'fa-solid fa-wand-magic-sparkles text-xs';
+            }
+        }
+
+        // [냐냐 요청] 예문도 같은 방식으로 — 비어 있으면 만들어주고, 적어뒀으면 번역을 채운다
+        async function autofillExampleRow() {
+            const spInp = document.getElementById('input-example');
+            const meInp = document.getElementById('input-example-meaning');
+            const word = (document.getElementById('input-word') || {}).value || '';
+            if (!word.trim()) { showToast("먼저 단어를 입력해주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+
+            const btn = document.getElementById('example-ai-btn');
+            const icon = btn ? btn.querySelector('i') : null;
+            const prevCls = icon ? icon.className : '';
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+
+            try {
+                const cur = spInp ? spInp.value.trim() : '';
+                const meaning = (document.getElementById('input-meaning') || {}).value || '';
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        example: { type: "STRING", description: "그 단어를 쓴 스페인어 예문 한 문장. 강세 부호 정확히" },
+                        meaning: { type: "STRING", description: "예문의 한국어 번역" }
+                    },
+                    required: ["example", "meaning"]
+                };
+                const prompt = cur
+                    ? `스페인어 예문 "${cur}" 를 한국어로 번역해줘. 철자나 강세가 틀렸으면 example 에 고쳐서 넣어줘.`
+                    : `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 를 쓴 짧고 일상적인 예문 한 문장을 만들어줘.`;
+                const sys = "You are a precise Spanish tutor. Output strictly the JSON schema. Korean translation. No markdown, no extra text.";
+                const res = await callGemini(prompt, sys, schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+
+                if (spInp && data.example) spInp.value = data.example.trim();
+                if (meInp && data.meaning) meInp.value = data.meaning.trim();
+                showToast(cur ? "예문 번역을 채웠어요! ✨" : "예문을 만들었어요! ✨", "success");
+            } catch (e) {
+                showToast("AI 추천 중 문제가 생겼어요. 잠시 후 다시 시도해주세요", "error");
+            } finally {
+                if (icon) icon.className = prevCls || 'fa-solid fa-wand-magic-sparkles text-xs';
+            }
         }
 
         function clearIdiomRows() {
