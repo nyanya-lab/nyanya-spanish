@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260728h">
+    <link rel="stylesheet" href="css/style.css?v=20260728i">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1432,12 +1432,13 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
-                        <div class="flex items-center justify-between">
-                            <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
-                            <!-- [냐냐 요청] 비어 있으면 예문을 만들어주고, 적어뒀으면 번역을 채운다 -->
-                            <button id="example-ai-btn" type="button" onclick="autofillExampleRow()" title="AI 추천 (비어 있으면 예문을 만들고, 적어뒀으면 번역을 채워요)" class="w-6 h-6 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i></button>
+                        <label class="block text-xs font-bold text-slate-500">예문 (스페인어)</label>
+                        <!-- [냐냐 요청] AI 버튼을 라벨 줄에 두니 그 칸만 높아져서 옆 칸과 입력창이 어긋났다.
+                             메모의 X 버튼처럼 입력창 안 오른쪽에 얹어서 라벨 줄 높이를 건드리지 않는다 -->
+                        <div class="relative">
+                            <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 pr-11 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                            <button id="example-ai-btn" type="button" onclick="autofillExampleRow()" title="AI 추천 (비어 있으면 예문을 만들고, 적어뒀으면 번역을 채워요)" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i></button>
                         </div>
-                        <input type="text" id="input-example" placeholder="예: No tengo dinero ahora." autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                     </div>
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">예문 번역 (한국어 뜻)</label>
@@ -1942,13 +1943,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260728h"></script>
-    <script src="js/creatures.js?v=20260728h"></script>
-    <script src="js/core.js?v=20260728h"></script>
-    <script src="js/vocab.js?v=20260728h"></script>
-    <script src="js/flashcards.js?v=20260728h"></script>
-    <script src="js/quiz.js?v=20260728h"></script>
-    <script src="js/games.js?v=20260728h"></script>
-    <script src="js/ai-feedback.js?v=20260728h"></script>
+    <script src="js/dictionary-data.js?v=20260728i"></script>
+    <script src="js/creatures.js?v=20260728i"></script>
+    <script src="js/core.js?v=20260728i"></script>
+    <script src="js/vocab.js?v=20260728i"></script>
+    <script src="js/flashcards.js?v=20260728i"></script>
+    <script src="js/quiz.js?v=20260728i"></script>
+    <script src="js/games.js?v=20260728i"></script>
+    <script src="js/ai-feedback.js?v=20260728i"></script>
 </body>
 </html>
