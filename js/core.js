@@ -38,7 +38,9 @@ let vocabulary = [];
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
             if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
-            if (typeof initGrammarGroupsCollapsed === 'function') initGrammarGroupsCollapsed(); // [냐냐 요청] 문법·개념은 주제까지 접힌 상태로 시작
+            // [냐냐 요청] 문법·개념은 항상 같은 모습으로 시작 (주제로 묶고, 제목까지 펼치고, 가나다순)
+            //   위의 loadGrammarFilterPrefs 로 복원한 정렬·보기 값을 일부러 덮어쓴다 — 순서 중요
+            if (typeof initGrammarGroupsCollapsed === 'function') initGrammarGroupsCollapsed();
             renderWordList();
             updateStats();
             renderDiary();
@@ -3132,6 +3134,16 @@ let vocabulary = [];
         // ============================================================
         let grammarWordLookupMode = false;
 
+        // 켜진 상태를 버튼 색으로 보여준다 (맨 윗줄로 옮겼으니 어디가 켜졌는지 티가 나야 한다)
+        function syncGrammarLookupBtn() {
+            const btn = document.getElementById('grammar-lookup-btn');
+            if (!btn) return;
+            const on = grammarWordLookupMode;
+            btn.className = `w-10 h-10 rounded-xl border text-sm transition-all flex items-center justify-center ${
+                on ? 'bg-sky-50 border-sky-300 text-sky-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'}`;
+            btn.title = on ? '단어 찾기 끄기' : '🔍 단어 찾기 (표 안의 단어를 눌러 단어장으로)';
+        }
+
         function toggleGrammarWordLookup() {
             grammarWordLookupMode = !grammarWordLookupMode;
             renderGrammarTables();
@@ -3237,6 +3249,7 @@ let vocabulary = [];
             if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
             if (typeof syncGrammarExpandBtn === 'function') syncGrammarExpandBtn();
             if (typeof syncGrammarViewBtn === 'function') syncGrammarViewBtn();
+            if (typeof syncGrammarLookupBtn === 'function') syncGrammarLookupBtn();
         }
 
         // [냐냐 요청] 주제별 그룹 렌더 — 주제 헤더(접기 가능) 아래에 그 주제 노트들
@@ -3306,7 +3319,8 @@ let vocabulary = [];
                         })()}
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
-                        <button onclick="toggleGrammarWordLookup()" title="${grammarWordLookupMode ? '단어 찾기 끄기' : '🔍 단어 찾기 (셀의 단어를 눌러 단어장으로)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${grammarWordLookupMode ? 'text-sky-600 bg-sky-50' : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'}"><i class="fa-solid fa-magnifying-glass text-xs"></i></button>
+<!-- [냐냐 요청] 단어 찾기(돋보기)는 표 하나가 아니라 전체에 걸리는 모드라, 카드에서 빼고
+                             맨 윗줄 검색창 옆으로 옮겼다 (카드에 있으니 그 표만 켜지는 것처럼 보였다) -->
                         ${(() => {
                             // [냐냐 요청] 연결 상태를 노트를 펼치지 않고도 보게 — 이어둔 칸 수를 배지로.
                             //   누르면 수정창 + 연결창까지 바로 열린다
@@ -3462,9 +3476,15 @@ let vocabulary = [];
         // ============================================================
         let grammarViewMode = 'default';
         // 기본이 '주제까지 접힘'이라, 처음 열 때 모든 주제를 접어둔다
+        // [냐냐 요청] 들어올 때 항상 같은 모습으로 시작한다:
+        //   주제로 묶여 있고 · 주제별 노트 제목까지 펼쳐져 있고 · 가나다순.
+        //   (예전엔 주제까지 접어서 목차만 보여줬다)
         function initGrammarGroupsCollapsed() {
-            grammarGroupCollapsed = {};
-            getAllGrammarTables().forEach(t => { grammarGroupCollapsed[grammarTopicKey(t)] = true; });
+            grammarGroupCollapsed = {};          // 주제는 펼친 채로 = 노트 제목이 보인다
+            grammarViewMode = 'topics-open';     // 전체 펼치기 버튼의 3단계 중 가운데
+            grammarGroupView = 'group';          // 주제로 묶기
+            grammarSortMode = 'alpha-asc';       // 가나다순
+            getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });   // 노트 상세는 접힘
         }
         function toggleExpandAllGrammar() {
             if (grammarViewMode === 'default') {
