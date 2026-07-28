@@ -42,13 +42,19 @@
                 return;
             }
             box.classList.remove('hidden');
+            // [냐냐 요청] 사유 글씨가 작고 흐려서 잘 안 읽혔다 — 사유를 흰 칸에 담고
+            //   글씨를 키우고(11px→13px) 진하게, 바뀐 말과 사유를 세로로 확실히 나눈다
             list.innerHTML = changes.map(c => {
                 const from = (c.from || '').trim();
                 const to = (c.to || '').trim();
                 const why = (c.why || '').trim();
-                return `<li class="flex flex-col gap-0.5">
-                    <span><span class="text-slate-400 line-through">${from}</span> <span class="text-slate-300">→</span> <span class="text-red-600 font-bold">${to}</span></span>
-                    ${why ? `<span class="text-[11px] text-slate-500 pl-1">· ${why}</span>` : ''}
+                return `<li class="bg-white rounded-xl px-3 py-2 border border-red-100/70 space-y-1">
+                    <div class="text-sm leading-relaxed">
+                        <span class="text-slate-400 line-through">${from}</span>
+                        <span class="text-slate-300 mx-1">→</span>
+                        <span class="text-red-600 font-extrabold">${to}</span>
+                    </div>
+                    ${why ? `<div class="text-[13px] text-slate-600 leading-relaxed">${why}</div>` : ''}
                 </li>`;
             }).join('');
         }
@@ -680,9 +686,9 @@
                   { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
-                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
-               "tip": "One short, useful grammar or conversational tip in Korean, 1 sentence.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
             }
             IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
@@ -1114,9 +1120,9 @@ ${refGrammar}${refWords}
                   { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
-                  { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "Short Korean reason WHY it changed, e.g. '스페인어는 형용사가 명사 뒤에 와요' or '관사가 더 자연스러워요'. 1 sentence." }
+                  { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
-               "tip": "One short, useful grammatical tip in Korean, 1 sentence.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."
             }
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
@@ -1149,7 +1155,7 @@ ${refGrammar}${refWords}
                             properties: {
                                 from: { type: "STRING", description: "Original wrong part (word or phrase)" },
                                 to: { type: "STRING", description: "Corrected part" },
-                                why: { type: "STRING", description: "Short Korean reason for the change" }
+                                why: { type: "STRING", description: "왜 고쳤는지 한국어로. 규칙 이름 + 이유를 함께, 1~2문장" }
                             },
                             required: ["from", "to", "why"]
                         }
@@ -1385,7 +1391,7 @@ ${refGrammar}${refWords}
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
                "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "One short useful tip in Korean."
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."
             }
             IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
             Do not wrap JSON in markdown blockticks.`;
@@ -1526,9 +1532,9 @@ ${refGrammar}${refWords}
                   { "word": "ONE short Spanish word from correctedText. EXCEPTION: for reflexive verbs, keep the reflexive pronoun WITH the verb as one item (e.g. 'me llamo', 'se levanta' — NOT split into 'me'+'llamo'). Otherwise never a phrase or full clause.", "mean": "Its Korean meaning, 1-4 words only, never empty" }
                ],
                "changes": [
-                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "Short Korean reason, e.g. '형용사는 명사 뒤에 와요' or '관사가 자연스러워요'. 1 sentence." }
+                  { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
-               "tip": "One short, useful grammar tip in Korean, 1 sentence.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
             }
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
