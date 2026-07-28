@@ -3321,15 +3321,8 @@ let vocabulary = [];
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
 <!-- [냐냐 요청] 단어 찾기(돋보기)는 표 하나가 아니라 전체에 걸리는 모드라, 카드에서 빼고
                              맨 윗줄 검색창 옆으로 옮겼다 (카드에 있으니 그 표만 켜지는 것처럼 보였다) -->
-                        ${(() => {
-                            // [냐냐 요청] 연결 상태를 노트를 펼치지 않고도 보게 — 이어둔 칸 수를 배지로.
-                            //   누르면 수정창 + 연결창까지 바로 열린다
-                            const n = noteCellWordCount(t);
-                            const cls = n ? 'text-violet-600 bg-violet-50' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50';
-                            const tip = n ? `단어 연결 ${n}칸 — 눌러서 보기·고치기` : '단어 연결 (표 칸을 단어장과 이어두기)';
-                            const badge = n ? `<span class="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-white text-[8px] font-black flex items-center justify-center">${n}</span>` : '';
-                            return `<button onclick="openGrammarWordLinkFor('${t.id}')" title="${tip}" class="relative w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${cls}"><i class="fa-solid fa-link text-xs"></i>${badge}</button>`;
-                        })()}
+                        <!-- [냐냐 요청] 연결 상태 색·숫자 배지는 뺐다 — 다른 아이콘들과 같은 모양으로 -->
+                        <button onclick="openGrammarWordLinkFor('${t.id}')" title="단어 연결 (표 칸을 단어장과 이어두기)" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-link text-xs"></i></button>
                         <button onclick="deleteGrammarTable('${t.id}')" title="삭제" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
                     </span>`;
                 // [냐냐 요청] 배지 대신 카드 테두리·배경색으로 등급 표시 (단어장 카드와 같은 방식)
@@ -5438,30 +5431,6 @@ let vocabulary = [];
         function noteHasCellWords(tableId) {
             const all = grammarCellWords[tableId];
             return !!(all && Object.keys(all).length);
-        }
-
-        // [냐냐 요청] 노트 카드에 보여줄 '살아있는' 연결 수.
-        //   저장된 키에는 칸이 지워졌거나 단어가 삭제된 것도 섞일 수 있어서 남아 있는 것만 센다.
-        //   ⚠️ 반드시 getNoteBlocks 로 봐야 한다. t.blocks 를 직접 보면 옛 형식 노트
-        //      (표가 t.rows 에 있고 블록 id 가 'legacy-table')를 통째로 못 읽어서
-        //      멀쩡한 연결을 죽은 것으로 세어버린다.
-        function noteCellWordCount(t) {
-            const all = t && grammarCellWords[t.id];
-            if (!all) return 0;
-            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
-            const ids = new Set(vocabulary.map(v => v.id));
-            let n = 0;
-            Object.keys(all).forEach(k => {
-                if (!ids.has(all[k])) return;                    // 단어가 지워짐
-                const i = k.indexOf(':');
-                const blockId = (i < 0) ? LEGACY_TABLE_BLOCK_ID : k.slice(0, i);
-                const rc = (i < 0 ? k : k.slice(i + 1)).split('-');
-                const blk = blocks.find(b => b.id === blockId);
-                const row = blk && (blk.rows || [])[+rc[0]];
-                const cell = row && row[+rc[1]];
-                if (cell !== undefined && cell !== null && String(cell).trim() !== '') n++;   // 칸이 남아있음
-            });
-            return n;
         }
 
         // 카드의 연결 아이콘 → 수정창을 열고 그 표의 연결창까지 한 번에 띄운다
