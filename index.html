@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260728q">
+    <link rel="stylesheet" href="css/style.css?v=20260728r">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1023,7 +1023,8 @@
                                 <i class="fa-solid fa-lightbulb"></i>
                                 <span>냐냐를 위한 오늘의 학습 팁</span>
                             </div>
-                            <p id="ai-coach-tip" class="text-[15px] text-amber-950 leading-7 font-medium whitespace-pre-line"></p>
+                            <!-- 줄 단위로 나눠 그린다 (renderAiTip). 제목보다 크지 않게 14px -->
+                            <div id="ai-coach-tip" class="text-sm text-amber-950 leading-6 font-medium space-y-1.5"></div>
                         </div>
 
                         <!-- [냐냐 요청] 핵심 분석은 항상 접은 채로 시작 (새 첨삭이 올 때마다 되접힘 — resetBreakdown).
@@ -1952,13 +1953,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260728q"></script>
-    <script src="js/creatures.js?v=20260728q"></script>
-    <script src="js/core.js?v=20260728q"></script>
-    <script src="js/vocab.js?v=20260728q"></script>
-    <script src="js/flashcards.js?v=20260728q"></script>
-    <script src="js/quiz.js?v=20260728q"></script>
-    <script src="js/games.js?v=20260728q"></script>
-    <script src="js/ai-feedback.js?v=20260728q"></script>
+    <script src="js/dictionary-data.js?v=20260728r"></script>
+    <script src="js/creatures.js?v=20260728r"></script>
+    <script src="js/core.js?v=20260728r"></script>
+    <script src="js/vocab.js?v=20260728r"></script>
+    <script src="js/flashcards.js?v=20260728r"></script>
+    <script src="js/quiz.js?v=20260728r"></script>
+    <script src="js/games.js?v=20260728r"></script>
+    <script src="js/ai-feedback.js?v=20260728r"></script>
 </body>
 </html>

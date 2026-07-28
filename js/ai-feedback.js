@@ -30,6 +30,30 @@
             window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         }
 
+        // [냐냐 요청] 학습 팁 — 한 덩어리 줄글로 나오면 읽기 힘들어서 줄 단위로 나눠 그린다.
+        //   프롬프트가 세 줄(잘한 점·규칙 설명·예시)로 주게 돼 있지만, 한 덩어리로 와도
+        //   문장 끝에서 끊어 최소한의 줄나눔은 만들어 준다.
+        function renderAiTip(text) {
+            const el = document.getElementById('ai-coach-tip');
+            if (!el) return;
+            let lines = String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+            // 줄바꿈 없이 길게 왔으면 문장 단위로 쪼갠다 (예시 줄은 붙여둔 채)
+            if (lines.length === 1 && lines[0].length > 60) {
+                lines = lines[0].split(/(?<=[.!?])\s+(?=[^\s])/).map(s => s.trim()).filter(Boolean);
+            }
+            if (!lines.length) { el.innerHTML = ''; return; }
+            el.innerHTML = lines.map(l => {
+                const m = l.match(/^예시\s*[:：]\s*(.*)$/);
+                if (m) {
+                    return `<div class="mt-2 pt-2 border-t border-amber-200/70">
+                        <span class="text-[11px] font-bold text-amber-700">예시</span>
+                        <span class="font-semibold text-amber-950">${m[1]}</span>
+                    </div>`;
+                }
+                return `<div>${l}</div>`;
+            }).join('');
+        }
+
         // [냐냐 PATCH] B-2 첨삭: '바뀐 부분' 설명 리스트 렌더링 (어순/관사 변경도 표시)
         function renderAiChanges(feedback) {
             const box = document.getElementById('ai-changes-box');
@@ -688,7 +712,7 @@
                "changes": [
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 세 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 3번째 줄: 반드시 '예시: ' 로 시작하고 스페인어 문장 + 괄호 안 한국어 뜻. 각 줄은 60자 이내로 짧게. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
             }
             IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
@@ -783,7 +807,7 @@
                     breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
-                coachTip.innerText = feedback.tip;
+                renderAiTip(feedback.tip);
 
                 // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
                 learnerProfile.totalAnswered++;
@@ -1122,7 +1146,7 @@ ${refGrammar}${refWords}
                "changes": [
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 세 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 3번째 줄: 반드시 '예시: ' 로 시작하고 스페인어 문장 + 괄호 안 한국어 뜻. 각 줄은 60자 이내로 짧게. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."
             }
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
@@ -1225,7 +1249,7 @@ ${refGrammar}${refWords}
                     breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
-                coachTip.innerText = feedback.tip;
+                renderAiTip(feedback.tip);
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
                 learnerProfile.totalAnswered++;
@@ -1391,7 +1415,7 @@ ${refGrammar}${refWords}
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
                "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 세 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 3번째 줄: 반드시 '예시: ' 로 시작하고 스페인어 문장 + 괄호 안 한국어 뜻. 각 줄은 60자 이내로 짧게. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."
             }
             IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
             Do not wrap JSON in markdown blockticks.`;
@@ -1462,7 +1486,7 @@ ${refGrammar}${refWords}
                     breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
-                coachTip.innerText = feedback.tip;
+                renderAiTip(feedback.tip);
 
                 // 학습 프로필 반영
                 learnerProfile.totalAnswered++;
@@ -1534,7 +1558,7 @@ ${refGrammar}${refWords}
                "changes": [
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 한국어 2~4문장, 순서: (1) 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장, (2) 그 문법이 왜 그렇게 되는지 규칙 설명, (3) 짧은 예시 하나(스페인어 + 괄호 안 한국어 뜻). 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 세 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 3번째 줄: 반드시 '예시: ' 로 시작하고 스페인어 문장 + 괄호 안 한국어 뜻. 각 줄은 60자 이내로 짧게. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
                "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
             }
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
@@ -1625,7 +1649,7 @@ ${refGrammar}${refWords}
                     breakdownGrid.innerHTML += buildBreakdownRow(w, m);
                 });
 
-                coachTip.innerText = feedback.tip;
+                renderAiTip(feedback.tip);
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
                 // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
