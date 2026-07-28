@@ -262,6 +262,20 @@
             modalDragPos = null;
         }
 
+        // [냐냐 요청] 검색했는데 없을 때 '등록하기' — 검색어를 등록창에 그대로 채워준다.
+        //   검색은 단어와 뜻 둘 다에 걸리니, 한글이면 뜻 칸에 넣는다 (스페인어 칸에 한글이 들어가면 안 되니까)
+        function openWordModalFromSearch() {
+            const q = ((document.getElementById('search-bar') || {}).value || '').trim();
+            openWordModal();
+            if (!q) return;
+            const isKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(q);
+            const target = document.getElementById(isKorean ? 'input-meaning' : 'input-word');
+            if (!target) return;
+            target.value = q;
+            if (!isKorean && typeof handleWordInput === 'function') handleWordInput(q);
+            target.focus();
+        }
+
         function openWordModal(wordId = null) {
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
@@ -2969,6 +2983,22 @@
 
             if (filteredSorted.length === 0) {
                 grid.innerHTML = '';
+                // [냐냐 요청] 검색해서 안 나온 경우엔 그 검색어를 바로 등록할 수 있게 안내를 바꾼다
+                //   (버튼을 누르면 openWordModalFromSearch 가 검색어를 등록창에 채워준다)
+                const q = document.getElementById('search-bar').value.trim();
+                const t = document.getElementById('vocab-empty-title');
+                const d = document.getElementById('vocab-empty-desc');
+                const b = document.getElementById('vocab-empty-btn');
+                const short = q.length > 20 ? q.slice(0, 20) + '…' : q;
+                if (q) {
+                    if (t) t.innerText = `"${short}" 는 아직 단어장에 없어요`;
+                    if (d) d.innerText = '아래 버튼을 누르면 이 말이 등록창에 채워져요.';
+                    if (b) b.innerHTML = `<i class="fa-solid fa-plus"></i> "${escapeHtml(short)}" 등록하기`;
+                } else {
+                    if (t) t.innerText = '등록된 단어가 아직 없어요!';
+                    if (d) d.innerText = '새로운 단어를 등록하고 스페인어 학습을 시작해보세요!';
+                    if (b) b.innerText = '첫 단어 등록하기';
+                }
                 emptyState.classList.remove('hidden');
                 renderPagination(0, 0); // [냐냐 PATCH-페이지네이션] 결과 없으면 바도 숨김
                 lastFilteredWords = []; // [냐냐 요청] 쓰기 연습이 쓸 목록
