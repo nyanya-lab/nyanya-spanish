@@ -767,7 +767,7 @@
                 msgHtmlQ += `<span>${feedback.message}</span>`;
                 coachMsg.innerHTML = msgHtmlQ;
 
-                breakdownGrid.innerHTML = '';
+                resetBreakdown(breakdownGrid);
                 const seenWordsQ = new Set();
                 feedback.breakdown.forEach(item => {
                     const w = (item.word || '').trim();
@@ -1209,7 +1209,7 @@ ${refGrammar}${refWords}
                 coachVerdict.innerText = feedback.verdict;
                 coachMsg.innerHTML = feedback.message;
                 
-                breakdownGrid.innerHTML = '';
+                resetBreakdown(breakdownGrid);
                 const seenWords = new Set();
                 feedback.breakdown.forEach(item => {
                     const w = (item.word || '').trim();
@@ -1446,7 +1446,7 @@ ${refGrammar}${refWords}
                 coachVerdict.innerText = feedback.verdict;
                 coachMsg.innerHTML = feedback.message;
 
-                breakdownGrid.innerHTML = '';
+                resetBreakdown(breakdownGrid);
                 const seenWords = new Set();
                 feedback.breakdown.forEach(item => {
                     const w = (item.word || '').trim();
@@ -1611,7 +1611,7 @@ ${refGrammar}${refWords}
                 msgHtmlEsKo += `<span>${feedback.message}</span>`;
                 coachMsg.innerHTML = msgHtmlEsKo;
                 
-                breakdownGrid.innerHTML = '';
+                resetBreakdown(breakdownGrid);
                 const seenWordsEs = new Set();
                 feedback.breakdown.forEach(item => {
                     const w = (item.word || '').trim();
@@ -1732,6 +1732,23 @@ ${refGrammar}${refWords}
 
         function wordExistsInVocab(rawWord) {
             return !!findVocabWordByForm(rawWord);
+        }
+
+        // [냐냐 요청] 핵심 분석 접기/펼치기. open 을 주면 그 상태로, 안 주면 뒤집는다
+        function toggleAiBreakdown(open) {
+            const wrap = document.getElementById('ai-breakdown-wrap');
+            if (!wrap) return;
+            const willOpen = (open === undefined) ? wrap.classList.contains('hidden') : !!open;
+            wrap.classList.toggle('hidden', !willOpen);
+            const chev = document.getElementById('ai-breakdown-chevron');
+            if (chev) chev.style.transform = willOpen ? 'rotate(180deg)' : '';
+        }
+
+        // 항상 접은 채로 시작 — 새 첨삭 결과를 그릴 때마다 비우면서 같이 되접는다
+        //   (한 번 펼쳐두면 그 상태가 남아서 다음 첨삭 때 펼쳐진 채로 나온다)
+        function resetBreakdown(grid) {
+            if (grid) grid.innerHTML = '';
+            toggleAiBreakdown(false);
         }
 
         function buildBreakdownRow(word, mean) {
