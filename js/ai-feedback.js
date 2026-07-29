@@ -45,9 +45,10 @@
             el.innerHTML = lines.map(l => {
                 const m = l.match(/^예시\s*[:：]\s*(.*)$/);
                 if (m) {
-                    return `<div class="mt-2 pt-2 border-t border-amber-200/70">
-                        <span class="text-[11px] font-bold text-amber-700">예시</span>
-                        <span class="font-semibold text-amber-950">${m[1]}</span>
+                    // [냐냐 요청] 예시 문장은 굵게 말고 기울임으로
+                    return `<div class="mt-2 pt-2 border-t border-yellow-200">
+                        <span class="text-[11px] font-bold text-slate-500">예시</span>
+                        <span class="italic text-slate-700">${m[1]}</span>
                     </div>`;
                 }
                 return `<div>${l}</div>`;

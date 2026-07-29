@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260728r">
+    <link rel="stylesheet" href="css/style.css?v=20260728s">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1018,13 +1018,15 @@
 
                         <!-- [냐냐 요청] 팁이 AI 코멘트 역할까지 하므로 길어졌다.
                              글씨가 흐려서(amber-900/80) 잘 안 읽혔던 것도 진하게 바꿈 -->
-                        <div class="bg-amber-50 border border-amber-100 p-4 rounded-2xl">
-                            <div class="flex items-center gap-2 text-amber-800 text-xs font-bold mb-2">
-                                <i class="fa-solid fa-lightbulb"></i>
+                        <!-- [냐냐 요청] 주황·갈색이 너무 세서 연노랑 바탕 + 검은 글씨로.
+                             색은 전구 아이콘에만 남긴다 -->
+                        <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl">
+                            <div class="flex items-center gap-2 text-slate-500 text-xs font-bold mb-2">
+                                <i class="fa-solid fa-lightbulb text-amber-400"></i>
                                 <span>냐냐를 위한 오늘의 학습 팁</span>
                             </div>
                             <!-- 줄 단위로 나눠 그린다 (renderAiTip). 제목보다 크지 않게 14px -->
-                            <div id="ai-coach-tip" class="text-sm text-amber-950 leading-6 font-medium space-y-1.5"></div>
+                            <div id="ai-coach-tip" class="text-sm text-slate-800 leading-6 font-medium space-y-1.5"></div>
                         </div>
 
                         <!-- [냐냐 요청] 핵심 분석은 항상 접은 채로 시작 (새 첨삭이 올 때마다 되접힘 — resetBreakdown).
@@ -1953,13 +1955,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260728r"></script>
-    <script src="js/creatures.js?v=20260728r"></script>
-    <script src="js/core.js?v=20260728r"></script>
-    <script src="js/vocab.js?v=20260728r"></script>
-    <script src="js/flashcards.js?v=20260728r"></script>
-    <script src="js/quiz.js?v=20260728r"></script>
-    <script src="js/games.js?v=20260728r"></script>
-    <script src="js/ai-feedback.js?v=20260728r"></script>
+    <script src="js/dictionary-data.js?v=20260728s"></script>
+    <script src="js/creatures.js?v=20260728s"></script>
+    <script src="js/core.js?v=20260728s"></script>
+    <script src="js/vocab.js?v=20260728s"></script>
+    <script src="js/flashcards.js?v=20260728s"></script>
+    <script src="js/quiz.js?v=20260728s"></script>
+    <script src="js/games.js?v=20260728s"></script>
+    <script src="js/ai-feedback.js?v=20260728s"></script>
 </body>
 </html>
