@@ -4953,6 +4953,29 @@ let vocabulary = [];
             return null;
         }
 
+        // [냐냐 요청] 아무것도 안 쓴 빈 편집기에는 줄(블록)이 아직 없다.
+        //   그럴 때 rtLineBlock 이 null 이라 소제목 버튼이 아무 반응도 없었다.
+        //   → 빈 문단을 하나 만들어 커서를 넣어준 뒤 서식을 적용한다.
+        //   (글머리·들여쓰기는 rtEnsureBlock / execCommand 가 알아서 만들어 줘서 원래 잘 됐다)
+        function rtEnsureLineBlock(id) {
+            let block = rtLineBlock(id);
+            if (block) return block;
+            const el = document.getElementById(id);
+            if (!el) return null;
+            try { document.execCommand('formatBlock', false, 'div'); } catch (e) {}
+            block = rtLineBlock(id);
+            if (block) return block;
+            // 브라우저가 formatBlock 을 안 먹으면 직접 만든다
+            if (!el.textContent.trim()) el.innerHTML = '';   // 브라우저가 남긴 빈 <br> 치우기
+            const div = document.createElement('div');
+            div.appendChild(document.createElement('br'));
+            el.appendChild(div);
+            const r = document.createRange();
+            r.setStart(div, 0); r.collapse(true);
+            const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            return div;
+        }
+
         function rtHeading(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
@@ -4963,7 +4986,7 @@ let vocabulary = [];
         }
 
         function rtHeadingOne(id) {
-            const block = rtLineBlock(id);
+            const block = rtEnsureLineBlock(id);
             if (!block) return;
 
             const moveKids = (from, to) => { while (from.firstChild) to.appendChild(from.firstChild); };
@@ -4972,32 +4995,41 @@ let vocabulary = [];
                 r.selectNodeContents(node); r.collapse(false);
                 const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
             };
+            // 빈 줄이면 <br> 하나만 남기고 그 '앞'에 커서를 둔다.
+            //   맨 뒤에 두면 타이핑한 글자가 <br> 뒤로 들어가서 첫 줄이 비어 보인다
+            const caretInto = (node) => {
+                if (node.textContent.trim()) { caretEnd(node); return; }
+                node.innerHTML = '<br>';
+                const r = document.createRange();
+                r.setStart(node, 0); r.collapse(true);
+                const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            };
 
             if (block.tagName === 'H4') {
                 const li = (block.parentNode && block.parentNode.tagName === 'LI') ? block.parentNode : null;
                 if (li) {                       // 목록 줄이면 li 안으로 그냥 풀어준다
                     moveKids(block, li);
                     block.remove();
-                    caretEnd(li);
+                    caretInto(li);
                 } else {
                     const div = document.createElement('div');
                     if (block.className) div.className = block.className;   // 들여쓰기(rt-in*) 유지
                     moveKids(block, div);
                     block.parentNode.replaceChild(div, block);
-                    caretEnd(div);
+                    caretInto(div);
                 }
             } else if (block.tagName === 'LI') {
                 // 목록 줄은 li 를 그대로 두고 안쪽만 소제목으로 (li 를 h4 로 바꾸면 목록이 깨진다)
                 const h = document.createElement('h4');
                 moveKids(block, h);
                 block.appendChild(h);
-                caretEnd(h);
+                caretInto(h);
             } else {
                 const h = document.createElement('h4');
                 if (block.className) h.className = block.className;         // 들여쓰기 유지
                 moveKids(block, h);
                 block.parentNode.replaceChild(h, block);
-                caretEnd(h);
+                caretInto(h);
             }
         }
 
