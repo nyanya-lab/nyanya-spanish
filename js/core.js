@@ -4757,7 +4757,56 @@ let vocabulary = [];
                 });
             };
             walk(root);
+            rtUnwrapListWrappers(root);
             return root.innerHTML;
+        }
+
+        // [냐냐 요청] 옛 편집기(execCommand)가 남긴 껍데기를 펴준다.
+        //   <div><ul>…</ul></div> 처럼 목록이 문단 안에 들어가 있으면 div 의 padding 과
+        //   ul 의 padding 이 겹쳐 계단 폭이 어긋나고, 그 줄에서 Tab 을 누르면 수준이 안 바뀐다.
+        //   <li><div>글</div></li> 도 Tab 이 <blockquote> 를 만들게 하므로 같이 편다.
+        //   이미 저장해둔 노트도 열었다 저장하면 자동으로 정리된다.
+        function rtUnwrapListWrappers(root) {
+            // ⓪ <h4><ul><li>글</li></ul></h4> → <ul><li><h4>글</h4></li></ul>
+            //    (옛 편집기에서 소제목 줄에 글머리를 켜면 이 모양이 나왔다.
+            //     겉모습은 그대로 두고 구조만 바로잡는다 — 소제목이 li 안으로 들어간다)
+            Array.prototype.forEach.call(root.querySelectorAll('h4 > ul'), ul => {
+                const h4 = ul.parentElement;
+                if (!h4 || h4.tagName !== 'H4') return;
+                Array.prototype.forEach.call(ul.querySelectorAll(':scope > li'), li => {
+                    if (li.querySelector(':scope > h4')) return;      // 이미 소제목이면 그대로
+                    const h = li.ownerDocument.createElement('h4');
+                    Array.prototype.slice.call(li.childNodes).forEach(c => {
+                        if (c.nodeType === 1 && c.tagName === 'UL') return;   // 하위 목록은 밖에 둔다
+                        h.appendChild(c);
+                    });
+                    li.insertBefore(h, li.firstChild);
+                });
+                h4.replaceWith(ul);
+            });
+            // ① 목록만 감싸고 있는 div/p 껍데기 벗기기
+            let guard = 0;
+            while (guard++ < 20) {
+                const wrap = Array.prototype.find.call(root.querySelectorAll('div, p'), n => {
+                    const kids = Array.prototype.filter.call(n.childNodes,
+                        c => c.nodeType === 1 || (c.nodeType === 3 && c.nodeValue.trim()));
+                    return kids.length > 0 && kids.every(c => c.nodeType === 1 && c.tagName === 'UL');
+                });
+                if (!wrap) break;
+                const frag = wrap.ownerDocument.createDocumentFragment();
+                while (wrap.firstChild) frag.appendChild(wrap.firstChild);
+                wrap.replaceWith(frag);
+            }
+            // ② li 안의 div/p 껍데기 벗기기 (소제목 h4 는 그대로 둔다 — 목록 속 소제목은 정상 구조)
+            Array.prototype.forEach.call(root.querySelectorAll('li > div, li > p'), n => {
+                const frag = n.ownerDocument.createDocumentFragment();
+                while (n.firstChild) frag.appendChild(n.firstChild);
+                // 줄이 두 개로 붙어버리지 않게, 뒤에 형제가 더 있으면 줄바꿈을 넣어준다
+                if (n.nextSibling && !(n.nextSibling.nodeType === 1 && n.nextSibling.tagName === 'UL')) {
+                    frag.appendChild(n.ownerDocument.createElement('br'));
+                }
+                n.replaceWith(frag);
+            });
         }
 
         // 예전에 저장된 '그냥 글자'를 서식 HTML로 변환 (· 로 시작하는 줄은 목록으로)
@@ -4957,6 +5006,14 @@ let vocabulary = [];
         //   그럴 때 rtLineBlock 이 null 이라 소제목 버튼이 아무 반응도 없었다.
         //   → 빈 문단을 하나 만들어 커서를 넣어준 뒤 서식을 적용한다.
         //   (글머리·들여쓰기는 rtEnsureBlock / execCommand 가 알아서 만들어 줘서 원래 잘 됐다)
+        // 커서를 그 줄 맨 뒤에 놓기 (여러 곳에서 쓴다)
+        function rtCaretEnd(node) {
+            if (!node) return;
+            const r = document.createRange();
+            r.selectNodeContents(node); r.collapse(false);
+            const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        }
+
         function rtEnsureLineBlock(id) {
             let block = rtLineBlock(id);
             if (block) return block;
@@ -5031,6 +5088,53 @@ let vocabulary = [];
                 block.parentNode.replaceChild(h, block);
                 caretInto(h);
             }
+        }
+
+        // [냐냐 요청] 소제목 줄에서 엔터 → 다음 줄은 '보통 글' 로 시작한다.
+        //   브라우저 기본 동작의 문제:
+        //     · 줄 중간에서 엔터 → 소제목을 그대로 복제한다 (<h4>현재</h4><h4>시제</h4>)
+        //     · 글머리 줄 안의 소제목에서 엔터 → 새 줄을 <li><div>…</div></li> 로 만든다.
+        //       그 <div> 때문에 Tab 을 누르면 <blockquote> 가 생겨서 수준 변경이 깨졌다.
+        //   true 를 돌려주면 기본 동작을 막고 우리가 만든 줄을 쓴다.
+        function rtEnter(id) {
+            const sel = window.getSelection();
+            if (!sel || !sel.rangeCount || !sel.isCollapsed) return false;  // 범위 선택은 기본 동작에
+            const line = rtLineBlock(id);
+            if (!line || line.tagName !== 'H4') return false;               // 소제목 줄에서만 손댄다
+
+            const h4 = line;
+            const li = h4.closest('li');            // 글머리 줄 안의 소제목이면 새 줄도 li 로
+            const anchor = li || h4;
+            const r = sel.getRangeAt(0);
+
+            // 커서 앞이 비어 있으면 = 줄 맨 앞 → 위에 빈 줄만 끼우고 커서는 소제목에 그대로 둔다
+            const head = document.createRange();
+            head.selectNodeContents(h4);
+            head.setEnd(r.startContainer, r.startOffset);
+            if (!head.toString().trim()) {
+                const blank = document.createElement(li ? 'li' : 'div');
+                blank.innerHTML = '<br>';
+                anchor.parentNode.insertBefore(blank, anchor);
+                return true;
+            }
+
+            // 커서 뒤 내용을 잘라내 새 줄로 옮긴다 (소제목 서식은 떼고)
+            const tail = document.createRange();
+            tail.selectNodeContents(h4);
+            tail.setStart(r.startContainer, r.startOffset);
+            const frag = tail.extractContents();
+
+            const newLine = document.createElement(li ? 'li' : 'div');
+            if (!li && h4.className) newLine.className = h4.className;      // 들여쓰기 단계는 이어받는다
+            newLine.appendChild(frag);
+            if (!newLine.textContent.trim()) newLine.innerHTML = '<br>';
+            if (!h4.textContent.trim() && !h4.querySelector('br')) h4.appendChild(document.createElement('br'));
+
+            anchor.parentNode.insertBefore(newLine, anchor.nextSibling);
+            const r2 = document.createRange();
+            r2.setStart(newLine, 0); r2.collapse(true);
+            sel.removeAllRanges(); sel.addRange(r2);
+            return true;
         }
 
         // ── 들여쓰기 / 글머리 기호 ────────────────────────────────
@@ -5286,12 +5390,50 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
+        // [냐냐 요청] execCommand('insertUnorderedList') 는 있던 줄을 그대로 두고 그 '안에' <ul> 을
+        //   넣어버린다 — <div><ul>…</ul></div>, 소제목 줄이면 <h4><ul>…</ul></h4>.
+        //   그러면 div/h4 의 padding 과 ul 의 padding 이 겹쳐 계단 폭이 어긋나고(위 5116줄 참고)
+        //   Tab 을 눌러도 수준이 제대로 안 바뀐다. 그래서 <ul><li> 를 직접 만든다.
+        //     · 소제목 줄 → <li><h4>…</h4></li> (소제목은 그대로 유지)
+        //     · 보통 문단 → 껍데기를 벗겨 <li> 안으로
         function rtAddBullet(id) {
-            const b = rtBlockOf(id);
-            const lv = b ? rtGetLevel(b) : 0;
-            if (b) { rtSetLevel(b, 0); if (!b.className) b.removeAttribute('class'); }  // 빈 class="" 껍데기 안 남기기
-            try { document.execCommand('insertUnorderedList'); } catch (e) {}
-            // insertUnorderedList 자체가 이미 1단계를 만드므로 나머지만 추가로 내림
+            const line = rtEnsureLineBlock(id);
+            if (!line) return;
+            if (line.tagName === 'LI' || line.closest('li')) return;   // 이미 목록 안
+            const lv = rtGetLevel(line);
+            rtSetLevel(line, 0);
+            if (!line.className) line.removeAttribute('class');
+
+            // 커서 자리를 기억해 둔다 (글자 노드는 옮겨도 그대로 살아있다)
+            const sel = window.getSelection();
+            const r0 = (sel && sel.rangeCount) ? sel.getRangeAt(0) : null;
+            const cont = r0 ? r0.endContainer : null, off = r0 ? r0.endOffset : 0;
+
+            const ul = document.createElement('ul');
+            const li = document.createElement('li');
+            ul.appendChild(li);
+            line.parentNode.insertBefore(ul, line);
+            if (line.tagName === 'H4') {
+                li.appendChild(line);                                  // 소제목은 li 안에 그대로
+            } else {
+                while (line.firstChild) li.appendChild(line.firstChild);
+                line.remove();
+            }
+            if (!li.childNodes.length) li.appendChild(document.createElement('br'));
+
+            let restored = false;
+            if (cont && cont.isConnected) {
+                try {
+                    const r = document.createRange();
+                    r.setStart(cont, off); r.collapse(true);
+                    sel.removeAllRanges(); sel.addRange(r);
+                    restored = true;
+                } catch (e) {}
+            }
+            if (!restored) rtCaretEnd(li);
+
+            // 문단 들여쓰기(rt-in*) 단계가 있었으면 목록 단계로 옮겨준다.
+            // 목록 1단계는 <ul> 을 만든 것으로 이미 셌으므로 나머지만 내린다
             for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
         }
         // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기 (서식 없이 그냥 글자로)
@@ -5334,6 +5476,12 @@ let vocabulary = [];
             if (e.key === 'Tab') {
                 e.preventDefault();
                 if (e.shiftKey) rtOutdent(id); else rtIndent(id);
+                return;
+            }
+            // [냐냐 요청] 소제목 줄에서 엔터 → 다음 줄은 보통 글로.
+            //   한글 조합 중(isComposing)에는 손대지 않는다 — 그 엔터는 글자를 확정하는 엔터다
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                if (rtEnter(id)) { e.preventDefault(); rtSyncState(id); }
             }
         }
 
