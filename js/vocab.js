@@ -793,9 +793,15 @@
         }
 
         // 중복 판정: 단어 + 품사가 둘 다 같을 때만 같은 단어 (el poder 명사 ≠ poder 동사)
+        //
+        // [냐냐 요청] ⚠️ 악센트·물결표는 절대 떼고 비교하면 안 된다 — 스페인어는 뜻이 아예 달라진다.
+        //   carne(고기) ≠ carné(증명서) · papa(감자) ≠ papá(아빠) · ano ≠ año(해)
+        //   예전엔 NFD로 악센트를 떼서 비교했고, 그래서 carné를 carne의 중복으로 보고
+        //   '합치기'(=한쪽 삭제)를 하자고 했다. NFC로 모양만 통일하고 글자는 그대로 본다.
+        //   찾기·검색은 지금도 악센트를 무시한다(stripAccents) — 여기만 정확히 본다.
         function findExistingWord(wordText, pos, excludeId) {
             const norm = (t) => String(t || '').toLowerCase().trim()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .normalize('NFC')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
             const target = norm(wordText);
             return vocabulary.find(w => w.id !== excludeId && norm(w.word) === target && w.pos === pos) || null;
