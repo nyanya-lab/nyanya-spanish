@@ -36,11 +36,12 @@ let vocabulary = [];
             if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
             if (typeof loadDisplayPrefs === 'function') loadDisplayPrefs(); // [냐냐 PATCH-6배치] 카드 표시 설정 복원
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
-            if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // [냐냐 PATCH] 문법표 필터/정렬 복원
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
-            // [냐냐 요청] 문법·개념은 항상 같은 모습으로 시작 (주제로 묶고, 제목까지 펼치고, 가나다순)
-            //   위의 loadGrammarFilterPrefs 로 복원한 정렬·보기 값을 일부러 덮어쓴다 — 순서 중요
+            // [냐냐 요청] 문법·개념은 마지막에 보던 모습으로 다시 시작한다.
+            //   먼저 기본 모습을 깔고 → 저장된 설정으로 덮어쓴다. 순서 중요
+            //   (initGrammarGroupsCollapsed 가 정렬·보기를 기본값으로 되돌려놓기 때문)
             if (typeof initGrammarGroupsCollapsed === 'function') initGrammarGroupsCollapsed();
+            if (typeof loadGrammarFilterPrefs === 'function') loadGrammarFilterPrefs(); // 필터·정렬·보기·펼침 상태 복원
             renderWordList();
             updateStats();
             renderDiary();
@@ -525,6 +526,7 @@ let vocabulary = [];
         function openAskAi(preset) {
             const panel = document.getElementById('ask-ai-panel');
             if (!panel) return;
+            closeQuickWord();   // 같은 자리에 뜨는 단어 찾기 패널은 닫는다
             panel.classList.remove('hidden');
             initAskAiResize();
             restoreAskAiPrefs();
@@ -548,6 +550,174 @@ let vocabulary = [];
             renderAskAiThread();
             const input = document.getElementById('ask-ai-input');
             if (input) { input.value = ''; input.focus(); }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 어디서든 단어 찾기·등록 (왼쪽 아래 초록 돋보기)
+        //   · 결과는 '단어 + 뜻' 만 작게. 자세히 보려면 눌러서 단어창으로
+        //   · 등록된 단어 → 단어창 / 사전에만 있는 단어 → 등록창에 채워서 열기
+        //   · AI 패널과 같은 자리에 뜨므로 둘 중 하나만 열린다
+        // ============================================================
+        let _quickWordResults = [];   // 화면에 그린 결과 (클릭 시 인덱스로 찾음 — 따옴표 escape 걱정 없음)
+
+        function toggleQuickWord() {
+            const panel = document.getElementById('quick-word-panel');
+            if (!panel) return;
+            if (panel.classList.contains('hidden')) openQuickWord(); else closeQuickWord();
+        }
+
+        function openQuickWord(preset) {
+            const panel = document.getElementById('quick-word-panel');
+            if (!panel) return;
+            closeAskAi();
+            panel.classList.remove('hidden');
+            const icon = document.getElementById('quick-word-fab-icon');
+            if (icon) icon.className = 'fa-solid fa-xmark';
+            const input = document.getElementById('quick-word-input');
+            if (input && preset !== undefined && preset !== null) input.value = String(preset);
+            renderQuickWordResults();
+            setTimeout(() => { if (input) { input.focus(); input.select(); } }, 60);
+        }
+
+        function closeQuickWord() {
+            document.getElementById('quick-word-panel')?.classList.add('hidden');
+            const icon = document.getElementById('quick-word-fab-icon');
+            if (icon) icon.className = 'fa-solid fa-magnifying-glass';
+        }
+
+        function clearQuickWord() {
+            const input = document.getElementById('quick-word-input');
+            if (input) { input.value = ''; input.focus(); }
+            renderQuickWordResults();
+        }
+
+        function quickWordKeydown(e) {
+            if (e.key === 'Escape') { closeQuickWord(); return; }
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            // 결과가 있으면 맨 위 것을 열고, 없으면 등록창으로
+            if (_quickWordResults.length > 0) pickQuickWord(0);
+            else openQuickWordRegister();
+        }
+
+        // 내 단어장 먼저, 그다음 오프라인 사전. 스페인어·한글 뜻 둘 다 검색된다
+        function quickWordMatches(query) {
+            const norm = (s) => (typeof stripAccents === 'function')
+                ? stripAccents(String(s || '').toLowerCase())
+                : String(s || '').toLowerCase();
+            const q = norm(query);
+            if (!q) return [];
+
+            const out = [];
+            const pushed = new Set();          // 이미 결과에 넣은 단어 (중복 방지)
+            const registered = new Map();      // 단어 → 내 단어장 항목. 사전 쪽 결과에 '등록됨' 을 제대로 달기 위함
+            (typeof vocabulary !== 'undefined' ? vocabulary : []).forEach(w => registered.set(norm(w.word), w));
+
+            (typeof vocabulary !== 'undefined' ? vocabulary : []).forEach(w => {
+                if (norm(w.word).includes(q) || norm(w.meaning).includes(q)) {
+                    pushed.add(norm(w.word));
+                    out.push({ word: w.word, meaning: w.meaning, pos: w.pos, id: w.id });
+                }
+            });
+            if (typeof OFFLINE_DICT_DB !== 'undefined') {
+                Object.keys(OFFLINE_DICT_DB).forEach(k => {
+                    const key = norm(k);
+                    if (pushed.has(key)) return;
+                    const item = OFFLINE_DICT_DB[k] || {};
+                    if (!norm(k).includes(q) && !norm(item.meaning).includes(q)) return;
+                    pushed.add(key);
+                    // 사전 뜻으로 찾았지만 이미 등록한 단어일 수 있다 → 그럴 땐 내 단어장 것으로 보여준다
+                    const mine = registered.get(key);
+                    if (mine) out.push({ word: mine.word, meaning: mine.meaning, pos: mine.pos, id: mine.id });
+                    else out.push({ word: k, meaning: item.meaning || '', pos: item.pos, id: null });
+                });
+            }
+
+            // 정확히 일치 → 입력으로 시작 → 그냥 포함. 같은 순위면 등록된 단어를 먼저
+            const rank = (r) => { const s = norm(r.word); return s === q ? 0 : (s.startsWith(q) ? 1 : 2); };
+            out.sort((a, b) => {
+                const ra = rank(a), rb = rank(b);
+                if (ra !== rb) return ra - rb;
+                const ha = (a.id !== null && a.id !== undefined), hb = (b.id !== null && b.id !== undefined);
+                if (ha !== hb) return ha ? -1 : 1;
+                return norm(a.word).localeCompare(norm(b.word), 'es');
+            });
+            return out;
+        }
+
+        function renderQuickWordResults() {
+            const box = document.getElementById('quick-word-results');
+            if (!box) return;
+            const raw = (document.getElementById('quick-word-input')?.value || '').trim();
+            document.getElementById('quick-word-clear')?.classList.toggle('hidden', !raw);
+
+            if (!raw) {
+                _quickWordResults = [];
+                box.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center gap-1.5 px-4">
+                        <div class="text-2xl">🔎</div>
+                        <p class="text-[11px] font-bold text-slate-500">찾을 단어를 적어주세요</p>
+                        <p class="text-[10px] text-slate-400">스페인어 · 한글 뜻 둘 다 돼요</p>
+                    </div>`;
+                return;
+            }
+
+            _quickWordResults = quickWordMatches(raw).slice(0, 40);
+            if (_quickWordResults.length === 0) {
+                box.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center gap-1.5 px-4">
+                        <div class="text-2xl">🆕</div>
+                        <p class="text-[11px] font-bold text-slate-500">"${escapeHtml(raw)}" 는 아직 없어요</p>
+                        <p class="text-[10px] text-slate-400">아래 '등록창 열기' 를 누르면 채워서 열어드려요</p>
+                    </div>`;
+                return;
+            }
+
+            box.innerHTML = _quickWordResults.map((r, i) => {
+                const registered = (r.id !== null && r.id !== undefined);
+                const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[r.pos]) ? POS_LABELS[r.pos] : '';
+                const badge = registered
+                    ? `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-md px-1.5 py-0.5 shrink-0">등록됨</span>`
+                    : `<span class="text-[9px] font-bold text-slate-400 bg-slate-100 rounded-md px-1.5 py-0.5 shrink-0">사전</span>`;
+                return `
+                    <div onclick="pickQuickWord(${i})" title="${registered ? '단어창 열기' : '이 단어로 등록창 열기'}"
+                        class="px-2.5 py-2 rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2 transition-colors">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(r.word)}${posLabel ? `<span class="ml-1 text-[9px] font-medium text-slate-400">${escapeHtml(posLabel)}</span>` : ''}</p>
+                            <p class="text-[11px] text-slate-500 truncate">${escapeHtml(r.meaning || '뜻 없음')}</p>
+                        </div>
+                        ${badge}
+                    </div>`;
+            }).join('');
+        }
+
+        function pickQuickWord(i) {
+            const r = _quickWordResults[i];
+            if (!r) return;
+            if (r.id !== null && r.id !== undefined) {
+                closeQuickWord();
+                if (typeof openWordModal === 'function') openWordModal(r.id);
+                return;
+            }
+            // 사전에만 있는 단어 → 등록창에 채워서 열기
+            openQuickWordRegister(r.word);
+        }
+
+        // 등록창 열기. 한글이면 뜻 칸, 스페인어면 단어 칸에 넣는다 (단어장 검색의 '등록하기' 와 같은 규칙)
+        function openQuickWordRegister(presetWord) {
+            const raw = (presetWord !== undefined && presetWord !== null)
+                ? String(presetWord).trim()
+                : (document.getElementById('quick-word-input')?.value || '').trim();
+            closeQuickWord();
+            if (typeof openWordModal !== 'function') return;
+            openWordModal();
+            if (!raw) return;
+            const isKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(raw);
+            const target = document.getElementById(isKorean ? 'input-meaning' : 'input-word');
+            if (!target) return;
+            target.value = raw;
+            if (!isKorean && typeof handleWordInput === 'function') handleWordInput(raw);
+            target.focus();
         }
 
         function renderAskAiThread() {
@@ -3256,6 +3426,7 @@ let vocabulary = [];
         let grammarGroupCollapsed = {}; // {주제키: true} 접힌 주제. 없으면 펼침(기본)
         function toggleGrammarGroup(key) {
             grammarGroupCollapsed[key] = !grammarGroupCollapsed[key];
+            saveGrammarFilterPrefs();   // [냐냐 요청] 접어둔 주제도 기억
             renderGrammarTables();
         }
         function renderGrammarGrouped(tables) {
@@ -3452,12 +3623,14 @@ let vocabulary = [];
             const nowHidden = body.classList.toggle('hidden');
             grammarOpenState[id] = !nowHidden;
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+            saveGrammarFilterPrefs();   // [냐냐 요청] 열어둔 노트도 기억
         }
 
         function expandAllGrammar(open) {
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
             grammarViewMode = open ? 'all-open' : 'default';
             if (open) grammarGroupCollapsed = {};   // 다 펼칠 땐 접힌 주제도 열어준다
+            saveGrammarFilterPrefs();
             renderGrammarTables();
         }
 
@@ -3491,11 +3664,15 @@ let vocabulary = [];
                 grammarGroupCollapsed = {};
                 grammarViewMode = 'all-open';
             } else {
-                // → 기본 (주제까지 다 접기)
+                // → 기본 (주제까지 다 접기 = 목차만 보임)
+                //   예전엔 여기서 initGrammarGroupsCollapsed 를 불러서 정렬·보기까지 되돌렸고,
+                //   그 함수가 주제를 오히려 펼쳐놔서 '전부 접기' 가 안 먹었다. 접는 일만 한다.
                 getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
-                initGrammarGroupsCollapsed();
+                grammarGroupCollapsed = {};
+                getAllGrammarTables().forEach(t => { grammarGroupCollapsed[grammarTopicKey(t)] = true; });
                 grammarViewMode = 'default';
             }
+            saveGrammarFilterPrefs();
             renderGrammarTables();
         }
         function syncGrammarExpandBtn() {
@@ -3755,7 +3932,9 @@ let vocabulary = [];
         function saveGrammarFilterPrefs() {
             try {
                 localStorage.setItem('nyanya_grammar_filters', JSON.stringify({
-                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView
+                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
+                    // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
+                    expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState
                 }));
             } catch (e) {}
         }
@@ -3769,6 +3948,10 @@ let vocabulary = [];
                 if (f.view === 'list' || f.view === 'group') grammarGroupView = f.view;
                 // 예전에 저장해둔 값('topic' 등 지금은 없는 것)이 남아 있으면 기본(가나다순)으로
                 if (f.sort) grammarSortMode = GSORT_KEY_OF[f.sort] ? f.sort : 'alpha-asc';
+                // [냐냐 요청] 마지막에 보던 모습 복원 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
+                if (['default', 'topics-open', 'all-open'].includes(f.expand)) grammarViewMode = f.expand;
+                if (f.groups && typeof f.groups === 'object') grammarGroupCollapsed = f.groups;
+                if (f.open && typeof f.open === 'object') grammarOpenState = f.open;
             } catch (e) {}
         }
 
@@ -6204,8 +6387,8 @@ let vocabulary = [];
                 renderStreakBadge();
                 if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯
             } else if (tabId === 'grammar') {
-                // 탭 재진입 시 고정 안 한 표는 다시 접기 (고정된 것만 열린 상태 유지)
-                grammarOpenState = {};
+                // [냐냐 요청] 탭을 왔다갔다해도 마지막에 보던 모습 그대로 둔다
+                //   (예전엔 여기서 grammarOpenState 를 비워서 펼쳐둔 노트가 다 접혔다)
                 renderGrammarTables();
             }
         }

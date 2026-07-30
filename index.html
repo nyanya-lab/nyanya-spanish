@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260729a">
+    <link rel="stylesheet" href="css/style.css?v=20260730a">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -35,11 +35,19 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center gap-2 pointer-events-none"></div>
 
-    <!-- [냐냐 요청] AI에게 바로 물어보기 (왼쪽 아래, 배경 안 잠기는 대화 패널) -->
-    <button id="ask-ai-fab" onclick="toggleAskAi()" class="fixed bottom-5 left-5 z-[45] h-11 px-4 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-90" title="AI에게 물어보기">
-        <i id="ask-ai-fab-icon" class="fa-solid fa-comment-dots"></i>
-        <span class="text-xs font-bold">AI 질문</span>
-    </button>
+    <!-- [냐냐 요청] 왼쪽 아래 떠 있는 버튼 두 개 — AI 질문 + 단어 찾기·등록 -->
+    <!--   flex 로 나란히 둬서 AI 버튼 글자 길이가 바뀌어도 자리가 안 어긋난다 -->
+    <div class="fixed bottom-5 left-5 z-[45] flex items-center gap-2">
+        <!-- [냐냐 요청] AI에게 바로 물어보기 (배경 안 잠기는 대화 패널) -->
+        <button id="ask-ai-fab" onclick="toggleAskAi()" class="h-11 px-4 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-90" title="AI에게 물어보기">
+            <i id="ask-ai-fab-icon" class="fa-solid fa-comment-dots"></i>
+            <span class="text-xs font-bold">AI 질문</span>
+        </button>
+        <!-- [냐냐 요청] 어느 탭에서든 단어를 찾고(뜻만 작게), 없으면 바로 등록창으로 -->
+        <button id="quick-word-fab" onclick="toggleQuickWord()" class="w-11 h-11 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg flex items-center justify-center transition-all active:scale-90" title="단어 찾기 · 등록 (어디서든)">
+            <i id="quick-word-fab-icon" class="fa-solid fa-magnifying-glass"></i>
+        </button>
+    </div>
 
     <!-- [냐냐 PATCH] 맨 위로 가기 버튼 -->
     <!-- [냐냐 요청] 콘텐츠(max-w-7xl=1280px) 오른쪽 여백에 배치해서 본문 안 가림. 화면 좁으면 구석(1.25rem)으로 자동 -->
@@ -1544,6 +1552,44 @@
         </div>
     </div>
 
+    <!-- [냐냐 요청] 어디서든 단어 찾기 — 뜻만 작게. 눌러서 단어창, 없으면 등록창 -->
+    <div id="quick-word-panel" class="hidden fixed bottom-20 left-5 z-[46] w-[320px] max-w-[calc(100vw-2.5rem)] bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden flex flex-col" style="height: min(58vh, 480px);">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900">단어 찾기</p>
+                    <p class="text-[10px] text-slate-400">뜻만 빠르게 · 없으면 바로 등록</p>
+                </div>
+            </div>
+            <button onclick="closeQuickWord()" title="닫기" class="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-100 transition-all flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-3 shrink-0">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 pointer-events-none"></i>
+                <input id="quick-word-input" type="text" oninput="renderQuickWordResults()" onkeydown="quickWordKeydown(event)"
+                    placeholder="스페인어 또는 한글 뜻"
+                    class="w-full pl-8 pr-9 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-300">
+                <button id="quick-word-clear" onclick="clearQuickWord()" title="지우기" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg text-slate-400 hover:bg-slate-100 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="quick-word-results" class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 pb-2"></div>
+
+        <div class="p-3 border-t border-slate-100 shrink-0">
+            <button onclick="openQuickWordRegister()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-plus text-[10px]"></i>등록창 열기
+            </button>
+        </div>
+    </div>
+
     <div id="help-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -1955,13 +2001,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260729a"></script>
-    <script src="js/creatures.js?v=20260729a"></script>
-    <script src="js/core.js?v=20260729a"></script>
-    <script src="js/vocab.js?v=20260729a"></script>
-    <script src="js/flashcards.js?v=20260729a"></script>
-    <script src="js/quiz.js?v=20260729a"></script>
-    <script src="js/games.js?v=20260729a"></script>
-    <script src="js/ai-feedback.js?v=20260729a"></script>
+    <script src="js/dictionary-data.js?v=20260730a"></script>
+    <script src="js/creatures.js?v=20260730a"></script>
+    <script src="js/core.js?v=20260730a"></script>
+    <script src="js/vocab.js?v=20260730a"></script>
+    <script src="js/flashcards.js?v=20260730a"></script>
+    <script src="js/quiz.js?v=20260730a"></script>
+    <script src="js/games.js?v=20260730a"></script>
+    <script src="js/ai-feedback.js?v=20260730a"></script>
 </body>
 </html>
