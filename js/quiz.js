@@ -217,6 +217,11 @@ let quizSession = null;
         function startQuiz() {
             // [냐냐 PATCH] 오늘의 복습 전용 풀이 지정된 경우: 범위 무시하고 그 단어들로 진행
             let reviewablePool;
+            // [냐냐 요청] '승급 대기' 를 체크했을 때만 그 단어를 앞으로 당긴다.
+            //   예전엔 체크와 무관하게 늘 앞으로 당겨서, 마스터 제외만 골라도
+            //   승급 대기 단어(3점 이상 미마스터)가 매 회차 반드시 나왔다.
+            //   승급 대기가 2개뿐이면 그 2개가 200회차 내내 200번 다 나오는 셈이었다.
+            let prioritizePromotion = false;
             if (quizReviewPoolOverride && quizReviewPoolOverride.length >= 2) {
                 reviewablePool = quizReviewPoolOverride;
                 quizReviewPoolOverride = null; // 1회성 (다음 퀴즈엔 영향 없음)
@@ -252,6 +257,7 @@ let quizSession = null;
                 if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
                 if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
                 reviewablePool = [...poolSet.values()];
+                prioritizePromotion = !!wantPromotion;   // 체크했을 때만 앞으로 당긴다
             }
 
             if (reviewablePool.length < 2) {
@@ -316,11 +322,17 @@ let quizSession = null;
             // [냐냐 PATCH] 단어 문제 — 승급대기 그룹을 우선하되, 각 그룹 "안에서는" 셔플해서 매번 다른 단어가 나오게
             //   (예전엔 배열 앞쪽만 계속 뽑혀서 같은 단어가 반복되는 것처럼 보였음)
             //   승급대기 = 통합점수 3점 이상 + 미마스터 (여기서 다시 계산 — 위 블록 스코프 밖이라)
-            const promoIdSet = new Set(vocabulary.filter(x => !x.mastered && getScore(x) >= 3).map(x => x.id));
+            //   ⚠️ '승급 대기' 를 체크했을 때만 앞으로 당긴다. 안 골랐으면 전부 똑같이 섞는다
             const wordPool = reviewablePool.filter(x => !reservedIds.has(x.id));
-            const promo = shuffle(wordPool.filter(x => promoIdSet.has(x.id)));
-            const rest = shuffle(wordPool.filter(x => !promoIdSet.has(x.id)));
-            const wordQueue = [...promo, ...rest]; // 승급대기 먼저, 각 그룹은 셔플
+            let wordQueue;
+            if (prioritizePromotion) {
+                const promoIdSet = new Set(vocabulary.filter(x => !x.mastered && getScore(x) >= 3).map(x => x.id));
+                const promo = shuffle(wordPool.filter(x => promoIdSet.has(x.id)));
+                const rest = shuffle(wordPool.filter(x => !promoIdSet.has(x.id)));
+                wordQueue = [...promo, ...rest]; // 승급대기 먼저, 각 그룹은 셔플
+            } else {
+                wordQueue = shuffle(wordPool);
+            }
             for (let i = 0; i < wordCount && i < wordQueue.length; i++) {
                 const w = wordQueue[i];
                 // [냐냐 PATCH] 문제 유형: 객관식만 / 주관식만 / 섞어서(약 30% 주관식)
