@@ -965,12 +965,157 @@
             return s.split(/\s+/).length <= 3;              // 'el disco duro' 정도까지만
         }
 
-        // 내용이 있는 문법 노트 중에서 하나를 무작위로
-        function pickMissionGrammarNote() {
+        // ============================================================
+        // [냐냐 요청] 출제할 문법 범위 — 내가 고른 노트들 안에서만 문법을 뽑는다.
+        //   여러 문법을 한 문장에 합치는 게 아니라, '출제 범위'를 좁히는 것.
+        //   그래서 미션·첨삭 프롬프트는 그대로고, 고르는 풀만 달라진다.
+        //   빈 배열 = 범위 안 정함 = 전체에서 무작위 (예전과 같음)
+        // ============================================================
+        const AI_SCOPE_KEY = 'nyanya_ai_grammar_scope';
+        let aiMissionGrammarScope = [];
+        let aiScopePending = null;   // 모달에서 고르는 중인 임시 선택 (취소하면 버림)
+
+        function loadAiGrammarScope() {
+            try {
+                const raw = localStorage.getItem(AI_SCOPE_KEY);
+                if (!raw) return;
+                const v = JSON.parse(raw);
+                if (Array.isArray(v)) aiMissionGrammarScope = v.filter(x => typeof x === 'string');
+            } catch (e) {}
+            syncAiScopeBadge();
+        }
+        function saveAiGrammarScope() {
+            try { localStorage.setItem(AI_SCOPE_KEY, JSON.stringify(aiMissionGrammarScope)); } catch (e) {}
+        }
+
+        // 미션 재료로 쓸 수 있는 노트 (내용이 비어 있으면 AI 에게 줄 게 없다)
+        function aiUsableGrammarNotes() {
             const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
-            const usable = all.filter(t => buildGrammarContextForMission(t).trim().length > 0);
-            if (!usable.length) return null;
-            return usable[Math.floor(Math.random() * usable.length)];
+            return all.filter(t => buildGrammarContextForMission(t).trim().length > 0);
+        }
+
+        // 지금 범위에 실제로 걸리는 노트들. 범위가 비었거나 다 지워졌으면 전체
+        function aiScopedGrammarNotes() {
+            const usable = aiUsableGrammarNotes();
+            if (!aiMissionGrammarScope.length) return usable;
+            const scoped = usable.filter(t => aiMissionGrammarScope.includes(t.id));
+            return scoped.length ? scoped : usable;   // 고른 노트가 전부 지워진 경우 대비
+        }
+
+        function syncAiScopeBadge() {
+            const badge = document.getElementById('ai-scope-badge');
+            if (!badge) return;
+            const picked = aiMissionGrammarScope.length
+                ? aiUsableGrammarNotes().filter(t => aiMissionGrammarScope.includes(t.id)).length
+                : 0;
+            const on = picked > 0;
+            badge.innerText = on ? `${picked}개` : '전체';
+            badge.className = on
+                ? 'bg-violet-100 text-violet-700 rounded-md px-1.5 py-0.5 text-[10px] font-black'
+                : 'bg-slate-200 text-slate-600 rounded-md px-1.5 py-0.5 text-[10px] font-black';
+        }
+
+        function openAiGrammarScope() {
+            const modal = document.getElementById('ai-grammar-scope-modal');
+            if (!modal) return;
+            aiScopePending = new Set(aiMissionGrammarScope);
+            renderAiGrammarScope();
+            modal.classList.remove('hidden');
+        }
+        function closeAiGrammarScope() {
+            document.getElementById('ai-grammar-scope-modal')?.classList.add('hidden');
+            aiScopePending = null;
+        }
+        function toggleAiScopeNote(id) {
+            if (!aiScopePending) return;
+            if (aiScopePending.has(id)) aiScopePending.delete(id); else aiScopePending.add(id);
+            renderAiGrammarScope();
+        }
+        function setAiScopeAll(on) {
+            if (!aiScopePending) return;
+            aiScopePending = on ? new Set(aiUsableGrammarNotes().map(t => t.id)) : new Set();
+            renderAiGrammarScope();
+        }
+        // 약점·치명적 약점 문법만 담기 (문법 탭의 약점 필터와 같은 기준)
+        function setAiScopeWeak() {
+            if (!aiScopePending) return;
+            const weak = aiUsableGrammarNotes().filter(t =>
+                typeof getGrammarGrade === 'function' && ['weak', 'critical'].includes(getGrammarGrade(t.id)));
+            if (!weak.length) {
+                showToast("약점으로 잡힌 문법이 아직 없어요", "info");
+                return;
+            }
+            aiScopePending = new Set(weak.map(t => t.id));
+            renderAiGrammarScope();
+        }
+        function applyAiGrammarScope() {
+            if (!aiScopePending) return;
+            const all = aiUsableGrammarNotes();
+            const picked = all.filter(t => aiScopePending.has(t.id)).map(t => t.id);
+            // 전부 고른 건 '범위 없음'과 같으니 비워둔다 (배지가 '전체'로 보이게)
+            aiMissionGrammarScope = (picked.length === all.length) ? [] : picked;
+            saveAiGrammarScope();
+            syncAiScopeBadge();
+            closeAiGrammarScope();
+            showToast(aiMissionGrammarScope.length
+                ? `문법 ${aiMissionGrammarScope.length}개 범위로 출제할게요`
+                : "전체 문법에서 출제할게요", "success");
+        }
+
+        function renderAiGrammarScope() {
+            const box = document.getElementById('ai-scope-list');
+            const countEl = document.getElementById('ai-scope-count');
+            if (!box || !aiScopePending) return;
+            const all = aiUsableGrammarNotes();
+            if (countEl) countEl.innerText = `${aiScopePending.size} / ${all.length}개 선택`;
+
+            if (!all.length) {
+                box.innerHTML = `<div class="py-10 text-center text-xs text-slate-400">쓸 수 있는 문법 노트가 없어요.<br>문법·개념 탭에서 노트를 먼저 채워주세요.</div>`;
+                return;
+            }
+
+            // 문법 탭과 같은 주제 순서로 묶어서 보여준다
+            const groups = {};
+            all.forEach(t => {
+                const k = (typeof grammarTopicKey === 'function') ? grammarTopicKey(t) : '__other__';
+                (groups[k] = groups[k] || []).push(t);
+            });
+            const order = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(k => groups[k]);
+            if (typeof GRAMMAR_OTHER_TOPIC !== 'undefined' && groups[GRAMMAR_OTHER_TOPIC]) order.push(GRAMMAR_OTHER_TOPIC);
+            Object.keys(groups).forEach(k => { if (order.indexOf(k) < 0) order.push(k); });
+
+            box.innerHTML = order.map(key => {
+                const label = (typeof grammarTopicLabel === 'function') ? grammarTopicLabel(key) : key;
+                const rows = groups[key].map(t => {
+                    const on = aiScopePending.has(t.id);
+                    const grade = (typeof getGrammarGrade === 'function') ? getGrammarGrade(t.id) : null;
+                    const weakChip = ['weak', 'critical'].includes(grade)
+                        ? `<span class="text-[9px] font-black text-rose-600 bg-rose-50 rounded-md px-1.5 py-0.5 shrink-0">약점</span>` : '';
+                    return `
+                        <button type="button" onclick="toggleAiScopeNote('${t.id}')"
+                            class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${
+                                on ? 'bg-violet-50 border-violet-300' : 'bg-white border-slate-200 hover:border-slate-300'}">
+                            <span class="w-4 h-4 shrink-0 rounded-md border flex items-center justify-center ${
+                                on ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-slate-300'}">
+                                ${on ? '<i class="fa-solid fa-check text-[9px]"></i>' : ''}
+                            </span>
+                            <span class="text-xs font-bold text-slate-800 truncate flex-1">${escapeHtml(t.icon || '📋')} ${escapeHtml(t.title || '')}</span>
+                            ${weakChip}
+                        </button>`;
+                }).join('');
+                return `
+                    <div>
+                        <div class="text-[11px] font-black text-slate-400 mb-1.5">${escapeHtml(label)}</div>
+                        <div class="space-y-1.5">${rows}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        // 내용이 있는 문법 노트 중에서 하나를 무작위로 (범위를 정해뒀으면 그 안에서만)
+        function pickMissionGrammarNote() {
+            const pool = aiScopedGrammarNotes();
+            if (!pool.length) return null;
+            return pool[Math.floor(Math.random() * pool.length)];
         }
 
         async function generateAiMission() {

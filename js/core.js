@@ -37,6 +37,7 @@ let vocabulary = [];
             if (typeof loadDisplayPrefs === 'function') loadDisplayPrefs(); // [냐냐 PATCH-6배치] 카드 표시 설정 복원
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
+            if (typeof loadAiGrammarScope === 'function') loadAiGrammarScope(); // [냐냐 요청] AI 미션 출제 문법 범위 복원
             // [냐냐 요청] 문법·개념은 마지막에 보던 모습으로 다시 시작한다.
             //   먼저 기본 모습을 깔고 → 저장된 설정으로 덮어쓴다. 순서 중요
             //   (initGrammarGroupsCollapsed 가 정렬·보기를 기본값으로 되돌려놓기 때문)
