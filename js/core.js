@@ -5492,22 +5492,20 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
-        // [냐냐 요청] 자판으로 치기 번거로운 기호를 커서 자리에 바로 넣기
-        //   ¿ ¡ 는 바로 뒤에 글자가 붙으니(¿Qué) 공백을 넣지 않는다
+        // [냐냐 요청] 자판으로 치기 번거로운 기호를 커서 자리에 바로 넣기.
+        //   뒤에 공백은 붙이지 않는다 — 바로 이어서 치는 게 대부분이라 (·주의, [사물])
         const RT_SYMBOLS = [
             { ch: '·', title: '가운데 점' },
-            { ch: '→', title: '화살표' },
-            { ch: '¿', title: '거꾸로 물음표' },
-            { ch: '¡', title: '거꾸로 느낌표' }
+            { ch: '/', title: '빗금' },
+            { ch: '[', title: '대괄호 열기' },
+            { ch: ']', title: '대괄호 닫기' }
         ];
-        const rtSymbolNeedsGap = (ch) => ch !== '¿' && ch !== '¡';
 
         function rtInsertSymbol(id, ch) {
             const el = rtFocusEditor(id);
             if (!el) return;
             try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
-            const gap = rtSymbolNeedsGap(ch) ? '&nbsp;' : '';
-            try { document.execCommand('insertHTML', false, escapeHtml(ch) + gap); } catch (e) {}
+            try { document.execCommand('insertHTML', false, escapeHtml(ch)); } catch (e) {}
             rtSyncState(id);
         }
 

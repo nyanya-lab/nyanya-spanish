@@ -429,12 +429,10 @@
         function insertNotesSymbol(ch) {
             const ta = document.getElementById('input-notes');
             if (!ta) return;
-            const gap = (typeof rtSymbolNeedsGap === 'function' && rtSymbolNeedsGap(ch)) ? ' ' : '';
-            const txt = ch + gap;
             const s = (ta.selectionStart != null) ? ta.selectionStart : ta.value.length;
             const e = (ta.selectionEnd != null) ? ta.selectionEnd : s;
-            ta.value = ta.value.slice(0, s) + txt + ta.value.slice(e);
-            const pos = s + txt.length;
+            ta.value = ta.value.slice(0, s) + ch + ta.value.slice(e);
+            const pos = s + ch.length;
             ta.focus();
             try { ta.setSelectionRange(pos, pos); } catch (err) {}
             toggleNotesClearBtn();
