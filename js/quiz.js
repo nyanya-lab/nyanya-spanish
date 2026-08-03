@@ -267,13 +267,36 @@ let quizSession = null;
             const wordCount = Math.max(0, count - idiomCount - synCount);
 
             const questions = [];
+            const shuffle = (arr) => { const a = [...arr]; for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; };
+
+            // [냐냐 요청] 관용구·유의어 문제를 '먼저' 정한 뒤, 거기 쓰인 단어는 단어 문제에서 뺀다.
+            //   예전엔 단어 문제를 먼저 만들고 관용구를 나중에 무작위로 뽑아서,
+            //   같은 단어가 한 회차에 뜻 문제로도 관용구 문제로도 나오는 일이 200번 중 52번(26%) 있었다.
+            //   ("단어 하나당 문제 하나"가 원래 의도인데 단어 문제끼리만 지켜지고 있었음)
+            const synQuestions = synCount > 0 ? buildSynonymQuestions(reviewablePool, synCount) : [];
+            const reservedIds = new Set();
+            synQuestions.forEach(q => { if (q.word && q.word.id) reservedIds.add(q.word.id); });
+
+            // 관용구는 섞어서 앞에서부터 꺼낸다. 예전처럼 매번 무작위로 뽑으면 같은 관용구가
+            //   한 회차에 두 번 나올 수 있었다 (200번 중 5번).
+            //   allIdioms 는 (관용구, 단어) 쌍이라 한 단어가 관용구를 여럿 가지면 항목도 여럿이다
+            //   → 단어별로 하나씩만 꺼내야 같은 단어가 두 번 안 나온다
+            const idiomTargets = [];
+            shuffle(allIdioms).forEach(t => {
+                if (idiomTargets.length >= idiomCount) return;
+                const wid = t.word && t.word.id;
+                if (!wid || reservedIds.has(wid)) return;
+                reservedIds.add(wid);
+                idiomTargets.push(t);
+            });
+
             // [냐냐 PATCH] 단어 문제 — 승급대기 그룹을 우선하되, 각 그룹 "안에서는" 셔플해서 매번 다른 단어가 나오게
             //   (예전엔 배열 앞쪽만 계속 뽑혀서 같은 단어가 반복되는 것처럼 보였음)
-            const shuffle = (arr) => { const a = [...arr]; for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; };
             //   승급대기 = 통합점수 3점 이상 + 미마스터 (여기서 다시 계산 — 위 블록 스코프 밖이라)
             const promoIdSet = new Set(vocabulary.filter(x => !x.mastered && getScore(x) >= 3).map(x => x.id));
-            const promo = shuffle(reviewablePool.filter(x => promoIdSet.has(x.id)));
-            const rest = shuffle(reviewablePool.filter(x => !promoIdSet.has(x.id)));
+            const wordPool = reviewablePool.filter(x => !reservedIds.has(x.id));
+            const promo = shuffle(wordPool.filter(x => promoIdSet.has(x.id)));
+            const rest = shuffle(wordPool.filter(x => !promoIdSet.has(x.id)));
             const wordQueue = [...promo, ...rest]; // 승급대기 먼저, 각 그룹은 셔플
             for (let i = 0; i < wordCount && i < wordQueue.length; i++) {
                 const w = wordQueue[i];
@@ -351,9 +374,9 @@ let quizSession = null;
                 questions.push(q);
             }
 
-            // 관용구 문제 (양방향 섞어서)
-            for (let i = 0; i < idiomCount; i++) {
-                const target = allIdioms[Math.floor(Math.random() * allIdioms.length)];
+            // 관용구 문제 (양방향 섞어서) — 위에서 미리 뽑아둔 것들로, 같은 관용구가 두 번 안 나온다
+            for (let i = 0; i < idiomTargets.length; i++) {
+                const target = idiomTargets[i];
                 // [냐냐 PATCH] 섞어서/주관식 모드에서 30% 확률로 '뜻 해석 주관식' 문제 (AI가 유연하게 채점)
                 const canSubjective = selectedQuizFormat === 'subjective' || (selectedQuizFormat === 'mixed' && Math.random() < 0.3);
                 if (canSubjective) {
@@ -401,9 +424,8 @@ let quizSession = null;
             }
 
             // [냐냐 PATCH-4차] 유의어 묶음 문제 (위에서 count 안에 몫을 떼둔 만큼만)
-            if (synCount > 0) {
-                questions.push(...buildSynonymQuestions(reviewablePool, synCount));
-            }
+            //   ⚠️ 위에서 미리 만들어 뒀다 — 여기서 다시 만들면 단어 중복 제외가 어긋난다
+            if (synQuestions.length) questions.push(...synQuestions);
 
             // 총 개수가 선택한 수를 절대 넘지 않게 마지막으로 한 번 더 자름
             if (questions.length > count) questions.length = count;
