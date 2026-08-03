@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260803c">
+    <link rel="stylesheet" href="css/style.css?v=20260803e">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -511,17 +511,22 @@
                     </div>
 
                     <!-- 문제 화면 -->
-                    <div id="quiz-question-screen" class="hidden bg-white rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-sm border border-slate-200 space-y-5">
-                        <div class="flex justify-between items-center text-xs text-slate-400">
-                            <span id="quiz-question-counter">1 / 10</span>
-                            <span id="arena-score" class="font-bold text-violet-600">정답 0개</span>
-                        </div>
-                        
-                        <div class="text-center py-4 space-y-3">
-                            <div id="quiz-coach-character" class="text-5xl select-none transition-transform duration-150">🧑‍🏫</div>
-                            <div class="inline-block bg-violet-50 px-4 py-2.5 rounded-2xl border border-violet-100 max-w-full">
-                                <span class="text-xs text-violet-500 font-bold block" id="quiz-question-label">QUESTION</span>
-                                <h3 id="quiz-question-text" class="text-lg md:text-xl font-bold text-slate-900 mt-1">다음 스페인어의 올바른 한국어 뜻은?</h3>
+                    <!-- [냐냐 요청] overflow-hidden 을 뺐다 — 조상에 있으면 아래 sticky 가 동작하지 않는다 -->
+                    <div id="quiz-question-screen" class="hidden bg-white rounded-3xl p-6 md:p-8 relative shadow-sm border border-slate-200 space-y-5">
+                        <!-- [냐냐 요청] 문제는 위에 붙여두고 아래 해설만 움직이게 (AI 첨삭과 같은 방식).
+                             top 값은 위쪽 서브메뉴 바 높이에 맞춰 syncQuizStickyTop() 이 잡아준다 -->
+                        <div id="quiz-sticky-head" class="sticky z-20 bg-white -mx-6 md:-mx-8 px-6 md:px-8 -mt-6 md:-mt-8 pt-6 md:pt-8 pb-3 rounded-t-3xl space-y-3">
+                            <div class="flex justify-between items-center text-xs text-slate-400">
+                                <span id="quiz-question-counter">1 / 10</span>
+                                <span id="arena-score" class="font-bold text-violet-600">정답 0개</span>
+                            </div>
+
+                            <div class="text-center space-y-2">
+                                <div id="quiz-coach-character" class="text-5xl select-none transition-transform duration-150">🧑‍🏫</div>
+                                <div class="inline-block bg-violet-50 px-4 py-2.5 rounded-2xl border border-violet-100 max-w-full">
+                                    <span class="text-xs text-violet-500 font-bold block" id="quiz-question-label">QUESTION</span>
+                                    <h3 id="quiz-question-text" class="text-lg md:text-xl font-bold text-slate-900 mt-1">다음 스페인어의 올바른 한국어 뜻은?</h3>
+                                </div>
                             </div>
                         </div>
 
@@ -2039,13 +2044,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260803c"></script>
-    <script src="js/creatures.js?v=20260803c"></script>
-    <script src="js/core.js?v=20260803c"></script>
-    <script src="js/vocab.js?v=20260803c"></script>
-    <script src="js/flashcards.js?v=20260803c"></script>
-    <script src="js/quiz.js?v=20260803c"></script>
-    <script src="js/games.js?v=20260803c"></script>
-    <script src="js/ai-feedback.js?v=20260803c"></script>
+    <script src="js/dictionary-data.js?v=20260803e"></script>
+    <script src="js/creatures.js?v=20260803e"></script>
+    <script src="js/core.js?v=20260803e"></script>
+    <script src="js/vocab.js?v=20260803e"></script>
+    <script src="js/flashcards.js?v=20260803e"></script>
+    <script src="js/quiz.js?v=20260803e"></script>
+    <script src="js/games.js?v=20260803e"></script>
+    <script src="js/ai-feedback.js?v=20260803e"></script>
 </body>
 </html>

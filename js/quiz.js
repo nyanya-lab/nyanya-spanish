@@ -7,6 +7,7 @@ let quizSession = null;
             document.getElementById('quiz-question-screen').classList.add('hidden');
             document.getElementById('quiz-results-screen').classList.add('hidden');
             document.getElementById('quiz-combo-box').classList.add('hidden');
+            syncQuizStickyTop();   // 셋업 화면에서는 서브메뉴 바가 다시 고정된다
 
             const startBtn = document.getElementById('quiz-start-btn');
             const sub = document.getElementById('quiz-setup-sub');
@@ -49,6 +50,28 @@ let quizSession = null;
         //   ② "차이 구분: '겉으로 드러나는 밝음' 쪽은?" (차이 설명 활용, 객관식)
         //   → 차이를 서술이 아니라 객관식으로 물어서 부담 없이 학습
         // ============================================================
+        // ============================================================
+        // [냐냐 요청] 문제는 화면 위에 붙여두고, 답을 고른 뒤 열리는 해설만 아래로 움직이게.
+        //   퀴즈 탭엔 서브메뉴(쓰기/단어빈칸/퀴즈/…) sticky 바가 top-14 에 이미 있는데,
+        //   모바일에선 이 바가 3줄로 268px 이나 돼서 문제까지 붙이면 화면의 2/3 가 고정돼 버린다.
+        //   → 문제를 푸는 동안에는 서브메뉴 바의 고정을 풀고 문제만 상단에 붙인다.
+        //     (서브메뉴는 위로 스크롤하면 나온다. 문제 푸는 중엔 쓸 일이 없다)
+        //   셋업·결과 화면에서는 예전처럼 서브메뉴 바가 고정된다.
+        // ============================================================
+        const QUIZ_HEADER_TOP = 56;   // 상단 헤더(sticky top-14) 높이 = 3.5rem
+
+        function syncQuizStickyTop() {
+            const head = document.getElementById('quiz-sticky-head');
+            const bar = document.querySelector('#tab-quiz > .sticky');
+            const screen = document.getElementById('quiz-question-screen');
+            const inQuiz = !!screen && !screen.classList.contains('hidden');
+            if (bar) bar.style.position = inQuiz ? 'static' : '';
+            if (!head) return;
+            const barH = (bar && !inQuiz) ? Math.round(bar.getBoundingClientRect().height) : 0;
+            head.style.top = (QUIZ_HEADER_TOP + barH) + 'px';
+        }
+        window.addEventListener('resize', () => { if (typeof syncQuizStickyTop === 'function') syncQuizStickyTop(); });
+
         function buildSynonymQuestions(sourcePool, maxCount) {
             const out = [];
             // 링크가 살아있는 단어만 (상대 단어가 삭제됐으면 제외)
@@ -444,6 +467,7 @@ let quizSession = null;
 
         function renderQuizQuestion() {
             const q = quizSession.questions[quizSession.currentIndex];
+            syncQuizStickyTop();   // [냐냐 요청] 문제 영역을 서브메뉴 바 바로 아래에 붙인다 (바 높이가 바뀔 수 있음)
             document.getElementById('quiz-question-counter').innerText = `${quizSession.currentIndex + 1} / ${quizSession.questions.length}`;
             document.getElementById('arena-score').innerText = `정답 ${quizSession.correctCount}개`;
             document.getElementById('quiz-progress-text').innerText = `${quizSession.currentIndex + 1}/${quizSession.questions.length}`;
@@ -1218,6 +1242,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             document.getElementById('quiz-question-screen').classList.add('hidden');
             document.getElementById('quiz-results-screen').classList.remove('hidden');
             document.getElementById('quiz-combo-box').classList.add('hidden');
+            syncQuizStickyTop();   // 문제 화면을 닫았으니 서브메뉴 바 고정을 되돌린다
 
             // [냐냐 PATCH] 이번 퀴즈에서 자동 마스터된 단어 알림
             const autoMastered = quizSession.autoMasteredIds || [];
@@ -1375,4 +1400,5 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             document.getElementById('quiz-results-screen').classList.add('hidden');
             document.getElementById('quiz-question-screen').classList.add('hidden');
             document.getElementById('quiz-setup-screen').classList.remove('hidden');
+            syncQuizStickyTop();
         }

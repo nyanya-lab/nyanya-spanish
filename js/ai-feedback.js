@@ -1015,6 +1015,26 @@
                 : 'bg-slate-200 text-slate-600 rounded-md px-1.5 py-0.5 text-[10px] font-black';
         }
 
+        // [냐냐 요청] 주제 접고 펴기 — 접힌 주제 키를 기억해 둔다 (모달을 다시 열어도 유지)
+        let aiScopeCollapsed = {};
+
+        function toggleAiScopeGroup(key) {
+            aiScopeCollapsed[key] = !aiScopeCollapsed[key];
+            renderAiGrammarScope();
+        }
+
+        // [냐냐 요청] 주제 단위로 한번에 켜고 끄기 — 그 주제가 다 켜져 있으면 끄고, 아니면 다 켠다
+        function toggleAiScopeGroupAll(key) {
+            if (!aiScopePending) return;
+            const ids = aiUsableGrammarNotes()
+                .filter(t => ((typeof grammarTopicKey === 'function') ? grammarTopicKey(t) : '__other__') === key)
+                .map(t => t.id);
+            if (!ids.length) return;
+            const allOn = ids.every(id => aiScopePending.has(id));
+            ids.forEach(id => { if (allOn) aiScopePending.delete(id); else aiScopePending.add(id); });
+            renderAiGrammarScope();
+        }
+
         function openAiGrammarScope() {
             const modal = document.getElementById('ai-grammar-scope-modal');
             if (!modal) return;
@@ -1086,7 +1106,14 @@
 
             box.innerHTML = order.map(key => {
                 const label = (typeof grammarTopicLabel === 'function') ? grammarTopicLabel(key) : key;
-                const rows = groups[key].map(t => {
+                const list = groups[key];
+                const onCount = list.filter(t => aiScopePending.has(t.id)).length;
+                const allOn = onCount === list.length;
+                const someOn = onCount > 0 && !allOn;
+                const collapsed = !!aiScopeCollapsed[key];
+                const safeKey = String(key).replace(/'/g, "\\'");
+
+                const rows = list.map(t => {
                     const on = aiScopePending.has(t.id);
                     const grade = (typeof getGrammarGrade === 'function') ? getGrammarGrade(t.id) : null;
                     const weakChip = ['weak', 'critical'].includes(grade)
@@ -1103,10 +1130,27 @@
                             ${weakChip}
                         </button>`;
                 }).join('');
+
+                // 주제 줄: 왼쪽 화살표 = 접고 펴기 / 체크칸 = 그 주제 전부 켜고 끄기
                 return `
                     <div>
-                        <div class="text-[11px] font-black text-slate-400 mb-1.5">${escapeHtml(label)}</div>
-                        <div class="space-y-1.5">${rows}</div>
+                        <div class="flex items-center gap-1.5 mb-1.5">
+                            <button type="button" onclick="toggleAiScopeGroup('${safeKey}')" title="${collapsed ? '펴기' : '접기'}"
+                                class="w-5 h-5 shrink-0 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center transition-colors">
+                                <i class="fa-solid fa-chevron-down text-[10px] transition-transform" style="${collapsed ? '' : 'transform:rotate(180deg);'}"></i>
+                            </button>
+                            <button type="button" onclick="toggleAiScopeGroupAll('${safeKey}')" title="${allOn ? '이 주제 전체 해제' : '이 주제 전체 선택'}"
+                                class="flex items-center gap-2 flex-1 min-w-0 text-left rounded-lg px-1.5 py-1 hover:bg-slate-100 transition-colors">
+                                <span class="w-4 h-4 shrink-0 rounded-md border flex items-center justify-center ${
+                                    allOn ? 'bg-violet-600 border-violet-600 text-white'
+                                    : someOn ? 'bg-violet-100 border-violet-300 text-violet-600' : 'bg-white border-slate-300'}">
+                                    ${allOn ? '<i class="fa-solid fa-check text-[9px]"></i>' : someOn ? '<i class="fa-solid fa-minus text-[9px]"></i>' : ''}
+                                </span>
+                                <span class="text-[11px] font-black text-slate-500 truncate">${escapeHtml(label)}</span>
+                                <span class="text-[10px] font-bold ${onCount ? 'text-violet-500' : 'text-slate-300'} shrink-0">${onCount}/${list.length}</span>
+                            </button>
+                        </div>
+                        <div class="${collapsed ? 'hidden' : ''} space-y-1.5 pl-6">${rows}</div>
                     </div>`;
             }).join('');
         }
