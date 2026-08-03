@@ -415,6 +415,31 @@
             btn.classList.toggle('hidden', !ta.value.trim());
         }
 
+        // [냐냐 요청] 메모칸에도 기호 버튼 — 문법 노트 편집기와 같은 기호를 커서 자리에 끼워 넣는다.
+        //   여긴 그냥 textarea 라 execCommand 대신 값을 직접 자르고 붙인다
+        function renderNotesSymbolBar() {
+            const box = document.getElementById('notes-symbol-bar');
+            if (!box || typeof RT_SYMBOLS === 'undefined') return;
+            box.innerHTML = RT_SYMBOLS.map(s =>
+                `<button type="button" onmousedown="event.preventDefault()" onclick="insertNotesSymbol('${s.ch}')" title="${s.title} 넣기"
+                    class="w-6 h-6 rounded-md bg-slate-100 hover:bg-violet-100 hover:text-violet-600 text-slate-600 font-black text-xs transition-colors">${s.ch}</button>`
+            ).join('');
+        }
+
+        function insertNotesSymbol(ch) {
+            const ta = document.getElementById('input-notes');
+            if (!ta) return;
+            const gap = (typeof rtSymbolNeedsGap === 'function' && rtSymbolNeedsGap(ch)) ? ' ' : '';
+            const txt = ch + gap;
+            const s = (ta.selectionStart != null) ? ta.selectionStart : ta.value.length;
+            const e = (ta.selectionEnd != null) ? ta.selectionEnd : s;
+            ta.value = ta.value.slice(0, s) + txt + ta.value.slice(e);
+            const pos = s + txt.length;
+            ta.focus();
+            try { ta.setSelectionRange(pos, pos); } catch (err) {}
+            toggleNotesClearBtn();
+        }
+
         // [냐냐 PATCH] 관용구 입력칸 펼치기/접기
         function toggleIdiomSection() {
             const box = document.getElementById('idiom-fields-box');

@@ -38,6 +38,7 @@ let vocabulary = [];
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
             if (typeof loadAiGrammarScope === 'function') loadAiGrammarScope(); // [냐냐 요청] AI 미션 출제 문법 범위 복원
+            if (typeof renderNotesSymbolBar === 'function') renderNotesSymbolBar(); // [냐냐 요청] 메모칸 기호 버튼
             // [냐냐 요청] 문법·개념은 마지막에 보던 모습으로 다시 시작한다.
             //   먼저 기본 모습을 깔고 → 저장된 설정으로 덮어쓴다. 순서 중요
             //   (initGrammarGroupsCollapsed 가 정렬·보기를 기본값으로 되돌려놓기 때문)
@@ -4191,6 +4192,10 @@ let vocabulary = [];
                 ${b(`rtInsertLabel('${id}','ej.')`, '예시 표시 넣기', 'ej.', 'h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all')}
                 ${b(`rtInsertLabel('${id}','Q.')`, '질문 표시 넣기', 'Q.', 'h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all')}
                 ${b(`rtInsertLabel('${id}','A.')`, '답 표시 넣기', 'A.', 'h-7 px-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all')}
+                ${sep}
+                <!-- [냐냐 요청] 자판으로 치기 번거로운 기호 -->
+                ${RT_SYMBOLS.map(s => b(`rtInsertSymbol('${id}','${s.ch}')`, s.title + ' 넣기', s.ch,
+                    'w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-sm transition-all')).join('')}
             </div>`;
         }
 
@@ -4904,12 +4909,53 @@ let vocabulary = [];
             || rtIsReddish(n.style && n.style.color)
             || (n.tagName === 'FONT' && rtIsReddish(n.getAttribute('color')));
 
+        // [냐냐 요청] 서식 해제 — 형광펜과 빨간펜이 <span> 하나에 같이 얹혀 있을 수 있다.
+        //   형광펜을 칠한 자리에 빨간펜을 칠하면 크롬이 둘을 한 span 으로 합쳐 버린다:
+        //     <span style="background-color: rgb(254,240,138); color: rgb(220,38,38);">
+        //   예전엔 해제할 때 이 span 을 통째로 벗겨서, 빨간펜만 지웠는데 형광펜까지 같이 날아갔다.
+        //   그래서 지울 속성만 지우고, 남은 서식이 하나도 없을 때만 껍데기를 벗긴다.
+        function rtRemoveStyle(node, kind) {
+            if (!node) return;
+            if (kind === 'mark') {
+                if (node.tagName === 'MARK') {
+                    // <mark> 는 배경 전용 태그라 껍데기를 벗긴다.
+                    //   다만 글자색을 같이 지고 있으면 그 색은 살려서 span 으로 바꿔 끼운다
+                    const color = node.style && node.style.color;
+                    const isRed = node.classList && node.classList.contains('rt-red');
+                    if (color || isRed) {
+                        const sp = document.createElement('span');
+                        if (color) sp.style.color = color;
+                        if (isRed) sp.className = 'rt-red';
+                        while (node.firstChild) sp.appendChild(node.firstChild);
+                        node.parentNode.replaceChild(sp, node);
+                        return;
+                    }
+                    rtUnwrapNode(node);
+                    return;
+                }
+                node.style.backgroundColor = '';
+                node.style.background = '';
+            } else {
+                node.style.color = '';
+                if (node.classList) node.classList.remove('rt-red');
+                if (node.tagName === 'FONT') node.removeAttribute('color');
+            }
+            const styleLeft = (node.getAttribute('style') || '').trim();
+            const classLeft = (node.getAttribute('class') || '').trim();
+            if (!styleLeft) node.removeAttribute('style');
+            if (!classLeft) node.removeAttribute('class');
+            // 아무 서식도 안 남은 빈 껍데기면 벗긴다 (span/font 만 — b·i·mark 는 그 자체가 서식)
+            if ((node.tagName === 'SPAN' || node.tagName === 'FONT') && !styleLeft && !classLeft) {
+                rtUnwrapNode(node);
+            }
+        }
+
         // 형광펜 — 이미 칠해져 있으면 해제 (브라우저별 명령 이름이 달라서 둘 다 시도)
         function rtHighlight(id) {
             const el = rtFocusEditor(id);
             if (!el) return;
             const hit = rtFindAncestor(id, rtIsMarkNode);
-            if (hit) { rtUnwrapNode(hit); rtSyncState(id); return; }
+            if (hit) { rtRemoveStyle(hit, 'mark'); rtSyncState(id); return; }
             try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
             let ok = false;
             try { ok = document.execCommand('hiliteColor', false, '#fef08a'); } catch (e) {}
@@ -4922,7 +4968,7 @@ let vocabulary = [];
             const el = rtFocusEditor(id);
             if (!el) return;
             const hit = rtFindAncestor(id, rtIsRedNode);
-            if (hit) { rtUnwrapNode(hit); rtSyncState(id); return; }
+            if (hit) { rtRemoveStyle(hit, 'red'); rtSyncState(id); return; }
             try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
             try { document.execCommand('foreColor', false, '#dc2626'); } catch (e) {}
             rtSyncState(id);
@@ -5443,6 +5489,25 @@ let vocabulary = [];
             if (!el) return;
             try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
             try { document.execCommand('insertHTML', false, `${escapeHtml(txt)}&nbsp;`); } catch (e) {}
+            rtSyncState(id);
+        }
+
+        // [냐냐 요청] 자판으로 치기 번거로운 기호를 커서 자리에 바로 넣기
+        //   ¿ ¡ 는 바로 뒤에 글자가 붙으니(¿Qué) 공백을 넣지 않는다
+        const RT_SYMBOLS = [
+            { ch: '·', title: '가운데 점' },
+            { ch: '→', title: '화살표' },
+            { ch: '¿', title: '거꾸로 물음표' },
+            { ch: '¡', title: '거꾸로 느낌표' }
+        ];
+        const rtSymbolNeedsGap = (ch) => ch !== '¿' && ch !== '¡';
+
+        function rtInsertSymbol(id, ch) {
+            const el = rtFocusEditor(id);
+            if (!el) return;
+            try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+            const gap = rtSymbolNeedsGap(ch) ? '&nbsp;' : '';
+            try { document.execCommand('insertHTML', false, escapeHtml(ch) + gap); } catch (e) {}
             rtSyncState(id);
         }
 
