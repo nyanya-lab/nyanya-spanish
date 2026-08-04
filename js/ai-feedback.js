@@ -1734,7 +1734,10 @@ ${refGrammar}${refWords}
 
             const done = new Set();
             list.forEach(item => {
-                const w = byWord.get(norm(item && item.word));
+                const key = norm(item && item.word);
+                // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
+                const w = byWord.get(key)
+                    || ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null);
                 if (!w || done.has(w.id)) return;
                 const spelling = String((item && item.spelling) || '').toLowerCase();
                 if (spelling !== 'correct' && spelling !== 'wrong') return;
@@ -1840,46 +1843,14 @@ ${refGrammar}${refWords}
                 ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${scoreNotes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
                 : '';
 
-            // [냐냐 요청] 내 단어장 단어를 스펠링만 채점한다.
-            //   960개를 다 보내면 너무 기니, 이 문장에 나온 낱말과 겹치는 것만 추려서 준다.
-            //   오타가 나도 잡아야 하므로 앞 4글자가 같으면 후보로 올린다 (bicicleta ↔ biciclete)
-            const scoreWordCandidates = (() => {
-                if (typeof vocabulary === 'undefined') return [];
-                const strip = (s) => String(s || '').toLowerCase().normalize('NFC')
-                    .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
-                const tokens = String(userEsText).toLowerCase().normalize('NFC')
-                    .split(/[^a-záéíóúüñ]+/i).filter(t => t.length >= 2);
-                if (!tokens.length) return [];
-                const out = [];
-                vocabulary.forEach(w => {
-                    const base = strip(w.word);
-                    if (!base) return;
-                    const head = base.split(/\s+/)[0];
-                    // 그대로 나온 낱말은 무조건 후보.
-                    // 오타·활용형까지 잡으려고 앞 4글자 비교도 하는데, 짧은 낱말(que·de·es…)에서
-                    // 아무거나 걸려 목록이 잡음으로 차므로 양쪽 다 5글자 이상일 때만 본다
-                    const hit = tokens.some(t => t === head ||
-                        (t.length >= 5 && head.length >= 5 && (head.startsWith(t.slice(0, 4)) || t.startsWith(head.slice(0, 4)))));
-                    if (hit) out.push(w);
-                });
-                // 활용형은 앞글자가 달라져서(tengo↔tener) 위 비교로는 안 잡힌다.
-                //   문법표 단어 찾기에 쓰는 역추적을 그대로 빌려 원형을 찾아 붙인다
-                if (typeof findVocabWordByForm === 'function') {
-                    tokens.forEach(t => {
-                        const found = findVocabWordByForm(t);
-                        if (found && out.indexOf(found) < 0) out.push(found);
-                    });
-                }
-                return out.slice(0, 25);
-            })();
-            const wordListText = scoreWordCandidates.length
-                ? `\n            Words from my vocabulary that may appear in this sentence. For each one the student actually used, report in "usedWords" whether the SPELLING is correct:\n            ${scoreWordCandidates.map(w => `- ${w.word} (${w.meaning || ''})`).join('\n            ')}\n`
-                : '';
-
+            // [냐냐 요청] 단어 후보 목록은 주지 않는다.
+            //   예전엔 단어장에서 앞글자가 비슷한 것을 추려 보여줬는데, parece 의 'pare' 에
+            //   pareja·pared 가 걸려 엉뚱한 단어가 섞였고 AI 가 그 목록에서 고르려는 유인도 생겼다.
+            //   그냥 '문장에 실제로 쓴 단어'를 사전형으로 돌려받아 단어장과 대조한다.
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
 
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
-${noteListText}${wordListText}
+${noteListText}
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
@@ -1903,10 +1874,10 @@ ${noteListText}${wordListText}
                   { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
                ],
                "usedWords": [
-                  { "word": "EXACT entry copied from the vocabulary list in the prompt (keep its article, e.g. 'la bicicleta'). Never invent one.", "spelling": "'correct' if the student spelled that word correctly in the sentence, 'wrong' if misspelled" }
+                  { "word": "The DICTIONARY form of a content word the student actually wrote: verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito).", "spelling": "'correct' if the student spelled it correctly in the sentence, 'wrong' if misspelled" }
                ]
             }
-            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Report ONLY words from the given vocabulary list that the student actually used in this sentence. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if the student picked an odd word for the meaning. Conjugated verbs and plural nouns count as correct spelling of their dictionary entry when the inflected form itself is spelled right (e.g. "es" for "ser", "libros" for "el libro"). If the list was empty, return [].
+            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, plain prepositions and pronouns. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
             IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
@@ -1965,7 +1936,7 @@ ${noteListText}${wordListText}
                         items: {
                             type: "OBJECT",
                             properties: {
-                                word: { type: "STRING", description: "프롬프트에 준 단어 목록의 항목 그대로. 목록에 없는 단어는 만들지 말 것" },
+                                word: { type: "STRING", description: "학생이 실제로 쓴 낱말의 사전형 (동사는 원형, 명사는 관사+단수, 형용사는 남성 단수)" },
                                 spelling: { type: "STRING", description: "correct | wrong" }
                             },
                             required: ["word", "spelling"]
