@@ -988,11 +988,112 @@
             document.addEventListener('keydown', keyHandler);
         }
 
+        // ============================================================
+        // [냐냐 요청] 한글 뜻만 알 때 — 뜻 칸에 한글을 적고 'AI 추천'을 누르면
+        //   스페인어 단어부터 찾아준다. (예전엔 스페인어를 모르면 아무것도 못 했다:
+        //   오프라인 사전은 18개뿐이고, AI 추천은 스페인어 단어 칸을 기준으로만 돌았다)
+        //   후보가 하나면 바로 채워서 이어가고, 여럿이면 단어칸 아래 목록에서 고르게 한다
+        //   ("빨래" → la colada / lavar la ropa 처럼 갈리는 경우가 많다)
+        // ============================================================
+        const hasKoreanText = (s) => /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(String(s || ''));
+
+        async function findSpanishFromKorean(meaningText) {
+            const btn = document.getElementById('ai-autofill-btn');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 찾는 중...`; }
+
+            const prompt = `한국어 뜻 "${meaningText}" 에 해당하는 스페인어 단어·표현을 찾아주세요.
+            - 실제로 쓰이는 것만 1~4개. 억지로 개수를 채우지 말 것.
+            - 뜻이 갈리면 갈리는 대로 다 넣을 것. 예: "빨래" → la colada(빨랫감, 명사), lavar la ropa(빨래하다, 동사)
+            - word: 명사면 관사를 붙여서(el/la), 동사는 원형, 그 외는 단어만.
+            - meaning: 그 단어의 한국어 뜻을 짧게. 원래 물어본 뜻과 어떻게 다른지 드러나게 쓸 것.
+            - pos 는 noun/verb/adjective/adverb/preposition/conjunction/pronoun/interrogative/phrase 중 하나.
+            - 가장 흔하고 대표적인 것을 맨 앞에 둘 것.`;
+            const system = "You are a Spanish-Korean dictionary. Output strictly valid JSON matching the schema. No explanations, no markdown fences.";
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    candidates: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "스페인어 단어. 명사는 관사 포함(el libro), 동사는 원형" },
+                                meaning: { type: "STRING", description: "짧은 한국어 뜻" },
+                                pos: { type: "STRING", description: "noun|verb|adjective|adverb|preposition|conjunction|pronoun|interrogative|phrase" }
+                            },
+                            required: ["word", "meaning", "pos"]
+                        }
+                    }
+                },
+                required: ["candidates"]
+            };
+
+            try {
+                const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
+                const result = extractAndParseJson(responseText);
+                const list = (result.candidates || []).filter(c => c && (c.word || '').trim()).slice(0, 4);
+                if (!list.length) {
+                    showToast(`"${meaningText}" 에 맞는 스페인어를 못 찾았어요. 뜻을 조금 다르게 적어보세요!`, "warning");
+                    return;
+                }
+                if (list.length === 1) {
+                    // 하나뿐이면 바로 채우고 원래 흐름(단어 분석)으로 이어간다
+                    document.getElementById('input-word').value = list[0].word.trim();
+                    showToast(`"${list[0].word.trim()}" 를 찾았어요! 이어서 채우는 중...`, "success");
+                    await triggerAiAutofill();
+                    return;
+                }
+                renderAiWordCandidates(list);
+                showToast(`후보를 ${list.length}개 찾았어요. 맞는 걸 골라주세요!`, "info");
+            } catch (e) {
+                console.warn("한글→스페인어 찾기 실패", e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+            }
+        }
+
+        // 후보 목록은 단어칸 아래의 기존 자동완성 드롭다운 자리를 그대로 쓴다
+        function renderAiWordCandidates(list) {
+            const box = document.getElementById('word-suggestions');
+            if (!box) return;
+            box.innerHTML = list.map(c => {
+                const safe = String(c.word).trim().replace(/'/g, "\\'");
+                const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[c.pos]) ? POS_LABELS[c.pos] : (c.pos || '');
+                return `<div onclick="pickAiWordCandidate('${safe}')" class="px-4 py-2.5 hover:bg-violet-50 cursor-pointer flex items-center justify-between gap-2 text-xs transition-colors">
+                    <div class="flex flex-col min-w-0">
+                        <span class="font-bold text-slate-800 truncate">${escapeHtml(String(c.word).trim())}</span>
+                        <span class="text-slate-400 text-[10px] truncate">${escapeHtml(c.meaning || '')}</span>
+                    </div>
+                    <span class="text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5 shrink-0">${escapeHtml(posLabel)}</span>
+                </div>`;
+            }).join('');
+            box.classList.remove('hidden');
+        }
+
+        function pickAiWordCandidate(word) {
+            document.getElementById('word-suggestions').classList.add('hidden');
+            document.getElementById('input-word').value = word;
+            triggerAiAutofill();
+        }
+
         // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
         async function triggerAiAutofill(force = true) {
             const rawWord = document.getElementById('input-word').value.trim();
             if (!rawWord) {
-                showToast("단어 입력창에 스페인어 단어를 먼저 적어주세요!", "error");
+                // [냐냐 요청] 단어칸이 비어 있어도 뜻 칸에 한글이 있으면 거기서 스페인어를 찾아준다
+                const meaningText = (document.getElementById('input-meaning')?.value || '').trim();
+                if (hasKoreanText(meaningText)) {
+                    if (!hasGeminiApiKey()) {
+                        showToast("한글 뜻으로 스페인어를 찾으려면 Gemini API 키가 필요해요. 우측 상단 배지에서 등록해 주세요!", "warning");
+                        openApiKeyModal();
+                        return;
+                    }
+                    await findSpanishFromKorean(meaningText);
+                    return;
+                }
+                showToast("단어 입력창에 스페인어 단어를 먼저 적어주세요! (한글 뜻만 알면 뜻 칸에 적고 눌러도 돼요)", "error");
                 return;
             }
 

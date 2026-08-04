@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260803j">
+    <link rel="stylesheet" href="css/style.css?v=20260803k">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1389,7 +1389,10 @@
                         </div>
                     </div>
                     <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-violet-400">*</span></label>
+                        <!-- [냐냐 요청] 스페인어를 모를 땐 여기만 적고 AI 추천을 눌러도 된다 -->
+                        <label class="block text-xs font-bold text-slate-500">한글 뜻 <span class="text-violet-400">*</span>
+                            <span class="font-normal text-slate-400">— 스페인어를 모르면 여기만 적고 <b>AI 추천</b></span>
+                        </label>
                         <input type="text" id="input-meaning" placeholder="예: 가지다, 물, ~와 함께, 왜냐하면" autocomplete="off" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold">
                     </div>
                 </div>
@@ -2048,13 +2051,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260803j"></script>
-    <script src="js/creatures.js?v=20260803j"></script>
-    <script src="js/core.js?v=20260803j"></script>
-    <script src="js/vocab.js?v=20260803j"></script>
-    <script src="js/flashcards.js?v=20260803j"></script>
-    <script src="js/quiz.js?v=20260803j"></script>
-    <script src="js/games.js?v=20260803j"></script>
-    <script src="js/ai-feedback.js?v=20260803j"></script>
+    <script src="js/dictionary-data.js?v=20260803k"></script>
+    <script src="js/creatures.js?v=20260803k"></script>
+    <script src="js/core.js?v=20260803k"></script>
+    <script src="js/vocab.js?v=20260803k"></script>
+    <script src="js/flashcards.js?v=20260803k"></script>
+    <script src="js/quiz.js?v=20260803k"></script>
+    <script src="js/games.js?v=20260803k"></script>
+    <script src="js/ai-feedback.js?v=20260803k"></script>
 </body>
 </html>
