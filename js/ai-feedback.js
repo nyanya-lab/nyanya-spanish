@@ -1712,7 +1712,8 @@ ${refGrammar}${refWords}
         //   한→스는 문법을 정해주고 그 문법이 필요한 미션을 내지만,
         //   여기는 냐냐가 아무 문장이나 쓰므로 'AI 가 짚어준 노트'를 근거로 삼는다.
         //   점수는 한→스와 똑같이 제대로 씀 +2 / 틀리게 씀 −2.
-        //   AI 가 없는 제목을 지어낼 수 있으니 실제 노트와 이름이 맞는 것만 반영한다.
+        //   AI 가 짚은 노트는 개수 제한 없이 다 반영한다 (한 문장이 문법 세 개를 쓰면 세 개 다).
+        //   대신 AI 가 없는 제목을 지어낼 수 있으니 실제 노트와 이름이 맞는 것만 반영한다.
         // ============================================================
         let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
 
@@ -1727,7 +1728,7 @@ ${refGrammar}${refWords}
             notes.forEach(t => byTitle.set(norm(t.title), t));
 
             const done = new Set();
-            list.slice(0, 2).forEach(item => {          // 한 번에 최대 2개까지만
+            list.forEach(item => {                       // AI 가 짚은 만큼 다 반영한다 (개수 제한 없음)
                 const note = byTitle.get(norm(item && item.title));
                 if (!note || done.has(note.id)) return;   // 지어낸 제목·중복은 버린다
                 const usage = String((item && item.usage) || '').toLowerCase();
@@ -1822,7 +1823,7 @@ ${noteListText}
                   { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
                ]
             }
-            IMPORTANT for "usedGrammar": be strict and sparing. List AT MOST 2 notes, and ONLY ones the sentence genuinely and observably exercises — a note whose rule you can actually check in this sentence. Do NOT list a note just because the sentence happens to be in the present tense or contains a noun. If no note clearly applies, or no note list was given, return an empty array [].
+            IMPORTANT for "usedGrammar": list EVERY note the sentence genuinely and observably exercises — a note whose rule you can actually check in this sentence — but be strict about what counts. Do NOT list a note just because the sentence happens to be in the present tense or contains a noun, and do NOT pad the list to look thorough. Most sentences exercise 1-3 notes. If no note clearly applies, or no note list was given, return an empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
