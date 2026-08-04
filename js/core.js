@@ -1653,7 +1653,7 @@ let vocabulary = [];
         //      제대로 써봐야(grammarTransUsed) 열린다 — 단어의 subjectivePassed 와 같은 장치.
         // ============================================================
         const GRAMMAR_FILL_MAX = 1.5;   // 빈칸 복습 만점/최저점
-        const GRAMMAR_TRANS_OK = 2;     // 번역에서 문법을 제대로 씀
+        const GRAMMAR_TRANS_OK = 2;     // 번역에서 문법을 제대로 씀 (한→스, 스→한 둘 다)
         const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
 
         function getGrammarScore(id) {

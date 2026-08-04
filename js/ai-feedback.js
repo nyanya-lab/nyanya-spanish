@@ -1707,6 +1707,61 @@ ${refGrammar}${refWords}
             }
         }
 
+        // ============================================================
+        // [냐냐 요청] 스→한 자유 문장 첨삭에서도 문법표 점수를 반영한다.
+        //   한→스는 문법을 정해주고 그 문법이 필요한 미션을 내지만,
+        //   여기는 냐냐가 아무 문장이나 쓰므로 'AI 가 짚어준 노트'를 근거로 삼는다.
+        //   점수는 한→스와 똑같이 제대로 씀 +2 / 틀리게 씀 −2.
+        //   AI 가 없는 제목을 지어낼 수 있으니 실제 노트와 이름이 맞는 것만 반영한다.
+        // ============================================================
+        let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
+
+        function applyEsKoGrammarScores(feedback, notes) {
+            aiLastEsKoGrammar = [];
+            const list = Array.isArray(feedback && feedback.usedGrammar) ? feedback.usedGrammar : [];
+            if (!list.length || !notes || !notes.length) return;
+            if (typeof addGrammarScore !== 'function') return;
+
+            const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+            const byTitle = new Map();
+            notes.forEach(t => byTitle.set(norm(t.title), t));
+
+            const done = new Set();
+            list.slice(0, 2).forEach(item => {          // 한 번에 최대 2개까지만
+                const note = byTitle.get(norm(item && item.title));
+                if (!note || done.has(note.id)) return;   // 지어낸 제목·중복은 버린다
+                const usage = String((item && item.usage) || '').toLowerCase();
+                if (usage !== 'correct' && usage !== 'wrong') return;
+                done.add(note.id);
+                const delta = (usage === 'correct') ? GRAMMAR_TRANS_OK : GRAMMAR_TRANS_BAD;
+                addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
+                aiLastEsKoGrammar.push({ note, usage, delta });
+            });
+        }
+
+        // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
+        function renderEsKoGrammarRefs() {
+            const box = document.getElementById('ai-mission-refs');
+            if (!box) return;
+            if (!aiLastEsKoGrammar.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            box.innerHTML = `
+                <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
+                </div>
+                ${aiLastEsKoGrammar.map(g => {
+                    const ok = g.usage === 'correct';
+                    const txt = ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요';
+                    const cls = ok ? 'text-emerald-600' : 'text-rose-500';
+                    return `<button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
+                        <span class="text-[10px] font-bold text-violet-500">문법</span>
+                        <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
+                        <div class="text-[10px] font-bold ${cls} mt-1">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
+                    </button>`;
+                }).join('')}`;
+            box.classList.remove('hidden');
+        }
+
         async function submitAiTranslationEsKo() {
             const userEsText = document.getElementById('ai-free-input-es').value.trim();
             if (!userEsText) {
@@ -1722,15 +1777,28 @@ ${refGrammar}${refWords}
 
             const submitBtn = document.getElementById('ai-es-ko-submit-btn');
             const originalHtml = submitBtn.innerHTML;
-            
+
+            // 지난 결과의 문법 카드가 새 채점을 기다리는 동안 남아 있지 않게
+            aiLastEsKoGrammar = [];
+            const prevRefs = document.getElementById('ai-mission-refs');
+            if (prevRefs) { prevRefs.classList.add('hidden'); prevRefs.innerHTML = ''; }
+
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
             showToast("Gemini AI가 자유 문장의 문법을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
+            // [냐냐 요청] 내가 등록해 둔 문법 노트 제목을 주고, 이 문장이 실제로 쓰는 문법을 짚게 한다.
+            //   내용까지 다 보내면 25개라 너무 길어져서 제목만 준다 (제목이 충분히 서술적이다)
+            const scoreNotes = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const noteListText = scoreNotes.length
+                ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${scoreNotes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
+                : '';
+
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
-            
+
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+${noteListText}
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
@@ -1749,8 +1817,12 @@ ${refGrammar}${refWords}
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",
+               "usedGrammar": [
+                  { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
+               ]
             }
+            IMPORTANT for "usedGrammar": be strict and sparing. List AT MOST 2 notes, and ONLY ones the sentence genuinely and observably exercises — a note whose rule you can actually check in this sentence. Do NOT list a note just because the sentence happens to be in the present tense or contains a noun. If no note clearly applies, or no note list was given, return an empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
@@ -1787,7 +1859,19 @@ ${refGrammar}${refWords}
                         }
                     },
                     tip: { type: "STRING" },
-                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" }
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" },
+                    // [냐냐 요청] 이 문장이 실제로 쓴 내 문법 노트 (최대 2개, 없으면 빈 배열)
+                    usedGrammar: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                title: { type: "STRING", description: "프롬프트에 준 문법 노트 제목 그대로. 목록에 없는 제목은 만들지 말 것" },
+                                usage: { type: "STRING", description: "correct | wrong" }
+                            },
+                            required: ["title", "usage"]
+                        }
+                    }
                 },
                 required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
             };
@@ -1806,6 +1890,10 @@ ${refGrammar}${refWords}
                 const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
+
+                // [냐냐 요청] 이 문장이 쓴 내 문법 노트에 점수를 반영하고 결과에 보여준다
+                applyEsKoGrammarScores(feedback, scoreNotes);
+                renderEsKoGrammarRefs();
 
                 resultBox.classList.remove('hidden');
 
