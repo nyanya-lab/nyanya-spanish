@@ -1711,11 +1711,41 @@ ${refGrammar}${refWords}
         // [냐냐 요청] 스→한 자유 문장 첨삭에서도 문법표 점수를 반영한다.
         //   한→스는 문법을 정해주고 그 문법이 필요한 미션을 내지만,
         //   여기는 냐냐가 아무 문장이나 쓰므로 'AI 가 짚어준 노트'를 근거로 삼는다.
-        //   점수는 한→스와 똑같이 제대로 씀 +2 / 틀리게 씀 −2.
+        //   점수는 제대로 씀 +1 / 틀리게 씀 −2 (한→스는 +2 — 거긴 그 문법을 써야만 풀리는 미션이다).
         //   AI 가 짚은 노트는 개수 제한 없이 다 반영한다 (한 문장이 문법 세 개를 쓰면 세 개 다).
         //   대신 AI 가 없는 제목을 지어낼 수 있으니 실제 노트와 이름이 맞는 것만 반영한다.
         // ============================================================
         let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
+        let aiLastEsKoWords = [];     // [{ word, ok, delta }] — 스펠링 판정 결과
+
+        // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 의 스펠링 점수 — 맞으면 +2 / 틀리면 −2.
+        //   AI 가 돌려준 단어를 실제 단어장과 이름으로 맞춰본다. 없는 단어는 버린다.
+        //   ⚠️ 뜻이 맞았는지는 보지 않는다 (유의어·문맥 탓에 판정이 부정확해서 원래부터 안 건드렸다)
+        function applyEsKoWordScores(feedback) {
+            aiLastEsKoWords = [];
+            const list = Array.isArray(feedback && feedback.usedWords) ? feedback.usedWords : [];
+            if (!list.length || typeof vocabulary === 'undefined') return;
+
+            // 관사를 떼고 악센트까지 그대로 비교한다 (carne ≠ carné 와 같은 이유)
+            const norm = (s) => String(s || '').toLowerCase().trim().normalize('NFC')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+            const byWord = new Map();
+            vocabulary.forEach(w => { if (!byWord.has(norm(w.word))) byWord.set(norm(w.word), w); });
+
+            const done = new Set();
+            list.forEach(item => {
+                const w = byWord.get(norm(item && item.word));
+                if (!w || done.has(w.id)) return;
+                const spelling = String((item && item.spelling) || '').toLowerCase();
+                if (spelling !== 'correct' && spelling !== 'wrong') return;
+                done.add(w.id);
+                const ok = spelling === 'correct';
+                const delta = ok ? WORD_SPELL_OK : WORD_SPELL_BAD;
+                // 정답률·망각곡선까지 같이 반영되도록 단어 점수는 addWordScore 로 (퀴즈·복습과 같은 경로)
+                if (typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
+                aiLastEsKoWords.push({ word: w, ok, delta });
+            });
+        }
 
         function applyEsKoGrammarScores(feedback, notes) {
             aiLastEsKoGrammar = [];
@@ -1734,7 +1764,7 @@ ${refGrammar}${refWords}
                 const usage = String((item && item.usage) || '').toLowerCase();
                 if (usage !== 'correct' && usage !== 'wrong') return;
                 done.add(note.id);
-                const delta = (usage === 'correct') ? GRAMMAR_TRANS_OK : GRAMMAR_TRANS_BAD;
+                const delta = (usage === 'correct') ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_BAD;
                 addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
                 aiLastEsKoGrammar.push({ note, usage, delta });
             });
@@ -1744,22 +1774,35 @@ ${refGrammar}${refWords}
         function renderEsKoGrammarRefs() {
             const box = document.getElementById('ai-mission-refs');
             if (!box) return;
-            if (!aiLastEsKoGrammar.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            const grammarHtml = aiLastEsKoGrammar.map(g => {
+                const ok = g.usage === 'correct';
+                const txt = ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요';
+                const cls = ok ? 'text-emerald-600' : 'text-rose-500';
+                return `<button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="w-full text-left bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-1.5 transition-colors">
+                    <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
+                    <div class="text-[10px] font-bold ${cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
+                </button>`;
+            }).join('');
+
+            // 단어는 개수가 많을 수 있어 한 줄짜리 칩으로
+            const wordHtml = aiLastEsKoWords.map(w => {
+                const cls = w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600';
+                return `<span class="inline-flex items-baseline gap-1 border rounded-lg px-2 py-0.5 ${cls}">
+                    <b>${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.delta > 0 ? '+' : ''}${w.delta}</span>
+                </span>`;
+            }).join('');
+
             box.innerHTML = `
-                <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                ${grammarHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
                 </div>
-                ${aiLastEsKoGrammar.map(g => {
-                    const ok = g.usage === 'correct';
-                    const txt = ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요';
-                    const cls = ok ? 'text-emerald-600' : 'text-rose-500';
-                    return `<button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
-                        <span class="text-[10px] font-bold text-violet-500">문법</span>
-                        <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
-                        <div class="text-[10px] font-bold ${cls} mt-1">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
-                        <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
-                    </button>`;
-                }).join('')}`;
+                <div class="space-y-1.5">${grammarHtml}</div>` : ''}
+                ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
+                    <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}`;
             box.classList.remove('hidden');
         }
 
@@ -1779,8 +1822,9 @@ ${refGrammar}${refWords}
             const submitBtn = document.getElementById('ai-es-ko-submit-btn');
             const originalHtml = submitBtn.innerHTML;
 
-            // 지난 결과의 문법 카드가 새 채점을 기다리는 동안 남아 있지 않게
+            // 지난 결과의 문법·단어 카드가 새 채점을 기다리는 동안 남아 있지 않게
             aiLastEsKoGrammar = [];
+            aiLastEsKoWords = [];
             const prevRefs = document.getElementById('ai-mission-refs');
             if (prevRefs) { prevRefs.classList.add('hidden'); prevRefs.innerHTML = ''; }
 
@@ -1796,10 +1840,46 @@ ${refGrammar}${refWords}
                 ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${scoreNotes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
                 : '';
 
+            // [냐냐 요청] 내 단어장 단어를 스펠링만 채점한다.
+            //   960개를 다 보내면 너무 기니, 이 문장에 나온 낱말과 겹치는 것만 추려서 준다.
+            //   오타가 나도 잡아야 하므로 앞 4글자가 같으면 후보로 올린다 (bicicleta ↔ biciclete)
+            const scoreWordCandidates = (() => {
+                if (typeof vocabulary === 'undefined') return [];
+                const strip = (s) => String(s || '').toLowerCase().normalize('NFC')
+                    .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+                const tokens = String(userEsText).toLowerCase().normalize('NFC')
+                    .split(/[^a-záéíóúüñ]+/i).filter(t => t.length >= 2);
+                if (!tokens.length) return [];
+                const out = [];
+                vocabulary.forEach(w => {
+                    const base = strip(w.word);
+                    if (!base) return;
+                    const head = base.split(/\s+/)[0];
+                    // 그대로 나온 낱말은 무조건 후보.
+                    // 오타·활용형까지 잡으려고 앞 4글자 비교도 하는데, 짧은 낱말(que·de·es…)에서
+                    // 아무거나 걸려 목록이 잡음으로 차므로 양쪽 다 5글자 이상일 때만 본다
+                    const hit = tokens.some(t => t === head ||
+                        (t.length >= 5 && head.length >= 5 && (head.startsWith(t.slice(0, 4)) || t.startsWith(head.slice(0, 4)))));
+                    if (hit) out.push(w);
+                });
+                // 활용형은 앞글자가 달라져서(tengo↔tener) 위 비교로는 안 잡힌다.
+                //   문법표 단어 찾기에 쓰는 역추적을 그대로 빌려 원형을 찾아 붙인다
+                if (typeof findVocabWordByForm === 'function') {
+                    tokens.forEach(t => {
+                        const found = findVocabWordByForm(t);
+                        if (found && out.indexOf(found) < 0) out.push(found);
+                    });
+                }
+                return out.slice(0, 25);
+            })();
+            const wordListText = scoreWordCandidates.length
+                ? `\n            Words from my vocabulary that may appear in this sentence. For each one the student actually used, report in "usedWords" whether the SPELLING is correct:\n            ${scoreWordCandidates.map(w => `- ${w.word} (${w.meaning || ''})`).join('\n            ')}\n`
+                : '';
+
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
 
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
-${noteListText}
+${noteListText}${wordListText}
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
@@ -1821,8 +1901,12 @@ ${noteListText}
                "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",
                "usedGrammar": [
                   { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
+               ],
+               "usedWords": [
+                  { "word": "EXACT entry copied from the vocabulary list in the prompt (keep its article, e.g. 'la bicicleta'). Never invent one.", "spelling": "'correct' if the student spelled that word correctly in the sentence, 'wrong' if misspelled" }
                ]
             }
+            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Report ONLY words from the given vocabulary list that the student actually used in this sentence. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if the student picked an odd word for the meaning. Conjugated verbs and plural nouns count as correct spelling of their dictionary entry when the inflected form itself is spelled right (e.g. "es" for "ser", "libros" for "el libro"). If the list was empty, return [].
             IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
@@ -1874,9 +1958,21 @@ ${noteListText}
                             },
                             required: ["title", "usage"]
                         }
+                    },
+                    // [냐냐 요청] 이 문장에 쓴 내 단어장 단어의 스펠링 판정 (해당 없으면 빈 배열)
+                    usedWords: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                word: { type: "STRING", description: "프롬프트에 준 단어 목록의 항목 그대로. 목록에 없는 단어는 만들지 말 것" },
+                                spelling: { type: "STRING", description: "correct | wrong" }
+                            },
+                            required: ["word", "spelling"]
+                        }
                     }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar", "usedWords"]
             };
 
             try {
@@ -1894,8 +1990,9 @@ ${noteListText}
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
-                // [냐냐 요청] 이 문장이 쓴 내 문법 노트에 점수를 반영하고 결과에 보여준다
+                // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
                 applyEsKoGrammarScores(feedback, scoreNotes);
+                applyEsKoWordScores(feedback);
                 renderEsKoGrammarRefs();
 
                 resultBox.classList.remove('hidden');

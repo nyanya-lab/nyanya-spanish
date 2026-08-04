@@ -1653,8 +1653,17 @@ let vocabulary = [];
         //      제대로 써봐야(grammarTransUsed) 열린다 — 단어의 subjectivePassed 와 같은 장치.
         // ============================================================
         const GRAMMAR_FILL_MAX = 1.5;   // 빈칸 복습 만점/최저점
-        const GRAMMAR_TRANS_OK = 2;     // 번역에서 문법을 제대로 씀 (한→스, 스→한 둘 다)
+        const GRAMMAR_TRANS_OK = 2;     // 한→스 미션에서 문법을 제대로 씀
         const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
+        // [냐냐 요청] 스→한 자유 문장에서 문법을 제대로 쓴 경우는 절반만.
+        //   한→스는 그 문법을 써야만 풀리는 미션을 내주지만, 자유 문장은 아는 걸 골라 쓰는 거라
+        //   같은 +2 를 주면 너무 쉽게 쌓인다. 틀렸을 때는 똑같이 −2 (틀린 건 어느 쪽이든 약점)
+        const GRAMMAR_FREE_OK = 1;
+
+        // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 점수 — 스펠링만 본다.
+        //   뜻 판정은 유의어·문맥 때문에 부정확해서 예전부터 안 건드렸다. 스펠링은 객관적이라 괜찮다.
+        const WORD_SPELL_OK = 2;
+        const WORD_SPELL_BAD = -2;
 
         function getGrammarScore(id) {
             const s = grammarScores[id];
@@ -3472,6 +3481,12 @@ let vocabulary = [];
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
                 const editBtns = `
                     <span class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation();">
+                        ${(() => {
+                            // [냐냐 요청] 점수를 접은 상태에서도 보이게 — 마스터 체크 바로 왼쪽에.
+                            //   펼치면 아래쪽(빈칸 채우기 옆)에도 같은 배지가 있지만, 목록만 훑을 때 점수가 안 보였다
+                            const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
+                            return `<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} select-none shrink-0" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
+                        })()}
                         ${(() => {
                             // [냐냐 요청] 마스터 버튼 3단계 (단어장과 같은 색): 일반 → 마스터 → 완벽
                             const gr = getGrammarGrade(t.id);

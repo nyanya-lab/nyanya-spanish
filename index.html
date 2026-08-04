@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260803l">
+    <link rel="stylesheet" href="css/style.css?v=20260803o">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -993,8 +993,9 @@
 
                     <!-- 아래: 첨삭 결과 (페이지 스크롤 따라 자연스럽게) -->
                     <!-- AI Feedback Result Panel -->
-                    <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-5">
-                        <div class="flex items-center gap-3 border-b border-slate-200 pb-4">
+                    <!-- [냐냐 요청] 칸 사이 공백을 줄였다 (space-y-5 → 3, p-6 → 5, pb-4 → 3) -->
+                    <div id="ai-feedback-result" class="hidden bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-3">
+                        <div class="flex items-center gap-3 border-b border-slate-200 pb-3">
                             <div id="ai-coach-icon" class="text-3xl">🤖</div>
                             <div>
                                 <h4 class="font-bold text-slate-900">AI 첨삭 결과</h4>
@@ -1051,7 +1052,7 @@
                         <!-- [냐냐 요청] 핵심 분석은 항상 접은 채로 시작 (새 첨삭이 올 때마다 되접힘 — resetBreakdown).
                              <details> 는 안쪽 div 의 flex 때문에 접혀도 내용이 그대로 보여서 직접 여닫는다.
                              hidden 은 감싼 div 에만 걸어야 안쪽 flex 와 안 부딪힌다 -->
-                        <div class="border-t border-slate-200 pt-5 space-y-2">
+                        <div class="border-t border-slate-200 pt-3 space-y-2">
                             <button type="button" onclick="toggleAiBreakdown()" class="w-full flex items-center justify-between gap-2 text-[10px] font-bold text-slate-400 tracking-wider hover:text-slate-600 transition-colors">
                                 <span>단어 하나하나 쪼개서 핵심 분석 🔍</span>
                                 <i id="ai-breakdown-chevron" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
@@ -1062,7 +1063,7 @@
                         </div>
 
                         <!-- AI 첨삭 Q&A -->
-                        <div class="border-t border-slate-200 pt-5 space-y-4">
+                        <div class="border-t border-slate-200 pt-3 space-y-3">
                             <div class="flex items-center justify-between">
                                 <span class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                                     <i class="fa-solid fa-comments text-indigo-500"></i>
@@ -2051,13 +2052,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260803l"></script>
-    <script src="js/creatures.js?v=20260803l"></script>
-    <script src="js/core.js?v=20260803l"></script>
-    <script src="js/vocab.js?v=20260803l"></script>
-    <script src="js/flashcards.js?v=20260803l"></script>
-    <script src="js/quiz.js?v=20260803l"></script>
-    <script src="js/games.js?v=20260803l"></script>
-    <script src="js/ai-feedback.js?v=20260803l"></script>
+    <script src="js/dictionary-data.js?v=20260803o"></script>
+    <script src="js/creatures.js?v=20260803o"></script>
+    <script src="js/core.js?v=20260803o"></script>
+    <script src="js/vocab.js?v=20260803o"></script>
+    <script src="js/flashcards.js?v=20260803o"></script>
+    <script src="js/quiz.js?v=20260803o"></script>
+    <script src="js/games.js?v=20260803o"></script>
+    <script src="js/ai-feedback.js?v=20260803o"></script>
 </body>
 </html>
