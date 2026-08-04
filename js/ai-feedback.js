@@ -1823,7 +1823,7 @@ ${noteListText}
                   { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
                ]
             }
-            IMPORTANT for "usedGrammar": list EVERY note the sentence genuinely and observably exercises — a note whose rule you can actually check in this sentence — but be strict about what counts. Do NOT list a note just because the sentence happens to be in the present tense or contains a noun, and do NOT pad the list to look thorough. Most sentences exercise 1-3 notes. If no note clearly applies, or no note list was given, return an empty array [].
+            IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
@@ -1861,7 +1861,9 @@ ${noteListText}
                     },
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" },
-                    // [냐냐 요청] 이 문장이 실제로 쓴 내 문법 노트 (최대 2개, 없으면 빈 배열)
+                    // [냐냐 요청] 이 문장이 실제로 쓴 내 문법 노트 (해당 없으면 빈 배열).
+                    //   ⚠️ 아래 required 에 반드시 넣어둘 것 — 빼두면 모델이 이 항목을 통째로
+                    //      생략해 버려서 점수가 조용히 반영 안 된다 (실제로 그랬다)
                     usedGrammar: {
                         type: "ARRAY",
                         items: {
@@ -1874,7 +1876,7 @@ ${noteListText}
                         }
                     }
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar"]
             };
 
             try {
