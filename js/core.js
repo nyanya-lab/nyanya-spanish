@@ -1359,13 +1359,17 @@ let vocabulary = [];
                 words: due.filter(w => (w.reviewStage || 0) === stage)
             })).filter(g => g.words.length);
 
+            // [냐냐 요청] 단계 묶음도 접었다 폈다. 처음엔 다 접어두면 '어느 단계가 몇 개'가
+            //   한눈에 들어오고, 보고 싶은 단계만 펼치면 된다.
             bodyEl.innerHTML = groups.map(g => `
                 <div class="space-y-1.5">
-                    <div class="flex items-center gap-2 sticky top-0 bg-white py-1">
+                    <button onclick="toggleReviewPlanGroup(${g.stage})" class="w-full flex items-center gap-2 sticky top-0 bg-white py-1.5 hover:bg-slate-50 rounded-lg transition-colors">
+                        <i id="rpg-icon-${g.stage}" class="fa-solid fa-chevron-right text-[10px] text-slate-300 w-2.5"></i>
                         <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">${g.days}일차</span>
                         <span class="text-[10px] font-bold text-slate-400">${g.stage === 0 ? '처음 틀린 뒤 첫 복습' : `${g.stage}번 복습한 단어`}</span>
                         <span class="ml-auto text-[10px] font-black text-slate-500">${g.words.length}개</span>
-                    </div>
+                    </button>
+                    <div id="rpg-${g.stage}" class="hidden space-y-1.5">
                     ${g.words.map(w => `
                         <div class="border border-slate-200 rounded-xl overflow-hidden">
                             <button onclick="toggleReviewPlanWord('${w.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
@@ -1375,9 +1379,19 @@ let vocabulary = [];
                             </button>
                             <div id="rpw-${w.id}" class="hidden px-3 pb-3"></div>
                         </div>`).join('')}
+                    </div>
                 </div>`).join('');
 
             modal.classList.remove('hidden');
+        }
+
+        function toggleReviewPlanGroup(stage) {
+            const box = document.getElementById('rpg-' + stage);
+            const icon = document.getElementById('rpg-icon-' + stage);
+            if (!box) return;
+            const opening = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            if (icon) icon.className = `fa-solid fa-chevron-${opening ? 'down' : 'right'} text-[10px] text-slate-300 w-2.5`;
         }
 
         function closeReviewPlanModal() {
