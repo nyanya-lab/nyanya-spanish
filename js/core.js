@@ -1299,13 +1299,40 @@ let vocabulary = [];
                     <span class="text-slate-500">${label}</span>
                     <span class="font-bold ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
                 </div>`).join('');
+            // [냐냐 요청] 오늘·앞날이면 그날 복습 예정 단어도 같이 보여준다.
+            //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
+            const today = getLocalDateString();
+            const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
+            let planHtml = '';
+            if (due) {
+                const isToday = ds === today;
+                const chips = due.slice(0, 40).map(w =>
+                    `<span class="inline-block bg-white border border-amber-200 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-slate-600">${escapeHtml(w.word)}</span>`).join(' ');
+                const more = due.length > 40 ? `<span class="text-[10px] font-bold text-amber-500"> 외 ${due.length - 40}개</span>` : '';
+                planHtml = `
+                    <div class="mt-2 pt-2 border-t border-violet-100">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-amber-700">📖 복습 예정 <span class="text-amber-600">${due.length}개</span></span>
+                            ${isToday
+                                ? '<span class="text-[10px] font-bold text-amber-500">밀린 것 포함</span>'
+                                : '<span class="text-[10px] font-bold text-slate-400">오늘 걸 다 하면 기준</span>'}
+                        </div>
+                        ${due.length
+                            ? `<div class="max-h-24 overflow-y-auto leading-6">${chips}${more}</div>`
+                            : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>'}
+                    </div>`;
+            }
+
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-black text-slate-700">${fmtDateSlash(ds)} ${total > 0 ? `<span class="text-violet-600">· 총 ${total}개 활동</span>` : '<span class="text-slate-400 font-bold">· 학습 기록 없음</span>'}</span>
+                    <span class="font-black text-slate-700">${fmtDateSlash(ds)} ${total > 0 ? `<span class="text-violet-600">· 총 ${total}개 활동</span>` : (ds > today ? '' : '<span class="text-slate-400 font-bold">· 학습 기록 없음</span>')}</span>
                     <button onclick="document.getElementById('calendar-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                ${total > 0 ? `<div class="grid grid-cols-2 gap-1">${grid}</div>` : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>'}
+                ${total > 0
+                    ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
+                    : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
+                ${planHtml}
             `;
         }
 
@@ -1337,10 +1364,14 @@ let vocabulary = [];
                     // [냐냐 PATCH] 지나간 날인데 학습 기록이 0이면 은은한 회색 ✗ (빨강은 부담스러워서 부드럽게)
                     const isPast = ds < todayStr;
                     const showX = isPast && n === 0;
+                    // [냐냐 요청] 앞으로 복습이 잡힌 날은 점을 찍어둔다 — 눌러보지 않아도 몰리는 날이 보이게.
+                    const plan = (!isPast && typeof getReviewScheduledOn === 'function') ? (getReviewScheduledOn(ds) || []).length : 0;
+                    const dot = plan > 0 ? `<span class="absolute bottom-0.5 w-1 h-1 rounded-full bg-amber-500"></span>` : '';
                     const inner = showX
                         ? `<span class="relative flex items-center justify-center w-full h-full"><span class="text-slate-300">${d}</span><i class="fa-solid fa-xmark absolute text-slate-300/60 text-[13px]"></i></span>`
-                        : `${d}`;
-                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'} (클릭하면 상세)">${inner}</div>`;
+                        : `<span class="relative flex items-center justify-center w-full h-full">${d}${dot}</span>`;
+                    const planTitle = plan > 0 ? ` · 복습 예정 ${plan}개` : '';
+                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${planTitle} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
             } else if (calView === 'year') {
@@ -1533,6 +1564,30 @@ let vocabulary = [];
                 const base = w.lastReviewDate || w.lastWrongDate; // 복습했으면 그날부터 다시 셈
                 return daysSince(base) >= REVIEW_INTERVALS[stage]; // 지났으면 계속 대상(밀린 복습)
             }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
+        }
+
+        // [냐냐 요청] 달력에서 어떤 날을 누르면 그날 복습 예정 단어를 보여주기 위한 계산.
+        //   오늘 칸은 getReviewDueWords() 를 그대로 쓴다 — 헤더 배너와 숫자가 어긋나면 안 되니까
+        //   (오늘은 '밀린 것'까지 전부 포함된다).
+        //   앞날은 '오늘 걸 제때 다 한다면' 기준의 예정이다. 밀리면 그만큼 다음 날로 넘어가 쌓인다.
+        //   지난 날은 예정이라는 개념이 없으므로 null.
+        function addDaysToDateString(ds, n) {
+            const p = String(ds).split('-').map(Number);
+            const d = new Date(p[0], p[1] - 1, p[2]);
+            d.setDate(d.getDate() + n);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        function getReviewScheduledOn(ds) {
+            const today = getLocalDateString();
+            if (!ds || ds < today) return null;
+            if (ds === today) return getReviewDueWords();
+            return vocabulary.filter(w => {
+                if (w.mastered || !w.lastWrongDate) return false;
+                const stage = w.reviewStage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return false;
+                const base = w.lastReviewDate || w.lastWrongDate;
+                return addDaysToDateString(base, REVIEW_INTERVALS[stage]) === ds;
+            }).sort((a, b) => getScore(a) - getScore(b));
         }
 
         // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
