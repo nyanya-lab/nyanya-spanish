@@ -294,15 +294,40 @@ const OFFLINE_DICT_DB = {
         // 수동으로 내보내기/가져오기 해서 다른 기기에 옮길 수 있게 함)
         // ============================================================
         function openBackupModal() {
-            const exportData = {
-                vocabulary: vocabulary,
-                nyanyaDiary: nyanyaDiary,
-                learnerProfile: learnerProfile,
-                customQuestions: customQuestions
-            };
-            document.getElementById('backup-export-area').value = JSON.stringify(exportData);
+            // 예전엔 여기서 4개 필드만 담아서, 문법 점수·직접 만든 표·알 상태가 백업에 빠져 있었다.
+            // 이제 저장(saveToStorage)과 똑같은 payload 를 쓴다.
+            document.getElementById('backup-export-area').value = JSON.stringify(buildDataPayload());
             document.getElementById('backup-import-area').value = '';
             document.getElementById('backup-modal').classList.remove('hidden');
+        }
+
+        // 백업이 커서(단어 수백 개) 복사·붙여넣기로 옮기다 잘리는 일이 있다. 파일로도 받게 한다.
+        function downloadBackupFile() {
+            const json = JSON.stringify(buildDataPayload());
+            const stamp = new Date().toISOString().slice(0, 10);
+            const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `nyanya-backup-${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast("백업 파일을 저장했어요! 안전한 곳에 보관해 주세요 💾", "success");
+        }
+
+        // 받아둔 백업 파일을 그대로 가져오기 칸에 넣어준다.
+        function loadBackupFile(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                document.getElementById('backup-import-area').value = String(reader.result || '');
+                showToast("파일을 불러왔어요. 아래 '가져오기'를 눌러 주세요!", "info");
+            };
+            reader.onerror = () => showToast("파일을 읽지 못했어요.", "error");
+            reader.readAsText(file);
+            input.value = '';
         }
 
         function closeBackupModal() {
@@ -342,14 +367,14 @@ const OFFLINE_DICT_DB = {
                 "현재 기기의 데이터를 덮어쓸까요?",
                 `가져올 데이터에는 단어 ${parsed.vocabulary.length}개가 들어있어요. 현재 이 기기에 저장된 데이터는 사라집니다.`,
                 () => {
-                    vocabulary = parsed.vocabulary;
-                    nyanyaDiary = parsed.nyanyaDiary || {};
-                    learnerProfile = parsed.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
-                    customQuestions = parsed.customQuestions || [];
+                    // 불러오기와 같은 경로를 써서 필드가 하나 빠지는 일이 없게 한다.
+                    // (예전 4개짜리 백업도 그대로 들어온다 — 없는 값은 초기값이 된다)
+                    applyDataPayload(parsed);
                     saveToStorage();
                     renderWordList();
                     updateStats();
                     renderDiary();
+                    if (typeof renderGrammarTables === 'function') renderGrammarTables();
                     closeBackupModal();
                     showToast(`단어 ${vocabulary.length}개를 이 기기로 가져왔어요! 🎉`, "success");
                 }

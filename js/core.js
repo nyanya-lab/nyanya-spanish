@@ -126,8 +126,29 @@ let vocabulary = [];
         // 똑같이 동기화됨 (Claude에 의존하지 않는 진짜 서버 저장).
         // Firebase 연결이 안 될 때만 Claude 아티팩트 저장소 → 이 기기 로컬 저장소 순으로 대체.
         // ============================================================
-        const FIREBASE_DB_URL = 'https://nyanya-vocab-default-rtdb.firebaseio.com';
+        // 기본 저장소 주소. 아무 설정도 안 하면 지금까지와 똑같이 여기를 쓴다.
+        const DEFAULT_FIREBASE_DB_URL = 'https://nyanya-vocab-default-rtdb.firebaseio.com';
+        const FIREBASE_URL_KEY = 'nyanya_firebase_db_url';
         const SYNC_PASSWORD_KEY = 'nyanya_sync_password';
+
+        // [냐냐 요청] 앱을 남에게 나눠줄 때, 그 사람이 자기 Firebase 를 쓰게 하기 위한 설정.
+        //   비워두면 위 기본 주소 → 기존 사용자는 이 값을 건드릴 일이 없고 동작도 그대로다.
+        //   주소만 다르면 데이터베이스 자체가 갈리므로 서로의 데이터가 섞이지 않는다.
+        function getFirebaseDbUrl() {
+            const custom = (localStorage.getItem(FIREBASE_URL_KEY) || '').trim();
+            return custom ? normalizeDbUrl(custom) : DEFAULT_FIREBASE_DB_URL;
+        }
+        function isCustomFirebaseDbUrl() {
+            return getFirebaseDbUrl() !== DEFAULT_FIREBASE_DB_URL;
+        }
+        // 콘솔에서 복사한 주소는 끝에 `/` 나 `.json` 이 붙어 오기도 하고 https:// 가 빠지기도 한다.
+        function normalizeDbUrl(raw) {
+            let url = String(raw || '').trim();
+            if (!url) return '';
+            url = url.replace(/\.json$/i, '').replace(/\/+$/, '');
+            if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+            return url;
+        }
 
         // [냐냐 PATCH-비밀번호 동기화] 비밀번호 자체가 Firebase 안에서의 "내 데이터 경로"가 됨.
         // 이 비밀번호는 코드(GitHub)에는 절대 들어가지 않고 이 기기의 localStorage에만 저장됨.
@@ -142,12 +163,21 @@ let vocabulary = [];
         function getFirebaseDataPath() {
             const pw = getSyncPassword();
             if (!pw) return null;
-            return `${FIREBASE_DB_URL}/vocab/${encodeURIComponent(pw)}.json`;
+            return `${getFirebaseDbUrl()}/vocab/${encodeURIComponent(pw)}.json`;
         }
 
         function openSyncPasswordModal() {
             document.getElementById('sync-password-input').value = getSyncPassword();
+            const urlInput = document.getElementById('sync-dburl-input');
+            if (urlInput) urlInput.value = (localStorage.getItem(FIREBASE_URL_KEY) || '').trim();
+            const adv = document.getElementById('sync-advanced');
+            // 이미 직접 주소를 쓰고 있으면 접어두지 않고 바로 보여준다.
+            if (adv) adv.classList.toggle('hidden', !isCustomFirebaseDbUrl());
             document.getElementById('sync-password-modal').classList.remove('hidden');
+        }
+        function toggleSyncAdvanced() {
+            const adv = document.getElementById('sync-advanced');
+            if (adv) adv.classList.toggle('hidden');
         }
         function closeSyncPasswordModal() {
             document.getElementById('sync-password-modal').classList.add('hidden');
@@ -158,21 +188,48 @@ let vocabulary = [];
                 showToast("비밀번호를 입력해 주세요!", "error");
                 return;
             }
-            localStorage.setItem(SYNC_PASSWORD_KEY, value);
-            closeSyncPasswordModal();
-            showToast("비밀번호가 저장됐어요! 동기화를 다시 확인하는 중...", "info");
-            await loadFromStorage();
-            renderWordList();
-            updateStats();
-            renderDiary();
+            const urlInput = document.getElementById('sync-dburl-input');
+            const newUrl = urlInput ? normalizeDbUrl(urlInput.value) : '';
+            const oldUrl = getFirebaseDbUrl();
+
+            const apply = async () => {
+                if (urlInput) {
+                    // 비우면 기본 주소로 돌아간다 — 되돌릴 길을 항상 남겨둔다.
+                    if (newUrl) localStorage.setItem(FIREBASE_URL_KEY, newUrl);
+                    else localStorage.removeItem(FIREBASE_URL_KEY);
+                }
+                localStorage.setItem(SYNC_PASSWORD_KEY, value);
+                closeSyncPasswordModal();
+                showToast("저장했어요! 동기화를 다시 확인하는 중...", "info");
+                await loadFromStorage();
+                renderWordList();
+                updateStats();
+                renderDiary();
+                if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            };
+
+            // 주소를 바꾸는 건 저장소를 통째로 갈아타는 것이라, 실수하면 빈 앱이 뜬다.
+            // 원래 주소의 데이터가 지워지진 않지만 놀랄 수 있으니 한 번 확인받는다.
+            if ((newUrl || DEFAULT_FIREBASE_DB_URL) !== oldUrl) {
+                showConfirm(
+                    "저장소 주소를 바꿀까요?",
+                    `데이터를 가져올 곳이 바뀝니다.\n\n지금: ${oldUrl}\n바꾼 뒤: ${newUrl || DEFAULT_FIREBASE_DB_URL}\n\n원래 주소에 있던 데이터는 지워지지 않고 그대로 남아요. 주소를 되돌리면 다시 보입니다. 바꾸기 전에 '백업 · 복원'에서 백업 파일을 한 번 받아두시는 걸 권해요.`,
+                    apply
+                );
+                return;
+            }
+            await apply();
         }
 
         function hasServerStorage() {
             return typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function';
         }
 
-        async function saveToStorage() {
-            const payload = {
+        // 저장·백업이 담는 필드 목록은 여기 한 곳에서만 정의한다.
+        //   예전엔 백업(openBackupModal)이 따로 4개 필드만 담고 있어서, 문법 점수·알 상태 같은 게
+        //   비상용 백업에 조용히 빠져 있었다. 이제 저장과 백업이 같은 payload 를 쓴다.
+        function buildDataPayload() {
+            return {
                 vocabulary: vocabulary,
                 nyanyaDiary: nyanyaDiary,
                 learnerProfile: learnerProfile,
@@ -190,6 +247,10 @@ let vocabulary = [];
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState
             };
+        }
+
+        async function saveToStorage() {
+            const payload = buildDataPayload();
             const json = JSON.stringify(payload);
 
             // 항상 이 기기에도 백업 저장 (모든 동기화 방법이 실패해도 최소한 이 기기에서는 안전)
@@ -257,10 +318,11 @@ let vocabulary = [];
                     if (result && result.value) payload = JSON.parse(result.value);
                     updateSyncBadge('claude-only');
                 } catch (e) {
-                    updateSyncBadge(false);
+                    updateSyncBadge('sync-error');
                 }
             } else {
-                updateSyncBadge(false);
+                // 비밀번호는 있는데 서버에 못 닿은 경우 — 주소 오타일 수 있으니 눈에 띄게 알린다.
+                updateSyncBadge(firebasePath ? 'sync-error' : false);
             }
 
             if (!payload) {
@@ -284,6 +346,26 @@ let vocabulary = [];
                 }
             }
 
+            applyDataPayload(payload);
+
+            // 동기화를 켜뒀는데 서버에 못 닿았다면 저장하지 않는다.
+            //   여기서 저장하면, 주소나 비밀번호를 잘못 입력했을 때 (그리고 그 기기에 로컬 백업이
+            //   없으면) 기본 단어장이 엉뚱한 경로에 써진다. 원래 경로는 그대로 남지만 놀라게 된다.
+            //   지금 상태는 어차피 로컬 백업에서 온 것이라 건너뛰어도 잃는 게 없다.
+            if (firebasePath && !firebaseReachable) {
+                console.warn('[동기화] 서버에 못 닿아 자동 저장을 건너뜁니다. 주소·비밀번호를 확인해 주세요.');
+                return;
+            }
+
+            // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
+            // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
+            saveToStorage();
+        }
+
+        // payload 를 현재 상태로 펼친다. payload 가 없으면 초기 상태로 되돌린다.
+        //   불러오기(loadFromStorage)와 백업 가져오기(importBackupData)가 같은 경로를 쓰게 해서,
+        //   필드가 하나 늘었을 때 한쪽만 빠지는 일이 없게 한다.
+        function applyDataPayload(payload) {
             if (payload) {
                 vocabulary = payload.vocabulary || [...DEFAULT_VOCABULARY];
                 nyanyaDiary = payload.nyanyaDiary || {};
@@ -328,11 +410,8 @@ let vocabulary = [];
             }
 
             // [냐냐 PATCH-0배치] 통합 점수(score)로 1회 마이그레이션 (기존 약점/마스터 점수 합산)
+            //   백업 가져오기로 예전 형식이 들어와도 여기서 같이 걸리게 안쪽에 둔다.
             if (typeof migrateWordScores === 'function') migrateWordScores();
-
-            // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
-            // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
-            saveToStorage();
         }
 
         // [냐냐 요청] 설정 드롭다운 안의 '동기화' 행을 갱신.
@@ -342,9 +421,10 @@ let vocabulary = [];
             const badge = document.getElementById('sync-status-badge');
             if (!badge) return;
             let dot = 'bg-slate-400', text = '이 기기에만 저장됨';
-            if (state === true) { dot = 'bg-emerald-500'; text = '모든 기기 동기화 중'; }
+            if (state === true) { dot = 'bg-emerald-500'; text = isCustomFirebaseDbUrl() ? '내 저장소로 동기화 중' : '모든 기기 동기화 중'; }
             else if (state === 'claude-only') { dot = 'bg-amber-500'; text = 'Claude 안에서만 동기화'; }
             else if (state === 'no-password') { dot = 'bg-violet-500'; text = '동기화 비밀번호 설정하기'; }
+            else if (state === 'sync-error') { dot = 'bg-rose-500'; text = '동기화 실패 — 주소·비밀번호 확인'; }
             badge.innerHTML = `<span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>`
                 + `<span class="text-xs font-bold text-slate-700 flex-1">${text}</span>`
                 + `<i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>`;

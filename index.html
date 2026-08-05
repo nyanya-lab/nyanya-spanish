@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260803r">
+    <link rel="stylesheet" href="css/style.css?v=20260805a">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1858,7 +1858,7 @@
 
     <!-- PRESET 3.5: SYNC PASSWORD MODAL -->
     <div id="sync-password-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">🔐</div>
                 <div>
@@ -1876,6 +1876,22 @@
             <div class="space-y-1.5">
                 <label class="block text-xs font-bold text-slate-500">비밀번호 (아무 문자열이나 가능)</label>
                 <input type="password" id="sync-password-input" placeholder="예: nyanya-secret-2026" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
+            </div>
+
+            <button onclick="toggleSyncAdvanced()" class="w-full text-left text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fa-solid fa-sliders"></i> 내 저장소 직접 쓰기 (고급)
+            </button>
+
+            <div id="sync-advanced" class="hidden space-y-1.5">
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-[11px] text-slate-600 leading-relaxed">
+                    비워두면 <b>기본 저장소</b>를 씁니다 — 지금까지와 똑같아요.
+                    앱을 나눠 받은 분이 <b>자기만의 저장소</b>를 쓰고 싶다면, Firebase 에서 무료
+                    Realtime Database 를 하나 만들고 그 주소를 여기에 넣어 주세요. 주소가 다르면
+                    데이터베이스가 완전히 갈려서 서로의 데이터가 섞이지 않아요.
+                </div>
+                <label class="block text-xs font-bold text-slate-500">저장소 주소 (Realtime Database URL)</label>
+                <input type="text" id="sync-dburl-input" placeholder="https://내프로젝트-default-rtdb.firebaseio.com" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
+                <p class="text-[11px] text-slate-400">주소를 바꾸기 전에 <b>설정 → 백업 · 복원</b>에서 백업 파일을 한 번 받아두세요. 비우고 저장하면 언제든 기본 저장소로 되돌아갑니다.</p>
             </div>
 
             <div class="flex gap-2 pt-1">
@@ -2024,12 +2040,19 @@
                         <label class="block text-xs font-bold text-slate-500">① 이 기기에서: 내보내기</label>
                         <button onclick="copyBackupExport()" class="text-xs font-bold text-violet-600 hover:text-violet-700"><i class="fa-solid fa-copy"></i> 복사하기</button>
                     </div>
+                    <button onclick="downloadBackupFile()" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">
+                        <i class="fa-solid fa-download"></i> 백업 파일로 저장하기 (권장)
+                    </button>
                     <textarea id="backup-export-area" readonly rows="4" class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono"></textarea>
-                    <p class="text-[11px] text-slate-400">위 내용을 복사해서, 다른 기기로 (카카오톡 나에게 보내기, 메모앱 등으로) 전달해 주세요.</p>
+                    <p class="text-[11px] text-slate-400">단어장·일기·문법 점수·직접 만든 표·알 상태까지 전부 들어 있어요. 내용이 길어서 복사·붙여넣기는 중간에 잘릴 수 있으니, <b>파일로 저장</b>하는 쪽이 안전해요.</p>
                 </div>
 
                 <div class="space-y-2 pt-2 border-t border-slate-100">
                     <label class="block text-xs font-bold text-slate-500">② 다른 기기에서: 붙여넣고 가져오기</label>
+                    <label class="block w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold text-center cursor-pointer transition-all">
+                        <i class="fa-solid fa-folder-open"></i> 백업 파일 불러오기
+                        <input type="file" accept="application/json,.json" onchange="loadBackupFile(this)" class="hidden">
+                    </label>
                     <textarea id="backup-import-area" rows="4" placeholder="여기에 복사해 온 내용을 붙여넣으세요..." class="w-full bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 text-[10px] font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
                     <button onclick="importBackupData()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">가져오기 (현재 기기 데이터를 덮어씁니다)</button>
                 </div>
@@ -2052,13 +2075,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260803r"></script>
-    <script src="js/creatures.js?v=20260803r"></script>
-    <script src="js/core.js?v=20260803r"></script>
-    <script src="js/vocab.js?v=20260803r"></script>
-    <script src="js/flashcards.js?v=20260803r"></script>
-    <script src="js/quiz.js?v=20260803r"></script>
-    <script src="js/games.js?v=20260803r"></script>
-    <script src="js/ai-feedback.js?v=20260803r"></script>
+    <script src="js/dictionary-data.js?v=20260805a"></script>
+    <script src="js/creatures.js?v=20260805a"></script>
+    <script src="js/core.js?v=20260805a"></script>
+    <script src="js/vocab.js?v=20260805a"></script>
+    <script src="js/flashcards.js?v=20260805a"></script>
+    <script src="js/quiz.js?v=20260805a"></script>
+    <script src="js/games.js?v=20260805a"></script>
+    <script src="js/ai-feedback.js?v=20260805a"></script>
 </body>
 </html>
