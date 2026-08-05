@@ -1309,11 +1309,11 @@ let vocabulary = [];
                 const isToday = ds === today;
                 planHtml = `
                     <div class="mt-2 pt-2 border-t border-violet-100">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <span class="font-black text-amber-700">📖 복습 예정 <span class="text-amber-600">${due.length}개</span></span>
+                        <div class="mb-1.5">
+                            <div class="font-black text-amber-700">📖 복습 예정 <span class="text-amber-600">${due.length}개</span></div>
                             ${isToday
-                                ? '<span class="text-[10px] font-bold text-amber-500">밀린 것 포함</span>'
-                                : '<span class="text-[10px] font-bold text-slate-400">오늘 걸 다 하면 기준</span>'}
+                                ? '<div class="text-[10px] font-bold text-amber-500">밀린 복습까지 포함</div>'
+                                : '<div class="text-[10px] font-bold text-slate-400">오늘 걸 다 하면 기준</div>'}
                         </div>
                         ${due.length
                             ? `<button onclick="openReviewPlanModal('${ds}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"><i class="fa-solid fa-list-ul"></i> 단어 보기 (${due.length}개)</button>`
