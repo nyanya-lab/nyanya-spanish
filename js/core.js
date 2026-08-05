@@ -245,7 +245,8 @@ let vocabulary = [];
                 grammarCellHighlights: grammarCellHighlights,
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 grammarTopics: GRAMMAR_ICONS,
-                eggState: eggState
+                eggState: eggState,
+                gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
             };
         }
 
@@ -391,6 +392,9 @@ let vocabulary = [];
                 }
                 eggState = Object.assign(defaultEggState(), payload.eggState || {});
                 if (!Array.isArray(eggState.collection)) eggState.collection = [];
+                // [냐냐 요청] 미니게임 역대기록 — 예전엔 이 기기 localStorage 에만 있어서
+                //   폰과 PC 기록이 서로 안 보이고 '없어졌다 생겼다' 했다. 이제 같이 동기화한다.
+                if (typeof mergeGameHighScores === 'function') mergeGameHighScores(payload.gameHighScores);
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -6694,10 +6698,9 @@ let vocabulary = [];
                 if (typeof resetGamesMenu === 'function') resetGamesMenu();
             } else if (tabId === 'review') {
                 // [냐냐 요청] 복습 진행 중이면 화면 유지. 처음/끝났을 때만 셋업 화면으로.
-                //   ⚠️ resetReviewTab()은 깜빡이·단어빈칸·문법표빈칸을 전부 초기화하므로
+                //   ⚠️ resetReviewTab()은 쓰기·단어빈칸·문법표빈칸을 전부 초기화하므로
                 //      셋 중 하나라도 진행 중이면 건드리면 안 됨.
                 const reviewInProgress =
-                    (typeof reviewState !== 'undefined' && reviewState) ||
                     (typeof fillState !== 'undefined' && fillState) ||
                     (typeof gfillState !== 'undefined' && gfillState) ||
                     (typeof writePracticeState !== 'undefined' && writePracticeState);

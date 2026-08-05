@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260805a">
+    <link rel="stylesheet" href="css/style.css?v=20260805b">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -440,12 +440,11 @@
                 <div id="tab-quiz" class="hidden space-y-6">
                     <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-3">
                     <!-- [냐냐 PATCH-4배치] 복습/퀴즈 통합 서브메뉴 (복습 탭과 동일) -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                         <button onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">✍️ 쓰기</button>
                         <button onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📝 단어 빈칸</button>
                         <button class="py-3.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-sm">🎯 퀴즈</button>
                         <button onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📋 문법표 빈칸</button>
-                        <button onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">👁️ 깜빡이</button>
                     </div>
                     <!-- [냐냐 PATCH] 제목 카드 제거 (서브탭이 이미 어딘지 알려줌). 진행 표시만 남김 -->
                     <div id="quiz-combo-box" class="hidden items-center justify-center gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
@@ -594,12 +593,11 @@
 
                     <!-- [냐냐 PATCH] 복습 방식 서브메뉴 -->
                     <!-- [냐냐 요청] 쓰기 연습을 맨 앞으로, 깜빡이는 맨 뒤로 -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                         <button id="review-mode-write-btn" onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all">✍️ 쓰기</button>
                         <button id="review-mode-fill-btn" onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📝 단어 빈칸</button>
                         <button id="review-mode-quiz-btn" onclick="selectReviewMode('quiz')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🎯 퀴즈</button>
                         <button id="review-mode-gfill-btn" onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📋 문법표 빈칸</button>
-                        <button id="review-mode-blink-btn" onclick="selectReviewMode('blink')" class="py-3.5 rounded-xl text-sm font-bold transition-all">👁️ 깜빡이</button>
                     </div>
                     </div>
 
@@ -636,50 +634,6 @@
                         <!-- [냐냐 요청] 팝업 폐지 → 다른 복습 모드처럼 탭 안에서 진행 -->
                         <div id="write-play-area" class="hidden"></div>
                     </div>
-
-                    <!-- ===== 깜빡이 모드 ===== -->
-                    <div id="review-mode-blink">
-                    <!-- 복습 설정 화면 -->
-                    <!-- [냐냐 요청] 퀴즈 설정화면과 같은 골격으로 통일 (큰 이모지+제목, 가운데 정렬, 범위 3열) -->
-                    <div id="review-setup" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-6">
-                        <div class="text-5xl">👁️</div>
-                        <div>
-                            <h3 class="text-lg font-bold text-slate-900">몇 개나 복습할까요?</h3>
-                            <p class="text-xs text-slate-400 mt-1">단어가 잠깐 나타났다 사라져요. 떠오르는 대로 답해 보세요!</p>
-                        </div>
-                        <div class="flex justify-center gap-3 flex-wrap">
-                            <button onclick="selectReviewCount(10)" data-review-count="10" class="review-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">10개</button>
-                            <button onclick="selectReviewCount(20)" data-review-count="20" class="review-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">20개</button>
-                            <button onclick="selectReviewCount(30)" data-review-count="30" class="review-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">30개</button>
-                            <button onclick="selectReviewCount(9999)" data-review-count="9999" class="review-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">전체</button>
-                        </div>
-
-                        <div class="max-w-sm mx-auto text-left space-y-3">
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">복습 범위</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button onclick="selectReviewScope('weak')" data-review-scope="weak" class="review-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점</button>
-                                    <button onclick="selectReviewScope('not-mastered')" data-review-scope="not-mastered" class="review-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">📖 안 외운</button>
-                                    <button onclick="selectReviewScope('all')" data-review-scope="all" class="review-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🗂️ 전체</button>
-                                </div>
-                                <p id="review-scope-count" class="text-xs font-bold text-slate-400">복습할 범위를 선택하세요</p>
-                            </div>
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-bold text-slate-500">반복 횟수</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button onclick="selectReviewRepeat(1)" data-review-repeat="1" class="review-repeat-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">1회</button>
-                                    <button onclick="selectReviewRepeat(2)" data-review-repeat="2" class="review-repeat-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">2회</button>
-                                    <button onclick="selectReviewRepeat(3)" data-review-repeat="3" class="review-repeat-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">3회</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button onclick="startWordReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">복습 시작하기</button>
-                    </div>
-
-                    <!-- 복습 진행 화면 -->
-                    <div id="review-play-area" class="hidden"></div>
-                    </div><!-- /review-mode-blink -->
 
                     <!-- ===== 빈칸 채우기 모드 ===== -->
                     <div id="review-mode-fill" class="hidden">
@@ -2075,13 +2029,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260805a"></script>
-    <script src="js/creatures.js?v=20260805a"></script>
-    <script src="js/core.js?v=20260805a"></script>
-    <script src="js/vocab.js?v=20260805a"></script>
-    <script src="js/flashcards.js?v=20260805a"></script>
-    <script src="js/quiz.js?v=20260805a"></script>
-    <script src="js/games.js?v=20260805a"></script>
-    <script src="js/ai-feedback.js?v=20260805a"></script>
+    <script src="js/dictionary-data.js?v=20260805b"></script>
+    <script src="js/creatures.js?v=20260805b"></script>
+    <script src="js/core.js?v=20260805b"></script>
+    <script src="js/vocab.js?v=20260805b"></script>
+    <script src="js/flashcards.js?v=20260805b"></script>
+    <script src="js/quiz.js?v=20260805b"></script>
+    <script src="js/games.js?v=20260805b"></script>
+    <script src="js/ai-feedback.js?v=20260805b"></script>
 </body>
 </html>

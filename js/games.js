@@ -103,6 +103,39 @@
                 return obj.score || 0;
             } catch (e) { return 0; }
         }
+        // [냐냐 요청] 역대기록을 동기화 대상에 포함시키기 위한 수집/병합.
+        //   기록은 원래 localStorage 에만 있어서 기기마다 따로 놀았다. 서버에 올려 합치되,
+        //   합칠 때는 항상 '큰 값'을 남긴다 — 먼저 저장한 기기가 상대 기록을 지우면 안 되니까.
+        const GAME_TYPES = ['rapidfire', 'falling'];
+        function collectGameHighScores() {
+            const out = {};
+            GAME_TYPES.forEach(g => {
+                const all = getGameHighScore(g);
+                let week = null;
+                try {
+                    const raw = localStorage.getItem('nyanya_game_whs_' + g);
+                    if (raw) week = JSON.parse(raw);
+                } catch (e) {}
+                if (all || week) out[g] = { all: all || 0, week: week || null };
+            });
+            return out;
+        }
+        function mergeGameHighScores(remote) {
+            if (!remote || typeof remote !== 'object') return;
+            GAME_TYPES.forEach(g => {
+                const r = remote[g];
+                if (!r) return;
+                // 역대: 큰 쪽을 남긴다
+                if ((r.all || 0) > getGameHighScore(g)) {
+                    try { localStorage.setItem('nyanya_game_hs_' + g, String(r.all)); } catch (e) {}
+                }
+                // 이번 주: 같은 주차일 때만, 그리고 큰 쪽을 남긴다
+                if (r.week && r.week.week === getWeekKey() && (r.week.score || 0) > getGameWeekHighScore(g)) {
+                    try { localStorage.setItem('nyanya_game_whs_' + g, JSON.stringify(r.week)); } catch (e) {}
+                }
+            });
+        }
+
         function setGameHighScore(gameType, score) {
             let isNewAllTime = false;
             // 역대 최고
@@ -113,9 +146,15 @@
             }
             // 이번 주 최고
             const weekPrev = getGameWeekHighScore(gameType);
+            let changed = isNewAllTime;
             if (score > weekPrev) {
                 try { localStorage.setItem('nyanya_game_whs_' + gameType, JSON.stringify({ week: getWeekKey(), score })); } catch (e) {}
+                changed = true;
             }
+            // [냐냐 요청] 기록이 바뀌면 여기서 바로 저장한다.
+            //   호출부는 logAction('game')(=저장)을 이 함수보다 '먼저' 부르기 때문에,
+            //   여기서 저장하지 않으면 새 기록이 다음 저장 때까지 서버에 안 올라간다.
+            if (changed && typeof saveToStorage === 'function') saveToStorage();
             return isNewAllTime; // 역대 신기록 여부
         }
 
@@ -627,23 +666,11 @@
 
 
         // ============================================================
-        // [냐냐 PATCH] 단어 복습 (깜빡이 방식, 점수 없음, 단어 선택 가능)
+        // 복습 탭 공통
+        //   [냐냐 요청] 깜빡이 모드는 없앴다. 맞혀도 망각곡선이 안 도는데 틀리면 리셋만 돼서
+        //   (곡선을 앞으로는 못 돌리고 뒤로만 돌림) 복습 일정을 조용히 되돌리고 있었다.
         // ============================================================
-        let reviewState = null;
-        let reviewScope = 'not-mastered'; // [냐냐 요청] 기본: 마스터 안 된 단어
-        let reviewCount = 10;   // [냐냐 요청] 깜빡이 기본 10개
-        let reviewRepeat = 2;   // [냐냐 요청] 깜빡이 기본 2회
-
         function resetReviewTab() {
-            reviewState = null;
-            const setup = document.getElementById('review-setup');
-            const play = document.getElementById('review-play-area');
-            if (setup) setup.classList.remove('hidden');
-            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            // 기본 선택 ([냐냐 요청] today-wrong은 메뉴에서 제거됨 → 약점으로 대체)
-            selectReviewScope((!reviewScope || reviewScope === 'today-wrong') ? 'not-mastered' : reviewScope);
-            selectReviewCount(reviewCount || 10);
-            selectReviewRepeat(reviewRepeat || 2);
             // [냐냐 PATCH] 빈칸 채우기 모드도 초기화 + 서브메뉴(모드) 반영
             if (typeof resetFillSetup === 'function') resetFillSetup();
             if (typeof resetGrammarFillSetup === 'function') resetGrammarFillSetup();
@@ -652,32 +679,7 @@
             if (typeof selectReviewMode === 'function') selectReviewMode(reviewMode || 'write');
         }
 
-        function selectReviewCount(n) {
-            reviewCount = n;
-            document.querySelectorAll('.review-count-btn').forEach(btn => {
-                if (parseInt(btn.dataset.reviewCount) === n) {
-                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.remove('border-slate-200', 'text-slate-600');
-                } else {
-                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.add('border-slate-200', 'text-slate-600');
-                }
-            });
-        }
-
-        function selectReviewRepeat(n) {
-            reviewRepeat = n;
-            document.querySelectorAll('.review-repeat-btn').forEach(btn => {
-                if (parseInt(btn.dataset.reviewRepeat) === n) {
-                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.remove('border-slate-200', 'text-slate-600');
-                } else {
-                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.add('border-slate-200', 'text-slate-600');
-                }
-            });
-        }
-
+        // 빈칸 채우기(fill)도 이 풀을 쓰므로 깜빡이를 없애도 남겨둔다.
         function getReviewPool(scope) {
             // [냐냐 PATCH] '오늘 복습' = 망각곡선 복습 대상 (오늘 틀린 것 + 1·3·7·14·30일 주기)
             if (scope === 'today-wrong') return getReviewDueWords();
@@ -686,199 +688,13 @@
             return vocabulary.slice(); // all
         }
 
-        function selectReviewScope(scope) {
-            reviewScope = scope;
-            // 버튼 하이라이트
-            document.querySelectorAll('.review-scope-btn').forEach(btn => {
-                if (btn.dataset.reviewScope === scope) {
-                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.remove('border-slate-200', 'text-slate-600');
-                } else {
-                    btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-                    btn.classList.add('border-slate-200', 'text-slate-600');
-                }
-            });
-            const cnt = getReviewPool(scope).length;
-            const cntEl = document.getElementById('review-scope-count');
-            if (cntEl) cntEl.innerText = `복습할 단어: ${cnt}개`;
-        }
-
-        function startWordReview() {
-            const pool = getReviewPool(reviewScope);
-            if (pool.length < 1) {
-                showToast("복습할 단어가 없어요! 다른 범위를 골라보세요.", "error");
-                return;
-            }
-            // 순서 섞고, 선택한 개수만큼 자르기
-            let shuffled = shuffleArray(pool.slice());
-            shuffled = shuffled.slice(0, reviewCount);
-            // 반복 횟수만큼 리스트를 이어붙임 (매 회차 순서 다시 섞음)
-            let sequence = [];
-            for (let r = 0; r < reviewRepeat; r++) {
-                sequence = sequence.concat(shuffleArray(shuffled.slice()));
-            }
-            reviewState = { pool: sequence, index: 0, correct: 0, total: sequence.length, showMs: 2500, uniqueCount: shuffled.length, repeat: reviewRepeat };
-            document.getElementById('review-setup').classList.add('hidden');
-            document.getElementById('review-play-area').classList.remove('hidden');
-            reviewShowWord();
-        }
-
-        function reviewShowWord() {
-            if (!reviewState) return;
-            if (reviewState.index >= reviewState.pool.length) { reviewEnd(); return; }
-            const w = reviewState.pool[reviewState.index];
-            reviewState.current = w;
-            const play = document.getElementById('review-play-area');
-            play.innerHTML = `
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
-                    <div class="flex items-center justify-between">
-                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
-                    </div>
-                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-indigo-500 transition-all" style="width:${(reviewState.index / reviewState.total * 100)}%"></div>
-                    </div>
-                    <div class="text-center py-10">
-                        <p class="text-xs font-bold text-indigo-400 mb-3">👁️ 잘 기억하세요!</p>
-                        <p class="text-4xl font-black text-slate-900">${escapeHtml(w.word)}</p>
-                        <p class="text-sm text-slate-400 mt-2">${escapeHtml(w.meaning)}</p>
-                        <button onclick="speakSpanish('${String(w.word).replace(/'/g, "\\'")}', 0.85)" class="mt-4 w-9 h-9 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-500 transition-all"><i class="fa-solid fa-volume-high"></i></button>
-                    </div>
-                </div>
-            `;
-            // [냐냐 PATCH-3배치] 깜박이는 노출 시간이 짧아서 자동으로 읽어줌 (음소거면 안 나감)
-            if (typeof speakSpanish === 'function') speakSpanish(w.word, 0.85);
-            reviewState.flashTimeout = setTimeout(() => { if (reviewState) reviewAskInput(); }, reviewState.showMs);
-        }
-
-        function reviewAskInput() {
-            if (!reviewState) return;
-            const w = reviewState.current;
-            const play = document.getElementById('review-play-area');
-            play.innerHTML = `
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-5">
-                    <div class="flex items-center justify-between">
-                        <button onclick="resetReviewTab()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500">${reviewState.index + 1} / ${reviewState.total}</span>
-                    </div>
-                    <div class="text-center py-6">
-                        <p class="text-xs font-bold text-slate-400 mb-1">방금 본 단어를 써보세요!</p>
-                        <p class="text-lg font-bold text-indigo-600">${escapeHtml(w.meaning)}</p>
-                        <p id="review-feedback" class="text-sm font-bold mt-2 h-5"></p>
-                    </div>
-                    <input type="text" id="review-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                    <!-- [냐냐 PATCH-3배치] 확인 후 단어장 정보가 여기에 펼쳐짐 -->
-                    <div id="review-detail-box" class="hidden space-y-2"></div>
-                    <div class="flex gap-2" id="review-btn-row">
-                        <button onclick="reviewReveal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold transition-all">모르겠어요</button>
-                        <button onclick="reviewSubmit()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
-                    </div>
-                </div>
-            `;
-            const input = document.getElementById('review-input');
-            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); reviewSubmit(); } });
-            setTimeout(() => input.focus(), 50);
-        }
-
-        // [냐냐 PATCH-3배치] 확인/모르겠어요 누른 뒤 공통 처리 — 단어장 정보 전부 + [다음] 버튼
-        function reviewShowDetail(w) {
-            const box = document.getElementById('review-detail-box');
-            if (box) {
-                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w) : '';
-                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
-                const parts = [badges, notes].filter(x => x && x.trim());
-                box.classList.remove('hidden');
-                box.innerHTML = `
-                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 leading-relaxed">
-                        <div class="text-center pb-2">
-                            <p class="text-2xl font-black text-slate-900">${escapeHtml(w.word)}</p>
-                            <p class="text-sm text-slate-500">${escapeHtml(w.meaning)}</p>
-                        </div>
-                        ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
-                    </div>
-                    <div id="review-conj-box" class="hidden"></div>`;
-                // 동사면 등록된 시제 전부 (퀴즈 결과창과 동일한 렌더러 재사용)
-                if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'review-conj-box');
-            }
-            // 버튼을 [다음]으로 교체 — 자동으로 안 넘어감
-            const row = document.getElementById('review-btn-row');
-            if (row) {
-                const isLast = (reviewState && reviewState.index + 1 >= reviewState.total);
-                row.innerHTML = `<button id="review-next-btn" onclick="reviewNext()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all">${isLast ? '결과 보기 →' : '다음 →'}</button>`;
-                setTimeout(() => { const b = document.getElementById('review-next-btn'); if (b) b.focus(); }, 60);
-            }
-        }
-
-        // [냐냐 PATCH-3배치] 다음 문제로 (자동 넘김 폐지)
-        function reviewNext() {
-            if (!reviewState) return;
-            reviewState.index++;
-            reviewShowWord();
-        }
-
-        function reviewSubmit() {
-            if (!reviewState || !reviewState.current) return;
-            const input = document.getElementById('review-input');
-            if (!input || input.disabled) return; // 이미 채점됨
-            const userAnswer = input.value.trim();
-            input.disabled = true;
-            const w = reviewState.current;
-            const isCorrect = userAnswer ? gameCheckAnswer(userAnswer, w.word) : false;
-            // [냐냐 PATCH-0배치] 깜박이 복습 점수: 정답 +0.2 / 오답 -2
-            if (typeof addWordScore === 'function') {
-                addWordScore(w.id, isCorrect ? 0.2 : -2, { correct: isCorrect });
-            }
-            const fb = document.getElementById('review-feedback');
-            if (isCorrect) {
-                reviewState.correct++;
-                if (fb) { fb.innerText = "✓ 정답!"; fb.className = "text-sm font-bold mt-2 h-5 text-emerald-600"; }
-                AudioFX.playSuccess();
-            } else {
-                if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${escapeHtml(w.word)}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
-                AudioFX.playError();
-            }
-            logAction('review'); // [냐냐 PATCH] 제출한 단어 1개 = 복습 1개 기록
-            reviewShowDetail(w);  // [3배치] 정답/오답 상관없이 단어장 정보 전부
-        }
-
-        function reviewReveal() {
-            if (!reviewState || !reviewState.current) return;
-            const fb = document.getElementById('review-feedback');
-            const input = document.getElementById('review-input');
-            if (input && input.disabled) return;
-            if (input) input.disabled = true;
-            const w = reviewState.current;
-            // [냐냐 PATCH-0배치] '모르겠어요'도 오답 처리 (-2)
-            if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
-            if (fb) { fb.innerHTML = `정답: <b class="text-slate-800">${escapeHtml(w.word)}</b>`; fb.className = "text-sm font-bold mt-2 h-5 text-slate-500"; }
-            logAction('review');
-            reviewShowDetail(w);
-        }
-
-        function reviewEnd() {
-            const correct = reviewState ? reviewState.correct : 0;
-            const total = reviewState ? reviewState.total : 0;
-            reviewState = null;
-            const play = document.getElementById('review-play-area');
-            play.innerHTML = `
-                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
-                    <div class="text-6xl">🎉</div>
-                    <h3 class="text-xl font-black text-slate-900">복습 완료!</h3>
-                    <p class="text-sm text-slate-500">${total}개 중 <b class="text-emerald-600">${correct}개</b> 기억했어요!</p>
-                    <div class="flex gap-2 justify-center pt-2">
-                        <button onclick="resetReviewTab()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 복습</button>
-                    </div>
-                </div>
-            `;
-        }
-
         // ============================================================
         // [냐냐 PATCH] 3차-① 단어 빈칸 채우기 복습 (AI 채점)
         //   단어 카드 전체를 보여주고 랜덤 1~2곳을 빈칸으로. 엔터로 칸 이동/채점/다음.
         // ============================================================
         // [냐냐 요청] 처음 들어오거나 새로고침하면 항상 '쓰기'. 세션 중에는 마지막에 보던 모드를 기억함
         //   (localStorage에 저장하지 않으므로 새로고침하면 자동으로 'write'로 돌아감)
-        let reviewMode = 'write';          // 'write' | 'fill' | 'gfill' | 'blink'
+        let reviewMode = 'write';          // 'write' | 'fill' | 'gfill'
         let fillScope = 'not-mastered'; // [냐냐 요청] 기본: 마스터 안 된 단어
         let fillCount = 5; // [냐냐 요청] 단어빈칸 기본 5개
         let fillState = null;
@@ -894,10 +710,10 @@
                 changeTab('review');
             }
             reviewMode = mode;
-            const containers = { blink: 'review-mode-blink', fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write' };
+            const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write' };
             Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
             // [냐냐 PATCH] 퀴즈 버튼도 목록에 포함 (빠져 있어서 혼자 글씨색이 달랐음)
-            const btns = { blink: 'review-mode-blink-btn', fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn' };
+            const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
             Object.entries(btns).forEach(([m, id]) => {
