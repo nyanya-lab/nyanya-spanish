@@ -1306,14 +1306,13 @@ let vocabulary = [];
             const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
             let planHtml = '';
             if (due) {
-                const isToday = ds === today;
+                // 기준 설명('밀린 것 포함' / '오늘 걸 다 하면')은 여기 안 쓴다.
+                //   좁은 사이드바에서 개수와 한 줄에 못 들어가고, 어차피 '단어 보기' 팝업 머리에 적혀 있다.
                 planHtml = `
                     <div class="mt-2 pt-2 border-t border-violet-100">
-                        <div class="mb-1.5">
-                            <div class="font-black text-amber-700">📖 복습 예정 <span class="text-amber-600">${due.length}개</span></div>
-                            ${isToday
-                                ? '<div class="text-[10px] font-bold text-amber-500">밀린 복습까지 포함</div>'
-                                : '<div class="text-[10px] font-bold text-slate-400">오늘 걸 다 하면 기준</div>'}
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <span class="font-black text-amber-700">📖 복습 예정</span>
+                            <span class="font-black text-amber-600">${due.length}개</span>
                         </div>
                         ${due.length
                             ? `<button onclick="openReviewPlanModal('${ds}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"><i class="fa-solid fa-list-ul"></i> 단어 보기 (${due.length}개)</button>`
