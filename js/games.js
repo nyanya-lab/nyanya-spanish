@@ -1201,6 +1201,22 @@ Return JSON only, no markdown.`;
             fillState.phase = 'graded';
         }
 
+        // [냐냐 요청] 오답 칸 — 내가 쓴 답에 줄을 긋고 바로 밑에 정답을 적어준다.
+        //   input 안에는 글자를 한 덩어리로밖에 못 넣어서, 정답은 칸 바로 뒤에 붙인다.
+        //   (아래 오답 목록에도 정답이 있지만, 표를 보면서 바로 확인하고 싶다는 요청)
+        function markBlankAnswer(el, d) {
+            if (!el || !el.parentNode) return;
+            // 다시 채점해도 두 번 붙지 않게 먼저 지운다
+            const prev = el.parentNode.querySelector('.nyanya-answer-hint');
+            if (prev) prev.remove();
+            if (d.correct) return;
+            if (!String(el.value || '').trim()) el.value = '(빈칸)';   // 빈 칸이면 줄 그을 글자가 없다
+            const hint = document.createElement('div');
+            hint.className = 'nyanya-answer-hint mt-0.5 text-[11px] font-black text-emerald-600 leading-tight break-words text-center';
+            hint.textContent = d.correctAnswer || '';
+            el.insertAdjacentElement('afterend', hint);
+        }
+
         function applyFillGradeResults(detail) {
             detail.forEach((d, i) => {
                 const el = document.getElementById('fill-input-' + i);
@@ -1210,6 +1226,7 @@ Return JSON only, no markdown.`;
                 // [냐냐 요청] 정답 후 글씨크기 명시적으로 유지 (text-sm font-bold)
                 if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700', 'text-sm', 'font-bold');
                 else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through', 'text-sm', 'font-bold');
+                markBlankAnswer(el, d);
             });
             const fb = document.getElementById('fill-feedback');
             if (fb) {
@@ -1663,7 +1680,8 @@ Return JSON only, no markdown.`;
                 el.disabled = true;
                 el.classList.remove('border-indigo-300', 'bg-indigo-50/40');
                 if (d.correct) el.classList.add('border-emerald-400', 'bg-emerald-50', 'text-emerald-700');
-                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600');
+                else el.classList.add('border-red-400', 'bg-red-50', 'text-red-600', 'line-through');
+                markBlankAnswer(el, d);
             });
             const fb = document.getElementById('gfill-feedback');
             if (fb) {
