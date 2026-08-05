@@ -1301,14 +1301,12 @@ let vocabulary = [];
                 </div>`).join('');
             // [냐냐 요청] 오늘·앞날이면 그날 복습 예정 단어도 같이 보여준다.
             //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
+            //   단어 목록은 여기 늘어놓지 않고 '단어 보기'로 팝업에서 단계별로 본다.
             const today = getLocalDateString();
             const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
             let planHtml = '';
             if (due) {
                 const isToday = ds === today;
-                const chips = due.slice(0, 40).map(w =>
-                    `<span class="inline-block bg-white border border-amber-200 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-slate-600">${escapeHtml(w.word)}</span>`).join(' ');
-                const more = due.length > 40 ? `<span class="text-[10px] font-bold text-amber-500"> 외 ${due.length - 40}개</span>` : '';
                 planHtml = `
                     <div class="mt-2 pt-2 border-t border-violet-100">
                         <div class="flex items-center justify-between mb-1.5">
@@ -1318,7 +1316,7 @@ let vocabulary = [];
                                 : '<span class="text-[10px] font-bold text-slate-400">오늘 걸 다 하면 기준</span>'}
                         </div>
                         ${due.length
-                            ? `<div class="max-h-24 overflow-y-auto leading-6">${chips}${more}</div>`
+                            ? `<button onclick="openReviewPlanModal('${ds}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"><i class="fa-solid fa-list-ul"></i> 단어 보기 (${due.length}개)</button>`
                             : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>'}
                     </div>`;
             }
@@ -1334,6 +1332,79 @@ let vocabulary = [];
                     : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
                 ${planHtml}
             `;
+        }
+
+        // [냐냐 요청] 달력에서 '단어 보기' → 그날 복습 예정 단어를 망각곡선 단계별로 묶어서 보여준다.
+        //   단계를 보여주는 이유: 같은 '61개'라도 처음 틀린 40개인지 30일차 5개인지에 따라
+        //   그날 복습의 성격이 완전히 다르다.
+        //   단어를 누르면 팝업 위에 팝업을 또 띄우지 않고 그 자리에서 아래로 펼친다 (폰 배려).
+        function openReviewPlanModal(ds) {
+            const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
+            const modal = document.getElementById('review-plan-modal');
+            if (!due || !modal) return;
+
+            const titleEl = document.getElementById('review-plan-title');
+            const subEl = document.getElementById('review-plan-sub');
+            const bodyEl = document.getElementById('review-plan-body');
+            const isToday = ds === getLocalDateString();
+
+            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} 복습 예정 ${due.length}개`;
+            if (subEl) subEl.innerText = isToday
+                ? '밀린 복습까지 포함한 숫자예요. 약한 단어부터 보여드려요.'
+                : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.';
+
+            const groups = REVIEW_INTERVALS.map((days, stage) => ({
+                days,
+                stage,
+                words: due.filter(w => (w.reviewStage || 0) === stage)
+            })).filter(g => g.words.length);
+
+            bodyEl.innerHTML = groups.map(g => `
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 sticky top-0 bg-white py-1">
+                        <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">${g.days}일차</span>
+                        <span class="text-[10px] font-bold text-slate-400">${g.stage === 0 ? '처음 틀린 뒤 첫 복습' : `${g.stage}번 복습한 단어`}</span>
+                        <span class="ml-auto text-[10px] font-black text-slate-500">${g.words.length}개</span>
+                    </div>
+                    ${g.words.map(w => `
+                        <div class="border border-slate-200 rounded-xl overflow-hidden">
+                            <button onclick="toggleReviewPlanWord('${w.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                                <span class="font-bold text-slate-800 text-sm">${escapeHtml(w.word)}</span>
+                                <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
+                                <i id="rpw-icon-${w.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
+                            </button>
+                            <div id="rpw-${w.id}" class="hidden px-3 pb-3"></div>
+                        </div>`).join('')}
+                </div>`).join('');
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeReviewPlanModal() {
+            const m = document.getElementById('review-plan-modal');
+            if (m) m.classList.add('hidden');
+        }
+
+        function toggleReviewPlanWord(id) {
+            const box = document.getElementById('rpw-' + id);
+            const icon = document.getElementById('rpw-icon-' + id);
+            if (!box) return;
+            const opening = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            if (icon) icon.className = `fa-solid fa-chevron-${opening ? 'up' : 'down'} text-[10px] text-slate-300`;
+            // 처음 펼칠 때만 내용을 만든다 (61개를 미리 다 그리면 무겁다)
+            if (opening && !box.dataset.filled) {
+                const w = vocabulary.find(v => v.id === id);
+                if (w) {
+                    const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
+                    const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+                    const parts = [badges, notes].filter(x => x && x.trim());
+                    box.innerHTML = parts.length
+                        ? `<div class="space-y-2 pt-1">${parts.join('')}</div>`
+                        : '<p class="text-[11px] text-slate-400 pt-1">적어둔 정보가 없어요.</p>';
+                }
+                box.dataset.filled = '1';
+            }
         }
 
         function renderCalendar() {

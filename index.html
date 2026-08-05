@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260805c">
+    <link rel="stylesheet" href="css/style.css?v=20260805d">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1974,6 +1974,22 @@
         </div>
     </div>
 
+    <!-- [냐냐 요청] 달력에서 '단어 보기' → 그날 복습 예정 단어를 망각곡선 단계별로 -->
+    <div id="review-plan-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 id="review-plan-title" class="text-base font-bold text-slate-900">복습 예정</h3>
+                    <p id="review-plan-sub" class="text-[11px] text-slate-400 mt-0.5"></p>
+                </div>
+                <button onclick="closeReviewPlanModal()" class="w-8 h-8 shrink-0 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="review-plan-body" class="p-5 space-y-4 overflow-y-auto"></div>
+        </div>
+    </div>
+
     <div id="backup-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -2029,13 +2045,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260805c"></script>
-    <script src="js/creatures.js?v=20260805c"></script>
-    <script src="js/core.js?v=20260805c"></script>
-    <script src="js/vocab.js?v=20260805c"></script>
-    <script src="js/flashcards.js?v=20260805c"></script>
-    <script src="js/quiz.js?v=20260805c"></script>
-    <script src="js/games.js?v=20260805c"></script>
-    <script src="js/ai-feedback.js?v=20260805c"></script>
+    <script src="js/dictionary-data.js?v=20260805d"></script>
+    <script src="js/creatures.js?v=20260805d"></script>
+    <script src="js/core.js?v=20260805d"></script>
+    <script src="js/vocab.js?v=20260805d"></script>
+    <script src="js/flashcards.js?v=20260805d"></script>
+    <script src="js/quiz.js?v=20260805d"></script>
+    <script src="js/games.js?v=20260805d"></script>
+    <script src="js/ai-feedback.js?v=20260805d"></script>
 </body>
 </html>
