@@ -1140,7 +1140,10 @@ Return JSON only, no markdown.`;
                     const resp = await callGemini(prompt, system, schema, 'low');
                     const data = extractAndParseJson(resp);
                     graded = blanks.map((b, i) => {
-                        const r = (data.results || []).find(x => x.index === i) || {};
+                        const r = (data.results || []).find(x => x.index === i);
+                        // [냐냐 요청] AI 가 그 칸을 빼먹으면 예전엔 무조건 오답이 됐다.
+                        //   (정답을 써도 '오답 · 정답: julio' 처럼 보였음) 빠졌으면 기본 채점으로 넘긴다
+                        if (!r) return { correct: fillLocalGrade(b, answers[i]), correctAnswer: b.expected };
                         return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
                     });
                 } catch (err) {
@@ -1152,6 +1155,7 @@ Return JSON only, no markdown.`;
                 // API 키 없거나 실패 시 로컬 채점
                 graded = blanks.map(b => ({ correct: fillLocalGrade(b, answers[blanks.indexOf(b)]), correctAnswer: b.expected }));
             }
+            graded = rescueExactMatches(graded, blanks, answers);
 
             // 결과 저장 + 표시
             const detail = blanks.map((b, i) => ({ key: b.key, label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
@@ -1199,6 +1203,22 @@ Return JSON only, no markdown.`;
 
             applyFillGradeResults(detail);
             fillState.phase = 'graded';
+        }
+
+        // [냐냐 요청] 적어낸 답이 정답과 글자까지 똑같으면 무조건 정답으로 되돌린다.
+        //   AI 채점이 칸을 빼먹거나 잘못 짚어서 'julio' 를 쓰고도 '오답 · 정답: julio' 가 나온 적이 있다.
+        //   대소문자와 앞뒤 공백만 관대하게 보고, 악센트는 그대로 본다 (á 와 a 는 다른 글자다).
+        //   NFC 로 모양만 통일한다 — 같은 글자가 분해형으로 저장돼 있을 수 있어서.
+        function rescueExactMatches(graded, blanks, answers) {
+            if (!Array.isArray(graded)) return graded;
+            const norm = (s) => String(s || '').trim().normalize('NFC').toLowerCase();
+            return graded.map((g, i) => {
+                if (!g || g.correct) return g;
+                const expected = blanks[i] ? blanks[i].expected : '';
+                if (!norm(answers[i])) return g;                 // 빈 칸은 그대로 오답
+                if (norm(answers[i]) !== norm(expected)) return g;
+                return { correct: true, correctAnswer: g.correctAnswer || expected };
+            });
         }
 
         // [냐냐 요청] 오답 칸 — 내가 쓴 답에 줄을 긋고 바로 밑에 정답을 적어준다.
@@ -1588,7 +1608,9 @@ Return JSON only, no markdown.`;
                     const resp = await callGemini(prompt, system, schema, 'low');
                     const data = extractAndParseJson(resp);
                     graded = blanks.map((b, i) => {
-                        const r = (data.results || []).find(x => x.index === i) || {};
+                        const r = (data.results || []).find(x => x.index === i);
+                        // [냐냐 요청] AI 가 그 칸을 빼먹으면 예전엔 무조건 오답이 됐다 → 기본 채점으로 넘긴다
+                        if (!r) return { correct: fillLocalGrade({ language: 'es', expected: b.expected }, answers[i]), correctAnswer: b.expected };
                         return { correct: !!r.correct, correctAnswer: r.correctAnswer || b.expected };
                     });
                 } catch (err) {
@@ -1599,6 +1621,7 @@ Return JSON only, no markdown.`;
             if (!graded) {
                 graded = blanks.map((b, i) => ({ correct: fillLocalGrade({ language: 'es', expected: b.expected }, answers[i]), correctAnswer: b.expected }));
             }
+            graded = rescueExactMatches(graded, blanks, answers);
 
             const detail = blanks.map((b, i) => ({
                 bi: b.bi, ri: b.ri, ci: b.ci,
