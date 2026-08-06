@@ -2150,7 +2150,7 @@ let vocabulary = [];
                 <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 오늘의 복습 — 어떤 단어가 뽑히나요?</h4>
                 <p class="text-xs text-violet-900 font-semibold leading-relaxed">
                     <b>틀린 적 있고 아직 마스터 안 한 단어</b>가 망각곡선에 따라 올라와요.
-                    헤더의 <b>📖 복습</b> 버튼을 누르면 <b>랜덤 10개씩 쓰기 복습</b>으로 진행해요:
+                    헤더의 <b>📖 복습</b> 버튼을 누르면 <b>랜덤 20개씩 쓰기 복습</b>으로 진행해요:
                     1바퀴는 단어를 <b>보면서 2번</b> 쓰고, 2바퀴는 순서를 섞어 <b>가린 채 1번</b> 써요.
                     가리고 쓴 결과로 복습이 반영돼요 (점수는 안 변해요).
                 </p>
