@@ -1305,10 +1305,13 @@ let vocabulary = [];
                 ['게임', log.gameCount || 0, '판', 'text-pink-600'],
             ];
             const total = items.reduce((s, x) => s + x[1], 0);
+            // [냐냐 요청] 한 줄에 하나씩. 예전엔 2열이었는데 데스크톱 사이드바(w-56)에서는
+            //   칸 하나가 70px 밖에 안 돼서 '마스터 단어'(58px)+값이 안 들어가 두 줄로 접혔다.
+            //   1열로 펴면 176px 를 다 쓰므로 어떤 라벨도 안 접힌다.
             const grid = items.map(([label, val, unit, color]) =>
-                `<div class="flex items-center justify-between bg-white/70 rounded-lg px-2 py-1">
-                    <span class="text-slate-500">${label}</span>
-                    <span class="font-bold ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
+                `<div class="flex items-center justify-between gap-2 bg-white/70 rounded-lg px-2 py-0.5">
+                    <span class="text-slate-500 whitespace-nowrap">${label}</span>
+                    <span class="font-bold whitespace-nowrap ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
                 </div>`).join('');
             // [냐냐 요청] 오늘·앞날이면 그날 복습 예정 단어도 같이 보여준다.
             //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
@@ -1338,7 +1341,7 @@ let vocabulary = [];
                     <button onclick="document.getElementById('calendar-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 ${total > 0
-                    ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
+                    ? `<div class="grid grid-cols-1 gap-0.5">${grid}</div>`
                     : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
                 ${planHtml}
             `;
