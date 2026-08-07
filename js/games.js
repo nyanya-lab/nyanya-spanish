@@ -776,12 +776,97 @@
         //   [냐냐 요청] 10 → 20. 묶음 크기가 곧 '익히기(1바퀴)와 확인(2바퀴) 사이의 간격'이라,
         //   10개면 방금 쓴 걸 열 개 뒤에 다시 물어보는 셈이라 잘 안 틀렸다. 간격을 두 배로 늘린다.
         const TODAY_REVIEW_BATCH = 20;
+
+        // [냐냐 요청] 밀린 복습을 몇 번에 나눠 할지 먼저 고르게 한다.
+        //   딱 안 나눠지면 앞쪽부터 1개씩 더 준다: 83개를 4번 → 21 · 21 · 21 · 20
+        function splitReviewCounts(total, parts) {
+            const base = Math.floor(total / parts);
+            const rem = total % parts;
+            return Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
+        }
+
+        // 고른 나눔을 회차 사이에 기억해 둔다. '다음 N개 이어서'가 이 계획을 따라간다.
+        let todayReviewPlan = null;   // { counts: [21,21,21,20], index: 0 }
+        let todayReviewParts = 1;     // 팝업에서 고르는 중인 횟수
+
         function startTodayReviewShortcut() {
             const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
-            const picked = shuffleArray(due.slice()).slice(0, TODAY_REVIEW_BATCH);
+            todayReviewPlan = null;
+            // 한 번에 다 할 만큼 적으면 굳이 안 물어본다
+            if (due.length <= TODAY_REVIEW_BATCH) { beginTodayReview(1); return; }
+            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / TODAY_REVIEW_BATCH)));
+            renderReviewSplitModal();
+            document.getElementById('review-split-modal').classList.remove('hidden');
+        }
+
+        function changeReviewSplit(delta) {
+            todayReviewParts = Math.min(5, Math.max(1, todayReviewParts + delta));
+            renderReviewSplitModal();
+        }
+
+        function renderReviewSplitModal() {
+            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            const counts = splitReviewCounts(due.length, todayReviewParts);
+            const numEl = document.getElementById('review-split-num');
+            const perEl = document.getElementById('review-split-per');
+            const listEl = document.getElementById('review-split-list');
+            const totalEl = document.getElementById('review-split-total');
+            if (totalEl) totalEl.innerText = `오늘 복습할 단어 ${due.length}개`;
+            if (numEl) numEl.innerText = `${todayReviewParts}번`;
+            // counts 는 앞쪽이 크므로 그대로 쓰면 '18~17개'처럼 거꾸로 적힌다. 작은 쪽을 앞에 둔다.
+            if (perEl) perEl.innerText = counts.every(c => c === counts[0])
+                ? `한 번에 ${counts[0]}개씩`
+                : `한 번에 ${counts[counts.length - 1]}~${counts[0]}개씩`;
+            if (listEl) listEl.innerHTML = counts.map((c, i) =>
+                `<span class="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-700">${i + 1}회 ${c}개</span>`).join(' ');
+            const minus = document.getElementById('review-split-minus');
+            const plus = document.getElementById('review-split-plus');
+            if (minus) minus.disabled = todayReviewParts <= 1;
+            if (plus) plus.disabled = todayReviewParts >= 5;
+        }
+
+        function closeReviewSplitModal() {
+            const m = document.getElementById('review-split-modal');
+            if (m) m.classList.add('hidden');
+        }
+
+        function confirmReviewSplit() {
+            closeReviewSplitModal();
+            beginTodayReview(todayReviewParts);
+        }
+
+        // parts 로 나눠 첫 회차를 시작한다. 이후 회차는 continueTodayReview() 가 이어받는다.
+        function beginTodayReview(parts) {
+            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            todayReviewPlan = { counts: splitReviewCounts(due.length, parts), index: 0 };
+            runTodayReviewChunk(due);
+        }
+
+        // '다음 N개 이어서' — 고른 나눔의 다음 회차만큼 가져온다.
+        function continueTodayReview() {
+            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            if (!todayReviewPlan) { startTodayReviewShortcut(); return; }
+            todayReviewPlan.index++;
+            runTodayReviewChunk(due);
+        }
+
+        // 결과 화면의 '다음 N개 이어서' 버튼에 쓸 숫자 — 실제로 다음에 나올 개수와 맞춘다.
+        function peekNextTodayReviewCount(remain, fallbackBatch) {
+            const plan = todayReviewPlan;
+            const n = (plan && plan.counts[plan.index + 1]) || fallbackBatch || TODAY_REVIEW_BATCH;
+            return Math.min(remain, n);
+        }
+
+        // 이번 회차 개수만큼 뽑아서 시작. 계획을 다 썼으면 남은 만큼 한 번에.
+        function runTodayReviewChunk(due) {
+            const plan = todayReviewPlan;
+            const n = (plan && plan.counts[plan.index]) || Math.min(due.length, TODAY_REVIEW_BATCH);
+            const picked = shuffleArray(due.slice()).slice(0, n);
             if (typeof beginWritePractice === 'function') {
-                beginWritePractice(picked, { isTodayReview: true, batchSize: TODAY_REVIEW_BATCH });
+                beginWritePractice(picked, { isTodayReview: true, batchSize: n });
             }
         }
 

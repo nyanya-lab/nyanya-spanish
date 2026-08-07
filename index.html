@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260806c">
+    <link rel="stylesheet" href="css/style.css?v=20260806e">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1977,6 +1977,37 @@
         </div>
     </div>
 
+    <!-- [냐냐 요청] 복습 배너 → 몇 번에 나눠 할지 먼저 고르기 -->
+    <div id="review-split-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-5 text-center">
+            <div>
+                <div class="text-4xl">📖</div>
+                <h3 class="text-base font-bold text-slate-900 mt-2">몇 번에 나눠서 할까요?</h3>
+                <p id="review-split-total" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+
+            <div class="flex items-center justify-center gap-5">
+                <button id="review-split-minus" onclick="changeReviewSplit(-1)" class="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-slate-100 text-slate-600 text-lg transition-all active:scale-95">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <div class="min-w-[72px]">
+                    <div id="review-split-num" class="text-3xl font-black text-amber-600">1번</div>
+                    <div id="review-split-per" class="text-[11px] font-bold text-slate-500 mt-0.5"></div>
+                </div>
+                <button id="review-split-plus" onclick="changeReviewSplit(1)" class="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-slate-100 text-slate-600 text-lg transition-all active:scale-95">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div id="review-split-list" class="flex flex-wrap justify-center gap-1.5"></div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="closeReviewSplitModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
+                <button onclick="confirmReviewSplit()" class="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow-md">시작하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- [냐냐 요청] 달력에서 '단어 보기' → 그날 복습 예정 단어를 망각곡선 단계별로 -->
     <div id="review-plan-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] flex flex-col">
@@ -2048,13 +2079,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260806c"></script>
-    <script src="js/creatures.js?v=20260806c"></script>
-    <script src="js/core.js?v=20260806c"></script>
-    <script src="js/vocab.js?v=20260806c"></script>
-    <script src="js/flashcards.js?v=20260806c"></script>
-    <script src="js/quiz.js?v=20260806c"></script>
-    <script src="js/games.js?v=20260806c"></script>
-    <script src="js/ai-feedback.js?v=20260806c"></script>
+    <script src="js/dictionary-data.js?v=20260806e"></script>
+    <script src="js/creatures.js?v=20260806e"></script>
+    <script src="js/core.js?v=20260806e"></script>
+    <script src="js/vocab.js?v=20260806e"></script>
+    <script src="js/flashcards.js?v=20260806e"></script>
+    <script src="js/quiz.js?v=20260806e"></script>
+    <script src="js/games.js?v=20260806e"></script>
+    <script src="js/ai-feedback.js?v=20260806e"></script>
 </body>
 </html>

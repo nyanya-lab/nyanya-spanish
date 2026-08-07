@@ -1086,11 +1086,22 @@ let vocabulary = [];
             const info = RARITY_INFO[creature.rarity];
             const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
             if (typeof AudioFX !== 'undefined' && AudioFX.playSuccess) AudioFX.playSuccess();
+            // [냐냐 요청] 부화했다고 탭을 옮기지 않는다. 하던 걸 계속하게 두고 팝업으로만 알린다.
+            //   확인 버튼이 '도감 보기'(=탭 이동)였던 데다 엔터로 자동 실행돼서, 쓰기 복습 중에
+            //   부화하면 제출용 엔터가 그대로 눌려 팝업을 못 보고 탭만 넘어가 있었다.
+            //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
             showConfirm(
                 `🎉 부화 성공!`,
                 `${creature.emoji} ${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
-                () => { changeTab('records'); setTimeout(renderEgg, 100); },
-                { okLabel: '도감 보기', cancelLabel: '닫기', okStyle: 'primary' }
+                () => { /* 닫기만 — 하던 화면 그대로 */ },
+                {
+                    icon: 'happy',
+                    okLabel: '계속하기',
+                    okStyle: 'primary',
+                    cancelLabel: '도감 보기',
+                    noEnter: true,
+                    onCancel: () => { changeTab('records'); setTimeout(renderEgg, 100); }
+                }
             );
         }
 

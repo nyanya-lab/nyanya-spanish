@@ -979,10 +979,15 @@
                 cleanup();
             };
             // [냐냐 PATCH] 엔터로 확인 버튼 실행 (연속 등록 편하게)
-            setTimeout(() => { try { btnOk.focus(); } catch(e){} }, 50);
+            //   [냐냐 요청] noEnter 면 자동 포커스도 엔터 실행도 안 한다.
+            //   갑자기 뜨는 알림(예: 알 부화)에 이걸 켜야 한다 — 쓰기 복습처럼 엔터를 계속
+            //   누르는 중에 팝업이 뜨면, 그 엔터가 확인 버튼을 눌러버려서 내용을 볼 새도 없이 사라진다.
+            if (!options.noEnter) {
+                setTimeout(() => { try { btnOk.focus(); } catch(e){} }, 50);
+            }
             const keyHandler = (e) => {
                 if (modal.classList.contains('hidden')) { document.removeEventListener('keydown', keyHandler); return; }
-                if (e.key === 'Enter') { e.preventDefault(); btnOk.click(); document.removeEventListener('keydown', keyHandler); }
+                if (e.key === 'Enter' && !options.noEnter) { e.preventDefault(); btnOk.click(); document.removeEventListener('keydown', keyHandler); }
                 else if (e.key === 'Escape') { e.preventDefault(); btnCancel.click(); document.removeEventListener('keydown', keyHandler); }
             };
             document.addEventListener('keydown', keyHandler);
@@ -2790,10 +2795,14 @@
                 let nextBtn = '';
                 const batch = s.batchSize || total;
                 if (s.isTodayReview && typeof getReviewDueWords === 'function') {
-                    // 헤더 복습 배너 → 망각곡선 대상에서 같은 개수만큼 이어서
+                    // 헤더 복습 배너 → 망각곡선 대상에서 이어서.
+                    //   [냐냐 요청] 처음에 '몇 번에 나눠 할지' 골랐으면 그 계획의 다음 회차 개수를 따라간다.
+                    //   그래서 나눔 팝업을 다시 띄우는 startTodayReviewShortcut 이 아니라 continueTodayReview 를 부른다.
                     const remain = getReviewDueWords().length;
                     if (remain > 0) {
-                        nextBtn = `<button onclick="closeWritePractice(); startTodayReviewShortcut();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(remain, batch)}개 이어서 →</button>`;
+                        const nextN = (typeof peekNextTodayReviewCount === 'function')
+                            ? peekNextTodayReviewCount(remain, batch) : Math.min(remain, batch);
+                        nextBtn = `<button onclick="closeWritePractice(); continueTodayReview();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${nextN}개 이어서 →</button>`;
                     }
                 } else if (s.scopeContinue && typeof getWriteScopePool === 'function') {
                     // [냐냐 요청] 쓰기연습 탭에서 시작 → 같은 범위에서 '내가 고른 개수'만큼 이어서
