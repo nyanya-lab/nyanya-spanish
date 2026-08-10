@@ -1305,13 +1305,14 @@ let vocabulary = [];
                 ['게임', log.gameCount || 0, '판', 'text-pink-600'],
             ];
             const total = items.reduce((s, x) => s + x[1], 0);
-            // [냐냐 요청] 한 줄에 하나씩. 예전엔 2열이었는데 데스크톱 사이드바(w-56)에서는
-            //   칸 하나가 70px 밖에 안 돼서 '마스터 단어'(58px)+값이 안 들어가 두 줄로 접혔다.
-            //   1열로 펴면 176px 를 다 쓰므로 어떤 라벨도 안 접힌다.
+            // [냐냐 요청] 2열은 그대로 두고 글씨만 줄여서 두 줄로 접히던 걸 없앤다.
+            //   데스크톱 사이드바(w-56)에서 칸 하나가 70px 인데, 12px 글씨로는
+            //   '마스터 단어'(58px)+값(22px)=80px 라 넘쳤다.
+            //   10px 로 줄이면 66px, 좌우 여백도 px-2→px-1.5 로 줄여 74px 를 확보한다.
             const grid = items.map(([label, val, unit, color]) =>
-                `<div class="flex items-center justify-between gap-2 bg-white/70 rounded-lg px-2 py-0.5">
-                    <span class="text-slate-500 whitespace-nowrap">${label}</span>
-                    <span class="font-bold whitespace-nowrap ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
+                `<div class="flex items-baseline justify-between gap-1 py-0.5" title="${label} ${val}${unit}">
+                    <span class="text-[10px] text-slate-500 whitespace-nowrap truncate min-w-0">${label}</span>
+                    <span class="text-[10px] font-bold whitespace-nowrap shrink-0 ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
                 </div>`).join('');
             // [냐냐 요청] 오늘·앞날이면 그날 복습 예정 단어도 같이 보여준다.
             //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
@@ -1341,7 +1342,7 @@ let vocabulary = [];
                     <button onclick="document.getElementById('calendar-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 ${total > 0
-                    ? `<div class="grid grid-cols-1 gap-0.5">${grid}</div>`
+                    ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
                     : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
                 ${planHtml}
             `;
