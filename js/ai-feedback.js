@@ -1727,10 +1727,15 @@ ${refGrammar}${refWords}
             if (!list.length || typeof vocabulary === 'undefined') return;
 
             // 관사를 떼고 악센트까지 그대로 비교한다 (carne ≠ carné 와 같은 이유)
+            //   [냐냐 요청] 대괄호 자리표시자도 뗀다. 단어장에 "antes de [명사/동사원형]" 처럼
+            //   적힌 항목이 26개 있는데, 냐냐가 문장에 쓰는 건 "antes de" 라서 예전엔 영영 안 맞았다.
+            //   (빈칸·퀴즈 채점은 이미 대괄호를 떼고 있었는데 첨삭만 빠져 있었다)
             const norm = (s) => String(s || '').toLowerCase().trim().normalize('NFC')
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '').trim();
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
+                .replace(/\s+/g, ' ').trim();
             const byWord = new Map();
-            vocabulary.forEach(w => { if (!byWord.has(norm(w.word))) byWord.set(norm(w.word), w); });
+            vocabulary.forEach(w => { const k = norm(w.word); if (k && !byWord.has(k)) byWord.set(k, w); });
 
             const done = new Set();
             list.forEach(item => {
@@ -1744,9 +1749,13 @@ ${refGrammar}${refWords}
                 done.add(w.id);
                 const ok = spelling === 'correct';
                 const delta = ok ? WORD_SPELL_OK : WORD_SPELL_BAD;
+                // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
+                //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
+                //   델타만 빼면 안 된다 — 오답이면 lastWrongDate·reviewStage 까지 바뀌기 때문.
+                const prev = snapshotWordScoreState(w);
                 // 정답률·망각곡선까지 같이 반영되도록 단어 점수는 addWordScore 로 (퀴즈·복습과 같은 경로)
                 if (typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
-                aiLastEsKoWords.push({ word: w, ok, delta });
+                aiLastEsKoWords.push({ word: w, ok, delta, prev, undone: false });
             });
         }
 
@@ -1768,9 +1777,63 @@ ${refGrammar}${refWords}
                 if (usage !== 'correct' && usage !== 'wrong') return;
                 done.add(note.id);
                 const delta = (usage === 'correct') ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_BAD;
+                const prev = {
+                    score: (typeof grammarScores !== 'undefined') ? grammarScores[note.id] : undefined,
+                    transUsed: (typeof grammarTransUsed !== 'undefined') ? grammarTransUsed[note.id] : undefined,
+                    mastered: (typeof masteredGrammar !== 'undefined') ? masteredGrammar[note.id] : undefined
+                };
                 addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
-                aiLastEsKoGrammar.push({ note, usage, delta });
+                aiLastEsKoGrammar.push({ note, usage, delta, prev, undone: false });
             });
+        }
+
+        // [냐냐 요청] AI 가 잘못 알아들어 붙은 점수를 한 건씩 해제한다.
+        //   반영 전 상태를 그대로 되돌린다 (점수뿐 아니라 정답/오답 횟수, 망각곡선 날짜까지).
+        function snapshotWordScoreState(w) {
+            const keys = ['score', 'correctTotal', 'wrongTotal', 'lastWrongDate', 'reviewStage',
+                          'lastReviewDate', 'weak', 'mastered', 'perfect', 'subjectivePassed'];
+            const snap = {};
+            keys.forEach(k => { snap[k] = w[k]; });
+            return snap;
+        }
+
+        function restoreWordScoreState(w, snap) {
+            Object.keys(snap).forEach(k => {
+                if (snap[k] === undefined) delete w[k];
+                else w[k] = snap[k];
+            });
+        }
+
+        function undoEsKoWordScore(i) {
+            const e = aiLastEsKoWords[i];
+            if (!e || e.undone) return;
+            restoreWordScoreState(e.word, e.prev);
+            e.undone = true;
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderEsKoGrammarRefs();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof updateStats === 'function') updateStats();
+            showToast(`"${e.word.word}" 점수를 되돌렸어요`, "info");
+        }
+
+        function undoEsKoGrammarScore(i) {
+            const e = aiLastEsKoGrammar[i];
+            if (!e || e.undone) return;
+            const id = e.note.id;
+            if (typeof grammarScores !== 'undefined') {
+                if (e.prev.score === undefined) delete grammarScores[id]; else grammarScores[id] = e.prev.score;
+            }
+            if (typeof grammarTransUsed !== 'undefined') {
+                if (e.prev.transUsed === undefined) delete grammarTransUsed[id]; else grammarTransUsed[id] = e.prev.transUsed;
+            }
+            if (typeof masteredGrammar !== 'undefined') {
+                if (e.prev.mastered === undefined) delete masteredGrammar[id]; else masteredGrammar[id] = e.prev.mastered;
+            }
+            e.undone = true;
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderEsKoGrammarRefs();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            showToast(`"${e.note.title}" 점수를 되돌렸어요`, "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
@@ -1779,21 +1842,33 @@ ${refGrammar}${refWords}
             if (!box) return;
             if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
-            const grammarHtml = aiLastEsKoGrammar.map(g => {
+            // [냐냐 요청] 각 항목에 '해제' 버튼 — AI 가 의도와 다르게 알아들었을 때 그 점수만 되돌린다.
+            const grammarHtml = aiLastEsKoGrammar.map((g, i) => {
                 const ok = g.usage === 'correct';
                 const txt = ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요';
                 const cls = ok ? 'text-emerald-600' : 'text-rose-500';
-                return `<button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="w-full text-left bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-1.5 transition-colors">
-                    <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
-                    <div class="text-[10px] font-bold ${cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
-                </button>`;
+                return `<div class="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 ${g.undone ? 'opacity-50' : ''}">
+                    <button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="flex-1 text-left min-w-0">
+                        <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
+                        <div class="text-[10px] font-bold ${g.undone ? 'text-slate-400 line-through' : cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
+                    </button>
+                    ${g.undone
+                        ? '<span class="text-[10px] font-bold text-slate-400 shrink-0">해제됨</span>'
+                        : `<button type="button" onclick="undoEsKoGrammarScore(${i})" title="이 점수 해제" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
+                </div>`;
             }).join('');
 
             // 단어는 개수가 많을 수 있어 한 줄짜리 칩으로
-            const wordHtml = aiLastEsKoWords.map(w => {
+            const wordHtml = aiLastEsKoWords.map((w, i) => {
                 const cls = w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600';
-                return `<span class="inline-flex items-baseline gap-1 border rounded-lg px-2 py-0.5 ${cls}">
+                if (w.undone) {
+                    return `<span class="inline-flex items-baseline gap-1 border rounded-lg px-2 py-0.5 border-slate-200 bg-slate-50 text-slate-400">
+                        <b class="line-through">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">해제됨</span>
+                    </span>`;
+                }
+                return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
                     <b>${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.delta > 0 ? '+' : ''}${w.delta}</span>
+                    <button type="button" onclick="undoEsKoWordScore(${i})" title="이 점수 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
                 </span>`;
             }).join('');
 
@@ -1877,7 +1952,7 @@ ${noteListText}
                   { "word": "The DICTIONARY form of a content word the student actually wrote: verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito).", "spelling": "'correct' if the student spelled it correctly in the sentence, 'wrong' if misspelled" }
                ]
             }
-            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, plain prepositions and pronouns. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
+            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, bare one-word prepositions and pronouns. DO list multi-word set phrases and connectors the student used as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
             IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
