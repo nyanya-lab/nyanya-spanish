@@ -415,7 +415,9 @@ const OFFLINE_DICT_DB = {
                 // [냐냐 요청] 768은 너무 빠듯했음 — 첨삭 응답(총평+단어분석+수정내역+팁)이
                 //   한국어라 토큰을 많이 먹어서 JSON이 중간에 잘리는 일이 잦았다.
                 //   상한일 뿐이라 짧은 응답은 그대로 짧게 끝나고 요금도 안 늘어난다.
-                maxOutputTokens: 2048
+                //   [냐냐 요청] 2048 → 4096. usedWords·usedGrammar 배열이 붙으면서 응답이 더
+                //   길어졌고, 잘리면 JSON 파싱이 깨져 '네트워크 문제'처럼 보였다.
+                maxOutputTokens: 4096
             };
             if (jsonSchema) {
                 payload.generationConfig.responseMimeType = "application/json";
@@ -449,10 +451,29 @@ const OFFLINE_DICT_DB = {
                         throw err;
                     }
                     const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const cand = result.candidates?.[0];
+                    const text = cand?.content?.parts?.[0]?.text || '';
+                    // [냐냐 요청] 잘리거나 빈 응답을 여기서 잡아낸다.
+                    //   예전엔 잘린 JSON을 그대로 돌려줘서 파싱이 깨졌고, 그 에러엔 status 가 없어
+                    //   '네트워크 문제'로 안내됐다. 서버가 끊긴 줄 알기 딱 좋았다.
+                    const finishReason = cand?.finishReason || '';
+                    if (finishReason === 'MAX_TOKENS') {
+                        const err = new Error('Response truncated (MAX_TOKENS)');
+                        err.finishReason = 'MAX_TOKENS';
+                        throw err;
+                    }
+                    if (!text) {
+                        const reason = finishReason || result.promptFeedback?.blockReason || 'EMPTY';
+                        const err = new Error(`Empty response (${reason})`);
+                        err.finishReason = reason;
+                        throw err;
+                    }
+                    return text;
                 } catch (e) {
-                    // 키 오류/요청형식 오류/한도초과는 재시도해도 소용없으므로 즉시 중단
-                    const permanent = e.status === 400 || e.status === 401 || e.status === 403 || e.status === 429;
+                    // 키 오류/요청형식 오류/한도초과는 재시도해도 소용없으므로 즉시 중단.
+                    //   잘린 응답(MAX_TOKENS)도 다시 물어봐야 똑같이 잘리므로 바로 알린다.
+                    const permanent = e.status === 400 || e.status === 401 || e.status === 403
+                        || e.status === 429 || e.finishReason === 'MAX_TOKENS';
                     if (i === MAX_ATTEMPTS - 1 || permanent) throw e;
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2; // 0.5s → 1s → 2s 점진적으로 늘려가며 재시도
@@ -477,6 +498,20 @@ const OFFLINE_DICT_DB = {
             }
             if (e && (e.status >= 500)) {
                 return "Gemini 서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.";
+            }
+            // [냐냐 요청] 잘린 응답·빈 응답을 '네트워크 문제'로 뭉뚱그리지 않는다.
+            //   원인이 다르면 대처도 달라서 (문장을 줄이는 것 vs 인터넷 확인) 구분해서 알려준다.
+            if (e && e.finishReason === 'MAX_TOKENS') {
+                return "AI 답변이 너무 길어져서 중간에 잘렸어요. 문장을 조금 짧게 해서 다시 시도해 주세요.";
+            }
+            if (e && (e.finishReason === 'SAFETY' || e.finishReason === 'RECITATION')) {
+                return "AI가 이 문장에는 답변을 만들지 않았어요. 문장을 조금 바꿔서 다시 시도해 주세요.";
+            }
+            if (e && e.finishReason) {
+                return "AI가 답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.";
+            }
+            if (msg.includes('No valid JSON') || e instanceof SyntaxError) {
+                return "AI 답변을 읽지 못했어요 (형식 오류). 다시 시도해 주세요.";
             }
             return "AI 통신 중 네트워크 문제가 발생했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.";
         }
