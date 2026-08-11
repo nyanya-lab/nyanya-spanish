@@ -760,7 +760,7 @@
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] },
                     ...aiScoringSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar", "usedWords"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED]
             };
 
             try {
@@ -1646,7 +1646,7 @@ ${refGrammar}${refWords}
                     tip: { type: "STRING" },
                     ...aiScoringSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "usedGrammar", "usedWords"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", ...AI_SCORING_REQUIRED]
             };
 
             try {
@@ -1739,9 +1739,26 @@ ${refGrammar}${refWords}
         // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 의 스펠링 점수 — 맞으면 +2 / 틀리면 −2.
         //   AI 가 돌려준 단어를 실제 단어장과 이름으로 맞춰본다. 없는 단어는 버린다.
         //   ⚠️ 뜻이 맞았는지는 보지 않는다 (유의어·문맥 탓에 판정이 부정확해서 원래부터 안 건드렸다)
+        // 응답을 [{ name, ok }] 로 펴준다.
+        //   지금 형식은 맞음/틀림이 갈린 문자열 배열(wordsOk/wordsBad)이다. 예전 형식
+        //   ([{word, spelling}])도 받아준다 — 모델이 옛 꼴로 답해도 점수가 조용히 사라지지 않게.
+        function flattenScoredList(feedback, okKey, badKey, legacyKey, legacyName, legacyFlag) {
+            const out = [];
+            const push = (v, ok) => { const s = String(v || '').trim(); if (s) out.push({ name: s, ok }); };
+            if (Array.isArray(feedback && feedback[okKey])) feedback[okKey].forEach(v => push(v, true));
+            if (Array.isArray(feedback && feedback[badKey])) feedback[badKey].forEach(v => push(v, false));
+            if (!out.length && Array.isArray(feedback && feedback[legacyKey])) {
+                feedback[legacyKey].forEach(it => {
+                    const flag = String((it && it[legacyFlag]) || '').toLowerCase();
+                    if (flag === 'correct' || flag === 'wrong') push(it && it[legacyName], flag === 'correct');
+                });
+            }
+            return out;
+        }
+
         function applyEsKoWordScores(feedback) {
             aiLastEsKoWords = [];
-            const list = Array.isArray(feedback && feedback.usedWords) ? feedback.usedWords : [];
+            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling');
             if (!list.length || typeof vocabulary === 'undefined') return;
 
             // 관사를 떼고 악센트까지 그대로 비교한다 (carne ≠ carné 와 같은 이유)
@@ -1757,15 +1774,13 @@ ${refGrammar}${refWords}
 
             const done = new Set();
             list.forEach(item => {
-                const key = norm(item && item.word);
+                const key = norm(item.name);
                 // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
                 const w = byWord.get(key)
                     || ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null);
                 if (!w || done.has(w.id)) return;
-                const spelling = String((item && item.spelling) || '').toLowerCase();
-                if (spelling !== 'correct' && spelling !== 'wrong') return;
                 done.add(w.id);
-                const ok = spelling === 'correct';
+                const ok = item.ok;
                 const delta = ok ? WORD_SPELL_OK : WORD_SPELL_BAD;
                 // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
                 //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
@@ -1779,7 +1794,7 @@ ${refGrammar}${refWords}
 
         function applyEsKoGrammarScores(feedback, notes) {
             aiLastEsKoGrammar = [];
-            const list = Array.isArray(feedback && feedback.usedGrammar) ? feedback.usedGrammar : [];
+            const list = flattenScoredList(feedback, 'grammarOk', 'grammarBad', 'usedGrammar', 'title', 'usage');
             if (!list.length || !notes || !notes.length) return;
             if (typeof addGrammarScore !== 'function') return;
 
@@ -1789,12 +1804,11 @@ ${refGrammar}${refWords}
 
             const done = new Set();
             list.forEach(item => {                       // AI 가 짚은 만큼 다 반영한다 (개수 제한 없음)
-                const note = byTitle.get(norm(item && item.title));
+                const note = byTitle.get(norm(item.name));
                 if (!note || done.has(note.id)) return;   // 지어낸 제목·중복은 버린다
-                const usage = String((item && item.usage) || '').toLowerCase();
-                if (usage !== 'correct' && usage !== 'wrong') return;
                 done.add(note.id);
-                const delta = (usage === 'correct') ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_BAD;
+                const usage = item.ok ? 'correct' : 'wrong';
+                const delta = item.ok ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_BAD;
                 const prev = {
                     score: (typeof grammarScores !== 'undefined') ? grammarScores[note.id] : undefined,
                     transUsed: (typeof grammarTransUsed !== 'undefined') ? grammarTransUsed[note.id] : undefined,
@@ -1848,43 +1862,26 @@ ${refGrammar}${refWords}
                 ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${notes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
                 : '';
         }
-        // 응답 JSON 예시에 끼워 넣을 두 항목
+        // 응답 JSON 예시에 끼워 넣을 항목.
+        //   [냐냐 요청] 예전엔 [{word, spelling}] 꼴이라 단어 하나에 39자를 썼다. 응답이 길어지면
+        //   maxOutputTokens 에 걸려 잘리므로, 맞음/틀림을 배열로 갈라 이름만 담는다 (10자).
         const AI_SCORING_JSON_FIELDS = `
-               "usedGrammar": [
-                  { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
-               ],
-               "usedWords": [
-                  { "word": "The DICTIONARY form of a content word the student actually wrote: verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito).", "spelling": "'correct' if the student spelled it correctly in the sentence, 'wrong' if misspelled" }
-               ]`;
+               "grammarOk": ["EXACT note titles from the list above that this sentence uses CORRECTLY"],
+               "grammarBad": ["EXACT note titles from the list above that this sentence uses INCORRECTLY"],
+               "wordsOk": ["dictionary form of each content word the student spelled CORRECTLY"],
+               "wordsBad": ["dictionary form of each content word the student MISSPELLED"]`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, bare one-word prepositions and pronouns. DO list multi-word set phrases and connectors the student used as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
-            IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.`;
+            IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write.
+            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun.`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
+        const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsBad"];
         function aiScoringSchemaProps() {
             return {
-                usedGrammar: {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: {
-                            title: { type: "STRING", description: "프롬프트에 준 문법 노트 제목 그대로. 목록에 없는 제목은 만들지 말 것" },
-                            usage: { type: "STRING", description: "correct | wrong" }
-                        },
-                        required: ["title", "usage"]
-                    }
-                },
-                usedWords: {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: {
-                            word: { type: "STRING", description: "학생이 실제로 쓴 낱말의 사전형 (동사는 원형, 명사는 관사+단수, 형용사는 남성 단수)" },
-                            spelling: { type: "STRING", description: "correct | wrong" }
-                        },
-                        required: ["word", "spelling"]
-                    }
-                }
+                grammarOk: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 제대로 쓴 문법 노트 제목들 (목록에 있는 제목 그대로)" },
+                grammarBad: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 틀리게 쓴 문법 노트 제목들" },
+                wordsOk: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 맞은 낱말의 사전형들" },
+                wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" }
             };
         }
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
@@ -2065,7 +2062,7 @@ ${noteListText}
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" },
                     ...aiScoringSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar", "usedWords"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED]
             };
 
             try {
