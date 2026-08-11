@@ -691,12 +691,17 @@
             showToast("Gemini AI가 답변을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
+            // [냐냐 요청] 여기도 스페인어를 직접 쓰는 곳이라 스→한과 똑같이 단어·문법 점수를 매긴다
+            const qScoreNotes = aiScoringNoteList();
+            resetAiWritingScores();
+
             const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
             Student's Spanish Answer: "${userAnswer}"
 
             Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar).
             For "correctedText": output the corrected sentence; wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags. Already-correct words stay plain.
             For "originalMarked": output the student's ORIGINAL answer verbatim; wrap ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags. Correct words stay plain.
+            ${aiScoringNoteListText(qScoreNotes)}
             ${buildLearnerProfileSummary()}`;
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐" answering a practice question in Spanish.
             Return feedback matching this JSON schema:
@@ -714,9 +719,9 @@
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'."
+               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}
             }
-            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -752,14 +757,18 @@
                         }
                     },
                     tip: { type: "STRING" },
-                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] }
+                    issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] },
+                    ...aiScoringSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar", "usedWords"]
             };
 
             try {
                 const responseText = await callGemini(prompt, system, schema, 'low');
                 const feedback = extractAndParseJson(responseText);
+
+                // [냐냐 요청] 이 답변이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
+                applyAiWritingScores(feedback, qScoreNotes);
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
@@ -1587,6 +1596,10 @@ ${refGrammar}${refWords}
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
             AudioFX.playPunch();
 
+            // [냐냐 요청] 여기도 스페인어를 직접 쓰는 곳이라 스→한과 똑같이 단어·문법 점수를 매긴다
+            const exScoreNotes = aiScoringNoteList();
+            resetAiWritingScores();
+
             const refExample = aiCurrentWordForMission.example || '';
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
@@ -1594,6 +1607,7 @@ ${refGrammar}${refWords}
             Student's Spanish Answer: "${userText}"
 
             The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            ${aiScoringNoteListText(exScoreNotes)}
             ${buildLearnerProfileSummary()}`;
 
             const system = `You are an encouraging and precise Spanish tutor tutoring a student named "냐냐".
@@ -1605,9 +1619,9 @@ ${refGrammar}${refWords}
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
                "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",${AI_SCORING_JSON_FIELDS}
             }
-            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.
+            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1629,9 +1643,10 @@ ${refGrammar}${refWords}
                             required: ["word", "mean"]
                         }
                     },
-                    tip: { type: "STRING" }
+                    tip: { type: "STRING" },
+                    ...aiScoringSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "usedGrammar", "usedWords"]
             };
 
             try {
@@ -1647,6 +1662,9 @@ ${refGrammar}${refWords}
                 const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
+
+                // [냐냐 요청] 이 문장이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
+                applyAiWritingScores(feedback, exScoreNotes);
 
                 resultBox.classList.remove('hidden');
 
@@ -1816,6 +1834,73 @@ ${refGrammar}${refWords}
             showToast(`"${e.word.word}" 점수를 되돌렸어요`, "info");
         }
 
+        // ============================================================
+        // [냐냐 요청] 스페인어로 직접 쓰는 모드는 모두 같은 방식으로 점수를 매긴다.
+        //   스→한(자유 작문) · 질문에 답하기 · 내 예문으로 연습 — 셋 다 냐냐가 스페인어를
+        //   직접 쓰는 곳이라 한쪽만 점수가 붙으면 일관성이 없다.
+        //   지시문·스키마·반영 함수를 여기 한 곳에 두고 세 곳이 같이 쓴다.
+        // ============================================================
+        function aiScoringNoteList() {
+            return (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+        }
+        function aiScoringNoteListText(notes) {
+            return notes && notes.length
+                ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${notes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
+                : '';
+        }
+        // 응답 JSON 예시에 끼워 넣을 두 항목
+        const AI_SCORING_JSON_FIELDS = `
+               "usedGrammar": [
+                  { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
+               ],
+               "usedWords": [
+                  { "word": "The DICTIONARY form of a content word the student actually wrote: verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito).", "spelling": "'correct' if the student spelled it correctly in the sentence, 'wrong' if misspelled" }
+               ]`;
+        const AI_SCORING_RULES_TEXT = `
+            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, bare one-word prepositions and pronouns. DO list multi-word set phrases and connectors the student used as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
+            IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.`;
+        // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
+        //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
+        function aiScoringSchemaProps() {
+            return {
+                usedGrammar: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            title: { type: "STRING", description: "프롬프트에 준 문법 노트 제목 그대로. 목록에 없는 제목은 만들지 말 것" },
+                            usage: { type: "STRING", description: "correct | wrong" }
+                        },
+                        required: ["title", "usage"]
+                    }
+                },
+                usedWords: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            word: { type: "STRING", description: "학생이 실제로 쓴 낱말의 사전형 (동사는 원형, 명사는 관사+단수, 형용사는 남성 단수)" },
+                            spelling: { type: "STRING", description: "correct | wrong" }
+                        },
+                        required: ["word", "spelling"]
+                    }
+                }
+            };
+        }
+        // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
+        function applyAiWritingScores(feedback, notes) {
+            applyEsKoGrammarScores(feedback, notes);
+            applyEsKoWordScores(feedback);
+            renderEsKoGrammarRefs();
+        }
+        // 새 채점을 시작하기 전에 지난 결과 카드를 치운다
+        function resetAiWritingScores() {
+            aiLastEsKoGrammar = [];
+            aiLastEsKoWords = [];
+            const box = document.getElementById('ai-mission-refs');
+            if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+        }
+
         function undoEsKoGrammarScore(i) {
             const e = aiLastEsKoGrammar[i];
             if (!e || e.undone) return;
@@ -1901,10 +1986,7 @@ ${refGrammar}${refWords}
             const originalHtml = submitBtn.innerHTML;
 
             // 지난 결과의 문법·단어 카드가 새 채점을 기다리는 동안 남아 있지 않게
-            aiLastEsKoGrammar = [];
-            aiLastEsKoWords = [];
-            const prevRefs = document.getElementById('ai-mission-refs');
-            if (prevRefs) { prevRefs.classList.add('hidden'); prevRefs.innerHTML = ''; }
+            resetAiWritingScores();
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
@@ -1913,10 +1995,8 @@ ${refGrammar}${refWords}
 
             // [냐냐 요청] 내가 등록해 둔 문법 노트 제목을 주고, 이 문장이 실제로 쓰는 문법을 짚게 한다.
             //   내용까지 다 보내면 25개라 너무 길어져서 제목만 준다 (제목이 충분히 서술적이다)
-            const scoreNotes = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
-            const noteListText = scoreNotes.length
-                ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${scoreNotes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
-                : '';
+            const scoreNotes = aiScoringNoteList();
+            const noteListText = aiScoringNoteListText(scoreNotes);
 
             // [냐냐 요청] 단어 후보 목록은 주지 않는다.
             //   예전엔 단어장에서 앞글자가 비슷한 것을 추려 보여줬는데, parece 의 'pare' 에
@@ -1944,16 +2024,8 @@ ${noteListText}
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",
-               "usedGrammar": [
-                  { "title": "EXACT title copied from the grammar-note list in the prompt. Never invent a title that is not in that list.", "usage": "'correct' if the sentence applies that grammar point correctly, 'wrong' if it applies it incorrectly" }
-               ],
-               "usedWords": [
-                  { "word": "The DICTIONARY form of a content word the student actually wrote: verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito).", "spelling": "'correct' if the student spelled it correctly in the sentence, 'wrong' if misspelled" }
-               ]
-            }
-            IMPORTANT for "usedWords": this field is REQUIRED — always output the array, using [] when nothing applies. Walk through the student's ORIGINAL sentence and list each content word they actually wrote (nouns, verbs, adjectives, adverbs) in its dictionary form. Skip articles, bare one-word prepositions and pronouns. DO list multi-word set phrases and connectors the student used as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words), but a correctly spelled word stays 'correct' even if it was a poor word choice for the meaning; in that case still give its dictionary form and mark it 'correct'. If the student misspelled a word, give the dictionary form of the word they were CLEARLY trying to write and mark it 'wrong'. Never list a word the student did not write.
-            IMPORTANT for "usedGrammar": this field is REQUIRED — always output the array, using [] when nothing applies. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun. Match the note titles exactly as given, and never invent a title.
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}
+            }${AI_SCORING_RULES_TEXT}
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
@@ -1991,32 +2063,7 @@ ${noteListText}
                     },
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" },
-                    // [냐냐 요청] 이 문장이 실제로 쓴 내 문법 노트 (해당 없으면 빈 배열).
-                    //   ⚠️ 아래 required 에 반드시 넣어둘 것 — 빼두면 모델이 이 항목을 통째로
-                    //      생략해 버려서 점수가 조용히 반영 안 된다 (실제로 그랬다)
-                    usedGrammar: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                title: { type: "STRING", description: "프롬프트에 준 문법 노트 제목 그대로. 목록에 없는 제목은 만들지 말 것" },
-                                usage: { type: "STRING", description: "correct | wrong" }
-                            },
-                            required: ["title", "usage"]
-                        }
-                    },
-                    // [냐냐 요청] 이 문장에 쓴 내 단어장 단어의 스펠링 판정 (해당 없으면 빈 배열)
-                    usedWords: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                word: { type: "STRING", description: "학생이 실제로 쓴 낱말의 사전형 (동사는 원형, 명사는 관사+단수, 형용사는 남성 단수)" },
-                                spelling: { type: "STRING", description: "correct | wrong" }
-                            },
-                            required: ["word", "spelling"]
-                        }
-                    }
+                    ...aiScoringSchemaProps()
                 },
                 required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", "usedGrammar", "usedWords"]
             };
@@ -2037,9 +2084,7 @@ ${noteListText}
                 const coachIcon = document.getElementById('ai-coach-icon');
 
                 // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
-                applyEsKoGrammarScores(feedback, scoreNotes);
-                applyEsKoWordScores(feedback);
-                renderEsKoGrammarRefs();
+                applyAiWritingScores(feedback, scoreNotes);
 
                 resultBox.classList.remove('hidden');
 
