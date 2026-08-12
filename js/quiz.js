@@ -980,11 +980,21 @@ let quizSession = null;
 - "typo": clearly an attempt at the TARGET word but misspelled (including a wrong/missing accent), i.e. within about 3 characters of the target.
 - "wrong": anything else (different meaning, gibberish, blank).
 Prefer "typo" over "synonym" when the answer is not a real Spanish word.
+Also report whether the student's answer is itself a real Spanish word, and what it means — the learner needs to know if they wrote a different real word or just gibberish.
 Return JSON only.`;
                 const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).
 Student answered: "${userAnswer}".
-Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)" }`;
-                const schema = { type: "OBJECT", properties: { verdict: { type: "STRING" }, comment: { type: "STRING" } }, required: ["verdict"] };
+Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답이 실제 스페인어 단어라면 그 한글 뜻, 아니면 빈 문자열" }`;
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        verdict: { type: "STRING" },
+                        comment: { type: "STRING" },
+                        answerIsRealWord: { type: "BOOLEAN", description: "학생이 쓴 답이 실제로 존재하는 스페인어 단어인가" },
+                        answerMeaning: { type: "STRING", description: "그 답의 한글 뜻. 실제 단어가 아니면 빈 문자열" }
+                    },
+                    required: ["verdict"]
+                };
                 const resp = await callGemini(prompt, system, schema, 'low');
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
@@ -1070,18 +1080,26 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 const analysis = analyzeSubjectiveAnswer(userAnswer, q);
                 if (analysis.isSynonym && !q._retryReason) { askRetry('synonym', analysis.hint); return; }
                 if (analysis.isTypo && !q._retryReason) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
-                gradeNow(analysis.isCorrect, analysis.hint, analysis.unknownWord);
+                // [냐냐 요청] 틀렸으면 왜 틀렸는지까지 (철자면 틀린 자리 표시, 다른 단어면 그 뜻)
+                const hint = analysis.isCorrect ? analysis.hint : buildWrongAnswerHtml(userAnswer, correct);
+                gradeNow(analysis.isCorrect, hint, analysis.unknownWord);
                 return;
             }
 
             const verdict = String(ai.verdict || '').toLowerCase();
+            // [냐냐 요청] 오답 설명 — 철자면 틀린 자리만 빨갛게, 다른 단어면 그 단어의 뜻을
+            const wrongHtml = () => buildWrongAnswerHtml(userAnswer, correct, {
+                aiIsRealWord: ai.answerIsRealWord,
+                aiMeaning: ai.answerMeaning,
+                comment: ai.comment
+            });
 
             if (verdict === 'correct') { gradeNow(true, ''); return; }
 
             // 이미 재입력 기회를 한 번 썼으면 → 더는 안 봐주고 채점
             if (q._retryReason) {
                 const unknown = (verdict === 'wrong' && !isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
-                gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
+                gradeNow(false, wrongHtml(), unknown);
                 return;
             }
 
@@ -1093,7 +1111,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             if (verdict === 'typo') {
                 // 오타가 3글자를 넘으면 봐주지 않고 바로 오답
                 if (levenshtein(userNorm, correctNorm) > 3) {
-                    gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.`);
+                    gradeNow(false, wrongHtml());
                     return;
                 }
                 askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
@@ -1102,7 +1120,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             // wrong — 미등록 단어면 등록 추천
             const unknown = (!isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
-            gradeNow(false, `❌ 정답은 <b>${correct}</b> 예요.${ai.comment ? '<br><span class="text-slate-500">' + escapeHtml(ai.comment) + '</span>' : ''}`, unknown);
+            gradeNow(false, wrongHtml(), unknown);
         }
 
         // [냐냐 PATCH-2배치] 이 단어가 단어장에 이미 있나? (원형·활용형·관사 전부 고려)

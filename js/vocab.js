@@ -3343,8 +3343,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             } else {
                 // [냐냐 요청] 내가 쓴 오답을 같이 보여줘서 어디가 틀렸는지 바로 비교
                 const mine = (s.lastWrong || '').trim();
+                // [냐냐 요청] 틀린 자리만 빨갛게 — 어디가 다른지 눈으로 바로 보이게
                 const mineHtml = mine
-                    ? `<p class="text-xs font-bold text-rose-400 line-through break-words">${escapeHtml(mine)}</p>`
+                    ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, w.word), 'user') : escapeHtml(mine)}</p>`
                     : `<p class="text-xs font-bold text-slate-300">(빈칸으로 제출했어요)</p>`;
                 cardHtml = `
                     <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
@@ -3373,11 +3374,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <p class="text-xs font-black ${fb.correct ? 'text-emerald-600' : 'text-rose-500'}">${fb.correct ? `✅ 정답! <span class="text-emerald-500">${gainText}</span>` : '❌ 아쉬워요'}</p>
                         <p class="text-2xl font-extrabold ${fb.correct ? 'text-emerald-700' : 'text-rose-600'} break-words">${escapeHtml(fb.answer)}</p>
                         <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(fb.meaning || '')}</p>
-                        ${(!fb.correct && mine) ? `
+                        ${(!fb.correct && fb.why) ? `
+                        <div class="pt-2 mt-2 border-t border-rose-200 text-xs">${fb.why}</div>` : ((!fb.correct && mine) ? `
                         <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
                             <p class="text-[10px] font-bold text-slate-400">내가 쓴 답</p>
                             <p class="text-xs font-bold text-rose-400 line-through break-words">${escapeHtml(mine)}</p>
-                        </div>` : ''}
+                        </div>` : '')}
                         ${fb.correct ? '' : '<p class="text-[10px] font-bold text-rose-400 pt-1">2바퀴에서 다시 익혀요</p>'}
                     </div>`;
             }
@@ -3565,7 +3567,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (writePracticeState === s && s.feedback) writeFirstRoundNext();
             }, WRITE_FEEDBACK_MS);
         }
-        function writeFirstRoundFail(w, mine) {
+        function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
             // [냐냐 요청] 여기선 점수를 안 깎는다 (±는 최종 결과로만).
             //   다만 못 떠올린 건 사실이므로 오답 기록·망각곡선은 지금 반영한다.
@@ -3574,7 +3576,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (typeof logAction === 'function') logAction('review');
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
-            s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '' };
+            // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
+            const why = (typeof buildWrongAnswerHtml === 'function')
+                ? buildWrongAnswerHtml(mine || '', w.word, aiInfo || {}) : '';
+            s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why };
             writePracticeSave();
             renderWritePractice();
         }
@@ -3629,6 +3634,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 4) AI 채점
             const q = { word: w };
             let ai = null;
+            const aiInfo = () => ai ? { aiIsRealWord: ai.answerIsRealWord, aiMeaning: ai.answerMeaning, comment: ai.comment } : {};
             if (typeof aiGradeSubjective === 'function') {
                 s.grading = true;
                 renderWritePractice();
@@ -3643,7 +3649,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
                 if (a.isSynonym) { writeAskRetry('synonym', a.hint || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`); return; }
                 if (a.isTypo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`); return; }
-                writeFirstRoundFail(w, userAnswer);
+                writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
             }
 
@@ -3662,7 +3668,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     return;
                 }
             }
-            writeFirstRoundFail(w, userAnswer);
+            writeFirstRoundFail(w, userAnswer, aiInfo());
         }
 
         // 저장 + 헤더(복습 배너·통계) 갱신

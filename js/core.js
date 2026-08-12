@@ -3890,6 +3890,119 @@ let vocabulary = [];
             </div>`;
         }
 
+        // ============================================================
+        // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습이 같이 쓴다.
+        //   · 철자만 틀렸으면 → 틀린 자리만 빨갛게 (내가 쓴 답 / 정답 양쪽)
+        //   · 아예 다른 진짜 단어를 썼으면 → 그 단어의 뜻을 알려준다
+        //   · 없는 단어면 → 없는 단어라고 알려준다
+        // ============================================================
+        // 문자 단위 LCS — 어디가 다른지 표시하려고. 대소문자는 무시하고 비교하되 원래 글자를 그대로 보여준다.
+        //   'same' 양쪽에 다 있음 / 'del' 내가 쓴 답에만 있음(틀리게 씀) / 'ins' 정답에만 있음(빠뜨림)
+        function charDiffOps(aRaw, bRaw) {
+            const a = [...String(aRaw || '')], b = [...String(bRaw || '')];
+            const ka = a.map(c => c.toLowerCase()), kb = b.map(c => c.toLowerCase());
+            const n = a.length, m = b.length;
+            if (n * m > 40000) return [['del', String(aRaw || '')], ['ins', String(bRaw || '')]]; // 안전장치
+            const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+            for (let i = n - 1; i >= 0; i--) {
+                for (let j = m - 1; j >= 0; j--) {
+                    dp[i][j] = (ka[i] === kb[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+                }
+            }
+            const ops = [];
+            let i = 0, j = 0;
+            while (i < n && j < m) {
+                if (ka[i] === kb[j]) { ops.push(['same', a[i]]); i++; j++; }
+                else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push(['del', a[i]]); i++; }
+                else { ops.push(['ins', b[j]]); j++; }
+            }
+            while (i < n) ops.push(['del', a[i++]]);
+            while (j < m) ops.push(['ins', b[j++]]);
+            return ops;
+        }
+        // side 'user' = 내가 쓴 답(틀린 글자 빨강) / 'correct' = 정답(빠뜨린 글자 빨강)
+        function renderCharDiff(ops, side) {
+            const mark = (side === 'user') ? 'del' : 'ins';
+            return ops.filter(([t]) => t === 'same' || t === mark)
+                .map(([t, ch]) => t === 'same'
+                    ? escapeHtml(ch)
+                    : `<span class="bg-rose-200 text-rose-700 rounded-[3px] px-[1px]">${escapeHtml(ch)}</span>`)
+                .join('');
+        }
+        // 단어장에서 이 답의 뜻을 찾아본다 (없으면 null)
+        function lookupAnswerMeaning(raw) {
+            if (typeof vocabulary === 'undefined' || !raw) return null;
+            const n = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw) : String(raw).toLowerCase().trim();
+            if (!n) return null;
+            let hit = vocabulary.find(w => ((typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(w.word) : String(w.word).toLowerCase()) === n);
+            if (!hit && typeof findVocabWordByForm === 'function') hit = findVocabWordByForm(raw);
+            return (hit && hit.meaning) ? hit.meaning : null;
+        }
+        // 사람이 칠 수 있는 형태만 남긴다 — 자리표시자 대괄호·괄호와 한글은 뺀다.
+        //   (악센트·대소문자·문장부호는 그대로. 철자를 짚어주려면 원형이 필요하다)
+        //   "después de [명사/동사원형]" → "después de" · "el/la joven" → "joven"
+        function typeableForm(s) {
+            return String(s || '')
+                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
+                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                .replace(/\s+/g, ' ').trim()
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas)\s+/i, '');   // 성 묶음 표기 (el agua 같은 단독 관사는 남긴다)
+        }
+        // opts: { aiIsRealWord: bool|undefined, aiMeaning: string, comment: string }
+        function buildWrongAnswerHtml(userRaw, correctRaw, opts = {}) {
+            const user = String(userRaw || '').trim();
+            const correct = String(correctRaw || '');
+            const target = typeableForm(correct) || correct;   // 철자 비교는 칠 수 있는 형태로
+            if (!user) return `✏️ 정답은 <b>${escapeHtml(correct)}</b> 예요.`;
+
+            const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s).toLowerCase().trim();
+            // ⚠️ 거리는 악센트를 세는 쪽으로 재야 한다. normalizeSpanishAnswer 는 악센트를 떼기 때문에
+            //    despues vs después 가 거리 0이 되어 '아예 다른 단어' 쪽으로 새어나갔다.
+            const soft = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            const dist = (typeof levenshtein === 'function') ? levenshtein(soft(user), soft(target)) : 99;
+            const accentOnly = !!norm(user) && norm(user) === norm(target);
+            // 정답 길이의 절반 안쪽으로 다르면 '철자를 틀린 것'으로 본다 (아예 다른 단어와 구분)
+            const isSpellMiss = accentOnly || (dist > 0 && dist <= Math.max(1, Math.min(3, Math.floor(soft(target).length / 2))));
+
+            if (isSpellMiss) {
+                const ops = charDiffOps(user, target);
+                return `
+                    <div class="space-y-1.5 text-left">
+                        <p class="font-black text-rose-500">✏️ 철자가 틀렸어요</p>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-[10px] font-bold text-slate-400 shrink-0 w-11">내 답</span>
+                            <span class="font-bold text-slate-600 break-words">${renderCharDiff(ops, 'user')}</span>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-[10px] font-bold text-slate-400 shrink-0 w-11">정답</span>
+                            <span class="font-black text-slate-800 break-words">${renderCharDiff(ops, 'correct')}</span>
+                        </div>
+                    </div>`;
+            }
+
+            // 아예 다른 단어 — 단어장에 있으면 그 뜻을, 없으면 AI 판단을 쓴다
+            const known = lookupAnswerMeaning(user);
+            const meaning = known || (opts.aiMeaning || '').trim();
+            const isReal = known ? true : (opts.aiIsRealWord === true);
+            // 받침에 따라 '이라는/라는' — "'개'이라는" 처럼 나오면 안 되니까
+            const josa = (str) => {
+                const c = String(str || '').charCodeAt(String(str).length - 1);
+                const hasBatchim = c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0;
+                return hasBatchim ? '이라는' : '라는';
+            };
+            const head = isReal && meaning
+                ? `❌ <b>${escapeHtml(user)}</b>는 <b class="text-slate-800">'${escapeHtml(meaning)}'</b>${josa(meaning)} 뜻이에요.`
+                : (opts.aiIsRealWord === false
+                    ? `❌ <b>${escapeHtml(user)}</b>는 없는 단어예요.`
+                    : `❌ <b>${escapeHtml(user)}</b>는 답이 아니에요.`);
+            return `
+                <div class="space-y-1 text-left">
+                    <p class="font-bold text-rose-500">${head}</p>
+                    <p class="font-bold text-slate-600">정답은 <b class="text-slate-900">${escapeHtml(correct)}</b> 예요.</p>
+                    ${(opts.comment && !(isReal && meaning)) ? `<p class="text-slate-400 font-semibold">${escapeHtml(opts.comment)}</p>` : ''}
+                </div>`;
+        }
+
         function escapeHtml(s) {
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
