@@ -1868,7 +1868,9 @@ ${refGrammar}${refWords}
                 const textBlock = (t.blocks || []).find(b => b && b.html);
                 if (textBlock) desc = strip(textBlock.html);
             }
-            desc = desc.slice(0, 80);
+            //   [냐냐 요청] 80 → 150자. 단서가 모자라면 '근거를 못 짚겠으면 빼라'는 지시 때문에
+            //   실제로 쓴 문법도 놓친다. 정보를 늘리면 헛점수와 놓침이 같이 줄어든다.
+            desc = desc.slice(0, 150);
 
             const words = [];
             const push = (c) => {
@@ -1882,7 +1884,7 @@ ${refGrammar}${refWords}
             };
             (t.blocks || []).forEach(b => (b.rows || []).forEach(r => (r || []).forEach(push)));
             (t.rows || []).forEach(r => (r || []).forEach(push));
-            const ex = words.slice(0, 8).join(', ').slice(0, 160);
+            const ex = words.slice(0, 12).join(', ').slice(0, 240);
             return [desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
         }
         function aiScoringNoteListText(notes) {
