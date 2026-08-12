@@ -3129,10 +3129,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             beginWritePractice(pool, { isTodayReview: false });
         }
 
-        // [냐냐 요청] 쓰기 연습 공용 시작점.
-        //   1바퀴: 단어를 보면서 2번씩 쓰기 (익히기)
-        //   2바퀴: 순서를 다시 섞고, 단어를 가린 채 뜻만 보고 1번 쓰기 (확인)
-        //   isTodayReview면 2바퀴 첫 시도 결과로 망각곡선을 단어당 1회 반영 (점수는 안 건드림)
+        // [냐냐 요청] 쓰기 복습 공용 시작점 — 테스트부터 하고, 틀린 것만 익힌다.
+        //   1바퀴: 가리고 쓰기 (전체) — 한 번에 맞히면 +2, 거기서 끝
+        //   2바퀴: 1바퀴에서 틀린 것만 보면서 2번씩 쓰기 (익히기, 점수 없음)
+        //   3바퀴: 그 단어들만 다시 가리고 쓰기 — 맞으면 +0.4, 끝내 틀리면 −2
+        //   ⚠️ 망각곡선·오답 기록은 1바퀴 결과 기준이다. 3바퀴에서 맞혔다고 취소되면 안 된다
+        //      (2바퀴에서 답을 보고 온 거라 '기억하고 있었다'는 증거가 못 된다).
+        //   마스터 자격(subjectivePassed)도 1바퀴 정답에만 준다 — 힌트 없이 떠올린 것만 인정.
         //   [냐냐 요청] 팝업 폐지 → 복습 탭 '✍️ 쓰기' 영역 안에서 진행.
         //     단어장 ✍️ 버튼·헤더 📖 복습 배너에서 불러도 복습 탭으로 이동해서 거기서 푼다.
         function beginWritePractice(pool, opts) {
@@ -3145,12 +3148,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             writePracticeState = {
                 pool: shuffleArray(pool.slice()),
+                totalCount: pool.length,  // 결과 화면용 — pool은 바퀴마다 줄어든다
                 index: 0,
                 done: 0,
-                phase: 1,                 // 1 = 보고 쓰기, 2 = 가리고 쓰기
-                retry: false,             // 2바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
-                wrongCount: 0,
-                results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct}
+                phase: 1,                 // 1 = 테스트(가리고), 2 = 익히기(보고 2번), 3 = 재테스트(가리고)
+                wrongPool: [],            // 1바퀴에서 틀린 단어 — 2·3바퀴 대상
+                retry: false,             // 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
+                wrongCount: 0,            // 최종(3바퀴) 오답 수
+                results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct, firstTry}
                 // [냐냐 요청] '다음 N개 이어서'가 처음 시작한 개수를 그대로 따라가도록 기억
                 //   배너로 시작 → 5개 / 쓰기연습 탭에서 시작 → 내가 고른 개수
                 batchSize: (opts && opts.batchSize) || pool.length,
@@ -3186,34 +3191,48 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
                     <div class="flex items-center justify-between">
                         <button onclick="closeWritePractice()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-pen-to-square text-amber-500 mr-1"></i>보고 2번 → 가리고 1번</span>
+                        <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-pen-to-square text-amber-500 mr-1"></i>테스트 → 틀린 것만 익히기 → 다시 테스트</span>
                     </div>
                     ${inner}
                 </div>`;
 
+            // 바퀴별 안내 화면 (엔터로 넘어감)
+            const gate = (emoji, title, desc, btnText, cls) => {
+                body.innerHTML = wrap(`
+                    <div class="text-center space-y-4 py-6">
+                        <div class="text-5xl">${emoji}</div>
+                        <p class="text-lg font-bold text-slate-900">${title}</p>
+                        <p class="text-xs font-bold text-slate-500 leading-relaxed">${desc}</p>
+                        <button id="write-gate-btn" onclick="renderWritePractice()" class="w-full ${cls} text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">${btnText} (Enter) →</button>
+                    </div>`);
+                setTimeout(() => { const b = document.getElementById('write-gate-btn'); if (b) b.focus(); }, 60);
+            };
+
             if (s.index >= s.pool.length) {
-                if (s.phase === 1) {
-                    // [냐냐 요청] 1바퀴(보고 2번) 끝 → 순서 다시 섞어서 2바퀴(가리고 1번)로
+                // ── 1바퀴(테스트) 끝 → 틀린 게 있으면 2바퀴(익히기)로, 없으면 바로 결과 ──
+                if (s.phase === 1 && s.wrongPool.length > 0) {
                     s.phase = 2;
-                    s.pool = shuffleArray(s.pool.slice());
-                    s.index = 0;
-                    s.done = 0;
-                    s.retry = false;
-                    s.lastWrong = '';
-                    s.showDetail = false;
-                    body.innerHTML = wrap(`
-                        <div class="text-center space-y-4 py-6">
-                            <div class="text-5xl">🙈</div>
-                            <p class="text-lg font-bold text-slate-900">이제 가리고 써볼 차례!</p>
-                            <p class="text-xs font-bold text-slate-500 leading-relaxed">뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.</p>
-                            <button id="write-phase2-btn" onclick="renderWritePractice()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">2바퀴 시작 (Enter) →</button>
-                        </div>`);
-                    // [냐냐 요청] 엔터로도 시작되게 버튼에 포커스
-                    setTimeout(() => { const b = document.getElementById('write-phase2-btn'); if (b) b.focus(); }, 60);
+                    s.pool = s.wrongPool.slice();
+                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
+                        `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
+                        '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
                     return;
                 }
-                // 2바퀴까지 끝 → 결과
-                const total = s.pool.length;
+                // ── 2바퀴(익히기) 끝 → 3바퀴(재테스트)로 ──
+                if (s.phase === 2) {
+                    s.phase = 3;
+                    s.pool = shuffleArray(s.wrongPool.slice());
+                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    gate('🙈', '이제 가리고 써볼 차례!',
+                        '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
+                        '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
+                    return;
+                }
+                // ── 끝 → 결과 ──
+                const total = s.totalCount || s.pool.length;
+                const firstTryOk = (s.results || []).filter(r => r.firstTry).length;
+                const relearned = (s.results || []).filter(r => !r.firstTry && r.correct).length;
                 const ok = total - s.wrongCount;
                 const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
@@ -3240,6 +3259,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
                 const okList = res.filter(r => r.correct);
                 const noList = res.filter(r => !r.correct);
+                const scoreLine = `<p class="text-sm font-bold text-slate-600">
+                        <span class="text-emerald-600">한 번에 ${firstTryOk}개 (+2)</span>${relearned ? ` · <span class="text-indigo-600">익혀서 ${relearned}개 (+0.4)</span>` : ''}${s.wrongCount ? ` · <span class="text-rose-500">끝내 ${s.wrongCount}개 (−2)</span>` : ''}
+                    </p>`;
                 const listBlock = (title, arr, ok) => arr.length ? `
                     <div class="text-left">
                         <p class="text-xs font-black ${ok ? 'text-emerald-600' : 'text-rose-500'} mb-1.5">${title} ${arr.length}개</p>
@@ -3254,8 +3276,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 body.innerHTML = wrap(`
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
-                        <p class="text-lg font-bold text-slate-900">${total}개 다 썼어요!</p>
-                        <p class="text-sm font-bold text-slate-600">가리고 쓰기: <span class="text-emerald-600">${ok}개 성공</span>${s.wrongCount ? ` · <span class="text-rose-500">${s.wrongCount}개는 정답 보고 다시 씀</span>` : ''}</p>
+                        <p class="text-lg font-bold text-slate-900">${total}개 중 ${ok}개 성공!</p>
+                        ${scoreLine}
                         ${reviewNote}
                         ${resultLists}
                         ${nextBtn}
@@ -3265,7 +3287,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             const w = s.pool[s.index];
-            const dotsCount = s.phase === 1 ? WRITE_PRACTICE_TIMES : 1;
+            const isTest = (s.phase === 1 || s.phase === 3);   // 가리고 쓰는 바퀴
+            const dotsCount = isTest ? 1 : WRITE_PRACTICE_TIMES;
             const dots = Array.from({ length: dotsCount }, (_, k) =>
                 `<span class="w-2.5 h-2.5 rounded-full ${k < s.done ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
             const pct = Math.round(s.index / s.pool.length * 100);
@@ -3276,12 +3299,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
                 : '';
 
-            // [냐냐 요청] 1바퀴 카드는 "퀴즈 정답 화면"과 같은 양식으로 정보를 전부 펼쳐서 보여줌
+            // [냐냐 요청] 익히기 바퀴 카드는 "퀴즈 정답 화면"과 같은 양식으로 정보를 전부 펼쳐서 보여줌
             //   (펴기/접기 없음. 관용구·예문·유의어·반의어·노트는 buildNotesHtml, 동사변형은 renderQuizConjugation이 담당)
 
-            // [냐냐 요청] 바퀴별 카드 — 1바퀴: 전체 정보 / 2바퀴: 가림(뜻만) / 2바퀴 틀림: 정답 공개
+            // [냐냐 요청] 바퀴별 카드 — 테스트(1·3): 가림(뜻만) / 익히기(2): 전체 정보 / 3바퀴 틀림: 정답 공개
             let cardHtml, inputLabel, placeholder;
-            if (s.phase === 1) {
+            if (s.phase === 2) {
                 const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
                 const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
                 const parts = [badges, notes].filter(x => x && x.trim());
@@ -3330,11 +3353,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-[11px] font-bold ${s.phase === 2 ? 'text-violet-500' : 'text-slate-400'}">${s.phase === 1 ? '1바퀴 · 보고 쓰기' : '2바퀴 · 가리고 쓰기'} &nbsp;${s.index + 1} / ${s.pool.length}</span>
+                            <span class="text-[11px] font-bold ${isTest ? 'text-violet-500' : 'text-slate-400'}">${s.phase === 1 ? '1바퀴 · 가리고 쓰기' : (s.phase === 2 ? '2바퀴 · 보고 쓰기' : '3바퀴 · 다시 가리고 쓰기')} &nbsp;${s.index + 1} / ${s.pool.length}</span>
                             <span class="flex items-center gap-1.5">${dots}</span>
                         </div>
                         <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full ${s.phase === 2 ? 'bg-violet-500' : 'bg-indigo-500'} transition-all" style="width:${pct}%"></div>
+                            <div class="h-full ${isTest ? 'bg-violet-500' : 'bg-indigo-500'} transition-all" style="width:${pct}%"></div>
                         </div>
                     </div>
 
@@ -3344,7 +3367,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <label class="block text-xs font-bold text-slate-500">${inputLabel}</label>
                         <input id="write-practice-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
                             onkeydown="writePracticeKeydown(event)"
-                            class="w-full px-3 py-2.5 rounded-xl border-2 ${s.phase === 2 && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2"
+                            class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2"
                             placeholder="${escapeHtml(placeholder)}">
                         <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">악센트까지 정확히 써야 넘어가요</p>
                     </div>
@@ -3354,14 +3377,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <button onclick="closeWritePractice()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm font-bold transition-all">그만하기</button>
                     </div>
                 </div>`);
-            // [냐냐 요청] 1바퀴에서 동사면 등록된 시제 전부 (퀴즈 정답 화면과 동일한 렌더러 재사용)
-            if (s.phase === 1 && typeof renderQuizConjugation === 'function') {
+            // [냐냐 요청] 익히기 바퀴에서 동사면 등록된 시제 전부 (퀴즈 정답 화면과 동일한 렌더러 재사용)
+            if (s.phase === 2 && typeof renderQuizConjugation === 'function') {
                 renderQuizConjugation(w, null, 'write-conj-box');
             }
             setTimeout(() => { const el = document.getElementById('write-practice-input'); if (el) el.focus(); }, 60);
-            // [냐냐 요청] 1바퀴(보고 쓰기)에선 매 시도마다 읽어줌 (1회차 제출 후 2회차에도 한 번 더).
-            //   2바퀴는 정답이 새어나가므로 안 읽음.
-            if (s.phase === 1 && typeof speakSpanishVoice === 'function') {
+            // [냐냐 요청] 익히기 바퀴(보고 쓰기)에선 매 시도마다 읽어줌 (1회차 제출 후 2회차에도 한 번 더).
+            //   테스트 바퀴는 정답이 새어나가므로 안 읽음.
+            if (s.phase === 2 && typeof speakSpanishVoice === 'function') {
                 setTimeout(() => speakSpanishVoice(w.word), 120);
             }
         }
@@ -3406,8 +3429,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
             const isMatch = norm(el.value) === norm(w.word);
 
-            // ── 1바퀴: 보면서 2번 쓰기 ──
-            if (s.phase === 1) {
+            // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
+            if (s.phase === 2) {
                 if (isMatch) {
                     s.done++;
                     if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; s.showDetail = false; }
@@ -3419,38 +3442,54 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return;
             }
 
-            // ── 2바퀴: 가리고 쓰기 ──
+            // ── 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감 (점수 없음) ──
             if (s.retry) {
-                // 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감
                 if (isMatch) { s.retry = false; s.lastWrong = ''; s.index++; s.done = 0; renderWritePractice(); }
                 else writePracticeFlashWrong(el);
                 return;
             }
-            // 첫 시도 — 여기서만 점수·복습 반영 (단어당 1회, 2바퀴에서만)
-            if (isMatch) {
-                // [냐냐 요청] 가리고 쓰기 정답 +0.4 (쓰기연습·복습 동일)
-                // [냐냐 요청] 뜻만 보고 스페인어를 떠올려 쓴 것 = 주관식 정답 → 마스터 자격 부여
-                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: true, subjective: true });
-                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
-                // [냐냐 요청] 🔴 학습기록 '복습' 카운터 — 여태 빠져 있어서 숫자가 안 늘었음
+
+            // ── 1바퀴: 가리고 쓰기 (테스트) ──
+            if (s.phase === 1) {
+                if (isMatch) {
+                    // [냐냐 요청] 힌트 없이 뜻만 보고 떠올려 씀 = 퀴즈 주관식과 같은 행위 → +2
+                    //   마스터 자격(subjectivePassed)도 여기서만 준다
+                    if (typeof addWordScore === 'function') addWordScore(w.id, 2, { correct: true, subjective: true });
+                    if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+                    s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: true });
+                } else {
+                    // [냐냐 요청] 여기선 점수를 안 깎는다 (±는 최종 결과로만).
+                    //   다만 못 떠올린 건 사실이므로 오답 기록·망각곡선은 지금 반영한다.
+                    if (typeof addWordScore === 'function') addWordScore(w.id, 0, { correct: false });
+                    if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                    s.wrongPool.push(w);
+                }
+                // [냐냐 요청] 🔴 학습기록 '복습' 카운터 — 단어당 1회만 (1바퀴에서)
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true });
-                writePracticeSave();
+                s.lastWrong = '';
                 s.index++;
                 s.done = 0;
+                writePracticeSave();
                 renderWritePractice();
+                return;
+            }
+
+            // ── 3바퀴: 다시 가리고 쓰기 (최종) ──
+            //   정답률 카운터·망각곡선은 1바퀴에서 이미 셌으므로 여기선 점수만 움직인다(correct: null)
+            if (isMatch) {
+                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: null });
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false });
+                s.index++;
+                s.done = 0;
             } else {
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                // [냐냐 요청] 가리고 쓰기 오답 −2 → 틀린 날짜도 오늘로 바로 기록되고 곡선 재시작
-                if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
-                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false });
-                writePracticeSave();
-                renderWritePractice();
+                if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: null });
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false, firstTry: false });
             }
+            writePracticeSave();
+            renderWritePractice();
         }
 
         // 저장 + 헤더(복습 배너·통계) 갱신
