@@ -339,6 +339,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return vocabulary.filter(v => v.pos === 'verb' && !hasConjValues(getTenseConj(v, tense)));
         }
 
+        // [냐냐 요청] 표시 설정 패널 안에서 열기 — 패널을 닫고 모달을 띄운다
+        //   (패널의 위임 리스너가 삼키지 않도록 여기서 직접 전파를 끊는다)
+        function openBulkConjFromPanel(ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            closeDisplayPanel();
+            openBulkConj();
+        }
+
         function openBulkConj() {
             bulkConjState = { tense: 'gerundio', targets: [], rows: [], running: false, cancelled: false, failed: [] };
             const modal = document.getElementById('bulk-conj-modal');
@@ -373,9 +381,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             btn.classList.toggle('hidden', !handler);
             btn.onclick = handler || null;
         }
+        // 문장에 넣을 짧은 이름 — 괄호 설명은 뗀다 ('현재분사 (gerundio · 1칸)' → '현재분사')
         function bulkTenseLabel(tense) {
             const o = TENSE_TYPE_OPTIONS.find(t => t.key === tense);
-            return o ? o.label : tense;
+            return o ? o.label.replace(/\s*\(.*\)\s*$/, '') : tense;
         }
 
         function renderBulkConjIntro() {
