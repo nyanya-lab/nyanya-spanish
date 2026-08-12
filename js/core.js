@@ -1647,6 +1647,24 @@ let vocabulary = [];
         // 망각곡선 복습 주기 (일). 이 날짜에 해당하면 복습 대상
         const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
 
+        // [냐냐 요청] 틀렸을 때 곡선을 처음(0)으로 되돌리지 않고 '한 단계만' 뒤로 물린다.
+        //   14일을 버틴 단어가 실수 한 번에 1일차로 떨어지는 게 과했다.
+        //   퀴즈·게임·복습·첨삭 어디서 틀리든 이 규칙 하나로 간다.
+        //     stage 4(30일) → 3(14일) → 2(7일) → 1(3일) → 0(1일) → 0
+        //   ⚠️ 하루에 한 번만 물린다. 같은 오답 한 건에 addWordScore 와
+        //      markWordReviewedToday 가 잇따라 불려서 두 단계씩 떨어지면 안 된다.
+        //      (예전엔 둘 다 0으로 만들어서 몇 번을 불러도 결과가 같았다)
+        function demoteReviewStage(w) {
+            if (!w) return;
+            const today = getLocalDateString();
+            if (w.lastDemoteDate === today) return;
+            w.lastDemoteDate = today;
+            // 졸업한 단어(마지막 칸 밖)는 마지막 칸으로 당겨놓고 뺀다 — 안 그러면
+            // 방금 잊어버린 단어를 30일 뒤에나 다시 묻게 된다
+            const cur = Math.min(w.reviewStage || 0, REVIEW_INTERVALS.length - 1);
+            w.reviewStage = Math.max(0, cur - 1);
+        }
+
         // 오늘 복습해야 할 단어
         // [냐냐 요청] B방식 — 놓친 복습도 사라지지 않고 할 때까지 계속 뜬다.
         //   w.reviewStage = 지금까지 끝낸 복습 단계 수 (0이면 아직 1일차도 안 함)
@@ -1690,13 +1708,13 @@ let vocabulary = [];
         }
 
         // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
-        //   맞았으면 다음 단계로, 핵심을 틀렸으면 주기를 처음부터 다시.
+        //   맞았으면 다음 단계로, 핵심을 틀렸으면 한 단계 뒤로.
         function markWordReviewedToday(wordOrId, wasCorrect) {
             const w = (typeof wordOrId === 'string') ? vocabulary.find(v => v.id === wordOrId) : wordOrId;
             if (!w) return;
             w.lastReviewDate = getLocalDateString();
             if (wasCorrect) w.reviewStage = (w.reviewStage || 0) + 1;
-            else w.reviewStage = 0; // 틀리면 lastWrongDate도 오늘로 갱신되어 곡선 재시작
+            else demoteReviewStage(w); // [냐냐 요청] 처음으로 되돌리지 않고 한 단계만 뒤로
         }
 
         // [냐냐 PATCH] 오늘 틀린 단어만 단어장에 필터링해서 보여주기
@@ -1872,8 +1890,8 @@ let vocabulary = [];
                 //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
                 if (!opts.skipReviewDate) {
                     w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
-                    // [냐냐 요청] 퀴즈·게임·복습 어디서 틀리든 망각곡선을 처음부터 다시 시작
-                    w.reviewStage = 0;
+                    // [냐냐 요청] 퀴즈·게임·복습 어디서 틀리든 곡선을 한 단계 뒤로 (처음으로 되돌리지 않음)
+                    demoteReviewStage(w);
                     w.lastReviewDate = null;
                 }
             }
@@ -2191,7 +2209,8 @@ let vocabulary = [];
                     <li>• <b>틀린 당일</b>은 뜨지 않아요. 다음 날부터 시작해요.</li>
                     <li>• <b>놓쳐도 사라지지 않아요.</b> 복습일이 지나면 할 때까지 계속 떠요.</li>
                     <li>• 밀린 단어도 <b>하루에 한 번만</b> 떠요. (한 번 하면 그날은 빠짐)</li>
-                    <li>• <b>어디서 틀리든</b>(퀴즈·게임·복습) 단계가 <b>1단계부터 다시</b> 시작돼요.</li>
+                    <li>• <b>어디서 틀리든</b>(퀴즈·게임·복습·첨삭) 단계가 <b>한 칸만 뒤로</b> 가요. 4단계에서 틀리면 3단계(7일 뒤)로요. 처음부터 다시 하진 않아요.</li>
+                    <li>• 같은 단어를 하루에 여러 번 틀려도 <b>한 칸만</b> 내려가요.</li>
                     <li>• 단어 빈칸에서 <b>관용구·예문 칸만</b> 틀린 건 복습 대상이 안 돼요. (뜻·철자·동사변형만 해당)</li>
                     <li>• 그날 복습을 다 끝내면 버튼이 <b>회색 '완료 ✓'</b>로 바뀌어요.</li>
                 </ul>

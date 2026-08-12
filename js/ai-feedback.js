@@ -1823,6 +1823,7 @@ ${refGrammar}${refWords}
         //   반영 전 상태를 그대로 되돌린다 (점수뿐 아니라 정답/오답 횟수, 망각곡선 날짜까지).
         function snapshotWordScoreState(w) {
             const keys = ['score', 'correctTotal', 'wrongTotal', 'lastWrongDate', 'reviewStage',
+                          'lastDemoteDate', // 곡선을 하루 한 번만 물리는 표시 — 되돌릴 때 같이 지워야 재반영이 먹는다
                           'lastReviewDate', 'weak', 'mastered', 'perfect', 'subjectivePassed'];
             const snap = {};
             keys.forEach(k => { snap[k] = w[k]; });
