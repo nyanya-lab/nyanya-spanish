@@ -1595,6 +1595,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             ellos: { type: "STRING", description: "ellos/ellas (3인칭 복수)" }
                         }
                     },
+                    // [냐냐 요청] AI 추천 한 번에 현재분사까지 같이 받는다 (현재진행은 여기서 자동 생성됨)
+                    gerundio: {
+                        type: "OBJECT",
+                        description: "동사일 때만 채울 것. 현재분사(gerundio). -ar→-ando, -er/-ir→-iendo. 재귀동사(-se로 끝나는 동사)는 재귀대명사를 뒤에 붙이고 악센트까지 표기 (secarse→secándose, dormirse→durmiéndose). 절대 estar를 붙이지 말 것. 동사가 아니면 빈 문자열.",
+                        properties: {
+                            form: { type: "STRING", description: "현재분사 형태 (악센트 정확히)" },
+                            irregular: { type: "STRING", enum: ["none", "e ➡️ i", "o ➡️ u", "-yendo", "기타 변형"], description: "현재분사의 불규칙 갈래. none=규칙(-ando/-iendo). 'e ➡️ i'=pedir→pidiendo·decir→diciendo. 'o ➡️ u'=dormir→durmiendo·poder→pudiendo. '-yendo'=어간이 모음으로 끝남(leer→leyendo·oír→oyendo·ir→yendo)" }
+                        }
+                    },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
                     idioms: {
                         type: "ARRAY",
@@ -1843,6 +1852,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             const cell = presenteBlock.querySelector(`[data-person="${key}"]`);
                             if (cell && (forceOverwrite || !cell.value.trim())) cell.value = result.conjugations[key] || '';
                         });
+                    }
+                }
+                // [냐냐 요청] 현재분사도 같이 등록 — 블록이 없으면 만들어서 채운다 (현재진행은 여기서 자동 생성됨)
+                const ger = result.gerundio || {};
+                const gerForm = String(ger.form || '').trim();
+                if (gerForm && box) {
+                    const gerBlock = [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'gerundio');
+                    if (!gerBlock) {
+                        const irr = GERUNDIO_IRREGULAR_ENUM.includes(ger.irregular) ? ger.irregular : 'none';
+                        addTenseBlock('gerundio', { form: gerForm }, irr !== 'none' ? 'irregular' : 'regular', irr);
+                    } else {
+                        const cell = gerBlock.querySelector('[data-person="form"]');
+                        if (cell && (forceOverwrite || !cell.value.trim())) cell.value = gerForm;
+                        applyGerundioIrregular(gerBlock, ger.irregular);
                     }
                 }
             }
@@ -2683,15 +2706,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             { key: 'synonyms',label: '유의어·반의어' }
         ];
         const DEFAULT_DISPLAY = {
-            sections: DISPLAY_SECTIONS.map(s => s.key),          // 기본: 전부 표시
-            tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
+            sections: DISPLAY_SECTIONS.map(s => s.key),                          // 기본: 전부 표시
+            tenses: TENSE_TYPE_OPTIONS.filter(t => !t.derived).map(t => t.key)   // 기본: 모든 시제 표시 (자동 생성 시제는 목록에 없음)
         };
         let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
         // [냐냐 PATCH] 설정 패널에서 편집 중인 임시 상태. [확인]을 눌러야 displayPrefs로 반영됨.
         let pendingDisplay = null;
 
         function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
-        function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
+        // [냐냐 요청] 현재진행은 현재분사에서 자동으로 나오는 거라 따로 켜고 끌 게 없다 — 현재분사 설정을 따라간다
+        function isTenseOn(key) {
+            if (isDerivedTense(key)) return displayPrefs.tenses.includes('gerundio');
+            return displayPrefs.tenses.includes(key);
+        }
         function isDisplayDefault() {
             return displayPrefs.sections.length === DEFAULT_DISPLAY.sections.length
                 && displayPrefs.tenses.length === DEFAULT_DISPLAY.tenses.length;
@@ -2705,7 +2732,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (raw) {
                     const d = JSON.parse(raw);
                     if (Array.isArray(d.sections)) displayPrefs.sections = d.sections;
-                    if (Array.isArray(d.tenses)) displayPrefs.tenses = d.tenses;
+                    // 예전에 저장된 목록엔 현재진행이 들어 있을 수 있다 — 이제 목록에 없는 시제는 버린다
+                    if (Array.isArray(d.tenses)) displayPrefs.tenses = d.tenses.filter(k => DEFAULT_DISPLAY.tenses.includes(k));
                 }
             } catch (e) {}
         }
@@ -2746,7 +2774,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
             if (tenseBox) {
                 const conjOn = p.sections.includes('conj');
-                tenseBox.innerHTML = TENSE_TYPE_OPTIONS.map(t => {
+                // [냐냐 요청] 현재진행은 현재분사를 켜면 같이 나오므로 목록에서 뺀다
+                tenseBox.innerHTML = TENSE_TYPE_OPTIONS.filter(t => !t.derived).map(t => {
                     const on = p.tenses.includes(t.key) && conjOn;
                     const cls = !conjOn ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                               : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-500');
