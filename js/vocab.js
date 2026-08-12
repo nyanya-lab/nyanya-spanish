@@ -74,7 +74,13 @@
             return list.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o === 'none' ? '- 형태 -' : o}</option>`).join('');
         }
 
-        // [냐냐 요청] 현재분사 생성·검증에 공통으로 쓰는 규칙 설명 (블록별 AI 추천 + 일괄 추가가 같이 씀)
+        // [냐냐 요청] AI에게 활용을 물어볼 때 공통으로 붙이는 규칙 (블록별 추천 + 일괄 추가가 같이 씀)
+        //   ⚠️ 재귀동사는 단어장이 재귀대명사를 포함해서 저장한다 (secarse → "me seco").
+        //      현재분사도 같은 규칙으로 대명사를 붙인 형태여야 한다 (secarse → "secándose").
+        const REFLEXIVE_RULE = `If the infinitive ends in -se it is REFLEXIVE and the reflexive pronoun MUST be kept:
+- conjugated tenses put the pronoun before the verb (secarse → "me seco / te secas / se seca / nos secamos / os secáis / se secan", levantarse → "me levanto")
+- the gerundio attaches it to the end with the written accent (secarse → "secándose", levantarse → "levantándose", dormirse → "durmiéndose", irse → "yéndose")
+Never drop the pronoun for a reflexive verb.`;
         const GERUNDIO_IRREGULAR_ENUM = IRREGULAR_TYPES_BY_TENSE.gerundio;
         const GERUNDIO_RULE_PROMPT = `You are a precise Spanish conjugation engine (standard peninsular Spanish).
 For each verb give its gerundio (현재분사 / present participle) with correct accents, and classify the irregularity as EXACTLY one of:
@@ -83,7 +89,19 @@ For each verb give its gerundio (현재분사 / present participle) with correct
 - "o ➡️ u" = stem o becomes u (dormir→durmiendo, morir→muriendo, poder→pudiendo)
 - "-yendo" = stem ends in a vowel so the ending becomes -yendo (leer→leyendo, oír→oyendo, traer→trayendo, construir→construyendo, ir→yendo)
 - "기타 변형" = none of the above fits
-Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levantando). Never add "estar".`;
+${REFLEXIVE_RULE}
+Never add "estar".`;
+        // 시제별 프롬프트 — 현재분사만 갈래 설명이 따로 있고, 나머지는 공통 틀을 쓴다
+        function tenseRulePrompt(tense) {
+            if (tense === 'gerundio') return GERUNDIO_RULE_PROMPT;
+            const o = TENSE_TYPE_OPTIONS.find(t => t.key === tense);
+            const label = o ? o.label : tense;
+            return `You are a precise Spanish conjugation engine (standard peninsular Spanish).
+Conjugate each verb in this tense: ${label} (internal key: ${tense}), all 6 persons, with correct accents.
+"vos" means the Spanish 2nd person plural vosotros (-áis/-éis/-ís) — NEVER Argentinian voseo (-ás/-és).
+${REFLEXIVE_RULE}
+Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map(t => `"${t}"`).join(', ')} ("none" = fully regular).`;
+        }
         // AI가 준 불규칙 갈래를 블록 콤보박스에 반영 (사용자가 이미 불규칙으로 지정해 뒀으면 건드리지 않음)
         function applyGerundioIrregular(block, type) {
             if (!type || !GERUNDIO_IRREGULAR_ENUM.includes(type) || type === 'none') return;
@@ -276,7 +294,7 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
                     applyGerundioIrregular(block, data.irregular);
                 } else {
                     const schema = { type: "OBJECT", properties: { yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" }, nos: { type: "STRING" }, vos: { type: "STRING" }, ellos: { type: "STRING" } }, required: ["yo", "tu", "el", "nos", "vos", "ellos"] };
-                    const resp = await callGemini(`Conjugate the Spanish verb "${infinitive}" in this tense: ${label} (internal key: ${tense}), all 6 persons. Return JSON: {"yo","tu","el","nos","vos","ellos"} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
+                    const resp = await callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${infinitive}". Return JSON: {"yo","tu","el","nos","vos","ellos"}`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
                     CONJ_PERSON_KEYS.forEach(p => { const el = block.querySelector(`[data-person="${p}"]`); if (el && !el.value.trim()) el.value = (data[p] || '').trim(); });
                 }
@@ -288,15 +306,18 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
         }
 
         // ============================================================
-        // [냐냐 요청] 현재분사 일괄 추가
-        //   등록된 동사 중 현재분사가 비어 있는 것을 AI가 묶음으로 채우고,
+        // [냐냐 요청] 시제 일괄 추가
+        //   시제를 하나 고르면, 그 시제가 비어 있는 동사를 AI가 묶음으로 채우고
         //   같은 목록을 AI가 한 번 더 풀게 해서 두 답이 갈린 것만 ⚠️로 올려 준다.
         //   (전부 눈으로 확인할 필요 없이, 갈린 것만 보면 됨)
         // ============================================================
-        const BULK_GER_BATCH = 20;   // 한 번에 물어볼 동사 수 (응답이 잘리지 않는 선)
-        let bulkGerState = null;     // { targets, rows, running, cancelled, failed }
+        const BULK_BATCH = 20;    // 한 번에 물어볼 동사 수 (응답이 잘리지 않는 선)
+        let bulkConjState = null; // { tense, targets, rows, running, cancelled, failed }
 
-        function gerKey(s) {
+        // 일괄 추가로 채울 수 있는 시제 (자동 생성 시제인 현재진행은 제외)
+        function bulkTenseOptions() { return TENSE_TYPE_OPTIONS.filter(o => !o.derived); }
+
+        function verbKey(s) {
             return String(s || '').toLowerCase().trim()
                 .normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .replace(/[^a-z]/g, '');
@@ -304,50 +325,76 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
         function sameForm(a, b) {
             return String(a || '').toLowerCase().trim() === String(b || '').toLowerCase().trim();
         }
-        function verbsMissingGerundio() {
-            return vocabulary.filter(v => v.pos === 'verb'
-                && !((((v.conjugationsByTense || {}).gerundio || {}).form) || '').trim());
+        // 두 응답이 같은 답인지 (1칸 시제는 form, 나머지는 6인칭 전부)
+        function sameConj(tense, a, b) {
+            const keys = isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS;
+            return keys.every(k => sameForm(a[k], b[k]));
+        }
+        // 사람이 읽을 한 줄 (1칸이면 그 형태, 6칸이면 · 로 이어서)
+        function conjOneLine(tense, c) {
+            const keys = isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS;
+            return keys.map(k => (c[k] || '')).filter(Boolean).join(' · ');
+        }
+        function verbsMissingTense(tense) {
+            return vocabulary.filter(v => v.pos === 'verb' && !hasConjValues(getTenseConj(v, tense)));
         }
 
-        function openBulkGerundio() {
-            const targets = verbsMissingGerundio();
-            bulkGerState = { targets, rows: [], running: false, cancelled: false, failed: [] };
-            const modal = document.getElementById('bulk-gerundio-modal');
+        function openBulkConj() {
+            bulkConjState = { tense: 'gerundio', targets: [], rows: [], running: false, cancelled: false, failed: [] };
+            const modal = document.getElementById('bulk-conj-modal');
             if (modal) modal.classList.remove('hidden');
-            renderBulkGerundioIntro();
+            const sel = document.getElementById('bulk-conj-tense');
+            if (sel) {
+                sel.innerHTML = bulkTenseOptions().map(o => `<option value="${o.key}" ${o.key === bulkConjState.tense ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
+                sel.disabled = false;
+            }
+            onBulkTenseChange();
         }
-        function closeBulkGerundio() {
-            if (bulkGerState) bulkGerState.cancelled = true; // 진행 중이면 중단
-            const modal = document.getElementById('bulk-gerundio-modal');
+        function closeBulkConj() {
+            if (bulkConjState) bulkConjState.cancelled = true; // 진행 중이면 중단
+            const modal = document.getElementById('bulk-conj-modal');
             if (modal) modal.classList.add('hidden');
-            bulkGerState = null;
+            bulkConjState = null;
         }
-        function setBulkGerAction(label, handler, disabled) {
-            const btn = document.getElementById('bulk-ger-action');
+        function onBulkTenseChange() {
+            const st = bulkConjState;
+            if (!st || st.running) return;
+            const sel = document.getElementById('bulk-conj-tense');
+            st.tense = (sel && sel.value) || 'gerundio';
+            st.targets = verbsMissingTense(st.tense);
+            st.rows = []; st.failed = [];
+            renderBulkConjIntro();
+        }
+        function setBulkConjAction(label, handler, disabled) {
+            const btn = document.getElementById('bulk-conj-action');
             if (!btn) return;
             btn.innerText = label;
             btn.disabled = !!disabled;
             btn.classList.toggle('hidden', !handler);
             btn.onclick = handler || null;
         }
+        function bulkTenseLabel(tense) {
+            const o = TENSE_TYPE_OPTIONS.find(t => t.key === tense);
+            return o ? o.label : tense;
+        }
 
-        function renderBulkGerundioIntro() {
-            const st = bulkGerState;
-            const body = document.getElementById('bulk-ger-body');
-            const sub = document.getElementById('bulk-ger-sub');
+        function renderBulkConjIntro() {
+            const st = bulkConjState;
+            const body = document.getElementById('bulk-conj-body');
+            const sub = document.getElementById('bulk-conj-sub');
             if (!st || !body) return;
             const verbCount = vocabulary.filter(v => v.pos === 'verb').length;
             const n = st.targets.length;
             if (sub) sub.innerText = `등록된 동사 ${verbCount}개 중 ${n}개가 비어 있어요`;
             if (n === 0) {
-                body.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">모든 동사에 현재분사가 이미 있어요 🎉</div>`;
-                setBulkGerAction('', null, false);
+                body.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">모든 동사에 ${escapeHtml(bulkTenseLabel(st.tense))}이(가) 이미 있어요 🎉</div>`;
+                setBulkConjAction('', null, false);
                 return;
             }
-            setBulkGerAction('AI로 채우기', startBulkGerundio, false);
+            setBulkConjAction('AI로 채우기', startBulkConj, false);
             body.innerHTML = `
                 <div class="bg-violet-50 border border-violet-100 rounded-2xl p-3 text-xs text-violet-700 leading-relaxed font-medium">
-                    <b>${n}개</b> 동사의 현재분사를 AI가 만들고, <b>같은 목록을 AI가 한 번 더</b> 풀어서 맞춰봐요.<br>
+                    <b>${n}개</b> 동사의 <b>${escapeHtml(bulkTenseLabel(st.tense))}</b>을(를) AI가 만들고, <b>같은 목록을 AI가 한 번 더</b> 풀어서 맞춰봐요.<br>
                     두 답이 갈린 것만 ⚠️로 표시되니 그것만 확인하시면 돼요.
                 </div>
                 <div class="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
@@ -355,77 +402,78 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
                 </div>`;
         }
 
-        function renderBulkGerundioProgress(msg, step, total) {
-            const body = document.getElementById('bulk-ger-body');
+        function renderBulkConjProgress(msg, pct) {
+            const body = document.getElementById('bulk-conj-body');
             if (!body) return;
-            const pct = total ? Math.round((step / total) * 100) : 0;
+            const p = Math.max(0, Math.min(100, Math.round(pct)));
             body.innerHTML = `
                 <div class="py-10 text-center space-y-3">
                     <i class="fa-solid fa-wand-magic-sparkles text-3xl text-violet-500 animate-pulse"></i>
-                    <p class="text-sm font-bold text-slate-700">${escapeHtml(msg)}… ${step}/${total}</p>
-                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${pct}%"></div></div>
+                    <p class="text-sm font-bold text-slate-700">${escapeHtml(msg)}… <span class="text-violet-600">${p}%</span></p>
+                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${p}%"></div></div>
                     <p class="text-[11px] text-slate-400">창을 닫으면 중단돼요</p>
                 </div>`;
         }
 
         // AI 한 번 호출 = 동사 목록 하나. candidates 를 주면 '검증(다시 풀어서 맞춰보기)' 모드.
-        async function bulkGerundioAsk(words, candidates) {
+        async function bulkConjAsk(tense, words, candidates) {
+            const single = isSingleTense(tense);
+            const props = { verb: { type: "STRING", description: "the infinitive exactly as given in the input list" } };
+            if (single) props.form = { type: "STRING", description: "the gerundio with correct accents, no estar" };
+            else CONJ_PERSON_KEYS.forEach(p => { props[p] = { type: "STRING" }; });
+            props.irregular = { type: "STRING", enum: irregularTypesFor(tense) };
+            const required = ['verb', 'irregular'].concat(single ? ['form'] : CONJ_PERSON_KEYS);
             const schema = {
                 type: "OBJECT",
-                properties: {
-                    items: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                verb: { type: "STRING", description: "the infinitive exactly as given in the input list" },
-                                form: { type: "STRING", description: "gerundio with correct accents, no pronoun, no estar" },
-                                irregular: { type: "STRING", enum: GERUNDIO_IRREGULAR_ENUM }
-                            },
-                            required: ["verb", "form", "irregular"]
-                        }
-                    }
-                },
+                properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: props, required } } },
                 required: ["items"]
             };
+
             const listText = candidates
-                ? words.map(w => `${w} -> ${(candidates[gerKey(w)] || {}).form || '?'}`).join('\n')
+                ? words.map(w => `${w} -> ${conjOneLine(tense, candidates[verbKey(w)] || {}) || '?'}`).join('\n')
                 : words.join('\n');
             const prompt = candidates
-                ? `${GERUNDIO_RULE_PROMPT}\n\nEach line below is "verb -> a proposed gerundio". For EVERY verb, derive the gerundio yourself from the rules above FIRST, then output your own derived answer (keep the proposal only if your own derivation matches it). Output one item per verb, no verb skipped.\n\n${listText}`
-                : `${GERUNDIO_RULE_PROMPT}\n\nGive the gerundio for every verb below. Output one item per verb, in the same order, no verb skipped.\n\n${listText}`;
+                ? `${tenseRulePrompt(tense)}\n\nEach line below is "verb -> a proposed answer". For EVERY verb, work out the answer yourself from the rules above FIRST, then output your own answer (keep the proposal only if your own derivation matches it). Output one item per verb, no verb skipped.\n\n${listText}`
+                : `${tenseRulePrompt(tense)}\n\nAnswer for every verb below. Output one item per verb, in the same order, no verb skipped.\n\n${listText}`;
+
             const resp = await callGemini(prompt, 'Return ONLY JSON.', schema, 'minimal');
             const data = extractAndParseJson(resp);
             const out = {};
             (data.items || []).forEach(it => {
-                const k = gerKey(it && it.verb);
-                const form = String((it && it.form) || '').trim();
-                if (!k || !form) return;
-                out[k] = { form, irregular: GERUNDIO_IRREGULAR_ENUM.includes(it.irregular) ? it.irregular : 'none' };
+                const k = verbKey(it && it.verb);
+                if (!k) return;
+                const row = { irregular: irregularTypesFor(tense).includes(it.irregular) ? it.irregular : 'none' };
+                if (single) row.form = String(it.form || '').trim();
+                else CONJ_PERSON_KEYS.forEach(p => { row[p] = String(it[p] || '').trim(); });
+                if (!conjOneLine(tense, row)) return; // 알맹이가 없으면 버림
+                out[k] = row;
             });
             return out;
         }
 
-        async function startBulkGerundio() {
+        async function startBulkConj() {
             if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
-            const st = bulkGerState;
+            const st = bulkConjState;
             if (!st || st.running || st.targets.length === 0) return;
             st.running = true; st.rows = []; st.failed = [];
-            setBulkGerAction('진행 중…', null, true);
+            setBulkConjAction('진행 중…', null, true);
+            const tenseSel = document.getElementById('bulk-conj-tense');
+            if (tenseSel) tenseSel.disabled = true;
 
             const batches = [];
-            for (let i = 0; i < st.targets.length; i += BULK_GER_BATCH) batches.push(st.targets.slice(i, i + BULK_GER_BATCH));
-            const totalSteps = batches.length * 2; // 생성 + 검증
+            for (let i = 0; i < st.targets.length; i += BULK_BATCH) batches.push(st.targets.slice(i, i + BULK_BATCH));
+            const totalSteps = batches.length * 2; // 만들기 + 검증
             let step = 0;
-            renderBulkGerundioProgress('현재분사 만드는 중', 0, totalSteps);
+            const pct = () => (step / totalSteps) * 100;
+            renderBulkConjProgress('만드는 중', 0);
 
             for (const batch of batches) {
                 if (st.cancelled) break;
                 const words = batch.map(v => (v.word || '').trim());
                 let made = null;
                 try {
-                    renderBulkGerundioProgress('현재분사 만드는 중', step, totalSteps);
-                    made = await bulkGerundioAsk(words, null);
+                    renderBulkConjProgress('만드는 중', pct());
+                    made = await bulkConjAsk(st.tense, words, null);
                 } catch (e) {
                     console.error(e);
                     batch.forEach(v => st.failed.push(v.word));
@@ -436,58 +484,60 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
                 let verified = {};
                 if (!st.cancelled) {
                     try {
-                        renderBulkGerundioProgress('AI 검증 중', step, totalSteps);
-                        verified = await bulkGerundioAsk(words, made);
-                    } catch (e) { console.error(e); verified = {}; } // 검증만 실패하면 1차 결과를 '검증 못 함'으로 남김
+                        renderBulkConjProgress('AI 검증 중', pct());
+                        verified = await bulkConjAsk(st.tense, words, made);
+                    } catch (e) { console.error(e); verified = {}; } // 검증만 실패하면 '검증 못 함'으로 남김
                 }
                 step++;
                 batch.forEach(v => {
-                    const k = gerKey(v.word);
+                    const k = verbKey(v.word);
                     const a = made[k], b = verified[k];
                     if (!a && !b) { st.failed.push(v.word); return; }
-                    const chosen = b || a;                       // 검증본을 채택
-                    const conflict = !!(a && b) && !sameForm(a.form, b.form);
-                    st.rows.push({
-                        id: v.id, word: v.word, meaning: v.meaning,
-                        form: chosen.form, irregular: chosen.irregular || 'none',
-                        alt: conflict ? a.form : '',             // 갈렸을 때 1차 답
-                        unverified: !b,
-                        on: true
-                    });
+                    const chosen = b || a;                      // 검증본을 채택
+                    const conflict = !!(a && b) && !sameConj(st.tense, a, b);
+                    const row = { id: v.id, word: v.word, meaning: v.meaning, irregular: chosen.irregular || 'none', unverified: !b, on: true };
+                    if (isSingleTense(st.tense)) row.form = chosen.form;
+                    else CONJ_PERSON_KEYS.forEach(p => { row[p] = chosen[p]; });
+                    row.text = conjOneLine(st.tense, row);
+                    row.alt = conflict ? conjOneLine(st.tense, a) : '';
+                    st.rows.push(row);
                 });
             }
 
-            if (bulkGerState !== st) return; // 진행 중에 창을 닫았으면 그리지 않음
+            if (bulkConjState !== st) return; // 진행 중에 창을 닫았으면 그리지 않음
             st.running = false;
-            renderBulkGerundioResult();
+            if (tenseSel) tenseSel.disabled = false;
+            renderBulkConjResult();
         }
 
-        function bulkGerRowHtml(r, i) {
+        function bulkConjRowHtml(r, i) {
             const flagged = !!(r.alt || r.unverified);
             const note = r.alt ? `⚠️ 1차 답: ${escapeHtml(r.alt)}` : (r.unverified ? '⚠️ 검증 못 함' : '');
             return `
-                <label class="flex items-center gap-2 p-2 rounded-xl border ${flagged ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}">
-                    <input type="checkbox" data-bulk-ger="${i}" ${r.on ? 'checked' : ''} onchange="toggleBulkGerRow(this)" class="w-4 h-4 accent-violet-600 shrink-0">
+                <label class="flex items-start gap-2 p-2 rounded-xl border ${flagged ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}">
+                    <input type="checkbox" data-bulk-conj="${i}" ${r.on ? 'checked' : ''} onchange="toggleBulkConjRow(this)" class="w-4 h-4 accent-violet-600 shrink-0 mt-0.5">
                     <span class="text-[11px] font-bold text-slate-500 w-16 shrink-0 truncate">${escapeHtml(r.word)}</span>
-                    <span class="text-sm font-black text-blue-600 truncate">${escapeHtml(r.form)}</span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block text-xs font-black text-blue-600 break-words">${escapeHtml(r.text)}</span>
+                        ${note ? `<span class="block text-[10px] text-amber-700 font-bold mt-0.5">${note}</span>` : ''}
+                    </span>
                     ${(r.irregular && r.irregular !== 'none') ? `<span class="text-[10px] font-bold text-rose-500 shrink-0">${escapeHtml(r.irregular)}</span>` : ''}
-                    ${note ? `<span class="text-[10px] text-amber-700 font-bold shrink-0 ml-auto">${note}</span>` : ''}
                 </label>`;
         }
 
-        function renderBulkGerundioResult() {
-            const st = bulkGerState;
-            const body = document.getElementById('bulk-ger-body');
+        function renderBulkConjResult() {
+            const st = bulkConjState;
+            const body = document.getElementById('bulk-conj-body');
             if (!st || !body) return;
             const items = st.rows.map((r, i) => ({ r, i }));
             const flagged = items.filter(x => x.r.alt || x.r.unverified);
             const clean = items.filter(x => !(x.r.alt || x.r.unverified));
-            const sub = document.getElementById('bulk-ger-sub');
+            const sub = document.getElementById('bulk-conj-sub');
             if (sub) sub.innerText = `${st.rows.length}개 완성 · 확인 필요 ${flagged.length}개`;
 
             if (st.rows.length === 0) {
                 body.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">받아온 결과가 없어요. 잠시 뒤 다시 시도해 주세요.</div>`;
-                setBulkGerAction('다시 시도', () => { bulkGerState.cancelled = false; renderBulkGerundioIntro(); }, false);
+                setBulkConjAction('다시 시도', renderBulkConjIntro, false);
                 return;
             }
 
@@ -495,55 +545,67 @@ Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levan
                 ${flagged.length ? `
                 <div class="space-y-1.5">
                     <p class="text-[11px] font-bold text-amber-700">⚠️ 두 답이 갈렸어요 — 여기만 확인해 주세요 (${flagged.length}개)</p>
-                    ${flagged.map(x => bulkGerRowHtml(x.r, x.i)).join('')}
+                    ${flagged.map(x => bulkConjRowHtml(x.r, x.i)).join('')}
                 </div>` : `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">두 번 다 같은 답이 나왔어요 — 확인할 게 없어요 ✨</div>`}
                 <div class="space-y-1.5">
                     <p class="text-[11px] font-bold text-slate-400">검증 통과 (${clean.length}개)</p>
-                    ${clean.map(x => bulkGerRowHtml(x.r, x.i)).join('')}
+                    ${clean.map(x => bulkConjRowHtml(x.r, x.i)).join('')}
                 </div>
                 ${st.failed.length ? `<p class="text-[11px] text-rose-500 font-bold">못 받아온 단어 ${st.failed.length}개: ${escapeHtml(st.failed.join(', '))}</p>` : ''}`;
-            updateBulkGerActionLabel();
+            updateBulkConjActionLabel();
         }
 
-        function updateBulkGerActionLabel() {
-            const st = bulkGerState;
+        function updateBulkConjActionLabel() {
+            const st = bulkConjState;
             if (!st) return;
-            const n = st.rows.filter(r => r.on && r.form).length;
-            setBulkGerAction(`${n}개 저장`, saveBulkGerundio, n === 0);
+            const n = st.rows.filter(r => r.on && r.text).length;
+            setBulkConjAction(`${n}개 저장`, saveBulkConj, n === 0);
         }
-        function toggleBulkGerRow(el) {
-            const i = parseInt(el.getAttribute('data-bulk-ger'), 10);
-            if (bulkGerState && bulkGerState.rows[i]) bulkGerState.rows[i].on = el.checked;
-            updateBulkGerActionLabel();
+        function toggleBulkConjRow(el) {
+            const i = parseInt(el.getAttribute('data-bulk-conj'), 10);
+            if (bulkConjState && bulkConjState.rows[i]) bulkConjState.rows[i].on = el.checked;
+            updateBulkConjActionLabel();
         }
 
-        function saveBulkGerundio() {
-            const st = bulkGerState;
+        function saveBulkConj() {
+            const st = bulkConjState;
             if (!st) return;
-            const picked = st.rows.filter(r => r.on && r.form);
+            const tense = st.tense;
+            const picked = st.rows.filter(r => r.on && r.text);
             if (picked.length === 0) { showToast("선택된 게 없어요", "error"); return; }
             let n = 0;
             picked.forEach(r => {
                 const v = vocabulary.find(x => x.id === r.id);
                 if (!v) return;
+                const data = {};
+                if (isSingleTense(tense)) data.form = r.form;
+                else CONJ_PERSON_KEYS.forEach(p => { data[p] = r[p] || ''; });
                 v.conjugationsByTense = v.conjugationsByTense || {};
-                v.conjugationsByTense.gerundio = { form: r.form };
+                v.conjugationsByTense[tense] = data;
                 v.verbClassByTense = v.verbClassByTense || {};
                 v.irregularByTense = v.irregularByTense || {};
                 if (r.irregular && r.irregular !== 'none') {
-                    v.verbClassByTense.gerundio = 'irregular';
-                    v.irregularByTense.gerundio = r.irregular;
+                    v.verbClassByTense[tense] = 'irregular';
+                    v.irregularByTense[tense] = r.irregular;
                 } else {
-                    v.verbClassByTense.gerundio = 'regular';
-                    delete v.irregularByTense.gerundio;
+                    v.verbClassByTense[tense] = 'regular';
+                    delete v.irregularByTense[tense];
+                }
+                // 구버전 호환 필드도 같이 (현재시제일 때만)
+                if (tense === 'presente') {
+                    v.conjugations = data;
+                    v.verbClass = v.verbClassByTense.presente;
+                    v.irregularType = v.irregularByTense.presente || 'none';
                 }
                 n++;
             });
+            const label = bulkTenseLabel(tense);
+            const extra = (tense === 'gerundio') ? ' 현재진행도 같이 생겨요 ✨' : ' ✨';
             saveToStorage();
-            closeBulkGerundio();
+            closeBulkConj();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
-            showToast(`현재분사 ${n}개를 채웠어요! 현재진행도 같이 생겨요 ✨`, "success");
+            showToast(`${label} ${n}개를 채웠어요!${extra}`, "success");
         }
 
         // [냐냐 PATCH] AI 추천 완료 여부 (완료 후 아무 칸에서 엔터 = 저장)
