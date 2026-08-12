@@ -344,12 +344,15 @@ let quizSession = null;
 
                 // [냐냐 PATCH] 동사이고 활용 정보가 있으면 30% 확률로 '활용형 문제' 출제 (B방식: 원형 숨김)
                 //   여러 시제가 등록돼 있으면 그 중 랜덤으로 출제
-                //   [냐냐 요청] 현재분사(1칸)·현재진행(현재분사에서 자동 생성)도 출제 대상에 넣는다
+                //   [냐냐 요청] 현재분사(1칸)도 출제 대상. 단 현재진행은 일부러 뺀다 —
+                //   estar 6개는 모든 동사에서 똑같아서 실제로 시험되는 건 뒤의 현재분사뿐이고,
+                //   그건 이미 현재분사 문제로 나온다. 후보 시제만 늘어나 부정과거·접속법이
+                //   뽑힐 확률을 깎는다. (카드·정답표에는 계속 보인다)
                 const tenseMap = {
                     presente: '직설법 현재', indefinido: '직설법 부정과거', imperfecto: '직설법 불완료과거',
                     futuro: '직설법 미래', condicional: '조건법', subjPresente: '접속법 현재',
                     subjImperfecto: '접속법 불완료과거', imperativo: '명령법',
-                    gerundio: '현재분사', presProgresivo: '현재진행'
+                    gerundio: '현재분사'
                 };
                 // 사용 가능한 시제 목록 수집 (구버전 conjugations는 presente로 취급)
                 const availableTenses = [];
