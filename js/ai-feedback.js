@@ -1857,10 +1857,41 @@ ${refGrammar}${refWords}
         function aiScoringNoteList() {
             return (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
         }
+        // [냐냐 요청] 예전엔 제목만 보냈다. AI 가 표 안에 뭐가 있는지 모른 채 제목만 보고 짐작해서,
+        //   문장에 없는 문법에도 점수가 붙는 일이 있었다. 표 전체는 하나에 3천 자라 못 보내니
+        //   설명 앞부분과 표 안의 스페인어 낱말 몇 개만 단서로 붙인다 (한 표당 150자 안팎).
+        function aiScoringNoteHint(t) {
+            const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+            // 설명이 없으면 첫 글 블록의 본문을 대신 쓴다 (표만 있고 desc 가 빈 노트가 있다)
+            let desc = strip(t.desc);
+            if (!desc) {
+                const textBlock = (t.blocks || []).find(b => b && b.html);
+                if (textBlock) desc = strip(textBlock.html);
+            }
+            desc = desc.slice(0, 80);
+
+            const words = [];
+            const push = (c) => {
+                const s = strip(c);
+                // 스페인어처럼 보이는 칸만 고른다. 낱말뿐 아니라 짧은 문구도 단서가 되므로
+                //   쉼표·물음표·¿¡ 까지 허용하되, 한글이 섞인 칸은 뜻풀이라 제외한다.
+                if (!s || s.length > 40 || /[ㄱ-ㅎ가-힣]/.test(s)) return;
+                if (!/^[¿¡A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(s)) return;
+                if (!/^[¿¡?!.,'’\- A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/.test(s)) return;
+                if (!words.includes(s)) words.push(s);
+            };
+            (t.blocks || []).forEach(b => (b.rows || []).forEach(r => (r || []).forEach(push)));
+            (t.rows || []).forEach(r => (r || []).forEach(push));
+            const ex = words.slice(0, 8).join(', ').slice(0, 160);
+            return [desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
+        }
         function aiScoringNoteListText(notes) {
-            return notes && notes.length
-                ? `\n            My grammar notes (titles only). If the sentence genuinely exercises one of these, report it in "usedGrammar":\n            ${notes.map(t => `- ${t.title || ''}`).join('\n            ')}\n`
-                : '';
+            if (!notes || !notes.length) return '';
+            const lines = notes.map(t => {
+                const hint = aiScoringNoteHint(t);
+                return `- ${t.title || ''}${hint ? ` :: ${hint}` : ''}`;
+            });
+            return `\n            My grammar notes. Each line is "TITLE :: what the note is about | example words from the note".\n            Use the hint to decide whether the sentence REALLY exercises that note — do not guess from the title alone:\n            ${lines.join('\n            ')}\n`;
         }
         // 응답 JSON 예시에 끼워 넣을 항목.
         //   [냐냐 요청] 예전엔 [{word, spelling}] 꼴이라 단어 하나에 39자를 썼다. 응답이 길어지면
@@ -1872,7 +1903,7 @@ ${refGrammar}${refWords}
                "wordsBad": ["dictionary form of each content word the student MISSPELLED"]`;
         const AI_SCORING_RULES_TEXT = `
             IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write.
-            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. List EVERY note the sentence genuinely and observably exercises: any note whose rule is actually visible in this sentence. Concrete structures always count — e.g. a gustar-type / reverse-construction verb ("Me parece que...", "Me gusta...") matches a 역구조동사 note; "más ... que" matches a 비교급 note; a reflexive verb matches a 재귀동사 note; an object pronoun matches a 목적격 대명사 note. A sentence often exercises 2-3 notes at once — list them all. What does NOT count: listing a note just because the sentence is in the present tense or merely contains a noun.`;
+            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. Most sentences match 0-2 notes; listing many is a sign you are guessing. Do NOT list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
         const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsBad"];
