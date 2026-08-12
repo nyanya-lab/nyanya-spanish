@@ -344,27 +344,28 @@ let quizSession = null;
 
                 // [냐냐 PATCH] 동사이고 활용 정보가 있으면 30% 확률로 '활용형 문제' 출제 (B방식: 원형 숨김)
                 //   여러 시제가 등록돼 있으면 그 중 랜덤으로 출제
+                //   [냐냐 요청] 현재분사(1칸)·현재진행(현재분사에서 자동 생성)도 출제 대상에 넣는다
                 const tenseMap = {
                     presente: '직설법 현재', indefinido: '직설법 부정과거', imperfecto: '직설법 불완료과거',
                     futuro: '직설법 미래', condicional: '조건법', subjPresente: '접속법 현재',
-                    subjImperfecto: '접속법 불완료과거', imperativo: '명령법'
+                    subjImperfecto: '접속법 불완료과거', imperativo: '명령법',
+                    gerundio: '현재분사', presProgresivo: '현재진행'
                 };
                 // 사용 가능한 시제 목록 수집 (구버전 conjugations는 presente로 취급)
                 const availableTenses = [];
                 if (w.pos === 'verb') {
-                    if (w.conjugationsByTense) {
-                        Object.keys(tenseMap).forEach(t => {
-                            const c = w.conjugationsByTense[t];
-                            if (c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos)) availableTenses.push({ key: t, data: c });
-                        });
-                    } else if (w.conjugations && (w.conjugations.yo || w.conjugations.el)) {
-                        availableTenses.push({ key: 'presente', data: w.conjugations });
-                    }
+                    Object.keys(tenseMap).forEach(t => {
+                        const c = (typeof getTenseConj === 'function') ? getTenseConj(w, t)
+                            : ((w.conjugationsByTense || {})[t] || (t === 'presente' ? w.conjugations : null));
+                        if (c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form)) availableTenses.push({ key: t, data: c });
+                    });
                 }
                 if (availableTenses.length > 0 && selectedQuizFormat !== 'mc' && Math.random() < 0.3) {
                     const pickedTense = availableTenses[Math.floor(Math.random() * availableTenses.length)];
                     const conj = pickedTense.data;
-                    const forms = [
+                    const forms = (conj.form && !conj.yo)
+                        ? [{ key: 'form', label: '현재분사' }] // 1칸짜리 시제 (gerundio)
+                        : [
                         { key: 'yo', label: '1인칭 단수 (yo)' },
                         { key: 'tu', label: '2인칭 단수 (tú)' },
                         { key: 'el', label: '3인칭 단수 (él/ella)' },
@@ -520,7 +521,10 @@ let quizSession = null;
                     document.getElementById('quiz-question-label').innerText = '동사 활용';
                     // [냐냐 PATCH] B방식: 원형(스페인어)을 숨기고 한국어 뜻 + 시제로 물어봄
                     const tenseName = q.tenseLabel || '현재시제';
-                    document.getElementById('quiz-question-text').innerHTML = `<b class="text-violet-600">${q.word.meaning}</b>의 ${tenseName} <b>${q.conjLabel}</b>은?`;
+                    // [냐냐 요청] 현재분사는 인칭이 없어서 "…의 현재분사 현재분사은?"이 되면 안 된다
+                    document.getElementById('quiz-question-text').innerHTML = (q.conjKey === 'form')
+                        ? `<b class="text-violet-600">${q.word.meaning}</b>의 <b>${tenseName}</b>는?`
+                        : `<b class="text-violet-600">${q.word.meaning}</b>의 ${tenseName} <b>${q.conjLabel}</b>은?`;
                 } else if (q.type === 'idiom-subjective') {
                     document.getElementById('quiz-question-label').innerText = '관용구 뜻풀이';
                     if (q.subDir === 'ko-es') {
@@ -831,10 +835,12 @@ let quizSession = null;
             const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
             const tenseOpts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
             const labelOf = (k) => { const o = tenseOpts.find(t => t.key === k); return o ? o.label : k; };
+            // 등록된 시제 + 자동 생성 시제(현재진행 = estar+현재분사)
+            const conjOf = (k) => (typeof getTenseConj === 'function') ? getTenseConj(word, k)
+                : (byTense[k] || (k === 'presente' ? word.conjugations : null));
 
-            // 등록된 시제 모으기 (구버전 호환: conjugations = 현재시제)
-            let keys = Object.keys(byTense).filter(k => hasValues(byTense[k]));
-            if (!keys.includes('presente') && hasValues(word.conjugations)) keys.unshift('presente');
+            let keys = (typeof listTenseKeys === 'function') ? listTenseKeys(word)
+                : Object.keys(byTense).filter(k => hasValues(byTense[k]));
             if (keys.length === 0) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
             // 정렬: 출제된 시제 먼저 → 나머지는 등록 폼의 시제 순서대로
@@ -846,10 +852,12 @@ let quizSession = null;
             });
 
             const blocks = keys.map(k => {
-                const c = byTense[k] || (k === 'presente' ? word.conjugations : null);
+                const c = conjOf(k);
                 if (!hasValues(c)) return '';
-                const irrType = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
-                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
+                // 현재진행을 현재분사에서 만들어 쓴 경우엔 규칙/불규칙 표시 대신 만들어진 근거를 보여준다
+                const derived = (typeof isDerivedTense === 'function') && isDerivedTense(k) && !byTense[k];
+                const irrType = derived ? '' : (irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : ''));
+                const verbClass = derived ? 'regular' : (vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular')));
                 const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
                 const isAsked = (k === askedKey);
 
@@ -884,7 +892,8 @@ let quizSession = null;
                     <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
                         <span>🔀</span> ${escapeHtml(labelOf(k))}
                         ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
-                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
+                        ${derived ? '<span class="text-slate-400 font-bold">· estar + 현재분사</span>'
+                          : (isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>')}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
                 </div>`;
@@ -997,7 +1006,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 inputEl.disabled = true;
                 submitBtn.disabled = true;
                 const isCorrect = userAnswer && (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer));
-                q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word} = ${q.word.meaning} · ${q.tenseLabel || '현재'} ${q.conjLabel})`;
+                const conjDesc = (q.conjKey === 'form') ? (q.tenseLabel || '현재분사') : `${q.tenseLabel || '현재'} ${q.conjLabel}`;
+                q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word} = ${q.word.meaning} · ${conjDesc})`;
                 finishQuizQuestion(isCorrect, q);
                 return;
             }

@@ -53,13 +53,78 @@
             { key: 'subjPresente', label: '접속법 현재' },
             { key: 'subjImperfecto', label: '접속법 불완료과거' },
             { key: 'imperativo', label: '명령법' },
-            { key: 'presProgresivo', label: '현재진행 (estar+gerundio)' },
             { key: 'gerundio', label: '현재분사 (gerundio · 1칸)' },
+            // [냐냐 요청] 현재진행은 'estar 현재형 + 현재분사'로 100% 계산되므로 따로 입력받지 않는다.
+            //   derived: true = 등록 폼에 블록이 안 생기고, 표시·출제할 때 현재분사에서 자동 생성.
+            { key: 'presProgresivo', label: '현재진행', derived: true },
         ];
         // 불규칙 유형 (틀 — 학습하며 나중에 채우기)
         const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
+        // [냐냐 요청] 현재분사는 불규칙 갈래가 현재시제와 아예 달라서 목록을 따로 쓴다.
+        //   e➡️i: pedir→pidiendo · decir→diciendo · reír→riendo
+        //   o➡️u: dormir→durmiendo · poder→pudiendo
+        //   -yendo: 어간이 모음으로 끝남 (leer→leyendo · oír→oyendo · ir→yendo)
+        const IRREGULAR_TYPES_BY_TENSE = {
+            gerundio: ['none', 'e ➡️ i', 'o ➡️ u', '-yendo', '기타 변형'],
+        };
+        function irregularTypesFor(tense) { return IRREGULAR_TYPES_BY_TENSE[tense] || IRREGULAR_TYPE_OPTIONS; }
+        function irrOptionsHtml(tense, cur) {
+            const list = irregularTypesFor(tense);
+            const val = list.includes(cur) ? cur : 'none';
+            return list.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o === 'none' ? '- 형태 -' : o}</option>`).join('');
+        }
+
+        // [냐냐 요청] 현재분사 생성·검증에 공통으로 쓰는 규칙 설명 (블록별 AI 추천 + 일괄 추가가 같이 씀)
+        const GERUNDIO_IRREGULAR_ENUM = IRREGULAR_TYPES_BY_TENSE.gerundio;
+        const GERUNDIO_RULE_PROMPT = `You are a precise Spanish conjugation engine (standard peninsular Spanish).
+For each verb give its gerundio (현재분사 / present participle) with correct accents, and classify the irregularity as EXACTLY one of:
+- "none" = regular: -ar → -ando, -er/-ir → -iendo (hablar→hablando, comer→comiendo, vivir→viviendo)
+- "e ➡️ i" = stem e becomes i (pedir→pidiendo, decir→diciendo, venir→viniendo, sentir→sintiendo, seguir→siguiendo, reír→riendo)
+- "o ➡️ u" = stem o becomes u (dormir→durmiendo, morir→muriendo, poder→pudiendo)
+- "-yendo" = stem ends in a vowel so the ending becomes -yendo (leer→leyendo, oír→oyendo, traer→trayendo, construir→construyendo, ir→yendo)
+- "기타 변형" = none of the above fits
+Reflexive verbs (-se): give the gerundio without the pronoun (levantarse→levantando). Never add "estar".`;
+        // AI가 준 불규칙 갈래를 블록 콤보박스에 반영 (사용자가 이미 불규칙으로 지정해 뒀으면 건드리지 않음)
+        function applyGerundioIrregular(block, type) {
+            if (!type || !GERUNDIO_IRREGULAR_ENUM.includes(type) || type === 'none') return;
+            const cls = block.querySelector('.conj-block-class');
+            const irr = block.querySelector('.conj-block-irr');
+            if (!cls || !irr || cls.value === 'irregular') return;
+            cls.value = 'irregular';
+            irr.disabled = false;
+            irr.value = type;
+        }
 
         function isSingleTense(t) { return SINGLE_TENSES.includes(t); }
+        function isDerivedTense(t) { const o = TENSE_TYPE_OPTIONS.find(x => x.key === t); return !!(o && o.derived); }
+
+        // [냐냐 요청] 현재진행 자동 생성 — estar 현재형은 6개가 고정이라 계산이 확실하다
+        const ESTAR_PRESENTE = { yo: 'estoy', tu: 'estás', el: 'está', nos: 'estamos', vos: 'estáis', ellos: 'están' };
+        function deriveProgresivo(gerundio) {
+            const g = (gerundio || '').trim();
+            if (!g) return null;
+            const d = {};
+            CONJ_PERSON_KEYS.forEach(p => { d[p] = ESTAR_PRESENTE[p] + ' ' + g; });
+            return d;
+        }
+        function hasConjValues(c) { return !!(c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form)); }
+        // 단어의 한 시제 변형을 얻는다 — 저장값 우선, 없으면 자동 생성(현재진행), 구버전 conjugations 호환
+        function getTenseConj(word, key) {
+            if (!word) return null;
+            const byTense = word.conjugationsByTense || {};
+            let c = byTense[key];
+            if (!hasConjValues(c) && key === 'presente') c = word.conjugations;
+            if (hasConjValues(c)) return c;
+            if (key === 'presProgresivo') {
+                const g = (byTense.gerundio && byTense.gerundio.form) || '';
+                return deriveProgresivo(g); // 현재분사가 없으면 null
+            }
+            return null;
+        }
+        // 표시·출제에 쓸 시제 키 목록 (등록된 것 + 자동 생성 가능한 것), 등록 폼 순서대로
+        function listTenseKeys(word) {
+            return TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => hasConjValues(getTenseConj(word, k)));
+        }
 
         // 블록 하나의 입력칸을 시제 종류에 맞게 렌더 (기존 입력값 최대한 보존)
         function renderBlockInputs(block) {
@@ -89,16 +154,18 @@
         function addTenseBlock(tenseKey, data, vcVal, irrVal) {
             const box = document.getElementById('conj-tense-blocks');
             if (!box) return;
-            if (!tenseKey) { // '+ 시제 추가' 버튼: 아직 안 쓴 시제 중 첫 번째로
+            if (!tenseKey) { // '+ 시제 추가' 버튼: 아직 안 쓴 시제 중 첫 번째로 (자동 생성 시제는 건너뜀)
                 const used = [...box.querySelectorAll('.conj-block-tense')].map(s => s.value);
-                tenseKey = TENSE_TYPE_OPTIONS.map(o => o.key).find(k => !used.includes(k)) || 'presente';
+                tenseKey = TENSE_TYPE_OPTIONS.filter(o => !o.derived).map(o => o.key).find(k => !used.includes(k)) || 'presente';
                 data = {}; vcVal = 'regular'; irrVal = 'none';
             }
             const isRegular = (vcVal !== 'irregular');
             const block = document.createElement('div');
             block.className = 'conj-tense-block bg-white rounded-xl border border-slate-200 p-2.5 space-y-2';
-            const tenseOpts = TENSE_TYPE_OPTIONS.map(o => `<option value="${o.key}" ${o.key === tenseKey ? 'selected' : ''}>${o.label}</option>`).join('');
-            const irrOpts = IRREGULAR_TYPE_OPTIONS.map(o => `<option value="${o}" ${o === irrVal ? 'selected' : ''}>${o === 'none' ? '- 형태 -' : o}</option>`).join('');
+            // 자동 생성 시제(현재진행)는 고를 수 없다 — 현재분사에서 만들어지므로
+            const tenseOpts = TENSE_TYPE_OPTIONS.filter(o => !o.derived || o.key === tenseKey)
+                .map(o => `<option value="${o.key}" ${o.key === tenseKey ? 'selected' : ''}>${o.label}</option>`).join('');
+            const irrOpts = irrOptionsHtml(tenseKey, irrVal);
             block.innerHTML = `
                 <div class="flex items-center gap-1 flex-wrap">
                     <select class="conj-block-tense flex-1 min-w-[104px] bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-200 text-[11px] font-bold text-indigo-700 focus:outline-none" onchange="onBlockTenseChange(this)">${tenseOpts}</select>
@@ -117,11 +184,31 @@
             fillBlockConj(block, data);
         }
 
-        function onBlockTenseChange(sel) { renderBlockInputs(sel.closest('.conj-tense-block')); }
+        // [냐냐 요청] 시제를 바꾸면 불규칙 유형 목록도 그 시제 것으로 다시 그린다.
+        //   (예전엔 블록을 만들 때 한 번만 그려서, 현재분사 블록에도 '1인칭' 같은 현재시제 전용 항목이 남아 있었다)
+        function onBlockTenseChange(sel) {
+            const block = sel.closest('.conj-tense-block');
+            const irr = block.querySelector('.conj-block-irr');
+            if (irr) {
+                const cur = irr.value;
+                irr.innerHTML = irrOptionsHtml(sel.value, cur);
+                if (irr.value === 'none' && cur !== 'none') {
+                    // 새 시제엔 없는 유형이었으면 규칙으로 되돌림 (엉뚱한 유형이 남지 않게)
+                    const cls = block.querySelector('.conj-block-class');
+                    if (cls) cls.value = 'regular';
+                    irr.disabled = true;
+                }
+            }
+            renderBlockInputs(block);
+        }
         function onBlockClassChange(sel) {
             const block = sel.closest('.conj-tense-block');
             const irr = block.querySelector('.conj-block-irr');
-            if (sel.value === 'irregular') { irr.disabled = false; if (irr.value === 'none') irr.value = '1인칭'; }
+            const tense = block.querySelector('.conj-block-tense').value;
+            if (sel.value === 'irregular') {
+                irr.disabled = false;
+                if (irr.value === 'none') irr.value = irregularTypesFor(tense).find(o => o !== 'none') || 'none';
+            }
             else { irr.disabled = true; irr.value = 'none'; }
         }
         function removeTenseBlock(btn) { const b = btn.closest('.conj-tense-block'); if (b) b.remove(); }
@@ -158,7 +245,8 @@
             const byTense = (word && word.conjugationsByTense && Object.keys(word.conjugationsByTense).length) ? word.conjugationsByTense : (word && word.conjugations ? { presente: word.conjugations } : {});
             const irrByTense = (word && word.irregularByTense) || {};
             const vcByTense = (word && word.verbClassByTense) || {};
-            let tenses = TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => byTense[k]);
+            // 자동 생성 시제(현재진행)는 입력 블록을 만들지 않는다 — 저장된 값이 있어도 그대로 보존만 됨
+            let tenses = TENSE_TYPE_OPTIONS.filter(o => !o.derived).map(o => o.key).filter(k => byTense[k]);
             if (!tenses.includes('presente')) tenses.unshift('presente'); // 현재시제 블록은 항상 하나
             tenses.forEach(t => {
                 const vc = vcByTense[t] || ((t === 'presente' && word && word.verbClass) ? word.verbClass : (irrByTense[t] ? 'irregular' : 'regular'));
@@ -180,13 +268,15 @@
             const orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i>';
             try {
                 if (isSingleTense(tense)) {
-                    const schema = { type: "OBJECT", properties: { form: { type: "STRING" } }, required: ["form"] };
-                    const resp = await callGemini(`Give the gerundio (현재분사, present participle) of the Spanish verb "${infinitive}". JSON: {"form":"..."} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
+                    // [냐냐 요청] 현재분사는 형태와 함께 불규칙 갈래도 같이 받아 콤보박스에 채운다
+                    const schema = { type: "OBJECT", properties: { form: { type: "STRING" }, irregular: { type: "STRING", enum: GERUNDIO_IRREGULAR_ENUM } }, required: ["form", "irregular"] };
+                    const resp = await callGemini(`${GERUNDIO_RULE_PROMPT}\n\nVerb: "${infinitive}". JSON: {"form":"...","irregular":"..."}`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
                     const el = block.querySelector('[data-person="form"]'); if (el && !el.value.trim()) el.value = (data.form || '').trim();
+                    applyGerundioIrregular(block, data.irregular);
                 } else {
                     const schema = { type: "OBJECT", properties: { yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" }, nos: { type: "STRING" }, vos: { type: "STRING" }, ellos: { type: "STRING" } }, required: ["yo", "tu", "el", "nos", "vos", "ellos"] };
-                    const resp = await callGemini(`Conjugate the Spanish verb "${infinitive}" in this tense: ${label} (internal key: ${tense}), all 6 persons. For 현재진행(presProgresivo) give full "estar + gerundio" forms (e.g. "estoy comiendo"). Return JSON: {"yo","tu","el","nos","vos","ellos"} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
+                    const resp = await callGemini(`Conjugate the Spanish verb "${infinitive}" in this tense: ${label} (internal key: ${tense}), all 6 persons. Return JSON: {"yo","tu","el","nos","vos","ellos"} with correct accents.`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
                     CONJ_PERSON_KEYS.forEach(p => { const el = block.querySelector(`[data-person="${p}"]`); if (el && !el.value.trim()) el.value = (data[p] || '').trim(); });
                 }
@@ -195,6 +285,265 @@
                 console.error(e);
                 showToast((typeof describeGeminiError === 'function') ? describeGeminiError(e) : "AI 추천 실패", "error");
             } finally { btn.disabled = false; btn.innerHTML = orig; }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 현재분사 일괄 추가
+        //   등록된 동사 중 현재분사가 비어 있는 것을 AI가 묶음으로 채우고,
+        //   같은 목록을 AI가 한 번 더 풀게 해서 두 답이 갈린 것만 ⚠️로 올려 준다.
+        //   (전부 눈으로 확인할 필요 없이, 갈린 것만 보면 됨)
+        // ============================================================
+        const BULK_GER_BATCH = 20;   // 한 번에 물어볼 동사 수 (응답이 잘리지 않는 선)
+        let bulkGerState = null;     // { targets, rows, running, cancelled, failed }
+
+        function gerKey(s) {
+            return String(s || '').toLowerCase().trim()
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-z]/g, '');
+        }
+        function sameForm(a, b) {
+            return String(a || '').toLowerCase().trim() === String(b || '').toLowerCase().trim();
+        }
+        function verbsMissingGerundio() {
+            return vocabulary.filter(v => v.pos === 'verb'
+                && !((((v.conjugationsByTense || {}).gerundio || {}).form) || '').trim());
+        }
+
+        function openBulkGerundio() {
+            const targets = verbsMissingGerundio();
+            bulkGerState = { targets, rows: [], running: false, cancelled: false, failed: [] };
+            const modal = document.getElementById('bulk-gerundio-modal');
+            if (modal) modal.classList.remove('hidden');
+            renderBulkGerundioIntro();
+        }
+        function closeBulkGerundio() {
+            if (bulkGerState) bulkGerState.cancelled = true; // 진행 중이면 중단
+            const modal = document.getElementById('bulk-gerundio-modal');
+            if (modal) modal.classList.add('hidden');
+            bulkGerState = null;
+        }
+        function setBulkGerAction(label, handler, disabled) {
+            const btn = document.getElementById('bulk-ger-action');
+            if (!btn) return;
+            btn.innerText = label;
+            btn.disabled = !!disabled;
+            btn.classList.toggle('hidden', !handler);
+            btn.onclick = handler || null;
+        }
+
+        function renderBulkGerundioIntro() {
+            const st = bulkGerState;
+            const body = document.getElementById('bulk-ger-body');
+            const sub = document.getElementById('bulk-ger-sub');
+            if (!st || !body) return;
+            const verbCount = vocabulary.filter(v => v.pos === 'verb').length;
+            const n = st.targets.length;
+            if (sub) sub.innerText = `등록된 동사 ${verbCount}개 중 ${n}개가 비어 있어요`;
+            if (n === 0) {
+                body.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">모든 동사에 현재분사가 이미 있어요 🎉</div>`;
+                setBulkGerAction('', null, false);
+                return;
+            }
+            setBulkGerAction('AI로 채우기', startBulkGerundio, false);
+            body.innerHTML = `
+                <div class="bg-violet-50 border border-violet-100 rounded-2xl p-3 text-xs text-violet-700 leading-relaxed font-medium">
+                    <b>${n}개</b> 동사의 현재분사를 AI가 만들고, <b>같은 목록을 AI가 한 번 더</b> 풀어서 맞춰봐요.<br>
+                    두 답이 갈린 것만 ⚠️로 표시되니 그것만 확인하시면 돼요.
+                </div>
+                <div class="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
+                    ${st.targets.map(v => `<span class="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">${escapeHtml(v.word)}</span>`).join('')}
+                </div>`;
+        }
+
+        function renderBulkGerundioProgress(msg, step, total) {
+            const body = document.getElementById('bulk-ger-body');
+            if (!body) return;
+            const pct = total ? Math.round((step / total) * 100) : 0;
+            body.innerHTML = `
+                <div class="py-10 text-center space-y-3">
+                    <i class="fa-solid fa-wand-magic-sparkles text-3xl text-violet-500 animate-pulse"></i>
+                    <p class="text-sm font-bold text-slate-700">${escapeHtml(msg)}… ${step}/${total}</p>
+                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${pct}%"></div></div>
+                    <p class="text-[11px] text-slate-400">창을 닫으면 중단돼요</p>
+                </div>`;
+        }
+
+        // AI 한 번 호출 = 동사 목록 하나. candidates 를 주면 '검증(다시 풀어서 맞춰보기)' 모드.
+        async function bulkGerundioAsk(words, candidates) {
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    items: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                verb: { type: "STRING", description: "the infinitive exactly as given in the input list" },
+                                form: { type: "STRING", description: "gerundio with correct accents, no pronoun, no estar" },
+                                irregular: { type: "STRING", enum: GERUNDIO_IRREGULAR_ENUM }
+                            },
+                            required: ["verb", "form", "irregular"]
+                        }
+                    }
+                },
+                required: ["items"]
+            };
+            const listText = candidates
+                ? words.map(w => `${w} -> ${(candidates[gerKey(w)] || {}).form || '?'}`).join('\n')
+                : words.join('\n');
+            const prompt = candidates
+                ? `${GERUNDIO_RULE_PROMPT}\n\nEach line below is "verb -> a proposed gerundio". For EVERY verb, derive the gerundio yourself from the rules above FIRST, then output your own derived answer (keep the proposal only if your own derivation matches it). Output one item per verb, no verb skipped.\n\n${listText}`
+                : `${GERUNDIO_RULE_PROMPT}\n\nGive the gerundio for every verb below. Output one item per verb, in the same order, no verb skipped.\n\n${listText}`;
+            const resp = await callGemini(prompt, 'Return ONLY JSON.', schema, 'minimal');
+            const data = extractAndParseJson(resp);
+            const out = {};
+            (data.items || []).forEach(it => {
+                const k = gerKey(it && it.verb);
+                const form = String((it && it.form) || '').trim();
+                if (!k || !form) return;
+                out[k] = { form, irregular: GERUNDIO_IRREGULAR_ENUM.includes(it.irregular) ? it.irregular : 'none' };
+            });
+            return out;
+        }
+
+        async function startBulkGerundio() {
+            if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
+            const st = bulkGerState;
+            if (!st || st.running || st.targets.length === 0) return;
+            st.running = true; st.rows = []; st.failed = [];
+            setBulkGerAction('진행 중…', null, true);
+
+            const batches = [];
+            for (let i = 0; i < st.targets.length; i += BULK_GER_BATCH) batches.push(st.targets.slice(i, i + BULK_GER_BATCH));
+            const totalSteps = batches.length * 2; // 생성 + 검증
+            let step = 0;
+            renderBulkGerundioProgress('현재분사 만드는 중', 0, totalSteps);
+
+            for (const batch of batches) {
+                if (st.cancelled) break;
+                const words = batch.map(v => (v.word || '').trim());
+                let made = null;
+                try {
+                    renderBulkGerundioProgress('현재분사 만드는 중', step, totalSteps);
+                    made = await bulkGerundioAsk(words, null);
+                } catch (e) {
+                    console.error(e);
+                    batch.forEach(v => st.failed.push(v.word));
+                    step += 2;
+                    continue;
+                }
+                step++;
+                let verified = {};
+                if (!st.cancelled) {
+                    try {
+                        renderBulkGerundioProgress('AI 검증 중', step, totalSteps);
+                        verified = await bulkGerundioAsk(words, made);
+                    } catch (e) { console.error(e); verified = {}; } // 검증만 실패하면 1차 결과를 '검증 못 함'으로 남김
+                }
+                step++;
+                batch.forEach(v => {
+                    const k = gerKey(v.word);
+                    const a = made[k], b = verified[k];
+                    if (!a && !b) { st.failed.push(v.word); return; }
+                    const chosen = b || a;                       // 검증본을 채택
+                    const conflict = !!(a && b) && !sameForm(a.form, b.form);
+                    st.rows.push({
+                        id: v.id, word: v.word, meaning: v.meaning,
+                        form: chosen.form, irregular: chosen.irregular || 'none',
+                        alt: conflict ? a.form : '',             // 갈렸을 때 1차 답
+                        unverified: !b,
+                        on: true
+                    });
+                });
+            }
+
+            if (bulkGerState !== st) return; // 진행 중에 창을 닫았으면 그리지 않음
+            st.running = false;
+            renderBulkGerundioResult();
+        }
+
+        function bulkGerRowHtml(r, i) {
+            const flagged = !!(r.alt || r.unverified);
+            const note = r.alt ? `⚠️ 1차 답: ${escapeHtml(r.alt)}` : (r.unverified ? '⚠️ 검증 못 함' : '');
+            return `
+                <label class="flex items-center gap-2 p-2 rounded-xl border ${flagged ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}">
+                    <input type="checkbox" data-bulk-ger="${i}" ${r.on ? 'checked' : ''} onchange="toggleBulkGerRow(this)" class="w-4 h-4 accent-violet-600 shrink-0">
+                    <span class="text-[11px] font-bold text-slate-500 w-16 shrink-0 truncate">${escapeHtml(r.word)}</span>
+                    <span class="text-sm font-black text-blue-600 truncate">${escapeHtml(r.form)}</span>
+                    ${(r.irregular && r.irregular !== 'none') ? `<span class="text-[10px] font-bold text-rose-500 shrink-0">${escapeHtml(r.irregular)}</span>` : ''}
+                    ${note ? `<span class="text-[10px] text-amber-700 font-bold shrink-0 ml-auto">${note}</span>` : ''}
+                </label>`;
+        }
+
+        function renderBulkGerundioResult() {
+            const st = bulkGerState;
+            const body = document.getElementById('bulk-ger-body');
+            if (!st || !body) return;
+            const items = st.rows.map((r, i) => ({ r, i }));
+            const flagged = items.filter(x => x.r.alt || x.r.unverified);
+            const clean = items.filter(x => !(x.r.alt || x.r.unverified));
+            const sub = document.getElementById('bulk-ger-sub');
+            if (sub) sub.innerText = `${st.rows.length}개 완성 · 확인 필요 ${flagged.length}개`;
+
+            if (st.rows.length === 0) {
+                body.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-bold">받아온 결과가 없어요. 잠시 뒤 다시 시도해 주세요.</div>`;
+                setBulkGerAction('다시 시도', () => { bulkGerState.cancelled = false; renderBulkGerundioIntro(); }, false);
+                return;
+            }
+
+            body.innerHTML = `
+                ${flagged.length ? `
+                <div class="space-y-1.5">
+                    <p class="text-[11px] font-bold text-amber-700">⚠️ 두 답이 갈렸어요 — 여기만 확인해 주세요 (${flagged.length}개)</p>
+                    ${flagged.map(x => bulkGerRowHtml(x.r, x.i)).join('')}
+                </div>` : `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">두 번 다 같은 답이 나왔어요 — 확인할 게 없어요 ✨</div>`}
+                <div class="space-y-1.5">
+                    <p class="text-[11px] font-bold text-slate-400">검증 통과 (${clean.length}개)</p>
+                    ${clean.map(x => bulkGerRowHtml(x.r, x.i)).join('')}
+                </div>
+                ${st.failed.length ? `<p class="text-[11px] text-rose-500 font-bold">못 받아온 단어 ${st.failed.length}개: ${escapeHtml(st.failed.join(', '))}</p>` : ''}`;
+            updateBulkGerActionLabel();
+        }
+
+        function updateBulkGerActionLabel() {
+            const st = bulkGerState;
+            if (!st) return;
+            const n = st.rows.filter(r => r.on && r.form).length;
+            setBulkGerAction(`${n}개 저장`, saveBulkGerundio, n === 0);
+        }
+        function toggleBulkGerRow(el) {
+            const i = parseInt(el.getAttribute('data-bulk-ger'), 10);
+            if (bulkGerState && bulkGerState.rows[i]) bulkGerState.rows[i].on = el.checked;
+            updateBulkGerActionLabel();
+        }
+
+        function saveBulkGerundio() {
+            const st = bulkGerState;
+            if (!st) return;
+            const picked = st.rows.filter(r => r.on && r.form);
+            if (picked.length === 0) { showToast("선택된 게 없어요", "error"); return; }
+            let n = 0;
+            picked.forEach(r => {
+                const v = vocabulary.find(x => x.id === r.id);
+                if (!v) return;
+                v.conjugationsByTense = v.conjugationsByTense || {};
+                v.conjugationsByTense.gerundio = { form: r.form };
+                v.verbClassByTense = v.verbClassByTense || {};
+                v.irregularByTense = v.irregularByTense || {};
+                if (r.irregular && r.irregular !== 'none') {
+                    v.verbClassByTense.gerundio = 'irregular';
+                    v.irregularByTense.gerundio = r.irregular;
+                } else {
+                    v.verbClassByTense.gerundio = 'regular';
+                    delete v.irregularByTense.gerundio;
+                }
+                n++;
+            });
+            saveToStorage();
+            closeBulkGerundio();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
+            showToast(`현재분사 ${n}개를 채웠어요! 현재진행도 같이 생겨요 ✨`, "success");
         }
 
         // [냐냐 PATCH] AI 추천 완료 여부 (완료 후 아무 칸에서 엔터 = 저장)
@@ -1951,6 +2300,12 @@
                 // [냐냐 PATCH] 시제 블록에서 수집 (시제별 규칙/불규칙·유형 포함)
                 const info = collectVerbInfoByTense();
                 const byTense = collectConjByTense();
+                // [냐냐 요청] 현재진행처럼 '자동 생성' 시제는 폼에 블록이 없다.
+                //   예전에 직접 입력해 저장해 둔 값이 있으면 수정할 때 날아가지 않게 그대로 옮겨 담는다.
+                if (modalId) {
+                    const prevBy = ((vocabulary.find(item => item.id === modalId) || {}).conjugationsByTense) || {};
+                    TENSE_TYPE_OPTIONS.filter(o => o.derived).forEach(o => { if (prevBy[o.key] && !byTense[o.key]) byTense[o.key] = prevBy[o.key]; });
+                }
                 wordObj.conjugationsByTense = byTense;
                 wordObj.irregularByTense = info.irregularByTense;
                 wordObj.verbClassByTense = info.verbClassByTense;
@@ -2397,26 +2752,23 @@
 
         // [냐냐 PATCH-6배치] 카드 안의 동사 변형표 — 등록된 시제 중 "설정에서 켠 시제"만 전부 표시
         function buildCardConjHtml(w) {
-            const byTense = w.conjugationsByTense || {};
             const irrByTense = w.irregularByTense || {};
             const vcByTense = w.verbClassByTense || {};
-            const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
 
-            let keys = Object.keys(byTense).filter(k => hasValues(byTense[k]));
-            if (!keys.includes('presente') && hasValues(w.conjugations)) keys.unshift('presente');
-            keys = keys.filter(k => isTenseOn(k));
+            // [냐냐 요청] 등록된 시제 + 자동 생성되는 시제(현재진행)를 등록 폼 순서대로
+            const keys = listTenseKeys(w).filter(k => isTenseOn(k));
             if (keys.length === 0) return '';
 
-            const orderOf = (k) => { const i = TENSE_TYPE_OPTIONS.findIndex(t => t.key === k); return i < 0 ? 99 : i; };
-            keys.sort((a, b) => orderOf(a) - orderOf(b));
             const labelOf = (k) => { const o = TENSE_TYPE_OPTIONS.find(t => t.key === k); return o ? o.label : k; };
 
             return keys.map(k => {
-                const c = byTense[k] || (k === 'presente' ? w.conjugations : null);
-                if (!hasValues(c)) return '';
-                const irrType = irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : '');
-                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular'));
-                const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`;
+                const c = getTenseConj(w, k);
+                if (!hasConjValues(c)) return '';
+                const derived = isDerivedTense(k) && !((w.conjugationsByTense || {})[k]);
+                const irrType = derived ? '' : (irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : ''));
+                const verbClass = derived ? 'regular' : (vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular')));
+                const clsText = derived ? 'estar + 현재분사'
+                    : ((verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`);
 
                 const body = (c.form && !c.yo)
                     ? `<div class="text-center py-1"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`
