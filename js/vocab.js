@@ -3154,6 +3154,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 phase: 1,                 // 1 = 테스트(가리고), 2 = 익히기(보고 2번), 3 = 재테스트(가리고)
                 wrongPool: [],            // 1바퀴에서 틀린 단어 — 2·3바퀴 대상
                 retry: false,             // 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
+                retryReason: null,        // 1바퀴에서 봐준 이유 — 'synonym' | 'typo' (단어당 한 번)
+                hint: '',                 // 1바퀴 재입력 안내 문구
+                grading: false,           // AI 채점 중
                 wrongCount: 0,            // 최종(3바퀴) 오답 수
                 results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct, firstTry}
                 // [냐냐 요청] '다음 N개 이어서'가 처음 시작한 개수를 그대로 따라가도록 기억
@@ -3214,6 +3217,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     s.phase = 2;
                     s.pool = s.wrongPool.slice();
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    s.retryReason = null; s.hint = ''; s.grading = false;
                     gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
                         `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
@@ -3224,6 +3228,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     s.phase = 3;
                     s.pool = shuffleArray(s.wrongPool.slice());
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    s.retryReason = null; s.hint = ''; s.grading = false;
                     gate('🙈', '이제 가리고 써볼 차례!',
                         '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
                         '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
@@ -3231,8 +3236,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 // ── 끝 → 결과 ──
                 const total = s.totalCount || s.pool.length;
-                const firstTryOk = (s.results || []).filter(r => r.firstTry).length;
-                const relearned = (s.results || []).filter(r => !r.firstTry && r.correct).length;
+                const nBy = (g) => (s.results || []).filter(r => r.gain === g).length;
                 const ok = total - s.wrongCount;
                 const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
@@ -3259,9 +3263,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
                 const okList = res.filter(r => r.correct);
                 const noList = res.filter(r => !r.correct);
-                const scoreLine = `<p class="text-sm font-bold text-slate-600">
-                        <span class="text-emerald-600">한 번에 ${firstTryOk}개 (+2)</span>${relearned ? ` · <span class="text-indigo-600">익혀서 ${relearned}개 (+0.4)</span>` : ''}${s.wrongCount ? ` · <span class="text-rose-500">끝내 ${s.wrongCount}개 (−2)</span>` : ''}
-                    </p>`;
+                // [냐냐 요청] 실제로 붙은 점수대로 묶어서 보여준다 (오타 고친 +1을 +2로 뭉뚱그리지 않게)
+                const groups = [
+                    ['한 번에',      nBy(2),   '+2',   'text-emerald-600'],
+                    ['오타 고쳐서',  nBy(1),   '+1',   'text-emerald-600'],
+                    ['익혀서',       nBy(0.4), '+0.4', 'text-indigo-600'],
+                    ['끝내',         nBy(-2),  '−2',   'text-rose-500']
+                ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
+                const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
                 const listBlock = (title, arr, ok) => arr.length ? `
                     <div class="text-left">
                         <p class="text-xs font-black ${ok ? 'text-emerald-600' : 'text-rose-500'} mb-1.5">${title} ${arr.length}개</p>
@@ -3363,13 +3372,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
                     ${cardHtml}
 
+                    ${s.hint ? `<div class="bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-amber-800 leading-relaxed">${s.hint}</div>` : ''}
+
                     <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-500">${inputLabel}</label>
+                        <label class="block text-xs font-bold text-slate-500">${s.grading ? '<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...' : inputLabel}</label>
                         <input id="write-practice-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-                            onkeydown="writePracticeKeydown(event)"
-                            class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2"
+                            onkeydown="writePracticeKeydown(event)" ${s.grading ? 'disabled' : ''}
+                            class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2 disabled:opacity-50"
                             placeholder="${escapeHtml(placeholder)}">
-                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">악센트까지 정확히 써야 넘어가요</p>
+                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">${s.phase === 1 ? '유의어나 오타는 한 번 더 기회를 줘요' : '악센트까지 정확히 써야 넘어가요'}</p>
                     </div>
 
                     <div class="flex gap-2">
@@ -3401,12 +3412,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function skipWritePractice() {
-            if (!writePracticeState) return;
-            writePracticeState.index++;
-            writePracticeState.done = 0;
-            writePracticeState.retry = false;
-            writePracticeState.lastWrong = '';
-            writePracticeState.showDetail = false;
+            const s = writePracticeState;
+            if (!s || s.grading) return;
+            s.index++;
+            s.done = 0;
+            s.retry = false;
+            s.lastWrong = '';
+            s.showDetail = false;
+            s.retryReason = null;   // [냐냐 요청] 봐준 이유는 단어마다 초기화
+            s.hint = '';
             renderWritePractice();
         }
 
@@ -3418,16 +3432,42 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             el.select();
         }
 
+        // [냐냐 요청] 쓰기 채점용 정규화 — 철자 연습이라 악센트는 그대로 두고,
+        //   사람이 칠 수 없는 것만 걷어낸다:
+        //     · 자리표시자 대괄호·괄호   "después de [명사/동사원형]" → "después de"
+        //     · 한글                     "litro de [사물]" → "litro de"
+        //     · 성 묶음 관사             "el/la joven" → "joven"  (el agua 같은 단독 관사는 그대로 둔다)
+        //     · 문장부호                 "¿Qué tal?" → "qué tal"
+        //   ⚠️ 순서 중요: 관사 묶음의 슬래시가 공백이 되기 전에 먼저 떼야 한다.
+        function normalizeWriteAnswer(s) {
+            return String(s || '').toLowerCase().trim()
+                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
+                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                .replace(/\s+/g, ' ').trim()
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas)\s+/, '')
+                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                .replace(/\s+/g, ' ').trim();
+        }
+        function stripAccentMarks(s) {
+            return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+        }
+        function writeAnswerMatches(userRaw, correctRaw) {
+            return normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw);
+        }
+        // 악센트만 틀린 경우 — 봐주지는 않고 '한 번 더' 기회를 준다
+        function writeAccentOnlyMiss(userRaw, correctRaw) {
+            const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(correctRaw);
+            return u !== c && !!u && stripAccentMarks(u) === stripAccentMarks(c);
+        }
+
         function writePracticeKeydown(e) {
             if (e.key !== 'Enter') return;
             e.preventDefault();
             const s = writePracticeState;
             const el = document.getElementById('write-practice-input');
-            if (!s || !el) return;
+            if (!s || !el || s.grading) return;   // AI 채점 중이면 엔터 무시
             const w = s.pool[s.index];
-            // 철자 연습이므로 악센트까지 정확히. 대소문자와 앞뒤·중복 공백만 관대하게 처리
-            const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
-            const isMatch = norm(el.value) === norm(w.word);
+            const isMatch = writeAnswerMatches(el.value, w.word);
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
@@ -3449,36 +3489,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return;
             }
 
-            // ── 1바퀴: 가리고 쓰기 (테스트) ──
-            if (s.phase === 1) {
-                if (isMatch) {
-                    // [냐냐 요청] 힌트 없이 뜻만 보고 떠올려 씀 = 퀴즈 주관식과 같은 행위 → +2
-                    //   마스터 자격(subjectivePassed)도 여기서만 준다
-                    if (typeof addWordScore === 'function') addWordScore(w.id, 2, { correct: true, subjective: true });
-                    if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
-                    s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: true });
-                } else {
-                    // [냐냐 요청] 여기선 점수를 안 깎는다 (±는 최종 결과로만).
-                    //   다만 못 떠올린 건 사실이므로 오답 기록·망각곡선은 지금 반영한다.
-                    if (typeof addWordScore === 'function') addWordScore(w.id, 0, { correct: false });
-                    if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                    s.wrongPool.push(w);
-                }
-                // [냐냐 요청] 🔴 학습기록 '복습' 카운터 — 단어당 1회만 (1바퀴에서)
-                if (typeof logAction === 'function') logAction('review');
-                s.lastWrong = '';
-                s.index++;
-                s.done = 0;
-                writePracticeSave();
-                renderWritePractice();
-                return;
-            }
+            // ── 1바퀴: 가리고 쓰기 (테스트) — 퀴즈 주관식과 같은 채점 경로 ──
+            if (s.phase === 1) { gradeWriteFirstRound(el.value); return; }
 
             // ── 3바퀴: 다시 가리고 쓰기 (최종) ──
             //   정답률 카운터·망각곡선은 1바퀴에서 이미 셌으므로 여기선 점수만 움직인다(correct: null)
             if (isMatch) {
                 if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: null });
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false });
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false, gain: 0.4 });
                 s.index++;
                 s.done = 0;
             } else {
@@ -3486,10 +3504,121 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: null });
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false, firstTry: false });
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false, firstTry: false, gain: -2 });
             }
             writePracticeSave();
             renderWritePractice();
+        }
+
+        // ============================================================
+        // [냐냐 요청] 1바퀴(테스트) 채점 — 퀴즈 주관식과 같은 대접을 해준다.
+        //   유의어를 썼거나 철자가 살짝 틀렸으면 한 번 더 쓸 기회를 주고,
+        //   판정은 AI에게 맡긴다 (키가 없거나 실패하면 로컬 채점으로 폴백).
+        //   점수도 퀴즈 주관식과 같은 값: 바로 정답 +2 / 유의어 후 정답 +2 / 오타 후 정답 +1
+        // ============================================================
+        function writeFirstRoundPass(w, gain) {
+            const s = writePracticeState;
+            if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
+            if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+            if (typeof logAction === 'function') logAction('review');
+            s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: true, gain });
+            writeFirstRoundNext();
+        }
+        function writeFirstRoundFail(w) {
+            const s = writePracticeState;
+            // [냐냐 요청] 여기선 점수를 안 깎는다 (±는 최종 결과로만).
+            //   다만 못 떠올린 건 사실이므로 오답 기록·망각곡선은 지금 반영한다.
+            if (typeof addWordScore === 'function') addWordScore(w.id, 0, { correct: false });
+            if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+            if (typeof logAction === 'function') logAction('review');
+            s.wrongPool.push(w);
+            writeFirstRoundNext();
+        }
+        function writeFirstRoundNext() {
+            const s = writePracticeState;
+            s.retryReason = null;
+            s.hint = '';
+            s.lastWrong = '';
+            s.index++;
+            s.done = 0;
+            writePracticeSave();
+            renderWritePractice();
+        }
+        // 한 번 더 쓰게 하기 (점수 반영 없음, 단어당 한 번만)
+        function writeAskRetry(reason, hintHtml) {
+            const s = writePracticeState;
+            s.retryReason = reason;
+            s.hint = hintHtml;
+            renderWritePractice();
+        }
+        // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자
+        function writePrefixHint(userRaw, correctRaw) {
+            const bare = String(correctRaw || '').trim()
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+            const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(bare);
+            const shared = (typeof sharedPrefixLen === 'function') ? sharedPrefixLen(u, c) : 0;
+            return bare.slice(0, shared + 1);
+        }
+
+        async function gradeWriteFirstRound(userRaw) {
+            const s = writePracticeState;
+            if (!s) return;
+            const w = s.pool[s.index];
+            const userAnswer = String(userRaw || '').trim();
+
+            // 1) 맞음 — 다시 쓰기였다면 왜 다시 썼는지에 따라 점수가 갈린다
+            if (writeAnswerMatches(userAnswer, w.word)) {
+                writeFirstRoundPass(w, s.retryReason === 'typo' ? 1 : 2);
+                return;
+            }
+            // 2) 빈칸이거나, 이미 한 번 봐줬으면 → 오답
+            if (!userAnswer || s.retryReason) { s.lastWrong = userAnswer; writeFirstRoundFail(w); return; }
+
+            // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더'
+            if (writeAccentOnlyMiss(userAnswer, w.word)) {
+                writeAskRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);
+                return;
+            }
+
+            // 4) AI 채점
+            const q = { word: w };
+            let ai = null;
+            if (typeof aiGradeSubjective === 'function') {
+                s.grading = true;
+                renderWritePractice();
+                try { ai = await aiGradeSubjective(userAnswer, q); } catch (err) { console.warn(err); }
+                s.grading = false;
+                if (writePracticeState !== s) return;   // 채점 중에 나갔으면 아무것도 하지 않음
+            }
+
+            // 5) AI가 없거나 실패 → 로컬 채점으로 폴백
+            if (!ai) {
+                const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
+                if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
+                if (a.isSynonym) { writeAskRetry('synonym', a.hint || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`); return; }
+                if (a.isTypo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`); return; }
+                s.lastWrong = userAnswer;
+                writeFirstRoundFail(w);
+                return;
+            }
+
+            const verdict = String(ai.verdict || '').toLowerCase();
+            if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
+            if (verdict === 'synonym') {
+                writeAskRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`);
+                return;
+            }
+            if (verdict === 'typo') {
+                // 오타가 3글자를 넘으면 봐주지 않는다 (퀴즈와 같은 기준)
+                const dist = (typeof levenshtein === 'function')
+                    ? levenshtein(normalizeWriteAnswer(userAnswer), normalizeWriteAnswer(w.word)) : 99;
+                if (dist <= 3) {
+                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`);
+                    return;
+                }
+            }
+            s.lastWrong = userAnswer;
+            writeFirstRoundFail(w);
         }
 
         // 저장 + 헤더(복습 배너·통계) 갱신
