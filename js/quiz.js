@@ -857,10 +857,8 @@ let quizSession = null;
             const blocks = keys.map(k => {
                 const c = conjOf(k);
                 if (!hasValues(c)) return '';
-                // 현재진행을 현재분사에서 만들어 쓴 경우엔 규칙/불규칙 표시 대신 만들어진 근거를 보여준다
-                const derived = (typeof isDerivedTense === 'function') && isDerivedTense(k) && !byTense[k];
-                const irrType = derived ? '' : (irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : ''));
-                const verbClass = derived ? 'regular' : (vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular')));
+                const irrType = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
+                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
                 const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
                 const isAsked = (k === askedKey);
 
@@ -895,8 +893,7 @@ let quizSession = null;
                     <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
                         <span>🔀</span> ${escapeHtml(labelOf(k))}
                         ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
-                        ${derived ? '<span class="text-slate-400 font-bold">· estar + 현재분사</span>'
-                          : (isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>')}
+                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
                 </div>`;

@@ -54,9 +54,8 @@
             { key: 'subjImperfecto', label: '접속법 불완료과거' },
             { key: 'imperativo', label: '명령법' },
             { key: 'gerundio', label: '현재분사 (gerundio · 1칸)' },
-            // [냐냐 요청] 현재진행은 'estar 현재형 + 현재분사'로 100% 계산되므로 따로 입력받지 않는다.
-            //   derived: true = 등록 폼에 블록이 안 생기고, 표시·출제할 때 현재분사에서 자동 생성.
-            { key: 'presProgresivo', label: '현재진행', derived: true },
+            // [냐냐 요청] 현재진행은 넣지 않는다 — estar+현재분사라 새로 볼 게 없고,
+            //   조회 화면에서도 퀴즈에서도 자리만 차지했다.
         ];
         // 불규칙 유형 (틀 — 학습하며 나중에 채우기)
         const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
@@ -114,39 +113,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function isSingleTense(t) { return SINGLE_TENSES.includes(t); }
-        function isDerivedTense(t) { const o = TENSE_TYPE_OPTIONS.find(x => x.key === t); return !!(o && o.derived); }
 
-        // [냐냐 요청] 현재진행 자동 생성 — estar 현재형은 6개가 고정이라 계산이 확실하다
-        const ESTAR_PRESENTE = { yo: 'estoy', tu: 'estás', el: 'está', nos: 'estamos', vos: 'estáis', ellos: 'están' };
-        // 재귀동사는 뒤에 붙은 대명사가 인칭따라 바뀐다 (secándose → estoy secándome / estás secándote …)
-        const ENCLITIC_BY_PERSON = { yo: 'me', tu: 'te', el: 'se', nos: 'nos', vos: 'os', ellos: 'se' };
-        function deriveProgresivo(gerundio) {
-            const g = (gerundio || '').trim();
-            if (!g) return null;
-            // '…ándo/…éndo' 뒤에 재귀대명사가 붙어 있으면 그 자리를 인칭에 맞게 갈아끼운다.
-            //   악센트는 음절 수가 그대로라 붙은 채로 맞다 (secándome · secándonos)
-            const m = g.match(/^(.+[aáeéií]ndo)(me|te|se|nos|os)$/i);
-            const d = {};
-            CONJ_PERSON_KEYS.forEach(p => {
-                d[p] = ESTAR_PRESENTE[p] + ' ' + (m ? m[1] + ENCLITIC_BY_PERSON[p] : g);
-            });
-            return d;
-        }
         function hasConjValues(c) { return !!(c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form)); }
-        // 단어의 한 시제 변형을 얻는다 — 저장값 우선, 없으면 자동 생성(현재진행), 구버전 conjugations 호환
+        // 단어의 한 시제 변형을 얻는다 (구버전 conjugations = 현재시제 호환)
         function getTenseConj(word, key) {
             if (!word) return null;
             const byTense = word.conjugationsByTense || {};
             let c = byTense[key];
             if (!hasConjValues(c) && key === 'presente') c = word.conjugations;
-            if (hasConjValues(c)) return c;
-            if (key === 'presProgresivo') {
-                const g = (byTense.gerundio && byTense.gerundio.form) || '';
-                return deriveProgresivo(g); // 현재분사가 없으면 null
-            }
-            return null;
+            return hasConjValues(c) ? c : null;
         }
-        // 표시·출제에 쓸 시제 키 목록 (등록된 것 + 자동 생성 가능한 것), 등록 폼 순서대로
+        // 표시·출제에 쓸 시제 키 목록, 등록 폼 순서대로
         function listTenseKeys(word) {
             return TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => hasConjValues(getTenseConj(word, k)));
         }
@@ -181,14 +158,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!box) return;
             if (!tenseKey) { // '+ 시제 추가' 버튼: 아직 안 쓴 시제 중 첫 번째로 (자동 생성 시제는 건너뜀)
                 const used = [...box.querySelectorAll('.conj-block-tense')].map(s => s.value);
-                tenseKey = TENSE_TYPE_OPTIONS.filter(o => !o.derived).map(o => o.key).find(k => !used.includes(k)) || 'presente';
+                tenseKey = TENSE_TYPE_OPTIONS.map(o => o.key).find(k => !used.includes(k)) || 'presente';
                 data = {}; vcVal = 'regular'; irrVal = 'none';
             }
             const isRegular = (vcVal !== 'irregular');
             const block = document.createElement('div');
             block.className = 'conj-tense-block bg-white rounded-xl border border-slate-200 p-2.5 space-y-2';
             // 자동 생성 시제(현재진행)는 고를 수 없다 — 현재분사에서 만들어지므로
-            const tenseOpts = TENSE_TYPE_OPTIONS.filter(o => !o.derived || o.key === tenseKey)
+            const tenseOpts = TENSE_TYPE_OPTIONS
                 .map(o => `<option value="${o.key}" ${o.key === tenseKey ? 'selected' : ''}>${o.label}</option>`).join('');
             const irrOpts = irrOptionsHtml(tenseKey, irrVal);
             block.innerHTML = `
@@ -271,7 +248,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const irrByTense = (word && word.irregularByTense) || {};
             const vcByTense = (word && word.verbClassByTense) || {};
             // 자동 생성 시제(현재진행)는 입력 블록을 만들지 않는다 — 저장된 값이 있어도 그대로 보존만 됨
-            let tenses = TENSE_TYPE_OPTIONS.filter(o => !o.derived).map(o => o.key).filter(k => byTense[k]);
+            let tenses = TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => byTense[k]);
             if (!tenses.includes('presente')) tenses.unshift('presente'); // 현재시제 블록은 항상 하나
             tenses.forEach(t => {
                 const vc = vcByTense[t] || ((t === 'presente' && word && word.verbClass) ? word.verbClass : (irrByTense[t] ? 'irregular' : 'regular'));
@@ -322,7 +299,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let bulkConjState = null; // { tense, targets, rows, running, cancelled, failed }
 
         // 일괄 추가로 채울 수 있는 시제 (자동 생성 시제인 현재진행은 제외)
-        function bulkTenseOptions() { return TENSE_TYPE_OPTIONS.filter(o => !o.derived); }
+        function bulkTenseOptions() { return TENSE_TYPE_OPTIONS.slice(); }
 
         function verbKey(s) {
             return String(s || '').toLowerCase().trim()
@@ -2401,12 +2378,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // [냐냐 PATCH] 시제 블록에서 수집 (시제별 규칙/불규칙·유형 포함)
                 const info = collectVerbInfoByTense();
                 const byTense = collectConjByTense();
-                // [냐냐 요청] 현재진행처럼 '자동 생성' 시제는 폼에 블록이 없다.
-                //   예전에 직접 입력해 저장해 둔 값이 있으면 수정할 때 날아가지 않게 그대로 옮겨 담는다.
-                if (modalId) {
-                    const prevBy = ((vocabulary.find(item => item.id === modalId) || {}).conjugationsByTense) || {};
-                    TENSE_TYPE_OPTIONS.filter(o => o.derived).forEach(o => { if (prevBy[o.key] && !byTense[o.key]) byTense[o.key] = prevBy[o.key]; });
-                }
                 wordObj.conjugationsByTense = byTense;
                 wordObj.irregularByTense = info.irregularByTense;
                 wordObj.verbClassByTense = info.verbClassByTense;
@@ -2723,18 +2694,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         ];
         const DEFAULT_DISPLAY = {
             sections: DISPLAY_SECTIONS.map(s => s.key),                          // 기본: 전부 표시
-            tenses: TENSE_TYPE_OPTIONS.filter(t => !t.derived).map(t => t.key)   // 기본: 모든 시제 표시 (자동 생성 시제는 목록에 없음)
+            tenses: TENSE_TYPE_OPTIONS.map(t => t.key)           // 기본: 모든 시제 표시
         };
         let displayPrefs = { sections: [...DEFAULT_DISPLAY.sections], tenses: [...DEFAULT_DISPLAY.tenses] };
         // [냐냐 PATCH] 설정 패널에서 편집 중인 임시 상태. [확인]을 눌러야 displayPrefs로 반영됨.
         let pendingDisplay = null;
 
         function isDisplayOn(key) { return displayPrefs.sections.includes(key); }
-        // [냐냐 요청] 현재진행은 현재분사에서 자동으로 나오는 거라 따로 켜고 끌 게 없다 — 현재분사 설정을 따라간다
-        function isTenseOn(key) {
-            if (isDerivedTense(key)) return displayPrefs.tenses.includes('gerundio');
-            return displayPrefs.tenses.includes(key);
-        }
+        function isTenseOn(key) { return displayPrefs.tenses.includes(key); }
         function isDisplayDefault() {
             return displayPrefs.sections.length === DEFAULT_DISPLAY.sections.length
                 && displayPrefs.tenses.length === DEFAULT_DISPLAY.tenses.length;
@@ -2791,7 +2758,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (tenseBox) {
                 const conjOn = p.sections.includes('conj');
                 // [냐냐 요청] 현재진행은 현재분사를 켜면 같이 나오므로 목록에서 뺀다
-                tenseBox.innerHTML = TENSE_TYPE_OPTIONS.filter(t => !t.derived).map(t => {
+                tenseBox.innerHTML = TENSE_TYPE_OPTIONS.map(t => {
                     const on = p.tenses.includes(t.key) && conjOn;
                     const cls = !conjOn ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
                               : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-200 bg-slate-50 text-slate-500');
@@ -2871,11 +2838,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return keys.map(k => {
                 const c = getTenseConj(w, k);
                 if (!hasConjValues(c)) return '';
-                const derived = isDerivedTense(k) && !((w.conjugationsByTense || {})[k]);
-                const irrType = derived ? '' : (irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : ''));
-                const verbClass = derived ? 'regular' : (vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular')));
-                const clsText = derived ? 'estar + 현재분사'
-                    : ((verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`);
+                const irrType = irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : '');
+                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular'));
+                const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`;
 
                 const body = (c.form && !c.yo)
                     ? `<div class="text-center py-1"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`
