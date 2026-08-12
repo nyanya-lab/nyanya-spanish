@@ -118,11 +118,18 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 요청] 현재진행 자동 생성 — estar 현재형은 6개가 고정이라 계산이 확실하다
         const ESTAR_PRESENTE = { yo: 'estoy', tu: 'estás', el: 'está', nos: 'estamos', vos: 'estáis', ellos: 'están' };
+        // 재귀동사는 뒤에 붙은 대명사가 인칭따라 바뀐다 (secándose → estoy secándome / estás secándote …)
+        const ENCLITIC_BY_PERSON = { yo: 'me', tu: 'te', el: 'se', nos: 'nos', vos: 'os', ellos: 'se' };
         function deriveProgresivo(gerundio) {
             const g = (gerundio || '').trim();
             if (!g) return null;
+            // '…ándo/…éndo' 뒤에 재귀대명사가 붙어 있으면 그 자리를 인칭에 맞게 갈아끼운다.
+            //   악센트는 음절 수가 그대로라 붙은 채로 맞다 (secándome · secándonos)
+            const m = g.match(/^(.+[aáeéií]ndo)(me|te|se|nos|os)$/i);
             const d = {};
-            CONJ_PERSON_KEYS.forEach(p => { d[p] = ESTAR_PRESENTE[p] + ' ' + g; });
+            CONJ_PERSON_KEYS.forEach(p => {
+                d[p] = ESTAR_PRESENTE[p] + ' ' + (m ? m[1] + ENCLITIC_BY_PERSON[p] : g);
+            });
             return d;
         }
         function hasConjValues(c) { return !!(c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form)); }
