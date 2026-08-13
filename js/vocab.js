@@ -3135,6 +3135,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   3바퀴: 그 단어들만 다시 가리고 쓰기 — 맞으면 +0.4, 끝내 틀리면 −2
         //   ⚠️ 망각곡선·오답 기록은 1바퀴 결과 기준이다. 3바퀴에서 맞혔다고 취소되면 안 된다
         //      (2바퀴에서 답을 보고 온 거라 '기억하고 있었다'는 증거가 못 된다).
+        //   ⚠️ 다만 '언제' 적느냐는 복습이 끝난 시점이다 [냐냐 요청]:
+        //      1바퀴에 맞히면 그 단어는 거기서 끝나므로 그 자리에서,
+        //      틀리면 3바퀴까지 돌고 나서 한꺼번에 (복습 횟수·점수·곡선 전부).
+        //      중간에 그만두면 그 단어는 복습을 안 한 것으로 남는다.
         //   마스터 자격(subjectivePassed)도 1바퀴 정답에만 준다 — 힌트 없이 떠올린 것만 인정.
         //   [냐냐 요청] 팝업 폐지 → 복습 탭 '✍️ 쓰기' 영역 안에서 진행.
         //     단어장 ✍️ 버튼·헤더 📖 복습 배너에서 불러도 복습 탭으로 이동해서 거기서 푼다.
@@ -3536,9 +3540,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (s.phase === 1) { gradeWriteFirstRound(el.value); return; }
 
             // ── 3바퀴: 다시 가리고 쓰기 (최종) ──
-            //   정답률 카운터·망각곡선은 1바퀴에서 이미 셌으므로 여기선 점수만 움직인다(correct: null)
+            //   [냐냐 요청] 1바퀴에서 틀린 단어의 기록을 여기서 한꺼번에 반영한다.
+            //   correct:false 로 부르는 건 "1바퀴에서 못 떠올렸다"는 사실을 지금 적는 것이다 —
+            //   오답 횟수·틀린 날짜가 남고 망각곡선이 한 칸 뒤로 간다. 3바퀴에서 맞혔다고
+            //   취소되지 않는다 (2바퀴에서 답을 보고 온 거라 기억했다는 증거가 아니다).
+            //   델타만 결과에 따라 갈린다: 맞히면 +0.4, 끝내 틀리면 −2.
             if (isMatch) {
-                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: null });
+                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: false });
+                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false, gain: 0.4 });
                 s.index++;
                 s.done = 0;
@@ -3546,7 +3556,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: null });
+                if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
+                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', correct: false, firstTry: false, gain: -2 });
             }
             writePracticeSave();
@@ -3576,11 +3588,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
-            // [냐냐 요청] 여기선 점수를 안 깎는다 (±는 최종 결과로만).
-            //   다만 못 떠올린 건 사실이므로 오답 기록·망각곡선은 지금 반영한다.
-            if (typeof addWordScore === 'function') addWordScore(w.id, 0, { correct: false });
-            if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-            if (typeof logAction === 'function') logAction('review');
+            // [냐냐 요청] 여기선 아무것도 기록하지 않는다 — 점수도, 복습 횟수도, 망각곡선도.
+            //   이 단어는 아직 복습이 안 끝났다. 2·3바퀴까지 돌고 나서 3바퀴에서 한꺼번에 반영한다.
+            //   (1바퀴에서 맞힌 단어는 거기서 복습이 끝나므로 그 자리에서 반영)
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
