@@ -3975,7 +3975,9 @@ let vocabulary = [];
                 .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
                 .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
                 .replace(/\s+/g, ' ').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas)\s+/i, '');   // 성 묶음 표기 (el agua 같은 단독 관사는 남긴다)
+                // 관사는 뗀다 — 채점(normalizeSpanishAnswer·normalizeWriteAnswer)도 떼고 비교하므로
+                // 여기서 남기면 'el agua' 에 'aqua' 를 쓴 오타가 '아예 다른 단어'로 잡혀 버린다
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
         }
         // opts: { aiIsRealWord: bool|undefined, aiMeaning: string, comment: string }
         function buildWrongAnswerHtml(userRaw, correctRaw, opts = {}) {

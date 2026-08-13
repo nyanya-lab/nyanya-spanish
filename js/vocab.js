@@ -3245,7 +3245,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // ── 끝 → 결과 ──
                 const total = s.totalCount || s.pool.length;
                 const nBy = (g) => (s.results || []).filter(r => r.gain === g).length;
-                const ok = total - s.wrongCount;
+                // [냐냐 요청] 성공 개수는 채점 결과에서 센다.
+                //   total - wrongCount 로 세면 '건너뛰기'가 성공으로 잡혔다 (전부 건너뛰어도 "3개 중 3개 성공").
+                const ok = (s.results || []).filter(r => r.correct).length;
+                const skipped = Math.max(0, total - (s.results || []).length);
                 const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
                 const batch = s.batchSize || total;
@@ -3293,7 +3296,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 body.innerHTML = wrap(`
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
-                        <p class="text-lg font-bold text-slate-900">${total}개 중 ${ok}개 성공!</p>
+                        <p class="text-lg font-bold text-slate-900">${total}개 중 ${ok}개 성공!${skipped ? `<span class="text-sm font-bold text-slate-400"> · 건너뜀 ${skipped}개</span>` : ''}</p>
                         ${scoreLine}
                         ${reviewNote}
                         ${resultLists}
