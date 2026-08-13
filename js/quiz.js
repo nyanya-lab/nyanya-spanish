@@ -656,9 +656,12 @@ let quizSession = null;
             return i;
         }
 
-        function normalizeSpanishAnswer(s) {
-            return String(s || '').toLowerCase().trim()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // 채점은 악센트 관용 처리
+        // [냐냐 요청] keepAccents=true 면 악센트를 살려서 비교한다.
+        //   악센트만 틀린 답을 '그냥 정답'으로 넘기지 않고 한 번 더 물어보려고 쓴다
+        //   (esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다).
+        function normalizeSpanishAnswer(s, keepAccents) {
+            const base = String(s || '').toLowerCase().trim();
+            return (keepAccents ? base : base.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
                 // [냐냐 PATCH] 대괄호 자리표시자는 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
                 //   (냐냐가 저 안의 한글을 똑같이 칠 수는 없으니 채점 대상에서 뺌)
                 .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
@@ -1063,8 +1066,17 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             // 0) 빈칸이면 바로 오답
             if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }
-            // 1) 정답이면 AI 안 부르고 바로 통과 (빠름)
-            if (userNorm === correctNorm) { gradeNow(true, ''); return; }
+            // 1) 악센트까지 정확히 맞으면 AI 안 부르고 바로 통과 (빠름)
+            if (normalizeSpanishAnswer(userAnswer, true) === normalizeSpanishAnswer(correct, true)) { gradeNow(true, ''); return; }
+            // 1-2) [냐냐 요청] 악센트만 틀렸으면 그냥 넘기지 않고 한 번 더 물어본다.
+            //   esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다.
+            //   고쳐 쓰면 오타와 같은 대접(+1). AI를 부를 것도 없다.
+            if (userNorm === correctNorm) {
+                // 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
+                if (q._retryReason) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
+                askRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);
+                return;
+            }
 
             // 2) AI 채점 (키 있을 때만) — 채점 중 표시
             submitBtn.disabled = true;
