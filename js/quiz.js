@@ -1047,9 +1047,15 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 finishQuizQuestion(isCorrect, q);
             };
 
+            // [냐냐 요청] 봐준 이유는 종류별로 한 번씩. 유의어를 알려줘서 제 단어를 떠올렸는데
+            //   철자를 흘렸다면 그건 새로운 실수라 한 번 더 기회를 준다 (반대도 마찬가지).
+            //   같은 이유로 두 번 봐주지는 않는다 — 최대 두 번.
+            const used = () => (q._usedRetries = q._usedRetries || {});
             // 한 번 더 쓰게 하기 (점수 반영 없음)
             const askRetry = (reason, hintHtml) => {
-                q._retryReason = reason;   // 'synonym' | 'typo' → 재입력 후 점수에 반영됨
+                used()[reason] = true;
+                // 오타가 한 번이라도 끼면 점수는 오타 기준(+1). 유의어만이면 +2
+                q._retryReason = used().typo ? 'typo' : reason;
                 if (synHintBox) {
                     synHintBox.classList.remove('hidden');
                     synHintBox.innerHTML = hintHtml;
@@ -1065,7 +1071,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             //   ⚠️ 관사를 떼고 세야 한다. 안 그러면 'el agua' 의 힌트가 "el 로 시작해요"가 되어
             //      힌트 구실을 못 한다 (userNorm/correctNorm 은 이미 관사가 떼여 있다).
             const bareCorrect = correct.trim().replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
-            const prefixHint = () => bareCorrect.slice(0, sharedPrefixLen(userNorm, correctNorm) + 1);
+            //   ⚠️ 마지막 글자는 남긴다. 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
+            const prefixHint = () => bareCorrect.slice(0, Math.max(1, Math.min(sharedPrefixLen(userNorm, correctNorm) + 1, bareCorrect.length - 1)));
 
             // 0) 빈칸이면 바로 오답
             if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }
@@ -1075,8 +1082,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             //   esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다.
             //   고쳐 쓰면 오타와 같은 대접(+1). AI를 부를 것도 없다.
             if (userNorm === correctNorm) {
-                // 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
-                if (q._retryReason) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
+                // 철자로 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
+                if (used().typo) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
                 askRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);
                 return;
             }
@@ -1093,8 +1100,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             if (!ai) {
                 // 3) 폴백 — AI 키가 없거나 실패하면 기존 로컬 채점
                 const analysis = analyzeSubjectiveAnswer(userAnswer, q);
-                if (analysis.isSynonym && !q._retryReason) { askRetry('synonym', analysis.hint); return; }
-                if (analysis.isTypo && !q._retryReason) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
+                if (analysis.isSynonym && !used().synonym) { askRetry('synonym', analysis.hint); return; }
+                if (analysis.isTypo && !used().typo) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
                 // [냐냐 요청] 틀렸으면 왜 틀렸는지까지 (철자면 틀린 자리 표시, 다른 단어면 그 뜻)
                 const hint = analysis.isCorrect ? analysis.hint : buildWrongAnswerHtml(userAnswer, correct);
                 gradeNow(analysis.isCorrect, hint, analysis.unknownWord);
@@ -1111,19 +1118,13 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             if (verdict === 'correct') { gradeNow(true, ''); return; }
 
-            // 이미 재입력 기회를 한 번 썼으면 → 더는 안 봐주고 채점
-            if (q._retryReason) {
-                const unknown = (verdict === 'wrong' && !isWordKnown(userAnswer) && userAnswer.length >= 2) ? userAnswer : null;
-                gradeNow(false, wrongHtml(), unknown);
-                return;
-            }
-
-            if (verdict === 'synonym') {
+            // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
+            if (verdict === 'synonym' && !used().synonym) {
                 askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.`);
                 return;
             }
 
-            if (verdict === 'typo') {
+            if (verdict === 'typo' && !used().typo) {
                 // 오타가 3글자를 넘으면 봐주지 않고 바로 오답
                 if (levenshtein(userNorm, correctNorm) > 3) {
                     gradeNow(false, wrongHtml());

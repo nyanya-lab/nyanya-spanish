@@ -3156,7 +3156,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 retry: false,             // 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' 중인지
                 feedback: null,           // 1바퀴 채점 결과 화면 (정답/오답 표시)
                 feedbackTimer: null,
-                retryReason: null,        // 1바퀴에서 봐준 이유 — 'synonym' | 'typo' (단어당 한 번)
+                retryReason: null,        // 1바퀴 점수 기준 — 'synonym'(+2) | 'typo'(+1)
+                usedRetries: {},          // 종류별로 한 번씩만 봐준다 { synonym, typo }
                 hint: '',                 // 1바퀴 재입력 안내 문구
                 grading: false,           // AI 채점 중
                 wrongCount: 0,            // 최종(3바퀴) 오답 수
@@ -3220,7 +3221,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     s.phase = 2;
                     s.pool = s.wrongPool.slice();
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
-                    s.retryReason = null; s.hint = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.grading = false; s.feedback = null;
                     gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
                         `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
@@ -3231,7 +3232,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     s.phase = 3;
                     s.pool = shuffleArray(s.wrongPool.slice());
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
-                    s.retryReason = null; s.hint = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.grading = false; s.feedback = null;
                     gate('🙈', '이제 가리고 써볼 차례!',
                         '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
                         '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
@@ -3453,6 +3454,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             s.lastWrong = '';
             s.showDetail = false;
             s.retryReason = null;   // [냐냐 요청] 봐준 이유는 단어마다 초기화
+            s.usedRetries = {};
             s.hint = '';
             s.feedback = null;
             renderWritePractice();
@@ -3594,6 +3596,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (s.feedbackTimer) { clearTimeout(s.feedbackTimer); s.feedbackTimer = null; }
             s.feedback = null;
             s.retryReason = null;
+            s.usedRetries = {};
             s.hint = '';
             s.lastWrong = '';
             s.index++;
@@ -3603,7 +3606,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // 한 번 더 쓰게 하기 (점수 반영 없음, 단어당 한 번만)
         function writeAskRetry(reason, hintHtml) {
             const s = writePracticeState;
-            s.retryReason = reason;
+            s.usedRetries = s.usedRetries || {};
+            s.usedRetries[reason] = true;
+            // 오타가 한 번이라도 끼면 점수는 오타 기준(+1). 유의어만이면 +2
+            s.retryReason = s.usedRetries.typo ? 'typo' : reason;
             s.hint = hintHtml;
             renderWritePractice();
         }
@@ -3613,7 +3619,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
             const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(bare);
             const shared = (typeof sharedPrefixLen === 'function') ? sharedPrefixLen(u, c) : 0;
-            return bare.slice(0, shared + 1);
+            // ⚠️ 마지막 글자는 남긴다. 'cassa'처럼 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
+            return bare.slice(0, Math.max(1, Math.min(shared + 1, bare.length - 1)));
         }
 
         async function gradeWriteFirstRound(userRaw) {
@@ -3627,11 +3634,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 writeFirstRoundPass(w, s.retryReason === 'typo' ? 1 : 2);
                 return;
             }
-            // 2) 빈칸이거나, 이미 한 번 봐줬으면 → 오답
-            if (!userAnswer || s.retryReason) { writeFirstRoundFail(w, userAnswer); return; }
+            // 2) 빈칸이면 오답
+            if (!userAnswer) { writeFirstRoundFail(w, userAnswer); return; }
+            const used = (s.usedRetries = s.usedRetries || {});
 
-            // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더'
+            // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더' (철자로 이미 봐줬으면 오답)
             if (writeAccentOnlyMiss(userAnswer, w.word)) {
+                if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                 writeAskRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);
                 return;
             }
@@ -3652,22 +3661,23 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!ai) {
                 const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
-                if (a.isSynonym) { writeAskRetry('synonym', a.hint || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`); return; }
-                if (a.isTypo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`); return; }
+                if (a.isSynonym && !used.synonym) { writeAskRetry('synonym', a.hint || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`); return; }
+                if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`); return; }
                 writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
             }
 
             const verdict = String(ai.verdict || '').toLowerCase();
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
-            if (verdict === 'synonym') {
+            // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
+            if (verdict === 'synonym' && !used.synonym) {
                 writeAskRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`);
                 return;
             }
-            if (verdict === 'typo') {
-                // 오타가 3글자를 넘으면 봐주지 않는다 (퀴즈와 같은 기준)
-                const dist = (typeof levenshtein === 'function')
-                    ? levenshtein(normalizeWriteAnswer(userAnswer), normalizeWriteAnswer(w.word)) : 99;
+            if (verdict === 'typo' && !used.typo) {
+                // 오타가 3글자를 넘으면 봐주지 않는다 (퀴즈와 같은 기준 — 악센트를 뗀 문자열로 잰다)
+                const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
+                    ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
                 if (dist <= 3) {
                     writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`);
                     return;

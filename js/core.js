@@ -2080,7 +2080,7 @@ let vocabulary = [];
                     ['단어 빈칸', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
                     ['쓰기 복습 · 1바퀴에 바로 맞힘', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 유의어 쓴 뒤 다시 정답', '+2', '(점수 없이 2바퀴로)'],
-                    ['쓰기 복습 · 1바퀴 · 오타 고쳐서 다시 정답', '+1', '(점수 없이 2바퀴로)'],
+                    ['쓰기 복습 · 1바퀴 · 오타·악센트 고쳐서 다시 정답', '+1', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 익힌 뒤 3바퀴에서', '+0.4', '−2'],
                     ['문법표 빈칸', '단어 점수 무관', '마스터한 표를 틀리면 마스터 해제']
                 ]}
@@ -2215,6 +2215,34 @@ let vocabulary = [];
                     <li>• 같은 단어를 하루에 여러 번 틀려도 <b>한 칸만</b> 내려가요.</li>
                     <li>• 단어 빈칸에서 <b>관용구·예문 칸만</b> 틀린 건 복습 대상이 안 돼요. (뜻·철자·동사변형만 해당)</li>
                     <li>• 그날 복습을 다 끝내면 버튼이 <b>회색 '완료 ✓'</b>로 바뀌어요.</li>
+                </ul>
+            </div>
+
+            <div class="bg-indigo-50 rounded-2xl border border-indigo-200 p-4 space-y-3">
+                <h4 class="text-sm font-black text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-spell-check text-indigo-500"></i> 스페인어를 직접 쓰는 채점 — 퀴즈 주관식 · 쓰기 복습 1바퀴</h4>
+                <p class="text-xs text-indigo-900 font-semibold leading-relaxed">
+                    두 곳은 <b>똑같은 규칙</b>으로 채점해요. 뜻만 보고 스페인어를 떠올려 쓰는 같은 행위니까요.
+                </p>
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
+                    <thead>
+                        <tr class="border-b-2 border-indigo-100 text-[11px] text-indigo-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">이렇게 쓰면</th>
+                            <th class="py-2 px-3 text-left">이렇게 돼요</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700 whitespace-nowrap">그대로 정답</td><td class="py-2 px-3 text-slate-600 font-semibold">바로 통과 (AI도 안 불러요)</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700 whitespace-nowrap">유의어</td><td class="py-2 px-3 text-slate-600 font-semibold">"그것도 같은 뜻이에요" + <b>앞글자 힌트</b> → 한 번 더</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700 whitespace-nowrap">철자 오타</td><td class="py-2 px-3 text-slate-600 font-semibold">3글자 차이까지 → 한 번 더</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700 whitespace-nowrap">악센트만 틀림</td><td class="py-2 px-3 text-slate-600 font-semibold">그냥 안 넘어가요 → 한 번 더 <span class="text-slate-400">(esta/está 처럼 뜻이 갈려요)</span></td></tr>
+                        <tr><td class="py-2 px-3 font-black text-slate-700 whitespace-nowrap">아예 틀림</td><td class="py-2 px-3 text-slate-600 font-semibold">오답. 왜 틀렸는지 짚어줘요</td></tr>
+                    </tbody>
+                </table>
+                <ul class="text-xs text-indigo-900 font-semibold leading-relaxed space-y-1.5">
+                    <li>• <b>봐주는 건 이유마다 한 번씩.</b> 유의어를 알려줘서 제 단어를 떠올렸는데 철자를 흘렸다면 그건 새로운 실수라 <b>한 번 더</b> 기회를 줘요. 같은 이유로 두 번은 안 봐줘요.</li>
+                    <li>• <b>오타·악센트를 고쳐서 맞히면 +1</b>, 유의어만 거쳤으면 <b>+2</b>. 오타가 한 번이라도 끼면 +1이에요.</li>
+                    <li>• 틀렸을 때는 세 갈래로 알려줘요 — <b>철자면</b> 틀린 자리만 빨갛게, <b>다른 진짜 단어면</b> 그 단어의 뜻을, <b>없는 단어면</b> 없다고요.</li>
+                    <li>• <b>안 써도 되는 것</b>: 대괄호 자리표시자(<span class="text-slate-500">antes de [명사/동사원형]</span>), 한글, 관사(el·la·el/la), 문장부호(¿ ? ¡ !).</li>
                 </ul>
             </div>
 
