@@ -1062,7 +1062,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             };
 
             // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자 (televisión → televiso)
-            const prefixHint = () => correct.slice(0, sharedPrefixLen(userNorm, correctNorm) + 1);
+            //   ⚠️ 관사를 떼고 세야 한다. 안 그러면 'el agua' 의 힌트가 "el 로 시작해요"가 되어
+            //      힌트 구실을 못 한다 (userNorm/correctNorm 은 이미 관사가 떼여 있다).
+            const bareCorrect = correct.trim().replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+            const prefixHint = () => bareCorrect.slice(0, sharedPrefixLen(userNorm, correctNorm) + 1);
 
             // 0) 빈칸이면 바로 오답
             if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }

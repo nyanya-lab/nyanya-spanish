@@ -3470,17 +3470,22 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   사람이 칠 수 없는 것만 걷어낸다:
         //     · 자리표시자 대괄호·괄호   "después de [명사/동사원형]" → "después de"
         //     · 한글                     "litro de [사물]" → "litro de"
-        //     · 성 묶음 관사             "el/la joven" → "joven"  (el agua 같은 단독 관사는 그대로 둔다)
+        //     · 관사                     "el/la joven" → "joven" · "el agua" → "agua"
         //     · 문장부호                 "¿Qué tal?" → "qué tal"
         //   ⚠️ 순서 중요: 관사 묶음의 슬래시가 공백이 되기 전에 먼저 떼야 한다.
+        //   [냐냐 요청] 관사는 퀴즈 주관식과 똑같이 뗀다. 예전엔 단독 관사(el agua)를 남겨서
+        //     'agua' 라고 쓰면 문자열이 안 맞아 AI를 태웠는데, 그 AI가 결국 정답으로 통과시켰다.
+        //     결과가 같은데 호출만 한 번 더 하고 느렸다.
         function normalizeWriteAnswer(s) {
             return String(s || '').toLowerCase().trim()
                 .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
                 .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
                 .replace(/\s+/g, ' ').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas)\s+/, '')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
                 .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-                .replace(/\s+/g, ' ').trim();
+                .replace(/\s+/g, ' ').trim()
+                .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '')   // 기호 제거 후 남은 관사도 한 번 더
+                .trim();
         }
         function stripAccentMarks(s) {
             return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
