@@ -46,6 +46,18 @@
             if (playArea) { playArea.classList.remove('hidden'); playArea.innerHTML = html; }
         }
 
+        // [냐냐 요청] 빈칸 채점 결과 줄에서 틀린 글자만 빨갛게.
+        //   철자를 흘린 경우에만 칠한다 — 아예 다른 답이면 전부 빨개져서 오히려 안 보인다.
+        //   퀴즈·쓰기 복습이 쓰는 것과 같은 잣대(looksLikeSpellMiss)를 쓴다.
+        function blankDiffHtml(userRaw, correctRaw) {
+            const user = String(userRaw || '').trim();
+            if (!user || typeof looksLikeSpellMiss !== 'function' || typeof charDiffOps !== 'function') return null;
+            if (!looksLikeSpellMiss(user, correctRaw)) return null;
+            const target = typeableForm(correctRaw) || String(correctRaw || '');
+            const ops = charDiffOps(user, target);
+            return { mine: renderCharDiff(ops, 'user'), answer: renderCharDiff(ops, 'correct') };
+        }
+
         // 정답 비교 (악센트/관사 관용 — 기존 normalizeSpanishAnswer 재사용)
         function gameCheckAnswer(userRaw, correct) {
             const stripArticle = (s) => normalizeSpanishAnswer(s).replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
@@ -1157,8 +1169,11 @@ Return JSON only, no markdown.`;
                 fb.classList.remove('hidden');
                 fb.innerHTML = detail.map(d => {
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
-                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
-                    return `<div class="text-xs flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${escapeHtml(d.label)}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                    // [냐냐 요청] 스페인어 칸이 철자로 틀렸으면 어디가 다른지 글자로 짚어준다 (뜻 칸은 제외)
+                    const df = (!d.correct && d.language === 'es') ? blankDiffHtml(d.userAnswer, d.correctAnswer) : null;
+                    const mine = df ? df.mine : escapeHtml(d.userAnswer || '(빈칸)');
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${df ? df.answer : escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-xs flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${escapeHtml(d.label)}</span>${icon}<span class="text-slate-500">${mine}</span>${ans}</div>`;
                 }).join('');
             }
             const btn = document.getElementById('fill-action-btn');
@@ -1641,8 +1656,11 @@ Return JSON only, no markdown.`;
                 fb.innerHTML = scoreBanner + wordBanner + unmasterBanner + hintBanner + detail.map(d => {
                     const label = [d.rowLabel, d.column].filter(Boolean).map(escapeHtml).join(' · ');
                     const icon = d.correct ? '<span class="text-emerald-500 font-black">✓</span>' : '<span class="text-red-500 font-black">✗</span>';
-                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${escapeHtml(d.correctAnswer)}</b>`;
-                    return `<div class="text-[11px] flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${label || '칸'}</span>${icon}<span class="text-slate-500">${escapeHtml(d.userAnswer || '(빈칸)')}</span>${ans}</div>`;
+                    // [냐냐 요청] 문법표 칸은 전부 스페인어라 철자 오류면 바로 짚어준다
+                    const df = d.correct ? null : blankDiffHtml(d.userAnswer, d.correctAnswer);
+                    const mine = df ? df.mine : escapeHtml(d.userAnswer || '(빈칸)');
+                    const ans = d.correct ? '' : ` <span class="text-slate-400">→ 정답:</span> <b class="text-slate-800">${df ? df.answer : escapeHtml(d.correctAnswer)}</b>`;
+                    return `<div class="text-[11px] flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${label || '칸'}</span>${icon}<span class="text-slate-500">${mine}</span>${ans}</div>`;
                 }).join('');
             }
             const btn = document.getElementById('gfill-action-btn');

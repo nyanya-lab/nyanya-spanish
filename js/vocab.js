@@ -3475,27 +3475,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             el.select();
         }
 
-        // [냐냐 요청] 쓰기 채점용 정규화 — 철자 연습이라 악센트는 그대로 두고,
-        //   사람이 칠 수 없는 것만 걷어낸다:
-        //     · 자리표시자 대괄호·괄호   "después de [명사/동사원형]" → "después de"
-        //     · 한글                     "litro de [사물]" → "litro de"
-        //     · 관사                     "el/la joven" → "joven" · "el agua" → "agua"
-        //     · 문장부호                 "¿Qué tal?" → "qué tal"
-        //   ⚠️ 순서 중요: 관사 묶음의 슬래시가 공백이 되기 전에 먼저 떼야 한다.
-        //   [냐냐 요청] 관사는 퀴즈 주관식과 똑같이 뗀다. 예전엔 단독 관사(el agua)를 남겨서
-        //     'agua' 라고 쓰면 문자열이 안 맞아 AI를 태웠는데, 그 AI가 결국 정답으로 통과시켰다.
-        //     결과가 같은데 호출만 한 번 더 하고 느렸다.
-        function normalizeWriteAnswer(s) {
-            return String(s || '').toLowerCase().trim()
-                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
-                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
-                .replace(/\s+/g, ' ').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
-                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-                .replace(/\s+/g, ' ').trim()
-                .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '')   // 기호 제거 후 남은 관사도 한 번 더
-                .trim();
-        }
+        // [냐냐 요청] 쓰기 채점 정규화는 퀴즈와 같은 함수를 쓴다 (keepAccents=true).
+        //   철자 연습이라 악센트만 살리고, 걷어내는 건 전부 같다 —
+        //   자리표시자·한글·관사·문장부호. 예전엔 여기에 같은 정규식을 따로 들고 있다가
+        //   관사 규칙이 한쪽만 바뀌어서 오답 설명이 어긋난 적이 있다.
+        function normalizeWriteAnswer(s) { return normalizeSpanishAnswer(s, true); }
         function stripAccentMarks(s) {
             return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
         }

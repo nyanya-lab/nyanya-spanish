@@ -662,14 +662,14 @@ let quizSession = null;
         function normalizeSpanishAnswer(s, keepAccents) {
             const base = String(s || '').toLowerCase().trim();
             return (keepAccents ? base : base.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
-                // [냐냐 PATCH] 대괄호 자리표시자는 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
+                // [냐냐 PATCH] 대괄호 자리표시자·한글은 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
                 //   (냐냐가 저 안의 한글을 똑같이 칠 수는 없으니 채점 대상에서 뺌)
-                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
-                // [냐냐 PATCH] 한글은 채점하지 않음 (스페인어만 비교)
-                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                //   ⚠️ 규칙은 core.js 에 한 곳으로 모아 뒀다. 오답 설명(typeableForm)과 같아야 한다.
+                .replace(RE_PLACEHOLDER, ' ')
+                .replace(RE_HANGUL, ' ')
                 // [냐냐 PATCH] 기호 전부 무시 (¿ ? ¡ ! . , ; : " ' ( ) ~ - / 등)
                 // ⚠️ 관사는 기호 제거보다 "먼저" 떼야 함 (안 그러면 el/la 의 슬래시가 공백이 돼서 la가 남음)
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
+                .replace(RE_LEADING_ARTICLE, '')
                 .replace(/[^\p{L}\p{N}\s]/gu, ' ')
                 .replace(/\s+/g, ' ').trim()
                 .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '') // 기호 제거 후 남은 관사도 한 번 더

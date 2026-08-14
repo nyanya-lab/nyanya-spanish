@@ -3920,7 +3920,17 @@ let vocabulary = [];
         }
 
         // ============================================================
-        // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습이 같이 쓴다.
+        // [냐냐 요청] '사람이 칠 수 없는 것' 규칙은 여기 한 곳에만 둔다.
+        //   채점(normalizeSpanishAnswer)과 오답 설명(typeableForm)이 반드시 같은 규칙을 써야 한다.
+        //   예전엔 각자 정규식을 들고 있다가 관사 규칙이 한쪽만 바뀌어서,
+        //   'el agua' 에 'aqua' 를 쓴 오타가 '아예 다른 단어'로 잡힌 적이 있다.
+        // ============================================================
+        const RE_PLACEHOLDER = /[\[\(（【][^\]\)）】]*[\]\)）】]/g;      // "antes de [명사/동사원형]" 의 대괄호 뭉치
+        const RE_HANGUL = /[ㄱ-ㅎㅏ-ㅣ가-힣]/g;                        // 답에 한글이 섞일 일은 없다
+        const RE_LEADING_ARTICLE = /^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i;
+
+        // ============================================================
+        // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습·단어 빈칸이 같이 쓴다.
         //   · 철자만 틀렸으면 → 틀린 자리만 빨갛게 (내가 쓴 답 / 정답 양쪽)
         //   · 아예 다른 진짜 단어를 썼으면 → 그 단어의 뜻을 알려준다
         //   · 없는 단어면 → 없는 단어라고 알려준다
@@ -3972,12 +3982,26 @@ let vocabulary = [];
         //   "después de [명사/동사원형]" → "después de" · "el/la joven" → "joven"
         function typeableForm(s) {
             return String(s || '')
-                .replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g, ' ')
-                .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                .replace(RE_PLACEHOLDER, ' ')
+                .replace(RE_HANGUL, ' ')
                 .replace(/\s+/g, ' ').trim()
-                // 관사는 뗀다 — 채점(normalizeSpanishAnswer·normalizeWriteAnswer)도 떼고 비교하므로
-                // 여기서 남기면 'el agua' 에 'aqua' 를 쓴 오타가 '아예 다른 단어'로 잡혀 버린다
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+                .replace(RE_LEADING_ARTICLE, '');
+        }
+        // [냐냐 요청] '철자를 흘린 것'인가, '아예 다른 단어'인가.
+        //   설명 문구를 고르는 데도, 단어 빈칸에서 틀린 글자를 칠할지 정하는 데도 같은 잣대를 쓴다.
+        //   ⚠️ 거리는 악센트를 세는 쪽으로 재야 한다. normalizeSpanishAnswer 는 악센트를 떼기 때문에
+        //      despues vs después 가 거리 0이 되어 '아예 다른 단어' 쪽으로 새어나갔다.
+        function looksLikeSpellMiss(userRaw, correctRaw) {
+            const user = String(userRaw || '').trim();
+            const target = typeableForm(correctRaw) || String(correctRaw || '');
+            if (!user || !target) return false;
+            const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s).toLowerCase().trim();
+            const soft = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            if (soft(user) === soft(target)) return false;          // 아예 같으면 틀린 게 아니다
+            if (!!norm(user) && norm(user) === norm(target)) return true;   // 악센트만 다름
+            const dist = (typeof levenshtein === 'function') ? levenshtein(soft(user), soft(target)) : 99;
+            // 정답 길이의 절반 안쪽으로 다르면 '철자를 틀린 것'으로 본다
+            return dist > 0 && dist <= Math.max(1, Math.min(3, Math.floor(soft(target).length / 2)));
         }
         // opts: { aiIsRealWord: bool|undefined, aiMeaning: string, comment: string }
         function buildWrongAnswerHtml(userRaw, correctRaw, opts = {}) {
@@ -3986,16 +4010,7 @@ let vocabulary = [];
             const target = typeableForm(correct) || correct;   // 철자 비교는 칠 수 있는 형태로
             if (!user) return `✏️ 정답은 <b>${escapeHtml(correct)}</b> 예요.`;
 
-            const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s).toLowerCase().trim();
-            // ⚠️ 거리는 악센트를 세는 쪽으로 재야 한다. normalizeSpanishAnswer 는 악센트를 떼기 때문에
-            //    despues vs después 가 거리 0이 되어 '아예 다른 단어' 쪽으로 새어나갔다.
-            const soft = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-            const dist = (typeof levenshtein === 'function') ? levenshtein(soft(user), soft(target)) : 99;
-            const accentOnly = !!norm(user) && norm(user) === norm(target);
-            // 정답 길이의 절반 안쪽으로 다르면 '철자를 틀린 것'으로 본다 (아예 다른 단어와 구분)
-            const isSpellMiss = accentOnly || (dist > 0 && dist <= Math.max(1, Math.min(3, Math.floor(soft(target).length / 2))));
-
-            if (isSpellMiss) {
+            if (looksLikeSpellMiss(user, correct)) {
                 const ops = charDiffOps(user, target);
                 return `
                     <div class="space-y-1.5 text-left">
