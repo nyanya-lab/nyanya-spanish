@@ -54,15 +54,17 @@
             if (!user || typeof looksLikeSpellMiss !== 'function' || typeof charDiffOps !== 'function') return null;
             if (!looksLikeSpellMiss(user, correctRaw)) return null;
             const target = typeableForm(correctRaw) || String(correctRaw || '');
-            const ops = charDiffOps(user, target);
+            const ops = charDiffOps(typeableForm(user) || user, target);
             return { mine: renderCharDiff(ops, 'user'), answer: renderCharDiff(ops, 'correct') };
         }
 
-        // 정답 비교 (악센트/관사 관용 — 기존 normalizeSpanishAnswer 재사용)
+        // 정답 비교 — 관사는 관용, 악센트는 엄격 [냐냐 요청]
+        //   퀴즈 주관식·쓰기 복습·활용형과 같은 잣대다. 악센트도 철자의 일부다.
         function gameCheckAnswer(userRaw, correct) {
-            const stripArticle = (s) => normalizeSpanishAnswer(s).replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
+            const norm = (s) => normalizeSpanishAnswer(s, true);
+            const stripArticle = (s) => norm(s).replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
             // 관사 포함/미포함 둘 다 정답 인정 (힌트가 관사를 뗀 앞글자를 주므로)
-            return normalizeSpanishAnswer(userRaw) === normalizeSpanishAnswer(correct)
+            return norm(userRaw) === norm(correct)
                 || stripArticle(userRaw) === stripArticle(correct);
         }
 
@@ -278,7 +280,12 @@
                 // [냐냐 PATCH-2차잔여] 틀린 단어 기록 → 결과 화면에서 복습용으로 보여줌
                 if (!gameState.wrongIds) gameState.wrongIds = [];
                 if (!gameState.wrongIds.includes(gameState.current.id)) gameState.wrongIds.push(gameState.current.id);
-                if (fb) { fb.innerText = `✗ 정답: ${gameState.current.word}`; fb.className = "text-sm font-bold mt-2 h-5 text-rose-500"; }
+                // [냐냐 요청] 악센트를 엄격하게 봤으니 어디가 틀렸는지도 같이 보여준다
+                if (fb) {
+                    const df = blankDiffHtml(userAnswer, gameState.current.word);
+                    fb.innerHTML = df ? `✗ ${df.mine} → <b>${df.answer}</b>` : `✗ 정답: ${escapeHtml(gameState.current.word)}`;
+                    fb.className = "text-sm font-bold mt-2 h-5 text-rose-500";
+                }
                 AudioFX.playError();
             }
             const scoreEl = document.getElementById('rf-score');
@@ -609,9 +616,8 @@
             const userText = input.value.trim();
             input.disabled = true;
 
-            // 문장 비교 (악센트/문장부호/대소문자 관대하게)
-            const norm = (s) => s.toLowerCase().replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim()
-                .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u');
+            // 문장 비교 — 문장부호·대소문자는 관대, 악센트는 엄격 [냐냐 요청]
+            const norm = (s) => s.toLowerCase().replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim();
             const correct = gameState.current.example;
             const isCorrect = norm(userText) === norm(correct);
 
@@ -620,7 +626,12 @@
                 if (fb) { fb.innerText = "✓ 완벽해요!"; fb.className = "text-sm font-bold h-5 text-emerald-600"; }
                 AudioFX.playSuccess();
             } else {
-                if (fb) { fb.innerHTML = `✗ 정답: <span class="text-slate-700">${correct}</span>`; fb.className = "text-sm font-bold h-5 text-rose-500"; }
+                if (fb) {
+                    const df = blankDiffHtml(userText, correct);
+                    fb.innerHTML = df ? `✗ ${df.mine} → <span class="text-slate-700">${df.answer}</span>`
+                                      : `✗ 정답: <span class="text-slate-700">${escapeHtml(correct)}</span>`;
+                    fb.className = "text-sm font-bold h-5 text-rose-500";
+                }
                 AudioFX.playError();
             }
 
@@ -1019,7 +1030,9 @@
             // [냐냐 PATCH] 스페인어는 퀴즈와 동일한 정규화 사용
             //   → 관사·기호·대괄호 자리표시자([명사/동사원형])·한글을 채점에서 제외
             if (blank.language === 'es') {
-                return normalizeSpanishAnswer(ans) === normalizeSpanishAnswer(blank.expected);
+                // [냐냐 요청] 악센트도 엄격하게 — AI 채점 프롬프트가 "악센트가 빠지면 오답"이라
+                //   못박아 두고 있는데 폴백만 봐주면 AI 유무에 따라 결과가 갈린다
+                return normalizeSpanishAnswer(ans, true) === normalizeSpanishAnswer(blank.expected, true);
             }
             // 한국어 뜻은 관대하게 (대괄호 자리표시자와 기호는 무시)
             const cleanKo = (t) => (t || '').toString().toLowerCase()

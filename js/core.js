@@ -2068,7 +2068,9 @@ let vocabulary = [];
                     ['객관식', '+1', '−2'],
                     ['주관식', '+2', '−1'],
                     ['주관식 · 유의어 쓴 뒤 다시 정답', '+2', '−2'],
-                    ['주관식 · 오타·악센트 고쳐서 다시 정답', '+1', '−2']
+                    ['주관식 · 오타·악센트 고쳐서 다시 정답', '+1', '−2'],
+                    ['동사 활용형', '+2', '−1'],
+                    ['동사 활용형 · 악센트 고쳐서 다시 정답', '+1', '−2']
                 ]},
                 { group: '미니게임', color: 'text-teal-600 bg-teal-50 border-teal-200', rows: [
                     ['속사포', '+0.5', '−1'],
@@ -2244,6 +2246,9 @@ let vocabulary = [];
                     <li>• <b>오타·악센트를 고쳐서 맞히면 +1</b>, 유의어만 거쳤으면 <b>+2</b>. 오타가 한 번이라도 끼면 +1이에요.</li>
                     <li>• 틀렸을 때는 세 갈래로 알려줘요 — <b>철자면</b> 틀린 자리만 빨갛게, <b>다른 진짜 단어면</b> 그 단어의 뜻을, <b>없는 단어면</b> 없다고요.</li>
                     <li>• <b>안 써도 되는 것</b>: 대괄호 자리표시자(<span class="text-slate-500">antes de [명사/동사원형]</span>), 한글, 관사(el·la·el/la), 문장부호(¿ ? ¡ !).</li>
+                    <li>• <b>악센트는 어디서든 봅니다</b> — 퀴즈(주관식·동사 활용형)·쓰기 복습·단어 빈칸·문법표 빈칸·미니게임 전부요.
+                        <span class="text-slate-500">esta/está 처럼 뜻이 갈리기도 하고, vosotros(-áis)나 부정과거(-é/-ó)는 악센트가 곧 그 형태거든요.</span>
+                        틀리면 어디가 다른지 <b>글자에 표시</b>해 줘요.</li>
                 </ul>
             </div>
 
@@ -3980,12 +3985,16 @@ let vocabulary = [];
         // 사람이 칠 수 있는 형태만 남긴다 — 자리표시자 대괄호·괄호와 한글은 뺀다.
         //   (악센트·대소문자·문장부호는 그대로. 철자를 짚어주려면 원형이 필요하다)
         //   "después de [명사/동사원형]" → "después de" · "el/la joven" → "joven"
+        //   ⚠️ 문장부호도 뺀다. 채점이 기호를 통째로 무시하므로(normalizeSpanishAnswer),
+        //      남겨두면 안 쳐도 되는 마침표가 '빠뜨린 글자'로 빨갛게 칠해진다.
         function typeableForm(s) {
             return String(s || '')
                 .replace(RE_PLACEHOLDER, ' ')
                 .replace(RE_HANGUL, ' ')
                 .replace(/\s+/g, ' ').trim()
-                .replace(RE_LEADING_ARTICLE, '');
+                .replace(RE_LEADING_ARTICLE, '')
+                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                .replace(/\s+/g, ' ').trim();
         }
         // [냐냐 요청] '철자를 흘린 것'인가, '아예 다른 단어'인가.
         //   설명 문구를 고르는 데도, 단어 빈칸에서 틀린 글자를 칠할지 정하는 데도 같은 잣대를 쓴다.
@@ -4011,7 +4020,7 @@ let vocabulary = [];
             if (!user) return `✏️ 정답은 <b>${escapeHtml(correct)}</b> 예요.`;
 
             if (looksLikeSpellMiss(user, correct)) {
-                const ops = charDiffOps(user, target);
+                const ops = charDiffOps(typeableForm(user) || user, target);
                 return `
                     <div class="space-y-1.5 text-left">
                         <p class="font-black text-rose-500">✏️ 철자가 틀렸어요</p>

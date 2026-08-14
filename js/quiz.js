@@ -1015,13 +1015,38 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             const userAnswer = inputEl.value.trim();
 
             // 활용형 문제는 정답(활용형)과 직접 비교
+            //   [냐냐 요청] 주관식과 같은 대접 — 악센트까지 맞아야 정답이고,
+            //   악센트만 틀렸으면 한 번 더 기회를 준다 (고치면 +1). 활용형은 악센트가 핵심이다:
+            //   vosotros -áis/-éis, 부정과거 -é/-ó, 재귀 현재분사 -ándose.
             if (q.type === 'conjugation') {
-                inputEl.disabled = true;
-                submitBtn.disabled = true;
-                const isCorrect = userAnswer && (normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer));
                 const conjDesc = (q.conjKey === 'form') ? (q.tenseLabel || '현재분사') : `${q.tenseLabel || '현재'} ${q.conjLabel}`;
-                q._subjectiveHint = isCorrect ? '' : `✏️ 정답은 <b>${q.answer}</b> 예요. (${q.word.word} = ${q.word.meaning} · ${conjDesc})`;
-                finishQuizQuestion(isCorrect, q);
+                const hintBox = document.getElementById('quiz-synonym-hint');
+                const done = (ok, hint) => {
+                    inputEl.disabled = true;
+                    submitBtn.disabled = true;
+                    if (hintBox) hintBox.classList.add('hidden');
+                    q._subjectiveHint = hint || '';
+                    finishQuizQuestion(ok, q);
+                };
+                if (normalizeSpanishAnswer(userAnswer, true) === normalizeSpanishAnswer(q.answer, true)) { done(true, ''); return; }
+                // 악센트만 틀림 → 아직 안 봐줬으면 한 번 더
+                if (userAnswer && normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer)
+                    && !(q._usedRetries && q._usedRetries.typo)) {
+                    q._usedRetries = { typo: true };
+                    q._retryReason = 'typo';
+                    if (hintBox) {
+                        hintBox.classList.remove('hidden');
+                        hintBox.innerHTML = `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`;
+                    }
+                    inputEl.value = '';
+                    inputEl.focus();
+                    return;
+                }
+                // 오답 — 어디가 틀렸는지 글자로 짚어준다
+                const why = (typeof buildWrongAnswerHtml === 'function')
+                    ? buildWrongAnswerHtml(userAnswer, q.answer)
+                    : `✏️ 정답은 <b>${q.answer}</b> 예요.`;
+                done(false, `${why}<div class="text-slate-400 font-semibold mt-1">${escapeHtml(q.word.word)} = ${escapeHtml(q.word.meaning)} · ${escapeHtml(conjDesc)}</div>`);
                 return;
             }
 
