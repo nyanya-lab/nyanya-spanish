@@ -774,6 +774,13 @@ let quizSession = null;
                 chips.push(B('bg-purple-100 text-purple-600', 'Phr.'));
             }
 
+            // [냐냐 요청] 망각곡선을 끝까지 마친 단어에 표시. 예전엔 복습 목록에서 조용히
+            //   사라지기만 해서, 졸업했는지 아직 안 걸린 건지 구별할 수가 없었다.
+            //   틀리면 한 칸 뒤로 물리므로(demoteReviewStage) 배지도 같이 사라진다.
+            if (typeof REVIEW_INTERVALS !== 'undefined' && (word.reviewStage || 0) >= REVIEW_INTERVALS.length) {
+                chips.push(B('bg-emerald-100 text-emerald-700 border border-emerald-300', '🎓 졸업'));
+            }
+
             if (typeof getWordGrade === 'function' && typeof GRADE_INFO !== 'undefined') {
                 const gi = GRADE_INFO[getWordGrade(word)];
                 chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label}">${formatScore(word)}</span>`);

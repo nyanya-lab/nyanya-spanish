@@ -1713,7 +1713,17 @@ let vocabulary = [];
             const w = (typeof wordOrId === 'string') ? vocabulary.find(v => v.id === wordOrId) : wordOrId;
             if (!w) return;
             w.lastReviewDate = getLocalDateString();
-            if (wasCorrect) w.reviewStage = (w.reviewStage || 0) + 1;
+            if (wasCorrect) {
+                const before = w.reviewStage || 0;
+                w.reviewStage = before + 1;
+                // [냐냐 요청] 마지막 칸을 넘어서는 순간을 알려준다. 예전엔 복습 목록에서
+                //   그냥 사라지기만 해서 졸업한 줄도 몰랐다. 넘는 그 한 번만 뜬다.
+                if (before < REVIEW_INTERVALS.length && w.reviewStage >= REVIEW_INTERVALS.length
+                    && typeof showToast === 'function') {
+                    const lastGap = REVIEW_INTERVALS[REVIEW_INTERVALS.length - 1];
+                    showToast(`"${w.word}" 망각곡선 졸업! 🎓 ${lastGap}일을 버텼어요`, "success");
+                }
+            }
             else demoteReviewStage(w); // [냐냐 요청] 처음으로 되돌리지 않고 한 단계만 뒤로
         }
 
