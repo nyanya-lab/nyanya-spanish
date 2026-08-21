@@ -719,9 +719,9 @@
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}
+               "issueType": "If isCorrect is false, classify the main issue as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '내용부적절', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }
-            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}
+            IMPORTANT for "breakdown": split correctedText into individual words/particles (typically 3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}${AI_NATURAL_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -758,9 +758,10 @@
                     },
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "내용부적절", "기타", "없음"] },
-                    ...aiScoringSchemaProps()
+                    ...aiScoringSchemaProps(),
+                    ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -818,6 +819,7 @@
                 });
 
                 renderAiTip(feedback.tip);
+                renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
                 learnerProfile.totalAnswered++;
@@ -1307,6 +1309,7 @@ ${extraWords.length ? `
                 return;
             }
 
+            renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'을 먼저 치운다
             const submitBtn = document.getElementById('ai-ko-es-submit-btn');
             const originalHtml = submitBtn.innerHTML;
             
@@ -1346,8 +1349,8 @@ ${refGrammar}${refWords}
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."
-            }
+               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."${AI_NATURAL_JSON_FIELDS}
+            }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
             Do not wrap JSON in markdown blockticks.`;
@@ -1385,9 +1388,10 @@ ${refGrammar}${refWords}
                     },
                     tip: { type: "STRING" },
                     // [냐냐 요청] 참조 문법을 제대로 썼는지 — 문장 전체 정오(isCorrect)와 별개로 판정
-                    grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" }
+                    grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" },
+                    ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage"]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1449,6 +1453,7 @@ ${refGrammar}${refWords}
                 });
 
                 renderAiTip(feedback.tip);
+                renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
                 learnerProfile.totalAnswered++;
@@ -1619,9 +1624,9 @@ ${refGrammar}${refWords}
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
                "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",${AI_SCORING_JSON_FIELDS}
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }
-            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}
+            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}${AI_NATURAL_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1644,9 +1649,10 @@ ${refGrammar}${refWords}
                         }
                     },
                     tip: { type: "STRING" },
-                    ...aiScoringSchemaProps()
+                    ...aiScoringSchemaProps(),
+                    ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", ...AI_SCORING_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1695,6 +1701,7 @@ ${refGrammar}${refWords}
                 });
 
                 renderAiTip(feedback.tip);
+                renderAiNatural(feedback);
 
                 // 학습 프로필 반영
                 learnerProfile.totalAnswered++;
@@ -1918,6 +1925,47 @@ ${refGrammar}${refWords}
                 wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" }
             };
         }
+        // [냐냐 요청] 문법은 맞는데 원어민은 다르게 말하는 경우를 짚어준다.
+        //   "el pie de mi novio" 는 틀린 문장이 아니지만, 스페인어는 짝으로 있는 몸은 복수로 말해서
+        //   "los pies de mi novio" 가 자연스럽다. 예전엔 이런 게 그냥 '정답'으로 지나갔다.
+        //   ⚠️ 이건 오답이 아니다 — isCorrect·verdict·issueType·점수를 절대 건드리지 않는다.
+        //      맞게 쓴 문장에 벌을 주면 안 된다. 더 나은 표현을 '덧붙여' 알려주는 자리다.
+        const AI_NATURAL_JSON_FIELDS = `,
+               "moreNatural": "If the sentence is grammatically acceptable but a native speaker would normally phrase it differently, write the more natural Spanish version here. Empty string when there is nothing to say.",
+               "naturalWhy": "One short Korean sentence (60자 이내) on why a native prefers that phrasing. Empty string when moreNatural is empty."`;
+        const AI_NATURAL_RULES_TEXT = `
+            IMPORTANT for "moreNatural"/"naturalWhy": both are REQUIRED — always output them, using "" when there is nothing to say. They describe how a NATIVE would say it, not what is wrong, so they must NEVER affect isCorrect, verdict, issueType or any score, and must never restate a mistake you already fixed in correctedText. Fill them in only when a native speaker would clearly phrase it differently — common cases: Spanish uses the plural for paired body parts (los pies, las manos), a definite article instead of a possessive for one's own body (me duele la cabeza, not mi cabeza), a fixed collocation (tener hambre, hacer una pregunta, dar un paseo), or a more idiomatic word order or register. If the sentence already sounds natural as written, output "" for both.`;
+        const AI_NATURAL_REQUIRED = ["moreNatural", "naturalWhy"];
+        function aiNaturalSchemaProps() {
+            return {
+                moreNatural: { type: "STRING", description: "원어민이라면 이렇게 말한다는 스페인어 문장 (없으면 빈 문자열)" },
+                naturalWhy: { type: "STRING", description: "그 표현이 더 자연스러운 이유 한 문장 (없으면 빈 문자열)" }
+            };
+        }
+        // 결과 카드의 '이렇게 말하면 더 자연스러워요' 박스. 알려줄 게 없으면 통째로 숨긴다.
+        function renderAiNatural(feedback) {
+            const box = document.getElementById('ai-natural-box');
+            if (!box) return;
+            const textEl = document.getElementById('ai-natural-text');
+            const whyEl = document.getElementById('ai-natural-why');
+            const sentence = String((feedback && feedback.moreNatural) || '').trim();
+            const why = String((feedback && feedback.naturalWhy) || '').trim();
+            // 고친 문장을 그대로 옮겨 적어 오는 경우가 있다 — 그건 새로 알려주는 게 없으니 숨긴다
+            const corrected = String((feedback && feedback.correctedText) || '').replace(/<[^>]*>/g, '').trim();
+            const sameAsCorrected = sentence && corrected
+                && typeof normalizeSpanishAnswer === 'function'
+                && normalizeSpanishAnswer(sentence) === normalizeSpanishAnswer(corrected);
+            if (!sentence || sameAsCorrected) {
+                box.classList.add('hidden');
+                if (textEl) textEl.innerHTML = '';
+                if (whyEl) whyEl.innerHTML = '';
+                return;
+            }
+            box.classList.remove('hidden');
+            if (textEl) textEl.innerHTML = escapeHtml(sentence);
+            if (whyEl) whyEl.innerHTML = why ? escapeHtml(why) : '';
+        }
+
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
         function applyAiWritingScores(feedback, notes) {
             applyEsKoGrammarScores(feedback, notes);
@@ -1926,6 +1974,7 @@ ${refGrammar}${refWords}
         }
         // 새 채점을 시작하기 전에 지난 결과 카드를 치운다
         function resetAiWritingScores() {
+            renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'이 남아 있으면 안 된다
             aiLastEsKoGrammar = [];
             aiLastEsKoWords = [];
             const box = document.getElementById('ai-mission-refs');
@@ -2055,8 +2104,8 @@ ${noteListText}
                   { "from": "original wrong part (word or phrase)", "to": "corrected part", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '성수일치 — casa 가 여성명사라 bonito 가 아니라 bonita', '어순 — 스페인어는 꾸미는 말이 명사 뒤'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}
-            }${AI_SCORING_RULES_TEXT}
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'.",${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
+            }${AI_SCORING_RULES_TEXT}${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice.
             Do not wrap JSON in markdown blockticks.`;
 
@@ -2094,9 +2143,10 @@ ${noteListText}
                     },
                     tip: { type: "STRING" },
                     issueType: { type: "STRING", enum: ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"], description: "주된 문법 실수 유형 분류. 정답이면 '없음'" },
-                    ...aiScoringSchemaProps()
+                    ...aiScoringSchemaProps(),
+                    ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -2150,6 +2200,7 @@ ${noteListText}
                 });
 
                 renderAiTip(feedback.tip);
+                renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
                 // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
@@ -2202,15 +2253,31 @@ ${noteListText}
         // [냐냐 PATCH] 단어가 이미 등록됐는지 스마트 확인 (동사 변형·형용사 성수변화 포함)
         // [냐냐 PATCH] 입력 단어와 일치하는 단어장 항목을 찾아 반환 (없으면 null)
         //   동사 변형·형용사 성수·명사 단복수까지 관대하게 매칭 — task 7: 등록됨→수정창 열기용
+        // ⚠️ 먼저 걸리는 것을 그냥 돌려주면 안 된다. 후보마다 '얼마나 확실한 일치인지'
+        //   등급을 매겨서 가장 좋은 것을 고른다.
+        //   [냐냐 요청] 예전엔 단어장 순서가 곧 우선순위였다. 그래서 "duermo" 를 쓰면
+        //   dormir 가 아니라 dormirse 가 점수를 받았다 — dormirse 의 "me duermo" 에서
+        //   재귀대명사를 뗀 "duermo" 가 먼저 걸렸기 때문이다.
+        //   재귀형과 아닌 형이 같이 등록된 동사가 28개라 이게 자주 어긋났고,
+        //   냐냐 입장에서는 "분명히 쓴 단어에 점수가 안 붙는" 걸로 보였다.
+        //   (그 단어에 점수가 안 붙는 데서 끝나지 않는다 — 엉뚱한 단어가 대신 받는다.)
+        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REFLEXIVE: 3, ADJ_STEM: 4 };
         function findVocabWordByForm(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return null;
             // 재귀동사 대응: 앞의 재귀대명사(me/te/se/nos/os)를 뗀 형태도 준비
             //   예: "me llamo" → "llamo", "se llama" → "llama"
-            const targetNoReflexive = target.replace(/^(me|te|se|nos|os)\s+/, '');
+            const stripReflexive = (s) => s.replace(/^(me|te|se|nos|os)\s+/, '');
+            const targetNoReflexive = stripReflexive(target);
+
+            let best = null, bestRank = Infinity;
+            // 같은 등급이면 단어장에서 먼저 나온 것을 쓴다 (예전과 같은 순서)
+            const offer = (v, rank) => { if (rank < bestRank) { best = v; bestRank = rank; } };
+
             for (const v of vocabulary) {
+                if (bestRank === FVBF_RANK.WORD) break; // 더 좋은 게 나올 수 없다
                 // 1) 원형/사전형 그대로 일치
-                if (normalizeSpanishAnswer(v.word) === target) return v;
+                if (normalizeSpanishAnswer(v.word) === target) { offer(v, FVBF_RANK.WORD); continue; }
                 // 2) 동사: 등록된 모든 시제/인칭 변형과 대조
                 if (v.pos === 'verb') {
                     const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
@@ -2220,11 +2287,15 @@ ${noteListText}
                         for (const pk in forms) {
                             if (!forms[pk]) continue;
                             const formN = normalizeSpanishAnswer(forms[pk]);
-                            // 저장된 변형에서도 재귀대명사를 떼고 비교 (양쪽 다 관대하게)
-                            const formNoReflexive = formN.replace(/^(me|te|se|nos|os)\s+/, '');
-                            if (formN === target || formN === targetNoReflexive
-                                || formNoReflexive === target || formNoReflexive === targetNoReflexive) {
-                                return v;
+                            // 글자 그대로 맞은 것이 재귀대명사를 떼고 맞춘 것보다 항상 낫다.
+                            //   "duermes" → dormir 의 "duermes"(그대로) 가
+                            //               dormirse 의 "te duermes"(뗀 뒤) 를 이긴다.
+                            //   "te duermes" → 반대로 dormirse 가 그대로 맞아서 이긴다.
+                            if (formN === target) { offer(v, FVBF_RANK.FORM); break; }
+                            const formNoReflexive = stripReflexive(formN);
+                            if (formN === targetNoReflexive || formNoReflexive === target
+                                || formNoReflexive === targetNoReflexive) {
+                                offer(v, FVBF_RANK.REFLEXIVE);
                             }
                         }
                     }
@@ -2234,8 +2305,9 @@ ${noteListText}
                     const base = normalizeSpanishAnswer(v.word);
                     const stem = base.replace(/(o|a|os|as|e|es)$/, '');
                     // 어간이 충분히 길고, 대상이 같은 어간으로 시작하며 형용사 어미로 끝나면 같은 단어
+                    //   어간만 보는 느슨한 추측이라 등급은 가장 낮다
                     if (stem.length >= 2 && target.startsWith(stem) && /^(o|a|os|as|e|es)?$/.test(target.slice(stem.length))) {
-                        return v;
+                        offer(v, FVBF_RANK.ADJ_STEM);
                     }
                 }
                 // 4) 명사: 단수형 등록됐으면 복수형도 같은 단어로 취급 (그 반대도)
@@ -2244,7 +2316,7 @@ ${noteListText}
                     const stripArt = (s) => s.replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '');
                     const vn = stripArt(normalizeSpanishAnswer(v.word));
                     const tn = stripArt(target);
-                    if (vn === tn) return v;
+                    if (vn === tn) { offer(v, FVBF_RANK.WORD); continue; }
                     // 스페인어 복수 규칙: +s / +es / z→ces
                     const plurals = (s) => {
                         const arr = [s + 's', s + 'es'];
@@ -2252,10 +2324,10 @@ ${noteListText}
                         return arr;
                     };
                     // 단수→복수 또는 복수→단수 매칭
-                    if (plurals(vn).includes(tn) || plurals(tn).includes(vn)) return v;
+                    if (plurals(vn).includes(tn) || plurals(tn).includes(vn)) offer(v, FVBF_RANK.NOUN_NUM);
                 }
             }
-            return null;
+            return best;
         }
 
         function wordExistsInVocab(rawWord) {

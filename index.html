@@ -1003,6 +1003,18 @@
                         <!-- [냐냐 요청] 이번 미션이 어떤 문법 노트·단어를 보고 나왔는지 (첨삭 후에만 공개 — 미리 보면 힌트가 됨) -->
                         <div id="ai-mission-refs" class="hidden"></div>
 
+                        <!-- [냐냐 요청] 틀리진 않았는데 원어민은 다르게 말하는 경우를 짚어주는 자리.
+                             예: "el pie de mi novio" → "los pies de mi novio"
+                             오답이 아니므로 빨강이 아니라 하늘색. 알려줄 게 없으면 숨는다 (renderAiNatural) -->
+                        <div id="ai-natural-box" class="hidden bg-sky-50 border border-sky-200 p-4 rounded-2xl">
+                            <div class="flex items-center gap-2 text-slate-500 text-xs font-bold mb-2">
+                                <i class="fa-solid fa-comment-dots text-sky-400"></i>
+                                <span>이렇게 말하면 더 자연스러워요</span>
+                            </div>
+                            <div id="ai-natural-text" class="text-sm font-bold text-slate-800 leading-6"></div>
+                            <div id="ai-natural-why" class="text-[13px] text-slate-600 leading-6 mt-1"></div>
+                        </div>
+
                         <!-- [냐냐 요청] 팁이 AI 코멘트 역할까지 하므로 길어졌다.
                              글씨가 흐려서(amber-900/80) 잘 안 읽혔던 것도 진하게 바꿈 -->
                         <!-- [냐냐 요청] 주황·갈색이 너무 세서 연노랑 바탕 + 검은 글씨로.
