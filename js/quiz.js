@@ -659,8 +659,12 @@ let quizSession = null;
         // [냐냐 요청] keepAccents=true 면 악센트를 살려서 비교한다.
         //   악센트만 틀린 답을 '그냥 정답'으로 넘기지 않고 한 번 더 물어보려고 쓴다
         //   (esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다).
+        //   \u26a0\ufe0f NFC \ub85c \uba3c\uc800 \ubaa8\uc591\uc744 \ud1b5\uc77c\ud55c\ub2e4. \uac19\uc740 \u00e1 \ub77c\ub3c4 \ud55c \uae00\uc790(NFC)\ub85c\ub3c4, a+\uc545\uc13c\ud2b8 \ub450 \uae00\uc790(NFD)\ub85c\ub3c4
+        //      \uc800\uc7a5\ub420 \uc218 \uc788\uace0 \ub208\uc73c\ub85c\ub294 \uad6c\ubcc4\uc774 \uc548 \ub41c\ub2e4. \uc545\uc13c\ud2b8\ub97c \ub5bc\ub294 \ucabd\uc740 \uc5b4\ucc28\ud53c NFD \ub85c \ubd84\ud574\ud558\ub2c8
+        //      \uc0c1\uad00\uc5c6\uc9c0\ub9cc, \uc0b4\ub824\uc11c \ube44\uad50\ud558\ub294 \ucabd(keepAccents)\uc740 \ubaa8\uc591\uc774 \ub2e4\ub974\uba74 \uac19\uc740 \uae00\uc790\ub97c \uc624\ub2f5\uc73c\ub85c \ubcf8\ub2e4.
+        //      \ub9e5\u00b7\uc544\uc774\ud3f0\uc5d0\uc11c \ubcf5\uc0ac\ud574 \ubd99\uc5ec\ub123\uc73c\uba74 \ubd84\ud574\ud615\uc774 \ub4e4\uc5b4\uc62c \uc218 \uc788\ub2e4.
         function normalizeSpanishAnswer(s, keepAccents) {
-            const base = String(s || '').toLowerCase().trim();
+            const base = String(s || '').toLowerCase().trim().normalize('NFC');
             return (keepAccents ? base : base.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
                 // [냐냐 PATCH] 대괄호 자리표시자·한글은 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
                 //   (냐냐가 저 안의 한글을 똑같이 칠 수는 없으니 채점 대상에서 뺌)

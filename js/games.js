@@ -617,7 +617,9 @@
             input.disabled = true;
 
             // 문장 비교 — 문장부호·대소문자는 관대, 악센트는 엄격 [냐냐 요청]
-            const norm = (s) => s.toLowerCase().replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim();
+            //   NFC 로 모양을 통일한다 (normalizeSpanishAnswer 와 같은 이유 — 분해형 á 를 오답으로 보면 안 된다)
+            const norm = (s) => String(s || '').toLowerCase().normalize('NFC')
+                .replace(/[.,!?¿¡;:"'()]/g, '').replace(/\s+/g, ' ').trim();
             const correct = gameState.current.example;
             const isCorrect = norm(userText) === norm(correct);
 
