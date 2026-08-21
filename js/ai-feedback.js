@@ -1749,9 +1749,25 @@ ${refGrammar}${refWords}
         // 응답을 [{ name, ok }] 로 펴준다.
         //   지금 형식은 맞음/틀림이 갈린 문자열 배열(wordsOk/wordsBad)이다. 예전 형식
         //   ([{word, spelling}])도 받아준다 — 모델이 옛 꼴로 답해도 점수가 조용히 사라지지 않게.
+        // [냐냐 요청] 첨삭이 "solo|adverb" 처럼 품사를 붙여 보낸다. 같은 철자가 품사만 다르게
+        //   두 번 등록된 단어(solo 부사/형용사, joven 명사/형용사 등 11개)를 가려내려고 쓴다.
+        //   ⚠️ 문법 노트 제목에도 이 함수를 쓴다. 제목에 | 가 들어 있어도 잘리면 안 되므로
+        //      뒤 조각이 진짜 품사 이름일 때만 가른다.
+        const AI_POS_WORDS = new Set(['noun', 'verb', 'adjective', 'adverb', 'preposition',
+            'pronoun', 'conjunction', 'interrogative', 'phrase']);
         function flattenScoredList(feedback, okKey, badKey, legacyKey, legacyName, legacyFlag) {
             const out = [];
-            const push = (v, ok) => { const s = String(v || '').trim(); if (s) out.push({ name: s, ok }); };
+            const push = (v, ok) => {
+                let s = String(v || '').trim();
+                if (!s) return;
+                let pos = '';
+                const bar = s.lastIndexOf('|');
+                if (bar > 0) {
+                    const tail = s.slice(bar + 1).trim().toLowerCase();
+                    if (AI_POS_WORDS.has(tail)) { pos = tail; s = s.slice(0, bar).trim(); }
+                }
+                if (s) out.push({ name: s, ok, pos });
+            };
             if (Array.isArray(feedback && feedback[okKey])) feedback[okKey].forEach(v => push(v, true));
             if (Array.isArray(feedback && feedback[badKey])) feedback[badKey].forEach(v => push(v, false));
             if (!out.length && Array.isArray(feedback && feedback[legacyKey])) {
@@ -1776,14 +1792,28 @@ ${refGrammar}${refWords}
                 .replace(/\[[^\]]*\]/g, ' ')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
                 .replace(/\s+/g, ' ').trim();
+            // 같은 철자가 품사만 다르게 등록된 단어가 11개 있다 (solo 부사/형용사, joven 명사/형용사 …).
+            //   예전엔 먼저 등록된 쪽만 map 에 남아서, 나머지 하나는 첨삭 점수를 영영 못 받았다.
+            //   이제 후보를 모두 들고 있다가 첨삭이 알려준 품사로 고른다.
             const byWord = new Map();
-            vocabulary.forEach(w => { const k = norm(w.word); if (k && !byWord.has(k)) byWord.set(k, w); });
+            vocabulary.forEach(w => {
+                const k = norm(w.word);
+                if (!k) return;
+                if (!byWord.has(k)) byWord.set(k, []);
+                byWord.get(k).push(w);
+            });
+            // 품사를 못 받았거나 맞는 게 없으면 예전처럼 먼저 등록된 것을 쓴다
+            const pickByPos = (cands, pos) => {
+                if (!cands || !cands.length) return null;
+                if (cands.length === 1 || !pos) return cands[0];
+                return cands.find(w => String(w.pos || '').toLowerCase() === pos) || cands[0];
+            };
 
             const done = new Set();
             list.forEach(item => {
                 const key = norm(item.name);
                 // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
-                const w = byWord.get(key)
+                const w = pickByPos(byWord.get(key), item.pos)
                     || ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null);
                 if (!w || done.has(w.id)) return;
                 done.add(w.id);
@@ -1909,10 +1939,10 @@ ${refGrammar}${refWords}
         const AI_SCORING_JSON_FIELDS = `
                "grammarOk": ["EXACT note titles from the list above that this sentence uses CORRECTLY"],
                "grammarBad": ["EXACT note titles from the list above that this sentence uses INCORRECTLY"],
-               "wordsOk": ["dictionary form of each content word the student spelled CORRECTLY"],
-               "wordsBad": ["dictionary form of each content word the student MISSPELLED"]`;
+               "wordsOk": ["each content word the student spelled CORRECTLY, written as \\"dictionary form|part of speech\\""],
+               "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""]`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write.
+            IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
             IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. Most sentences match 0-2 notes; listing many is a sign you are guessing. Do NOT list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
