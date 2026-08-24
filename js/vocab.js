@@ -128,6 +128,69 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => hasConjValues(getTenseConj(word, k)));
         }
 
+        // ============================================================
+        // [냐냐 요청] '불규칙'이라고 적혀 있지만 실제로는 규칙형인 시제를 걸러낸다.
+        //   AI 가 단어를 채울 때, 다른 시제의 불규칙을 현재시제에 잘못 붙이는 일이 있었다.
+        //   abrir 은 과거분사(abierto)가 불규칙인데 현재시제가 '1인칭 불규칙'으로 저장돼서
+        //   완전히 규칙형인 abro 가 파랗게 강조됐다. 실데이터에서 9개가 이랬다
+        //   (abrir·romper·sacar·cruzar·andar·leer·meter 현재 / contener·esquiar 현재분사).
+        //
+        //   스페인어 현재형 규칙 변화는 계산할 수 있으므로, 여섯 칸이 전부 계산 결과와
+        //   같으면 그 시제는 규칙이다 — 라벨이 뭐라고 적혀 있든.
+        //   ⚠️ 반대 방향(규칙이라 적혔는데 형태가 다름)은 건드리지 않는다.
+        //      enviar(envío)·esquiar(esquío)처럼 악센트만 옮겨가는 동사가 걸려서,
+        //      맞게 적어둔 것까지 불규칙으로 뒤집어 버린다.
+        // ============================================================
+        const REG_ENDINGS = {
+            ar: ['o', 'as', 'a', 'amos', 'áis', 'an'],
+            er: ['o', 'es', 'e', 'emos', 'éis', 'en'],
+            ir: ['o', 'es', 'e', 'imos', 'ís', 'en']
+        };
+        const REG_PERSON_KEYS = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
+        const REG_REFLEXIVE_PRONOUNS = ['me', 'te', 'se', 'nos', 'os', 'se'];
+        function conjNorm(s) { return String(s || '').trim().toLowerCase().normalize('NFC'); }
+        // 재귀동사는 단어장이 대명사를 포함해 저장한다 (levantarse → "me levanto")
+        function regularPresentForms(infinitive) {
+            let w = conjNorm(infinitive);
+            let reflexive = false;
+            if (w.endsWith('se')) { reflexive = true; w = w.slice(0, -2); }
+            const ending = REG_ENDINGS[w.slice(-2)];
+            const stem = w.slice(0, -2);
+            if (!ending || !stem) return null;
+            const out = {};
+            REG_PERSON_KEYS.forEach((k, i) => {
+                out[k] = (reflexive ? REG_REFLEXIVE_PRONOUNS[i] + ' ' : '') + stem + ending[i];
+            });
+            return out;
+        }
+        function regularGerundioForm(infinitive) {
+            const w = conjNorm(infinitive);
+            // 재귀는 대명사가 뒤에 붙고 악센트까지 생겨서(secándose) 계산이 복잡하다 — 건드리지 않는다
+            if (w.endsWith('se')) return null;
+            const type = w.slice(-2);
+            if (!REG_ENDINGS[type]) return null;
+            return w.slice(0, -2) + (type === 'ar' ? 'ando' : 'iendo');
+        }
+        // 이 시제의 저장된 형태가 규칙 변화와 완전히 같은가
+        function tenseLooksRegular(word, tenseKey) {
+            const c = getTenseConj(word, tenseKey);
+            if (!word || !c) return false;
+            if (tenseKey === 'gerundio') {
+                const reg = regularGerundioForm(word.word);
+                return !!reg && conjNorm(c.form) === reg;
+            }
+            if (tenseKey !== 'presente') return false; // 나머지 시제는 규칙표가 없으니 판단하지 않는다
+            const reg = regularPresentForms(word.word);
+            if (!reg) return false;
+            return REG_PERSON_KEYS.every(k => conjNorm(c[k]) === conjNorm(reg[k]));
+        }
+        // 화면에 쓸 실제 분류. 라벨이 불규칙인데 형태가 규칙형이면 규칙으로 돌려준다.
+        function resolveTenseIrregularity(word, tenseKey, verbClass, irrType) {
+            if (verbClass !== 'irregular') return { verbClass: verbClass, irrType: irrType };
+            if (tenseLooksRegular(word, tenseKey)) return { verbClass: 'regular', irrType: 'none' };
+            return { verbClass: verbClass, irrType: irrType };
+        }
+
         // 블록 하나의 입력칸을 시제 종류에 맞게 렌더 (기존 입력값 최대한 보존)
         function renderBlockInputs(block) {
             const tense = block.querySelector('.conj-block-tense').value;
@@ -251,9 +314,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             let tenses = TENSE_TYPE_OPTIONS.map(o => o.key).filter(k => byTense[k]);
             if (!tenses.includes('presente')) tenses.unshift('presente'); // 현재시제 블록은 항상 하나
             tenses.forEach(t => {
-                const vc = vcByTense[t] || ((t === 'presente' && word && word.verbClass) ? word.verbClass : (irrByTense[t] ? 'irregular' : 'regular'));
-                const irr = irrByTense[t] || ((t === 'presente' && word && word.irregularType) ? word.irregularType : 'none');
-                addTenseBlock(t, byTense[t] || {}, vc, irr);
+                const rawVc = vcByTense[t] || ((t === 'presente' && word && word.verbClass) ? word.verbClass : (irrByTense[t] ? 'irregular' : 'regular'));
+                const rawIrr = irrByTense[t] || ((t === 'presente' && word && word.irregularType) ? word.irregularType : 'none');
+                // 조회 화면과 같은 것을 보여준다. 여기만 '불규칙'으로 열리면 카드와 어긋나 보인다.
+                //   이 상태로 저장하면 잘못 적힌 값도 같이 바로잡힌다.
+                const r = resolveTenseIrregularity(word, t, rawVc, rawIrr);
+                addTenseBlock(t, byTense[t] || {}, r.verbClass, r.irrType);
             });
         }
 
@@ -2838,8 +2904,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return keys.map(k => {
                 const c = getTenseConj(w, k);
                 if (!hasConjValues(c)) return '';
-                const irrType = irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : '');
-                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular'));
+                const rawIrr = irrByTense[k] || ((k === 'presente') ? (w.irregularType || '') : '');
+                const rawClass = vcByTense[k] || ((rawIrr && rawIrr !== 'none') ? 'irregular' : (k === 'presente' ? (w.verbClass || 'regular') : 'regular'));
+                // 적혀 있는 게 불규칙이어도 형태가 규칙형이면 규칙으로 본다 (resolveTenseIrregularity 주석 참고)
+                const resolved = resolveTenseIrregularity(w, k, rawClass, rawIrr);
+                const irrType = resolved.irrType;
+                const verbClass = resolved.verbClass;
                 const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`;
 
                 const body = (c.form && !c.yo)

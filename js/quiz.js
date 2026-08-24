@@ -871,8 +871,13 @@ let quizSession = null;
             const blocks = keys.map(k => {
                 const c = conjOf(k);
                 if (!hasValues(c)) return '';
-                const irrType = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
-                const verbClass = vcByTense[k] || ((irrType && irrType !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
+                const rawIrr = irrByTense[k] || ((k === 'presente') ? (word.irregularType || '') : '');
+                const rawClass = vcByTense[k] || ((rawIrr && rawIrr !== 'none') ? 'irregular' : (k === 'presente' ? (word.verbClass || 'regular') : 'regular'));
+                // 적혀 있는 게 불규칙이어도 형태가 규칙형이면 규칙으로 본다 (vocab.js resolveTenseIrregularity)
+                const resolved = (typeof resolveTenseIrregularity === 'function')
+                    ? resolveTenseIrregularity(word, k, rawClass, rawIrr) : { verbClass: rawClass, irrType: rawIrr };
+                const irrType = resolved.irrType;
+                const verbClass = resolved.verbClass;
                 const isIrr = verbClass === 'irregular' && irrType && irrType !== 'none';
                 const isAsked = (k === askedKey);
 
