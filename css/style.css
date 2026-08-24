@@ -164,14 +164,14 @@ html {
             padding: 0 0.12em;
             border-radius: 3px;
         }
+        /* 색만 준다 — 굵기는 붙이지 않는다.
+           편집창에서는 색이 인라인 스타일로 붙어서 안 굵은데, 저장하면 이 규칙이
+           걸려 굵어졌다. 편집창에서 본 모습 그대로 나와야 하므로 굵기는 뺀다. */
         .nyanya-rt .rt-red, .nyanya-rt-edit .rt-red {
             color: #dc2626;
-            font-weight: 700;
         }
-        /* 파란 글씨 — 빨간 글씨와 같은 굵기로 맞춘다 */
         .nyanya-rt .rt-blue, .nyanya-rt-edit .rt-blue {
             color: #2563eb;
-            font-weight: 700;
         }
         .nyanya-rt b, .nyanya-rt-edit b,
         .nyanya-rt strong, .nyanya-rt-edit strong { font-weight: 800; }
