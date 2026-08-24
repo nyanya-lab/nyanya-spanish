@@ -6991,7 +6991,15 @@ let vocabulary = [];
             'ai-feedback': { bg: 'bg-sky-50', text: 'text-sky-700' },
             'records': { bg: 'bg-emerald-50', text: 'text-emerald-700' }
         };
+        // [냐냐 요청] 탭마다 마지막으로 보던 스크롤 위치. 탭을 왔다갔다해도 보던 자리로 돌아온다.
+        //   왜 기억해 둬야 하나: 탭은 화면을 갈아끼우는 게 아니라 hidden 을 옮기는 방식이라
+        //   스크롤 주체가 창(window) 하나뿐이다. 짧은 탭(대부분 720px = 스크롤 없음)으로 옮기는
+        //   순간 브라우저가 스크롤을 0으로 깎아버려서, 돌아와도 맨 위였다.
+        //   문법 탭이 제일 길어서(2,200px+, 표를 펼치면 더) 여기서 제일 크게 티가 났다.
+        const tabScrollTop = {};
         function changeTab(tabId) {
+            // 떠나기 전에 지금 보던 자리를 적어둔다 (깎이기 전에)
+            if (activeTab && activeTab !== tabId) tabScrollTop[activeTab] = window.scrollY;
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
@@ -7087,6 +7095,18 @@ let vocabulary = [];
                 // [냐냐 요청] 탭을 왔다갔다해도 마지막에 보던 모습 그대로 둔다
                 //   (예전엔 여기서 grammarOpenState 를 비워서 펼쳐둔 노트가 다 접혔다)
                 renderGrammarTables();
+            }
+
+            // 펼쳐둔 것뿐 아니라 보던 자리까지 되돌린다. 처음 여는 탭은 맨 위에서 시작한다.
+            //   ⚠️ requestAnimationFrame 으로 미루면 안 된다. 창이 백그라운드일 때는 프레임이
+            //      돌지 않아서 복원이 영영 안 걸린다 (폰에서 앱을 잠깐 내렸다 올리면 그렇다).
+            //      scrollHeight 를 한 번 읽어 레이아웃을 확정시킨 뒤 바로 세운다.
+            const savedTop = tabScrollTop[tabId] || 0;
+            void document.documentElement.scrollHeight;
+            window.scrollTo(0, savedTop);
+            // 폰트·이미지가 늦게 자리를 잡아 높이가 나중에 늘어나는 경우만 한 번 더 시도한다
+            if (savedTop && Math.round(window.scrollY) !== savedTop) {
+                requestAnimationFrame(() => window.scrollTo(0, savedTop));
             }
         }
 
