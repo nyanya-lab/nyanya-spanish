@@ -2472,13 +2472,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     wordObj.createdAt = prev.createdAt || prev.registeredAt || null;
                     wordObj.updatedAt = Date.now();
                     vocabulary[index] = wordObj; // 제자리 교체
-                    showToast("단어가 깔끔하게 수정되었습니다! ✏️", "success");
+                    // 끝낼 때 한 번만 알린다 — 여기서도 띄우면 같은 말이 두 줄로 뜬다
                 }
                 logAction('snapshot');
             } else {
                 wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
                 vocabulary.unshift(wordObj);
-                showToast("새 단어가 등록되었습니다! 📚", "success");
+                // 등록도 끝낼 때 한 번만 알린다 (아래 토스트 또는 '계속 등록?' 확인창이 이미 말해준다)
                 logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
@@ -2550,7 +2550,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
             } else {
                 // [냐냐 PATCH] 수정 저장은 팝업 없이 바로 닫기 (토스트만)
-                showToast("수정했어요! ✏️", "success");
+                showToast("단어를 수정했어요! ✏️", "success");
                 closeWordModal();
             }
         }
