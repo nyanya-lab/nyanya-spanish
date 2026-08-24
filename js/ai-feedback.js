@@ -411,6 +411,12 @@
                 showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
                 return;
             }
+            // 저장해 둔 섞기 비율을 슬라이더에 반영
+            const mixRange = document.getElementById('question-ai-mix-range');
+            if (mixRange) mixRange.value = String(questionAiMix);
+            const mixLabel = document.getElementById('question-ai-mix-label');
+            if (mixLabel) mixLabel.innerText = questionAiMix + '%';
+
             const listBox = document.getElementById('topic-picker-list');
             const topics = [...new Set(customQuestions.map(q => q.topic || '기타'))];
 
@@ -467,7 +473,102 @@
             showToast(`랜덤 뽑기 주제를 '${label}'(으)로 설정했어요! 🎯`, "success");
         }
 
-        function pickRandomQuestion() {
+        // ============================================================
+        // [냐냐 요청] 랜덤 뽑기에 AI가 만든 질문을 섞는다.
+        //   예전엔 등록한 질문만 돌고 돌았다. AI 질문은 답변을 제출한 뒤
+        //   '연관 질문' 버튼으로만 나왔고 일회성이라 모을 수도 없었다.
+        //   재료는 내가 등록한 질문의 주제 — 결이 비슷해서 이질감이 적다.
+        // ============================================================
+        const QUESTION_AI_MIX_KEY = 'nyanya_question_ai_mix';
+        let questionAiMix = 30; // %
+        function loadQuestionAiMix() {
+            try {
+                const v = parseInt(localStorage.getItem(QUESTION_AI_MIX_KEY) || '', 10);
+                if (!isNaN(v)) questionAiMix = Math.min(100, Math.max(0, v));
+            } catch (e) {}
+        }
+        function setQuestionAiMix(v) {
+            questionAiMix = Math.min(100, Math.max(0, parseInt(v, 10) || 0));
+            const lab = document.getElementById('question-ai-mix-label');
+            if (lab) lab.innerText = questionAiMix + '%';
+            try { localStorage.setItem(QUESTION_AI_MIX_KEY, String(questionAiMix)); } catch (e) {}
+        }
+        loadQuestionAiMix();
+
+        // AI가 만든 질문일 때만 '이 질문 저장' 버튼을 보여준다
+        function updateSaveAiQuestionBtn() {
+            const btn = document.getElementById('question-save-ai-btn');
+            if (!btn) return;
+            const q = currentQuestionForAnswer;
+            const savable = !!(q && q._aiMade && !q._saved);
+            btn.classList.toggle('hidden', !savable);
+        }
+        function saveAiQuestion() {
+            const q = currentQuestionForAnswer;
+            if (!q || !q._aiMade) return;
+            const topic = q.topic || '기타';
+            const text = String(q.question || '').trim();
+            if (!text) return;
+            const dup = customQuestions.find(x => (x.topic || '기타') === topic
+                && x.question.trim().toLowerCase() === text.toLowerCase());
+            if (dup) { showToast(`'${topic}' 주제에 이미 같은 질문이 있어요!`, "info"); q._saved = true; updateSaveAiQuestionBtn(); return; }
+            customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
+            q._saved = true;
+            const hi = hiddenQuestionTopics.indexOf(topic);
+            if (hi >= 0) hiddenQuestionTopics.splice(hi, 1);
+            saveToStorage();
+            if (typeof renderCustomQuestionsList === 'function') renderCustomQuestionsList();
+            if (typeof refreshTopicsDatalist === 'function') refreshTopicsDatalist();
+            updateSaveAiQuestionBtn();
+            showToast(`'${topic}' 주제에 질문을 저장했어요! 📝`, "success");
+        }
+
+        // 주제를 재료로 새 질문 하나를 만든다. 실패하면 null (부르는 쪽이 등록 질문으로 넘어간다)
+        async function generateTopicQuestion(pool) {
+            const topics = [...new Set(pool.map(q => q.topic || '기타'))];
+            // 결을 잡아주려고 그 주제의 기존 질문을 몇 개 보여준다. 겹치지 말라고도 일러둔다.
+            const samples = pool.slice().sort(() => Math.random() - 0.5).slice(0, 8)
+                .map(q => `- [${q.topic || '기타'}] ${q.question}`);
+            const prompt = `Topics: ${topics.join(', ')}
+            Questions the student already has (do NOT repeat or lightly reword these):
+            ${samples.join('\n            ')}
+
+            Write ONE new Spanish question on one of those topics, in the same spirit and difficulty as the examples. It must be answerable from personal experience.
+            ${buildLearnerProfileSummary()}`;
+            const system = `You are a friendly Spanish conversation partner for a learner named "냐냐".
+            Return JSON matching this schema:
+            {
+               "question": "The new question in Spanish",
+               "koreanHint": "Korean meaning of the question, 1 sentence",
+               "topic": "EXACTLY one of the given topics, copied verbatim"
+            }
+            Do not wrap JSON in markdown.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    question: { type: "STRING" },
+                    koreanHint: { type: "STRING" },
+                    topic: { type: "STRING" }
+                },
+                required: ["question", "koreanHint", "topic"]
+            };
+            try {
+                const data = extractAndParseJson(await callGemini(prompt, system, schema, 'low'));
+                if (!data || !String(data.question || '').trim()) return null;
+                return {
+                    id: 'ai-' + Date.now(),
+                    question: String(data.question).trim(),
+                    topic: topics.includes(data.topic) ? data.topic : (topics[0] || '기타'),
+                    koreanHint: data.koreanHint || '',
+                    _aiMade: true
+                };
+            } catch (e) {
+                console.warn('AI 질문 생성 실패, 등록 질문으로 대신함', e);
+                return null;
+            }
+        }
+
+        async function pickRandomQuestion() {
             if (customQuestions.length === 0) {
                 showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
                 return;
@@ -481,8 +582,19 @@
                 showToast("설정한 주제에 질문이 없어요. '주제 설정'에서 다시 골라주세요!", "error");
                 return;
             }
-            const randIdx = Math.floor(Math.random() * pool.length);
-            currentQuestionForAnswer = pool[randIdx];
+
+            // 주사위를 굴려 AI 차례면 새로 만든다. 키가 없거나 실패하면 조용히 등록 질문으로.
+            let picked = null;
+            if (questionAiMix > 0 && Math.random() * 100 < questionAiMix && hasGeminiApiKey()) {
+                const btn = document.getElementById('question-pick-btn');
+                const original = btn ? btn.innerHTML : '';
+                if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>만드는 중...</span>`; }
+                try { picked = await generateTopicQuestion(pool); }
+                finally { if (btn) { btn.disabled = false; btn.innerHTML = original; } }
+            }
+            if (!picked) picked = pool[Math.floor(Math.random() * pool.length)];
+            currentQuestionForAnswer = picked;
+            updateSaveAiQuestionBtn();
             document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
             // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
             const topicBadge = document.getElementById('question-topic-badge');
@@ -629,6 +741,7 @@
                 const data = extractAndParseJson(responseText);
                 // 생성된 연관 질문을 현재 질문으로 세팅 (등록 질문 목록엔 저장 안 함 — 일회성 대화 흐름)
                 currentQuestionForAnswer = { question: data.followupQuestion, _isFollowup: true, koreanHint: data.koreanHint || '' };
+                updateSaveAiQuestionBtn(); // 연관 질문은 대화 흐름용이라 저장 버튼을 감춘다
                 document.getElementById('question-display-text').innerText = data.followupQuestion;
                 // 주제 배지를 한국어 힌트로 활용
                 const topicBadge = document.getElementById('question-topic-badge');
