@@ -4635,6 +4635,7 @@ let vocabulary = [];
                 ${b(`rtExec('${id}','italic')`, '기울임', 'I', 'w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-xs italic transition-all')}
                 ${b(`rtHighlight('${id}')`, '형광펜', '<i class="fa-solid fa-highlighter text-[11px] text-amber-500"></i>', ico)}
                 ${b(`rtRed('${id}')`, '빨간 글씨', '<i class="fa-solid fa-pen text-[11px] text-red-500"></i>', ico)}
+                ${b(`rtBlue('${id}')`, '파란 글씨', '<i class="fa-solid fa-pen text-[11px] text-blue-600"></i>', ico)}
                 ${b(`rtHeading('${id}')`, '소제목', 'H', 'w-7 h-7 rounded-lg text-slate-600 hover:bg-white hover:text-violet-600 font-black text-[11px] transition-all')}
                 ${sep}
                 ${b(`rtToggleList('${id}')`, '글머리 기호 넣기/빼기', '<i class="fa-solid fa-list-ul text-[11px] text-slate-600"></i>', ico)}
@@ -5109,6 +5110,20 @@ let vocabulary = [];
             return false;
         }
 
+        // [냐냐 요청] 파란 글씨 — 보라(#8b5cf6·#4c1d95)까지 파랑으로 잡히면 안 되므로
+        //   'G 가 R 보다 크다' 는 조건을 같이 본다 (보라는 R 이 G 보다 크다)
+        function rtIsBluish(color) {
+            if (!color) return false;
+            const c = color.toString().toLowerCase().replace(/\s/g, '');
+            if (c.includes('2563eb') || c.includes('3b82f6') || c.includes('1d4ed8') || c === 'blue') return true;
+            const m = c.match(/rgba?\((\d+),(\d+),(\d+)/);
+            if (m) {
+                const r = +m[1], g = +m[2], b = +m[3];
+                return b > 120 && b > r * 1.6 && b > g * 1.25 && g >= r;
+            }
+            return false;
+        }
+
         function rtHasBg(color) {
             if (!color) return false;
             const c = color.toString().toLowerCase().replace(/\s/g, '');
@@ -5149,9 +5164,9 @@ let vocabulary = [];
                     // execCommand가 만든 <font> → 의미 태그로 변환
                     if (tag === 'FONT') {
                         const col = child.getAttribute('color');
-                        if (rtIsReddish(col)) {
+                        if (rtIsReddish(col) || rtIsBluish(col)) {
                             const rep = doc.createElement('span');
-                            rep.className = 'rt-red';
+                            rep.className = rtIsReddish(col) ? 'rt-red' : 'rt-blue';
                             while (child.firstChild) rep.appendChild(child.firstChild);
                             child.replaceWith(rep);
                         } else {
@@ -5170,17 +5185,22 @@ let vocabulary = [];
                         return;
                     }
 
-                    // 스타일 → mark / rt-red 로 정규화
+                    // 스타일 → mark / rt-red / rt-blue 로 정규화
                     const style = child.getAttribute('style') || '';
                     const bgM = style.match(/background(?:-color)?\s*:\s*([^;]+)/i);
                     const fgM = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
                     // ⚠️ 이미 저장된 rt-red 는 스타일이 없으므로 class 도 같이 봐야 함
                     //    (안 보면 저장→다시 열기 때 빨간 글씨가 풀려버림)
                     const hadRed = child.classList && child.classList.contains('rt-red');
+                    const hadBlue = child.classList && child.classList.contains('rt-blue');
                     // [냐냐 요청] 글머리 없는 문단의 들여쓰기 단계(rt-in1~3)도 보존
                     const inLv = (child.className && child.className.toString().match(/\brt-in([1-3])\b/) || [])[1];
                     const wantMark = !!(bgM && rtHasBg(bgM[1]));
-                    const wantRed = hadRed || !!(fgM && rtIsReddish(fgM[1]));
+                    // 색을 바꿔 칠했으면(빨강→파랑) 새 인라인 색이 옛 class 를 이긴다
+                    const fgRed = !!(fgM && rtIsReddish(fgM[1]));
+                    const fgBlue = !!(fgM && rtIsBluish(fgM[1]));
+                    const wantRed = fgRed || (hadRed && !fgBlue);
+                    const wantBlue = fgBlue || (hadBlue && !fgRed);
                     const wantBold = /font-weight\s*:\s*(bold|[7-9]00)/i.test(style);
 
                     // 속성 전부 제거 (class는 아래에서 다시 지정)
@@ -5194,11 +5214,12 @@ let vocabulary = [];
                         target.appendChild(mk);
                         target = mk;
                     }
-                    if (wantRed) {
-                        if (child.tagName === 'SPAN') child.className = 'rt-red';
+                    if (wantRed || wantBlue) {
+                        const cls = wantRed ? 'rt-red' : 'rt-blue';
+                        if (child.tagName === 'SPAN') child.className = cls;
                         else {
                             const sp = doc.createElement('span');
-                            sp.className = 'rt-red';
+                            sp.className = cls;
                             while (target.firstChild) sp.appendChild(target.firstChild);
                             target.appendChild(sp);
                         }
@@ -5362,6 +5383,10 @@ let vocabulary = [];
             (n.classList && n.classList.contains('rt-red'))
             || rtIsReddish(n.style && n.style.color)
             || (n.tagName === 'FONT' && rtIsReddish(n.getAttribute('color')));
+        const rtIsBlueNode = (n) =>
+            (n.classList && n.classList.contains('rt-blue'))
+            || rtIsBluish(n.style && n.style.color)
+            || (n.tagName === 'FONT' && rtIsBluish(n.getAttribute('color')));
 
         // [냐냐 요청] 서식 해제 — 형광펜과 빨간펜이 <span> 하나에 같이 얹혀 있을 수 있다.
         //   형광펜을 칠한 자리에 빨간펜을 칠하면 크롬이 둘을 한 span 으로 합쳐 버린다:
@@ -5376,10 +5401,12 @@ let vocabulary = [];
                     //   다만 글자색을 같이 지고 있으면 그 색은 살려서 span 으로 바꿔 끼운다
                     const color = node.style && node.style.color;
                     const isRed = node.classList && node.classList.contains('rt-red');
-                    if (color || isRed) {
+                    const isBlue = node.classList && node.classList.contains('rt-blue');
+                    if (color || isRed || isBlue) {
                         const sp = document.createElement('span');
                         if (color) sp.style.color = color;
                         if (isRed) sp.className = 'rt-red';
+                        else if (isBlue) sp.className = 'rt-blue';
                         while (node.firstChild) sp.appendChild(node.firstChild);
                         node.parentNode.replaceChild(sp, node);
                         return;
@@ -5390,8 +5417,9 @@ let vocabulary = [];
                 node.style.backgroundColor = '';
                 node.style.background = '';
             } else {
+                // 글자색은 빨강·파랑이 같은 자리를 쓰므로 한꺼번에 지운다
                 node.style.color = '';
-                if (node.classList) node.classList.remove('rt-red');
+                if (node.classList) { node.classList.remove('rt-red'); node.classList.remove('rt-blue'); }
                 if (node.tagName === 'FONT') node.removeAttribute('color');
             }
             const styleLeft = (node.getAttribute('style') || '').trim();
@@ -5417,16 +5445,39 @@ let vocabulary = [];
             rtSyncState(id);
         }
 
-        // 빨간 글씨 — 이미 빨갛면 해제
-        function rtRed(id) {
+        // 색만 지우고 껍데기는 그대로 둔다 — 색을 바꿔 칠할 때 쓴다.
+        //   ⚠️ rtRemoveStyle 은 빈 span 을 벗기면서 normalize 로 글자를 합치는데,
+        //      그러면 골라둔 범위가 풀려버려서 새로 칠할 색이 아무 데도 안 묻는다.
+        //      빈 껍데기는 어차피 저장할 때 sanitizeRichHtml 이 걷어낸다.
+        function rtClearColorOnly(node) {
+            if (!node) return;
+            node.style.color = '';
+            if (node.classList) { node.classList.remove('rt-red'); node.classList.remove('rt-blue'); }
+            if (node.tagName === 'FONT') node.removeAttribute('color');
+            if (!(node.getAttribute('style') || '').trim()) node.removeAttribute('style');
+            if (!(node.getAttribute('class') || '').trim()) node.removeAttribute('class');
+        }
+
+        // 색펜 — 같은 색이면 해제, 다른 색이면 그 색을 걷어내고 새로 칠한다
+        //   (색을 겹쳐 칠하면 span 이 계속 겹쳐 쌓이니까 먼저 벗긴다)
+        const RT_PEN_COLORS = { red: '#dc2626', blue: '#2563eb' };
+        function rtColorPen(id, kind) {
             const el = rtFocusEditor(id);
             if (!el) return;
-            const hit = rtFindAncestor(id, rtIsRedNode);
-            if (hit) { rtRemoveStyle(hit, 'red'); rtSyncState(id); return; }
+            const same = kind === 'red' ? rtIsRedNode : rtIsBlueNode;
+            const other = kind === 'red' ? rtIsBlueNode : rtIsRedNode;
+            const hit = rtFindAncestor(id, same);
+            if (hit) { rtRemoveStyle(hit, 'color'); rtSyncState(id); return; }
+            const prev = rtFindAncestor(id, other);
+            if (prev) rtClearColorOnly(prev);
             try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
-            try { document.execCommand('foreColor', false, '#dc2626'); } catch (e) {}
+            try { document.execCommand('foreColor', false, RT_PEN_COLORS[kind]); } catch (e) {}
             rtSyncState(id);
         }
+        // 빨간 글씨 — 이미 빨갛면 해제
+        function rtRed(id) { rtColorPen(id, 'red'); }
+        // [냐냐 요청] 파란 글씨 — 이미 파랗면 해제
+        function rtBlue(id) { rtColorPen(id, 'blue'); }
 
         // ── [냐냐 요청] Ctrl+클릭으로 여러 줄 골라서 한번에 서식 주기 ──────
         //   contenteditable 은 떨어진 줄을 동시에 선택하는 걸 브라우저가 지원하지 않는다

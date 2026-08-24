@@ -157,7 +157,7 @@ html {
         }
         .nyanya-rt h4:first-child, .nyanya-rt-edit h4:first-child { margin-top: 0; }
 
-        /* 형광펜 / 빨간 글씨 */
+        /* 형광펜 / 빨간 글씨 / 파란 글씨 */
         .nyanya-rt mark, .nyanya-rt-edit mark {
             background: #fef08a;
             color: inherit;
@@ -166,6 +166,11 @@ html {
         }
         .nyanya-rt .rt-red, .nyanya-rt-edit .rt-red {
             color: #dc2626;
+            font-weight: 700;
+        }
+        /* 파란 글씨 — 빨간 글씨와 같은 굵기로 맞춘다 */
+        .nyanya-rt .rt-blue, .nyanya-rt-edit .rt-blue {
+            color: #2563eb;
             font-weight: 700;
         }
         .nyanya-rt b, .nyanya-rt-edit b,
