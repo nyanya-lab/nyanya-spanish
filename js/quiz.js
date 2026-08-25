@@ -999,6 +999,7 @@ let quizSession = null;
 - "typo": clearly an attempt at the TARGET word but misspelled (including a wrong/missing accent), i.e. within about 3 characters of the target.
 - "wrong": anything else (different meaning, gibberish, blank).
 Prefer "typo" over "synonym" when the answer is not a real Spanish word.
+If the target is a multi-word expression, EVERY word must be there. A missing or extra word — a preposition especially (target "en diagonal a", answer "diagonal a") — is NOT "correct": use "typo" if it is clearly an attempt at the same expression, otherwise "wrong".
 Also report whether the student's answer is itself a real Spanish word, and what it means — the learner needs to know if they wrote a different real word or just gibberish.
 Return JSON only.`;
                 const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).
@@ -1021,6 +1022,18 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 console.warn('AI 주관식 채점 실패, 로컬 채점으로 대체', e);
             }
             return null;
+        }
+
+        // [냐냐 요청] 여러 낱말로 된 표현은 낱말 하나만 빠져도 정답이 아니다.
+        //   "en diagonal a"(대각선의) 를 "diagonal a" 라고만 써도 AI 가 정답으로 봐줬다.
+        //   프롬프트로도 못박았지만 AI 말만 믿지 않고 여기서 한 번 더 막는다.
+        //   관사·악센트·문장부호·대괄호 자리표시자는 normalizeSpanishAnswer 가 이미 걷어내므로,
+        //   여기서 다르면 진짜로 낱말이 빠졌거나 더 붙은 것이다.
+        //   (악센트만 다른 경우는 AI를 부르기 전에 따로 처리된다 — 여기까지 오지 않는다)
+        function phraseAnswerIncomplete(userRaw, correctRaw) {
+            const c = normalizeSpanishAnswer(correctRaw);
+            if (!c.includes(' ')) return false;      // 한 낱말짜리는 이 규칙과 상관없다
+            return normalizeSpanishAnswer(userRaw) !== c;
         }
 
         async function submitSubjectiveAnswer() {
@@ -1157,6 +1170,15 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 comment: ai.comment
             });
 
+            // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (한 번은 다시 쓸 기회)
+            if (verdict === 'correct' && phraseAnswerIncomplete(userAnswer, correct)) {
+                if (!used().typo) {
+                    askRetry('typo', `✏️ 낱말이 빠졌어요! 통째로 하나의 표현이라 전부 써야 해요.`);
+                    return;
+                }
+                gradeNow(false, wrongHtml());
+                return;
+            }
             if (verdict === 'correct') { gradeNow(true, ''); return; }
 
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.

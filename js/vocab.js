@@ -3709,6 +3709,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             const verdict = String(ai.verdict || '').toLowerCase();
+            // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (퀴즈 주관식과 같은 규칙)
+            if (verdict === 'correct' && typeof phraseAnswerIncomplete === 'function'
+                && phraseAnswerIncomplete(userAnswer, w.word)) {
+                if (!used.typo) {
+                    writeAskRetry('typo', `✏️ 낱말이 빠졌어요! 통째로 하나의 표현이라 전부 써야 해요.`);
+                    return;
+                }
+                writeFirstRoundFail(w, userAnswer, aiInfo());
+                return;
+            }
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used.synonym) {
