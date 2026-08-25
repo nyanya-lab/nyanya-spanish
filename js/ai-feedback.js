@@ -16,19 +16,44 @@
             setTimeout(() => { generateAiMission(); }, 80);
         }
 
-        // [냐냐 요청] 첨삭 결과가 나올 때, sticky 입력영역에 상단이 가리지 않도록 스크롤.
-        //   scrollIntoView 기본값은 결과 맨 위를 화면 맨 위에 붙이는데, sticky 입력칸이
-        //   그 위를 덮어서 결과 상단이 안 보였음. sticky 높이만큼 여백을 두고 스크롤한다.
+        // [냐냐 요청] 첨삭 결과가 나올 때, 결과의 '맨 윗줄'이 보이는 자리로 스크롤한다.
+        //   결과 위에는 두 개가 겹쳐 있다 — 페이지 헤더(top-0)와 입력영역(sm 이상에서 top-14).
+        //   둘의 높이를 합친 만큼 내려서 멈춰야 결과 상단이 가려지지 않는다.
+        //   ⚠️ 예전엔 querySelector('.sticky') 로 입력영역을 찾았는데, 실제 클래스는
+        //      'static sm:sticky' 라서 영영 못 찾았다 (높이를 0 으로 계산 → 결과 위쪽
+        //      517px 이 입력칸에 덮여서, 냐냐 눈에는 결과 아랫부분만 보였다).
+        // [냐냐 요청] 입력영역 고정을 켜고/끈다.
+        //   입력칸이 517px 이나 돼서, 고정한 채로 결과를 보면 화면 아래 140px 틈으로만
+        //   읽게 된다. 그래서 결과가 뜨는 동안에는 고정을 풀어 결과가 화면을 다 쓰게 한다.
+        function setAiInputSticky(on) {
+            const el = document.getElementById('ai-input-sticky');
+            if (el) el.classList.toggle('ai-unstick', !on);
+        }
+
         function scrollAiResultIntoView() {
             const resultBox = document.getElementById('ai-feedback-result');
             if (!resultBox) return;
-            // sticky 입력영역(탭버튼+입력칸)의 실제 높이 측정
-            const tab = document.getElementById('tab-ai-feedback');
-            const sticky = tab ? tab.querySelector('.sticky') : null;
-            const stickyH = sticky ? sticky.getBoundingClientRect().height : 0;
-            const top = resultBox.getBoundingClientRect().top + window.scrollY - stickyH - 16;
+            setAiInputSticky(false);
+            const header = document.querySelector('header');
+            const headerH = header && getComputedStyle(header).position === 'sticky'
+                ? header.getBoundingClientRect().height : 0;
+            // 입력영역은 넓은 화면에서만 고정된다 (폰에서는 같이 밀려 올라가므로 0)
+            const sticky = document.getElementById('ai-input-sticky');
+            const stickyH = sticky && getComputedStyle(sticky).position === 'sticky'
+                ? sticky.getBoundingClientRect().height : 0;
+            const top = resultBox.getBoundingClientRect().top + window.scrollY - headerH - stickyH - 12;
             window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
         }
+
+        // 결과를 닫으면(모드 변경·새 미션 뽑기) 입력영역 고정을 되살린다.
+        //   숨기는 곳이 여섯 군데라 한 곳씩 고치는 대신 결과 상자를 지켜본다.
+        (function watchAiResultVisibility() {
+            const box = document.getElementById('ai-feedback-result');
+            if (!box || typeof MutationObserver === 'undefined') return;
+            new MutationObserver(() => {
+                if (box.classList.contains('hidden')) setAiInputSticky(true);
+            }).observe(box, { attributes: true, attributeFilter: ['class'] });
+        })();
 
         // [냐냐 요청] 학습 팁 — 한 덩어리 줄글로 나오면 읽기 힘들어서 줄 단위로 나눠 그린다.
         //   프롬프트가 세 줄(잘한 점·규칙 설명·예시)로 주게 돼 있지만, 한 덩어리로 와도
@@ -2404,7 +2429,31 @@ ${noteListText}
         //   재귀형과 아닌 형이 같이 등록된 동사가 28개라 이게 자주 어긋났고,
         //   냐냐 입장에서는 "분명히 쓴 단어에 점수가 안 붙는" 걸로 보였다.
         //   (그 단어에 점수가 안 붙는 데서 끝나지 않는다 — 엉뚱한 단어가 대신 받는다.)
-        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REFLEXIVE: 3, ADJ_STEM: 4 };
+        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REFLEXIVE: 3, ENCLITIC: 4, ENCLITIC_SE: 5, ADJ_STEM: 6 };
+
+        // [냐냐 요청] 동사 뒤에 붙여 쓰는 대명사를 뗀 형태도 만들어 둔다.
+        //   "presentarles" → "presentar", "dármelo" → "dar", "hablándome" → "hablando"
+        //   원형(-ar/-er/-ir)이나 현재분사(-ando/-iendo/-yendo)로 끝날 때만 인정한다.
+        //   이 조건이 없으면 "tomate"(토마토)에서 te 를 떼어 tomar 로 붙는 식의 오인이 생긴다.
+        //   악센트는 normalizeSpanishAnswer 가 이미 떼어 준다 (dármelo → darmelo → dar).
+        const FVBF_ENCLITICS = ['me', 'te', 'se', 'nos', 'os', 'lo', 'la', 'le', 'los', 'las', 'les'];
+        function fvbfEncliticBases(word) {
+            const out = [];
+            const isVerbBase = (s) => s.length >= 3 && /(ar|er|ir|ando|iendo|yendo)$/.test(s);
+            // 대명사는 최대 두 개까지 붙는다 (dármelo = dar + me + lo)
+            const peel = (s, depth) => {
+                if (depth > 2) return;
+                FVBF_ENCLITICS.forEach(p => {
+                    if (!s.endsWith(p) || s.length <= p.length + 2) return;
+                    const rest = s.slice(0, -p.length);
+                    if (isVerbBase(rest) && out.indexOf(rest) < 0) out.push(rest);
+                    peel(rest, depth + 1);
+                });
+            };
+            peel(word, 1);
+            return out;
+        }
+
         function findVocabWordByForm(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return null;
@@ -2412,6 +2461,8 @@ ${noteListText}
             //   예: "me llamo" → "llamo", "se llama" → "llama"
             const stripReflexive = (s) => s.replace(/^(me|te|se|nos|os)\s+/, '');
             const targetNoReflexive = stripReflexive(target);
+            // 뒤에 붙은 대명사를 뗀 형태들 ("presentarles" → "presentar")
+            const encliticBases = fvbfEncliticBases(target);
 
             let best = null, bestRank = Infinity;
             // 같은 등급이면 단어장에서 먼저 나온 것을 쓴다 (예전과 같은 순서)
@@ -2420,7 +2471,17 @@ ${noteListText}
             for (const v of vocabulary) {
                 if (bestRank === FVBF_RANK.WORD) break; // 더 좋은 게 나올 수 없다
                 // 1) 원형/사전형 그대로 일치
-                if (normalizeSpanishAnswer(v.word) === target) { offer(v, FVBF_RANK.WORD); continue; }
+                const vWordN = normalizeSpanishAnswer(v.word);
+                if (vWordN === target) { offer(v, FVBF_RANK.WORD); continue; }
+                // 1-2) 붙임 대명사를 뗀 원형과 일치 — "presentarles" → presentar
+                //   재귀형으로만 등록된 동사(presentarse)도 받아주되, 그냥 원형이 등록돼
+                //   있으면 그쪽이 이기도록 등급을 한 칸 낮춘다.
+                if (encliticBases.length) {
+                    if (encliticBases.indexOf(vWordN) >= 0) offer(v, FVBF_RANK.ENCLITIC);
+                    else if (/(ar|er|ir)se$/.test(vWordN) && encliticBases.indexOf(vWordN.slice(0, -2)) >= 0) {
+                        offer(v, FVBF_RANK.ENCLITIC_SE);
+                    }
+                }
                 // 2) 동사: 등록된 모든 시제/인칭 변형과 대조
                 if (v.pos === 'verb') {
                     const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
@@ -2439,6 +2500,10 @@ ${noteListText}
                             if (formN === targetNoReflexive || formNoReflexive === target
                                 || formNoReflexive === targetNoReflexive) {
                                 offer(v, FVBF_RANK.REFLEXIVE);
+                            }
+                            // 현재분사에 대명사가 붙은 꼴 — "hablándome" → hablando
+                            if (encliticBases.length && encliticBases.indexOf(formN) >= 0) {
+                                offer(v, FVBF_RANK.ENCLITIC);
                             }
                         }
                     }

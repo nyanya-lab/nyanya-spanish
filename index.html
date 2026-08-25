@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260824b">
+    <link rel="stylesheet" href="css/style.css?v=20260825a">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -746,7 +746,7 @@
                          이 고정 영역은 높이가 517px 이나 돼서, 폰에서는 헤더(61px)까지 더하면
                          화면을 통째로 덮어 첨삭 결과가 아예 안 보였다.
                          그래서 sm(640px) 미만에서는 고정을 풀고 페이지와 같이 스크롤시킨다. -->
-                    <div class="static sm:sticky sm:top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-4">
+                    <div id="ai-input-sticky" class="static sm:sticky sm:top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-4">
                         <!-- Premium Mode Switcher Tabs -->
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
@@ -2153,13 +2153,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260824b"></script>
-    <script src="js/creatures.js?v=20260824b"></script>
-    <script src="js/core.js?v=20260824b"></script>
-    <script src="js/vocab.js?v=20260824b"></script>
-    <script src="js/flashcards.js?v=20260824b"></script>
-    <script src="js/quiz.js?v=20260824b"></script>
-    <script src="js/games.js?v=20260824b"></script>
-    <script src="js/ai-feedback.js?v=20260824b"></script>
+    <script src="js/dictionary-data.js?v=20260825a"></script>
+    <script src="js/creatures.js?v=20260825a"></script>
+    <script src="js/core.js?v=20260825a"></script>
+    <script src="js/vocab.js?v=20260825a"></script>
+    <script src="js/flashcards.js?v=20260825a"></script>
+    <script src="js/quiz.js?v=20260825a"></script>
+    <script src="js/games.js?v=20260825a"></script>
+    <script src="js/ai-feedback.js?v=20260825a"></script>
 </body>
 </html>
