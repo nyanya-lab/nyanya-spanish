@@ -1993,81 +1993,69 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             toggleNotesClearBtn();
         }
 
-        // 지능형 오프라인 단어 완성 데이터베이스 엔진 (완벽 백업 및 Fallback UI 고도화)
+        // API 키가 없을 때 도는 규칙 기반 추측 (하드코딩 사전은 뺐다 — 어미 규칙만 쓴다)
         function runOfflineAutofill(rawWord) {
             const cleanWord = rawWord.toLowerCase().trim().replace(/^(el\s+|la\s+|los\s+|las\s+)/, "");
-            
-            // 1차: 완전히 일치하는 DB 매핑이 있는지 확인
-            let match = OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord];
-            
-            // 2차: 규칙 기반 스마트 유추 가동
-            if (!match) {
-                // 동사형 규칙성 판별 (-ar, -er, -ir, 그리고 강세가 있는 -ír도 포함: oír, reír 등)
-                if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir") || cleanWord.endsWith("ír")) {
-                    const ending = cleanWord.slice(-2);
-                    const stem = cleanWord.slice(0, -2);
-                    let conj = {};
-                    
-                    if (ending === "ar") {
-                        conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
-                    } else if (ending === "er") {
-                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
-                    } else { // -ir 또는 -ír
-                        conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
-                    }
-                    
-                    match = {
-                        meaning: "", 
-                        pos: "verb",
-                        verbClass: "regular",
-                        irregularType: "none",
-                        conjugations: conj,
-                        example: `Quiero ${rawWord} hoy.`,
-                        exampleMeaning: `나는 오늘 ${rawWord}하고 싶어.`, 
-                        notes: "· 어미 규칙으로 현재시제 자동 계산\n· 뜻과 예문은 직접 입력 필요"
-                    };
-                } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
-                    match = {
-                        meaning: "",
-                        pos: "preposition",
-                        example: `Voy a ir ${rawWord} mi amigo.`,
-                        exampleMeaning: `나는 내 친구${rawWord} 같이 갈 거야.`,
-                        notes: "· 자주 쓰이는 전치사\n· 뒤에 오는 명사와의 결합에 주의"
-                    };
-                } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
-                    match = {
-                        meaning: "",
-                        pos: "conjunction",
-                        example: `No voy ${rawWord} no quiero.`,
-                        exampleMeaning: `나는 가고 싶지 않기 ${rawWord} 안 가.`,
-                        notes: "· 문장을 이어주는 접속사"
-                    };
-                } else {
-                    // 명사형 남/여성 기본 유추 및 관사 일치 처리 (Me gusta pelo 해소)
-                    const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
-                    const article = isFeminine ? "la" : "el";
-                    match = {
-                        meaning: "", 
-                        pos: "noun",
-                        gender: isFeminine ? "feminine" : "masculine",
-                        example: `Me gusta ${article} ${cleanWord}.`,
-                        exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${cleanWord})를 좋아해.`, 
-                        notes: "· 어미로 품사·성별 추정 (확인 필요)\n· 뜻은 직접 입력 필요"
-                    };
+            let match;
+            // 동사형 규칙성 판별 (-ar, -er, -ir, 그리고 강세가 있는 -ír도 포함: oír, reír 등)
+            if (cleanWord.endsWith("ar") || cleanWord.endsWith("er") || cleanWord.endsWith("ir") || cleanWord.endsWith("ír")) {
+                const ending = cleanWord.slice(-2);
+                const stem = cleanWord.slice(0, -2);
+                let conj = {};
+                
+                if (ending === "ar") {
+                    conj = { yo: stem+"o", tu: stem+"as", el: stem+"a", nos: stem+"amos", vos: stem+"áis", ellos: stem+"an" };
+                } else if (ending === "er") {
+                    conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"emos", vos: stem+"éis", ellos: stem+"en" };
+                } else { // -ir 또는 -ír
+                    conj = { yo: stem+"o", tu: stem+"es", el: stem+"e", nos: stem+"imos", vos: stem+"ís", ellos: stem+"en" };
                 }
+                
+                match = {
+                    meaning: "", 
+                    pos: "verb",
+                    verbClass: "regular",
+                    irregularType: "none",
+                    conjugations: conj,
+                    example: `Quiero ${rawWord} hoy.`,
+                    exampleMeaning: `나는 오늘 ${rawWord}하고 싶어.`, 
+                    notes: "· 어미 규칙으로 현재시제 자동 계산\n· 뜻과 예문은 직접 입력 필요"
+                };
+            } else if (["con", "para", "por", "de", "en", "sin"].includes(cleanWord)) {
+                match = {
+                    meaning: "",
+                    pos: "preposition",
+                    example: `Voy a ir ${rawWord} mi amigo.`,
+                    exampleMeaning: `나는 내 친구${rawWord} 같이 갈 거야.`,
+                    notes: "· 자주 쓰이는 전치사\n· 뒤에 오는 명사와의 결합에 주의"
+                };
+            } else if (["y", "o", "pero", "porque", "como", "que"].includes(cleanWord)) {
+                match = {
+                    meaning: "",
+                    pos: "conjunction",
+                    example: `No voy ${rawWord} no quiero.`,
+                    exampleMeaning: `나는 가고 싶지 않기 ${rawWord} 안 가.`,
+                    notes: "· 문장을 이어주는 접속사"
+                };
+            } else {
+                // 명사형 남/여성 기본 유추 및 관사 일치 처리 (Me gusta pelo 해소)
+                const isFeminine = cleanWord.endsWith("a") || cleanWord.endsWith("ción") || cleanWord.endsWith("dad");
+                const article = isFeminine ? "la" : "el";
+                match = {
+                    meaning: "", 
+                    pos: "noun",
+                    gender: isFeminine ? "feminine" : "masculine",
+                    example: `Me gusta ${article} ${cleanWord}.`,
+                    exampleMeaning: `나는 그 ${isFeminine ? '여성명사' : '남성명사'}(${cleanWord})를 좋아해.`, 
+                    notes: "· 어미로 품사·성별 추정 (확인 필요)\n· 뜻은 직접 입력 필요"
+                };
             }
 
             // UI에 적용 (AI 추천의 fallback이므로 덮어쓰기 허용)
             applyAutofillResult(match, true);
             AudioFX.playSuccess();
             aiAutofillCompleted = true; // [냐냐 PATCH] 오프라인 추천 완료 → 엔터로 저장 가능
-
-            // DB에 있던 명확한 단어인지, 아니면 동적 규칙 유추인지에 따른 깔끔한 피드백 제공
-            if (OFFLINE_DICT_DB[rawWord.toLowerCase().trim()] || OFFLINE_DICT_DB[cleanWord]) {
-                showToast(`지능형 오프라인 사전에서 "${rawWord}" 정보를 완벽하게 찾아 적용했습니다! ⚡`, "success");
-            } else {
-                showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
-            }
+            showToast(`품사/성별 규칙이 자동 세팅되었습니다! 뜻과 예문 번역을 완성해 주세요! 💡`, "warning");
         }
 
         // REAL-TIME SMART AUTOFILL ENGINE (실시간 어순 분석)
@@ -2088,19 +2076,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const container = document.getElementById('word-suggestions');
             const cleanQuery = stripAccents(query.toLowerCase().trim()); // [냐냐 PATCH] 악센트 무시
             const results = [];
-            const seenKeys = new Set();
 
-            // [PATCH-16] 오프라인 사전뿐 아니라 내가 이미 등록한 단어장 전체에서도 검색
+            // [냐냐 요청] 내 단어장에서만 찾는다 (하드코딩 사전 18개는 뺐다 — 검색만 어지럽혔다)
             vocabulary.forEach(item => {
                 if (stripAccents(item.word.toLowerCase()).includes(cleanQuery)) {
-                    seenKeys.add(item.word.toLowerCase());
                     results.push({ key: item.word, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: item.id });
-                }
-            });
-            Object.keys(OFFLINE_DICT_DB).forEach(key => {
-                if (stripAccents(key.toLowerCase()).includes(cleanQuery) && !seenKeys.has(key.toLowerCase())) {
-                    const item = OFFLINE_DICT_DB[key];
-                    results.push({ key: key, meaning: item.meaning, pos: item.pos, gender: item.gender, registeredId: null });
                 }
             });
 
@@ -2153,14 +2133,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 showToast("이미 등록된 단어예요! 수정 모드로 열었어요 ✏️", "info");
                 return;
             }
-
+            // 후보는 이제 전부 내 단어장에서 오므로 여기까지 오지 않는다 (안전장치)
             document.getElementById('input-word').value = word;
-            const match = OFFLINE_DICT_DB[word];
-            if (match) {
-                applyAutofillResult(match, true); // 리스트 클릭 시 확실한 선택이므로 덮어쓰기 허용 (true)
-                showToast("오프라인 사전에 매칭되어 적용했어요! ⚡", "success");
-                AudioFX.playSuccess();
-            }
         }
 
         // Save Word Action

@@ -26,7 +26,7 @@ let vocabulary = [];
         window.onload = async function() {
             // [냐냐 PATCH-진단] dictionary-data.js가 누락되면(업로드 안 됨) 여기서 멈춰서
             // 모든 버튼이 먹통처럼 보임 → 명확한 안내를 띄워서 원인을 알 수 있게 함
-            if (typeof OFFLINE_DICT_DB === 'undefined' || typeof DEFAULT_VOCABULARY === 'undefined') {
+            if (typeof DEFAULT_VOCABULARY === 'undefined') {
                 alert("필수 파일(dictionary-data.js)이 로드되지 않았어요!\n\nGitHub에 'js/dictionary-data.js' 파일이 업로드됐는지, 그리고 index.html에서 이 파일을 불러오는 줄이 있는지 확인해 주세요.");
                 return;
             }
@@ -686,7 +686,9 @@ let vocabulary = [];
             else openQuickWordRegister();
         }
 
-        // 내 단어장 먼저, 그다음 오프라인 사전. 스페인어·한글 뜻 둘 다 검색된다
+        // 내 단어장에서 찾는다. 스페인어·한글 뜻 둘 다 검색된다
+        //   [냐냐 요청] 예전엔 하드코딩 사전 18개를 뒤에 붙였는데, 대부분 이미 등록한
+        //   단어라 결과만 어지럽혀서 뺐다.
         function quickWordMatches(query) {
             const norm = (s) => (typeof stripAccents === 'function')
                 ? stripAccents(String(s || '').toLowerCase())
@@ -695,37 +697,17 @@ let vocabulary = [];
             if (!q) return [];
 
             const out = [];
-            const pushed = new Set();          // 이미 결과에 넣은 단어 (중복 방지)
-            const registered = new Map();      // 단어 → 내 단어장 항목. 사전 쪽 결과에 '등록됨' 을 제대로 달기 위함
-            (typeof vocabulary !== 'undefined' ? vocabulary : []).forEach(w => registered.set(norm(w.word), w));
-
             (typeof vocabulary !== 'undefined' ? vocabulary : []).forEach(w => {
                 if (norm(w.word).includes(q) || norm(w.meaning).includes(q)) {
-                    pushed.add(norm(w.word));
                     out.push({ word: w.word, meaning: w.meaning, pos: w.pos, id: w.id });
                 }
             });
-            if (typeof OFFLINE_DICT_DB !== 'undefined') {
-                Object.keys(OFFLINE_DICT_DB).forEach(k => {
-                    const key = norm(k);
-                    if (pushed.has(key)) return;
-                    const item = OFFLINE_DICT_DB[k] || {};
-                    if (!norm(k).includes(q) && !norm(item.meaning).includes(q)) return;
-                    pushed.add(key);
-                    // 사전 뜻으로 찾았지만 이미 등록한 단어일 수 있다 → 그럴 땐 내 단어장 것으로 보여준다
-                    const mine = registered.get(key);
-                    if (mine) out.push({ word: mine.word, meaning: mine.meaning, pos: mine.pos, id: mine.id });
-                    else out.push({ word: k, meaning: item.meaning || '', pos: item.pos, id: null });
-                });
-            }
 
-            // 정확히 일치 → 입력으로 시작 → 그냥 포함. 같은 순위면 등록된 단어를 먼저
+            // 정확히 일치 → 입력으로 시작 → 그냥 포함
             const rank = (r) => { const s = norm(r.word); return s === q ? 0 : (s.startsWith(q) ? 1 : 2); };
             out.sort((a, b) => {
                 const ra = rank(a), rb = rank(b);
                 if (ra !== rb) return ra - rb;
-                const ha = (a.id !== null && a.id !== undefined), hb = (b.id !== null && b.id !== undefined);
-                if (ha !== hb) return ha ? -1 : 1;
                 return norm(a.word).localeCompare(norm(b.word), 'es');
             });
             return out;
@@ -759,14 +741,12 @@ let vocabulary = [];
                 return;
             }
 
+            // 이제 결과는 전부 내 단어장에서 온다 (사전 항목이 없으므로 '사전' 배지도 없다)
             box.innerHTML = _quickWordResults.map((r, i) => {
-                const registered = (r.id !== null && r.id !== undefined);
                 const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[r.pos]) ? POS_LABELS[r.pos] : '';
-                const badge = registered
-                    ? `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-md px-1.5 py-0.5 shrink-0">등록됨</span>`
-                    : `<span class="text-[9px] font-bold text-slate-400 bg-slate-100 rounded-md px-1.5 py-0.5 shrink-0">사전</span>`;
+                const badge = `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-md px-1.5 py-0.5 shrink-0">등록됨</span>`;
                 return `
-                    <div onclick="pickQuickWord(${i})" title="${registered ? '단어창 열기' : '이 단어로 등록창 열기'}"
+                    <div onclick="pickQuickWord(${i})" title="단어창 열기"
                         class="px-2.5 py-2 rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2 transition-colors">
                         <div class="min-w-0 flex-1">
                             <p class="text-xs font-bold text-slate-800 truncate">${escapeHtml(r.word)}${posLabel ? `<span class="ml-1 text-[9px] font-medium text-slate-400">${escapeHtml(posLabel)}</span>` : ''}</p>
@@ -785,7 +765,6 @@ let vocabulary = [];
                 if (typeof openWordModal === 'function') openWordModal(r.id);
                 return;
             }
-            // 사전에만 있는 단어 → 등록창에 채워서 열기
             openQuickWordRegister(r.word);
         }
 
