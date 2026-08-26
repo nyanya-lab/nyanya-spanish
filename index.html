@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260826a">
+    <link rel="stylesheet" href="css/style.css?v=20260826b">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1890,20 +1890,16 @@
                 <input type="password" id="sync-password-input" placeholder="예: nyanya-secret-2026" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
             </div>
 
-            <button onclick="toggleSyncAdvanced()" class="w-full text-left text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors">
-                <i class="fa-solid fa-sliders"></i> 내 저장소 직접 쓰기 (고급)
-            </button>
-
-            <div id="sync-advanced" class="hidden space-y-1.5">
+            <div id="sync-advanced" class="space-y-1.5">
                 <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-[11px] text-slate-600 leading-relaxed">
-                    비워두면 <b>기본 저장소</b>를 씁니다 — 지금까지와 똑같아요.
-                    앱을 나눠 받은 분이 <b>자기만의 저장소</b>를 쓰고 싶다면, Firebase 에서 무료
-                    Realtime Database 를 하나 만들고 그 주소를 여기에 넣어 주세요. 주소가 다르면
-                    데이터베이스가 완전히 갈려서 서로의 데이터가 섞이지 않아요.
+                    <b>내 저장소 주소</b>를 넣어야 여러 기기에서 같이 쓸 수 있어요.
+                    Firebase 에서 무료 Realtime Database 를 하나 만들고 그 주소를 넣어 주세요.
+                    <b>비워두면 이 기기에만 저장</b>됩니다 (앱은 그대로 다 돌아가요).
+                    주소가 다르면 데이터베이스가 통째로 갈려서 서로의 데이터가 섞이지 않아요.
                 </div>
                 <label class="block text-xs font-bold text-slate-500">저장소 주소 (Realtime Database URL)</label>
                 <input type="text" id="sync-dburl-input" placeholder="https://내프로젝트-default-rtdb.firebaseio.com" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono">
-                <p class="text-[11px] text-slate-400">주소를 바꾸기 전에 <b>설정 → 백업 · 복원</b>에서 백업 파일을 한 번 받아두세요. 비우고 저장하면 언제든 기본 저장소로 되돌아갑니다.</p>
+                <p class="text-[11px] text-slate-400">주소를 바꾸기 전에 <b>설정 → 백업 · 복원</b>에서 백업 파일을 한 번 받아두세요. 원래 주소에 있던 데이터는 지워지지 않습니다.</p>
             </div>
 
             <div class="flex gap-2 pt-1">
@@ -2153,13 +2149,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260826a"></script>
-    <script src="js/creatures.js?v=20260826a"></script>
-    <script src="js/core.js?v=20260826a"></script>
-    <script src="js/vocab.js?v=20260826a"></script>
-    <script src="js/flashcards.js?v=20260826a"></script>
-    <script src="js/quiz.js?v=20260826a"></script>
-    <script src="js/games.js?v=20260826a"></script>
-    <script src="js/ai-feedback.js?v=20260826a"></script>
+    <script src="js/dictionary-data.js?v=20260826b"></script>
+    <script src="js/creatures.js?v=20260826b"></script>
+    <script src="js/core.js?v=20260826b"></script>
+    <script src="js/vocab.js?v=20260826b"></script>
+    <script src="js/flashcards.js?v=20260826b"></script>
+    <script src="js/quiz.js?v=20260826b"></script>
+    <script src="js/games.js?v=20260826b"></script>
+    <script src="js/ai-feedback.js?v=20260826b"></script>
 </body>
 </html>
