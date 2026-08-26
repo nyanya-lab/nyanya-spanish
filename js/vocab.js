@@ -3176,7 +3176,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 쓰기 복습 공용 시작점 — 테스트부터 하고, 틀린 것만 익힌다.
         //   1바퀴: 가리고 쓰기 (전체) — 한 번에 맞히면 +2, 거기서 끝
         //   2바퀴: 1바퀴에서 틀린 것만 보면서 2번씩 쓰기 (익히기, 점수 없음)
-        //   3바퀴: 그 단어들만 다시 가리고 쓰기 — 맞으면 +0.4, 끝내 틀리면 −2
+        //   3바퀴: 그 단어들만 다시 가리고 쓰기 — 맞아도 −1, 끝내 틀리면 −2
         //   ⚠️ 망각곡선·오답 기록은 1바퀴 결과 기준이다. 3바퀴에서 맞혔다고 취소되면 안 된다
         //      (2바퀴에서 답을 보고 온 거라 '기억하고 있었다'는 증거가 못 된다).
         //   ⚠️ 다만 '언제' 적느냐는 복습이 끝난 시점이다 [냐냐 요청]:
@@ -3322,7 +3322,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const groups = [
                     ['한 번에',      nBy(2),   '+2',   'text-emerald-600'],
                     ['오타 고쳐서',  nBy(1),   '+1',   'text-emerald-600'],
-                    ['익혀서',       nBy(0.4), '+0.4', 'text-indigo-600'],
+                    ['익혀서',       nBy(-1),  '−1',   'text-amber-600'],
                     ['끝내',         nBy(-2),  '−2',   'text-rose-500']
                 ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
                 const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
@@ -3575,12 +3575,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   correct:false 로 부르는 건 "1바퀴에서 못 떠올렸다"는 사실을 지금 적는 것이다 —
             //   오답 횟수·틀린 날짜가 남고 망각곡선이 한 칸 뒤로 간다. 3바퀴에서 맞혔다고
             //   취소되지 않는다 (2바퀴에서 답을 보고 온 거라 기억했다는 증거가 아니다).
-            //   델타만 결과에 따라 갈린다: 맞히면 +0.4, 끝내 틀리면 −2.
+            //   [냐냐 요청] 델타는 맞혀도 마이너스다: 맞히면 −1, 끝내 틀리면 −2.
+            //   1바퀴에서 못 떠올린 단어라 '아는 단어'로 볼 수 없다. 2바퀴에서 답을 보고
+            //   두 번 베껴 쓴 뒤에 맞힌 것이라 기억했다는 증거가 아니다.
+            //   그래도 다시 붙잡긴 했으니 끝내 틀린 −2 와는 구분해 준다.
             if (isMatch) {
-                if (typeof addWordScore === 'function') addWordScore(w.id, 0.4, { correct: false });
+                if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false, gain: 0.4 });
+                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false, gain: -1 });
                 s.index++;
                 s.done = 0;
             } else {

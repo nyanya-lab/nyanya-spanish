@@ -2072,7 +2072,7 @@ let vocabulary = [];
                     ['쓰기 복습 · 1바퀴에 바로 맞힘', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 유의어 쓴 뒤 다시 정답', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 오타·악센트 고쳐서 다시 정답', '+1', '(점수 없이 2바퀴로)'],
-                    ['쓰기 복습 · 익힌 뒤 3바퀴에서', '+0.4', '−2'],
+                    ['쓰기 복습 · 익힌 뒤 3바퀴에서', '−1', '−2'],
                     ['문법표 빈칸', '단어 점수 무관', '마스터한 표를 틀리면 마스터 해제']
                 ]}
             ];
@@ -2080,7 +2080,8 @@ let vocabulary = [];
                 <tr class="border-b border-slate-100 ${i === g.rows.length - 1 ? 'border-b-2 border-b-slate-200' : ''}">
                     ${i === 0 ? `<td rowspan="${g.rows.length}" class="py-2.5 px-3 align-middle border-r border-slate-200"><span class="px-2 py-1 rounded-lg text-[11px] font-black border ${g.color} whitespace-nowrap">${g.group}</span></td>` : ''}
                     <td class="py-2.5 px-3 font-bold text-slate-700">${act}</td>
-                    <td class="py-2.5 px-3 font-black text-emerald-600 whitespace-nowrap">${ok}</td>
+                    <!-- 맞혀도 마이너스인 칸이 있다 (쓰기 복습 3바퀴) → 값이 마이너스면 빨갛게 -->
+                    <td class="py-2.5 px-3 font-black whitespace-nowrap ${/^[−-]/.test(ok) ? 'text-rose-500' : 'text-emerald-600'}">${ok}</td>
                     <td class="py-2.5 px-3 font-black text-rose-500 whitespace-nowrap">${no}</td>
                 </tr>`).join('')).join('');
 
