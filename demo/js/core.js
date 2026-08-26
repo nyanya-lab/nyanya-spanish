@@ -127,7 +127,11 @@ let vocabulary = [];
         // Firebase 연결이 안 될 때만 Claude 아티팩트 저장소 → 이 기기 로컬 저장소 순으로 대체.
         // ============================================================
         // 기본 저장소 주소. 아무 설정도 안 하면 지금까지와 똑같이 여기를 쓴다.
-        const DEFAULT_FIREBASE_DB_URL = 'https://nyanya-vocab-default-rtdb.firebaseio.com';
+        // [데모판] 기본 저장소 주소를 비워 둔다.
+        //   원본에는 여기에 진짜 주소가 들어 있다. 데모에 그대로 두면, 누가 동기화 비밀번호를
+        //   우연히 맞혔을 때 원본 데이터에 닿을 수 있다. 비워두면 경로가 성립하지 않아
+        //   어떤 비밀번호를 넣어도 서버에 못 간다 (데모는 이 기기에만 저장된다).
+        const DEFAULT_FIREBASE_DB_URL = '';
         const FIREBASE_URL_KEY = 'demo_firebase_db_url';
         const SYNC_PASSWORD_KEY = 'demo_sync_password';
 
