@@ -218,7 +218,10 @@ let vocabulary = [];
                 showConfirm(
                     oldUrl ? "저장소 주소를 바꿀까요?" : "저장소 주소를 넣을까요?",
                     `데이터를 가져올 곳이 바뀝니다.\n\n지금: ${shown(oldUrl)}\n바꾼 뒤: ${shown(newUrl)}\n\n원래 주소에 있던 데이터는 지워지지 않고 그대로 남아요. 주소를 되돌리면 다시 보입니다. 바꾸기 전에 '백업 · 복원'에서 백업 파일을 한 번 받아두시는 걸 권해요.`,
-                    apply
+                    apply,
+                    // ⚠️ 확인 창의 기본 버튼은 빨간 '삭제 확정' 이다. 지우는 게 아닌데
+                    //    그대로 두면 누르기 무섭다 — 이름과 색을 바꿔 준다.
+                    { okLabel: oldUrl ? '주소 바꾸기' : '주소 넣기', okStyle: 'primary', icon: 'info' }
                 );
                 return;
             }
