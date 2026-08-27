@@ -1672,6 +1672,88 @@ let vocabulary = [];
             }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
         }
 
+        // [냐냐 요청] 망각곡선 전체 그림 — 내 단어들이 지금 어느 칸에 흩어져 있나.
+        //   달력은 '그날 예정'만 보여줘서, 30일차에 몇 개가 쌓였는지 같은 건 며칠씩
+        //   눌러봐야 알 수 있었다. 여기서는 한 장으로 본다.
+        //   ⚠️ 분류 기준은 getReviewDueWords 와 똑같이 간다. 한쪽만 고치면 숫자가 어긋난다.
+        function getReviewCurveStats() {
+            const today = getLocalDateString();
+            const stats = {
+                total: vocabulary.length,
+                due: 0,           // 오늘 해야 할 것 (밀린 것 포함)
+                overdue: 0,       // 그중 예정일이 지난 것
+                waiting: 0,       // 곡선 안에 있지만 아직 차례가 아닌 것
+                graduated: 0,     // 곡선을 다 돈 것 + 마스터
+                never: 0,         // 한 번도 안 틀린 것
+                byStage: REVIEW_INTERVALS.map(() => 0)   // 곡선 안 단어의 단계별 개수
+            };
+            vocabulary.forEach(w => {
+                if (w.mastered) { stats.graduated++; return; }
+                if (!w.lastWrongDate) { stats.never++; return; }
+                const stage = w.reviewStage || 0;
+                if (stage >= REVIEW_INTERVALS.length) { stats.graduated++; return; }
+                stats.byStage[stage]++;
+                if (w.lastReviewDate === today) { stats.waiting++; return; }
+                const base = w.lastReviewDate || w.lastWrongDate;
+                const gap = daysSince(base);
+                if (gap >= REVIEW_INTERVALS[stage]) {
+                    stats.due++;
+                    if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                } else {
+                    stats.waiting++;
+                }
+            });
+            return stats;
+        }
+
+        function renderReviewCurveCard() {
+            const box = document.getElementById('review-curve-body');
+            if (!box) return;
+            const s = getReviewCurveStats();
+            const inCurve = s.due + s.waiting;
+            const num = (n, cls) => `<span class="text-lg font-black ${cls}">${n}</span><span class="text-[10px] font-bold text-slate-400 ml-0.5">개</span>`;
+            const cell = (label, n, cls, desc) => `
+                <div class="bg-slate-50 rounded-2xl px-3 py-2.5">
+                    <p class="text-[10px] font-bold text-slate-500">${label}</p>
+                    <p class="mt-0.5">${num(n, cls)}</p>
+                    <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">${desc}</p>
+                </div>`;
+
+            // 단계 막대 — 곡선 안에서 가장 많은 칸을 기준으로 길이를 잡는다
+            const maxStage = Math.max(1, ...s.byStage);
+            const bars = REVIEW_INTERVALS.map((days, i) => {
+                const n = s.byStage[i];
+                const pct = Math.round((n / maxStage) * 100);
+                const meaning = i === 0 ? '처음 틀린 뒤 첫 복습' : `${i}번 복습한 단어`;
+                return `
+                    <div class="flex items-center gap-2">
+                        <span class="w-12 shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 text-center">${days}일차</span>
+                        <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-400 rounded-full transition-all" style="width: ${n ? Math.max(pct, 4) : 0}%"></div>
+                        </div>
+                        <span class="w-10 shrink-0 text-right text-[11px] font-black text-slate-600">${n}개</span>
+                        <span class="hidden sm:inline w-28 shrink-0 text-[10px] text-slate-400">${meaning}</span>
+                    </div>`;
+            }).join('');
+
+            box.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    ${cell('오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600',
+                        s.overdue ? `그중 밀린 것 ${s.overdue}개` : (s.due ? '오늘이 예정일' : '오늘 치 다 했어요 ✨'))}
+                    ${cell('곡선 안에 있는 단어', inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
+                    ${cell('곡선 졸업 · 마스터', s.graduated, 'text-emerald-600', '30일까지 다 버틴 단어')}
+                    ${cell('한 번도 안 틀림', s.never, 'text-slate-500', '아직 곡선에 안 들어옴')}
+                </div>
+                <div class="mt-4 space-y-1.5">
+                    <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${inCurve}개가 어느 칸에 있나</p>
+                    ${bars}
+                </div>
+                <p class="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                    맞히면 다음 칸으로, 틀리면 한 칸 뒤로 갑니다. 30일차에서 한 번 더 맞히면 졸업이에요.<br>
+                    어느 날에 몇 개가 몰려 있는지는 <b>학습일지 달력</b>에서 날짜를 눌러 보세요.
+                </p>`;
+        }
+
         // [냐냐 요청] 달력에서 어떤 날을 누르면 그날 복습 예정 단어를 보여주기 위한 계산.
         //   오늘 칸은 getReviewDueWords() 를 그대로 쓴다 — 헤더 배너와 숫자가 어긋나면 안 되니까
         //   (오늘은 '밀린 것'까지 전부 포함된다).
@@ -7132,6 +7214,7 @@ let vocabulary = [];
                 setRecordRange('7d');
                 renderStreakBadge();
                 if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯
+                renderReviewCurveCard(); // [냐냐 요청] 망각곡선 현황
             } else if (tabId === 'grammar') {
                 // [냐냐 요청] 탭을 왔다갔다해도 마지막에 보던 모습 그대로 둔다
                 //   (예전엔 여기서 grammarOpenState 를 비워서 펼쳐둔 노트가 다 접혔다)

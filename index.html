@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260826c">
+    <link rel="stylesheet" href="css/style.css?v=20260826d">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1106,6 +1106,16 @@
                         <div id="egg-widget"></div>
                     </div>
 
+                    <!-- [냐냐 요청] 망각곡선 현황 — 내 단어들이 지금 곡선 어디쯤에 있는지.
+                         날짜별 예정은 달력이 이미 보여주므로 여기서는 '전체 그림'만 담는다. -->
+                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                        <button onclick="toggleChartCard('review-curve-body', this)" class="w-full flex items-center justify-between gap-4 mb-3">
+                            <span class="text-xs font-bold text-slate-700">🔁 망각곡선 현황</span>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                        </button>
+                        <div id="review-curve-body"></div>
+                    </div>
+
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
                         <label class="text-xs font-bold text-slate-500">시작일</label>
                         <input type="date" id="record-custom-start" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
@@ -2149,13 +2159,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260826c"></script>
-    <script src="js/creatures.js?v=20260826c"></script>
-    <script src="js/core.js?v=20260826c"></script>
-    <script src="js/vocab.js?v=20260826c"></script>
-    <script src="js/flashcards.js?v=20260826c"></script>
-    <script src="js/quiz.js?v=20260826c"></script>
-    <script src="js/games.js?v=20260826c"></script>
-    <script src="js/ai-feedback.js?v=20260826c"></script>
+    <script src="js/dictionary-data.js?v=20260826d"></script>
+    <script src="js/creatures.js?v=20260826d"></script>
+    <script src="js/core.js?v=20260826d"></script>
+    <script src="js/vocab.js?v=20260826d"></script>
+    <script src="js/flashcards.js?v=20260826d"></script>
+    <script src="js/quiz.js?v=20260826d"></script>
+    <script src="js/games.js?v=20260826d"></script>
+    <script src="js/ai-feedback.js?v=20260826d"></script>
 </body>
 </html>
