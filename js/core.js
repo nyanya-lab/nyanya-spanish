@@ -2146,11 +2146,14 @@ let vocabulary = [];
         }
 
         function buildHelpHtml() {
-            const gradeRows = [
+            // [냐냐 요청] 등급 구간은 단어·문법이 똑같다. 두 탭에 각각 보여줘야 하므로
+            //   설명 문구만 바꿔서 같은 표를 두 번 만든다 (한쪽에만 있으면 문법 탭에서
+            //   "그래서 몇 점이 마스터인데?" 를 알 수가 없다).
+            const buildGradeRows = (weakDesc) => [
                 ['+8 ~ +10', '완벽', 'bg-emerald-600 text-white', '찐초록 — 확실히 내 것'],
                 ['+4.5 ~ +7.9', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
                 ['-4.4 ~ +4.4', '일반', 'bg-slate-100 text-slate-600', '아직 연습 중'],
-                ['-4.5 ~ -7.9', '약점', 'bg-amber-100 text-amber-700', '자주 틀리는 단어'],
+                ['-4.5 ~ -7.9', '약점', 'bg-amber-100 text-amber-700', weakDesc],
                 ['-10 ~ -8', '치명적 약점', 'bg-red-100 text-red-600', '집중 공략 대상']
             ].map(([range, name, cls, desc]) => `
                 <tr class="border-b border-slate-100 last:border-0">
@@ -2158,6 +2161,8 @@ let vocabulary = [];
                     <td class="py-2.5 px-3"><span class="px-2.5 py-1 rounded-lg text-[11px] font-black ${cls}">${name}</span></td>
                     <td class="py-2.5 px-3 text-slate-500 font-semibold">${desc}</td>
                 </tr>`).join('');
+            const gradeRows = buildGradeRows('자주 틀리는 단어');
+            const gradeRowsGrammar = buildGradeRows('자주 틀리는 문법');
 
             // [냐냐 PATCH] 활동별 점수표 — 구분(퀴즈/미니게임/복습) 열로 묶어서 표시
             const SCORE_TABLE = [
@@ -2251,6 +2256,12 @@ let vocabulary = [];
                 <h4 class="text-sm font-black text-[#2c5578] flex items-center gap-2"><i class="fa-solid fa-book-open text-[#5896cb]"></i> 문법표 점수</h4>
                 <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
                     문법·개념 노트도 <b>단어와 똑같은 −10 ~ +10 점수·등급 5단계</b>를 써요.
+                </p>
+                <!-- [냐냐 요청] 등급 표를 문법 탭에도 넣는다 — 몇 점이 마스터인지 여기서 바로 보이게 -->
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden"><tbody>${gradeRowsGrammar}</tbody></table>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    <b>약점(−4.5 이하)</b>이 되면 문법 탭의 약점 필터에 걸리고,
+                    AI 번역 미션에서 <b>약점 문법만 골라 출제</b>할 수 있어요.
                 </p>
                 <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
                     <thead>
