@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260826f">
+    <link rel="stylesheet" href="css/style.css?v=20260826g">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1072,7 +1072,8 @@
                 </div>
 
                 <!-- TAB 5: STUDY RECORDS -->
-                <div id="tab-records" class="hidden space-y-6">
+                <!-- [냐냐 요청] 칸 사이 공백을 줄였다 (space-y-6 → 4, 그래프 묶음 mb-8 → 4, mt-4 → 3) -->
+                <div id="tab-records" class="hidden space-y-4">
                     <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center text-2xl">📊</div>
@@ -1106,16 +1107,6 @@
                         <div id="egg-widget"></div>
                     </div>
 
-                    <!-- [냐냐 요청] 망각곡선 현황 — 내 단어들이 지금 곡선 어디쯤에 있는지.
-                         날짜별 예정은 달력이 이미 보여주므로 여기서는 '전체 그림'만 담는다. -->
-                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <button onclick="toggleChartCard('review-curve-body', this)" class="w-full flex items-center justify-between gap-4 mb-3">
-                            <span class="text-xs font-bold text-slate-700">🔁 망각곡선 현황</span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
-                        </button>
-                        <div id="review-curve-body"></div>
-                    </div>
-
                     <div id="record-custom-range-box" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 flex-wrap">
                         <label class="text-xs font-bold text-slate-500">시작일</label>
                         <input type="date" id="record-custom-start" class="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
@@ -1125,7 +1116,7 @@
                     </div>
 
                     <!-- 학습 활동 그래프 (별도 · 다른 성장 그래프들과 구분) -->
-                    <div class="bg-orange-50/60 p-5 rounded-3xl border-2 border-orange-200 shadow-sm mb-8">
+                    <div class="bg-orange-50/60 p-5 rounded-3xl border-2 border-orange-200 shadow-sm mb-4">
                         <button onclick="toggleChartCard('chart-body-activity', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <span class="text-xs font-bold text-slate-700">학습 활동</span>
                             <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
@@ -1133,7 +1124,7 @@
                         <div id="chart-body-activity"><div id="record-activity-chart" class="w-full relative"></div></div>
 
                     <!-- 단어장 성장 그래프 -->
-                    <div class="bg-violet-50/50 p-5 rounded-3xl border border-violet-100 shadow-sm mt-4">
+                    <div class="bg-violet-50/50 p-5 rounded-3xl border border-violet-100 shadow-sm mt-3">
                         <button onclick="toggleChartCard('chart-body-growth', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-4 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">단어장 성장</span>
@@ -1147,7 +1138,7 @@
                     </div>
 
                     <!-- 문법표 성장 그래프 (단어장 성장 아래) -->
-                    <div class="bg-teal-50/50 p-5 rounded-3xl border border-teal-100 shadow-sm mt-4">
+                    <div class="bg-teal-50/50 p-5 rounded-3xl border border-teal-100 shadow-sm mt-3">
                         <button onclick="toggleChartCard('chart-body-grammar', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-4 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">문법표 성장</span>
@@ -1161,7 +1152,7 @@
                     </div>
 
                     <!-- 일별 신규 등록/마스터 그래프 -->
-                    <div class="bg-amber-50/50 p-5 rounded-3xl border border-amber-100 shadow-sm mt-4">
+                    <div class="bg-amber-50/50 p-5 rounded-3xl border border-amber-100 shadow-sm mt-3">
                         <button onclick="toggleChartCard('chart-body-daily', this)" class="w-full flex items-center justify-between gap-4 mb-3">
                             <div class="flex items-center gap-4 flex-wrap">
                                 <span class="text-xs font-bold text-slate-700">일별 신규 등록 / 마스터 (단어+문법)</span>
@@ -1173,6 +1164,16 @@
                         <div id="chart-body-daily"><div id="record-growth-daily-chart" class="w-full relative"></div></div>
                     </div>
 
+                    </div>
+
+                    <!-- [냐냐 요청] 망각곡선 현황 — 내 단어들이 지금 곡선 어디쯤에 있는지.
+                         날짜별 예정은 달력이 이미 보여주므로 여기서는 '전체 그림'만 담는다. -->
+                    <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                        <button onclick="toggleChartCard('review-curve-body', this)" class="w-full flex items-center justify-between gap-4 mb-3">
+                            <span class="text-xs font-bold text-slate-700">🔁 망각곡선 현황</span>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                        </button>
+                        <div id="review-curve-body"></div>
                     </div>
 
                     <!-- [냐냐 PATCH] 숫자 요약 + 학습 수준 (맨 아래로 이동) -->
@@ -2159,13 +2160,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260826f"></script>
-    <script src="js/creatures.js?v=20260826f"></script>
-    <script src="js/core.js?v=20260826f"></script>
-    <script src="js/vocab.js?v=20260826f"></script>
-    <script src="js/flashcards.js?v=20260826f"></script>
-    <script src="js/quiz.js?v=20260826f"></script>
-    <script src="js/games.js?v=20260826f"></script>
-    <script src="js/ai-feedback.js?v=20260826f"></script>
+    <script src="js/dictionary-data.js?v=20260826g"></script>
+    <script src="js/creatures.js?v=20260826g"></script>
+    <script src="js/core.js?v=20260826g"></script>
+    <script src="js/vocab.js?v=20260826g"></script>
+    <script src="js/flashcards.js?v=20260826g"></script>
+    <script src="js/quiz.js?v=20260826g"></script>
+    <script src="js/games.js?v=20260826g"></script>
+    <script src="js/ai-feedback.js?v=20260826g"></script>
 </body>
 </html>

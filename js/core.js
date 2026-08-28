@@ -1764,19 +1764,7 @@ let vocabulary = [];
                 <div class="mt-4 space-y-1.5">
                     <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                     ${bars}
-                </div>
-                <!-- [냐냐 지적] 마스터는 곡선과 별개 축이라 위 네 칸과 겹친다. 따로 적는다 -->
-                <div class="mt-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2.5">
-                    <p class="text-[11px] font-bold text-emerald-700">⭐ 마스터 ${s.mastered}개 — 곡선과는 별개예요</p>
-                    <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-                        위 네 칸과 겹칩니다: 한 번도 안 틀린 것 ${s.masteredNeverWrong}개 · 곡선 안에 있는 것 ${s.masteredInCurve}개.
-                        마스터라도 틀린 적이 있으면 곡선을 따라 복습에 나옵니다.
-                    </p>
-                </div>
-                <p class="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                    맞히면 다음 칸으로, 틀리면 한 칸 뒤로 갑니다. 30일차에서 한 번 더 맞히면 졸업이에요.<br>
-                    어느 날에 몇 개가 몰려 있는지는 <b>학습일지 달력</b>에서 날짜를 눌러 보세요.
-                </p>`;
+                </div>`;
         }
 
         // [냐냐 요청] 달력에서 어떤 날을 누르면 그날 복습 예정 단어를 보여주기 위한 계산.
