@@ -1676,26 +1676,40 @@ let vocabulary = [];
         //   달력은 '그날 예정'만 보여줘서, 30일차에 몇 개가 쌓였는지 같은 건 며칠씩
         //   눌러봐야 알 수 있었다. 여기서는 한 장으로 본다.
         //   ⚠️ 분류 기준은 getReviewDueWords 와 똑같이 간다. 한쪽만 고치면 숫자가 어긋난다.
+        //   ⚠️ [냐냐 지적] 마스터와 곡선 졸업은 별개다. 예전엔 한 칸에 뭉쳐 세는 바람에
+        //      "졸업 58개"처럼 보였는데, 사실 졸업은 0개이고 전부 마스터였다.
+        //      그중 46개는 한 번도 안 틀려서 곡선에 들어온 적조차 없는 단어였다.
+        //      곡선 위치(안/졸업/미진입)로 한 번 가르고, 마스터는 그 위에 겹치는 표시로 따로 센다.
         function getReviewCurveStats() {
             const today = getLocalDateString();
             const stats = {
                 total: vocabulary.length,
-                due: 0,           // 오늘 해야 할 것 (밀린 것 포함)
-                overdue: 0,       // 그중 예정일이 지난 것
-                waiting: 0,       // 곡선 안에 있지만 아직 차례가 아닌 것
-                graduated: 0,     // 곡선을 다 돈 것 + 마스터
-                never: 0,         // 한 번도 안 틀린 것
+                due: 0,               // 오늘 해야 할 것 (밀린 것 포함)
+                overdue: 0,           // 그중 예정일이 지난 것
+                waiting: 0,           // 곡선 안에 있지만 아직 차례가 아닌 것
+                inCurve: 0,           // 곡선 안 전체 = due + waiting + masteredInCurve
+                graduated: 0,         // 30일차까지 다 버틴 것
+                never: 0,             // 한 번도 안 틀린 것 (곡선에 들어온 적 없음)
+                mastered: 0,          // 마스터 — 곡선과 별개 축
+                masteredNeverWrong: 0,// 마스터 중 한 번도 안 틀린 것
+                masteredInCurve: 0,   // 마스터라서 곡선 안인데도 복습에서 빠지는 것
                 byStage: REVIEW_INTERVALS.map(() => 0)   // 곡선 안 단어의 단계별 개수
             };
             vocabulary.forEach(w => {
-                if (w.mastered) { stats.graduated++; return; }
-                if (!w.lastWrongDate) { stats.never++; return; }
                 const stage = w.reviewStage || 0;
+                if (w.mastered) stats.mastered++;
+                if (!w.lastWrongDate) {
+                    stats.never++;
+                    if (w.mastered) stats.masteredNeverWrong++;
+                    return;
+                }
                 if (stage >= REVIEW_INTERVALS.length) { stats.graduated++; return; }
+                stats.inCurve++;
                 stats.byStage[stage]++;
+                // 마스터인 동안은 복습 대상에서 빠진다 (getReviewDueWords 의 첫 조건)
+                if (w.mastered) { stats.masteredInCurve++; return; }
                 if (w.lastReviewDate === today) { stats.waiting++; return; }
-                const base = w.lastReviewDate || w.lastWrongDate;
-                const gap = daysSince(base);
+                const gap = daysSince(w.lastReviewDate || w.lastWrongDate);
                 if (gap >= REVIEW_INTERVALS[stage]) {
                     stats.due++;
                     if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
@@ -1710,7 +1724,6 @@ let vocabulary = [];
             const box = document.getElementById('review-curve-body');
             if (!box) return;
             const s = getReviewCurveStats();
-            const inCurve = s.due + s.waiting;
             const num = (n, cls) => `<span class="text-lg font-black ${cls}">${n}</span><span class="text-[10px] font-bold text-slate-400 ml-0.5">개</span>`;
             const cell = (label, n, cls, desc) => `
                 <div class="bg-slate-50 rounded-2xl px-3 py-2.5">
@@ -1740,13 +1753,21 @@ let vocabulary = [];
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                     ${cell('오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600',
                         s.overdue ? `그중 밀린 것 ${s.overdue}개` : (s.due ? '오늘이 예정일' : '오늘 치 다 했어요 ✨'))}
-                    ${cell('곡선 안에 있는 단어', inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
-                    ${cell('곡선 졸업 · 마스터', s.graduated, 'text-emerald-600', '30일까지 다 버틴 단어')}
+                    ${cell('곡선 안에 있는 단어', s.inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
+                    ${cell('곡선 졸업', s.graduated, 'text-emerald-600', '30일차까지 다 버틴 단어')}
                     ${cell('한 번도 안 틀림', s.never, 'text-slate-500', '아직 곡선에 안 들어옴')}
                 </div>
                 <div class="mt-4 space-y-1.5">
-                    <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${inCurve}개가 어느 칸에 있나</p>
+                    <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                     ${bars}
+                </div>
+                <!-- [냐냐 지적] 마스터는 곡선과 별개 축이라 위 네 칸과 겹친다. 따로 적는다 -->
+                <div class="mt-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2.5">
+                    <p class="text-[11px] font-bold text-emerald-700">⭐ 마스터 ${s.mastered}개 — 곡선과는 별개예요</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                        위 네 칸과 겹칩니다: 한 번도 안 틀린 것 ${s.masteredNeverWrong}개 · 곡선 안에 있는 것 ${s.masteredInCurve}개.
+                        ${s.masteredInCurve ? `마스터인 동안은 복습에 안 나옵니다 (곡선 안 ${s.masteredInCurve}개가 그래서 빠져 있어요).` : '마스터인 동안은 복습에 안 나옵니다.'}
+                    </p>
                 </div>
                 <p class="text-[10px] text-slate-400 mt-3 leading-relaxed">
                     맞히면 다음 칸으로, 틀리면 한 칸 뒤로 갑니다. 30일차에서 한 번 더 맞히면 졸업이에요.<br>
