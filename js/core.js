@@ -1660,10 +1660,15 @@ let vocabulary = [];
         //   기준일 = 마지막으로 복습한 날(lastReviewDate). 아직 복습 전이면 틀린 날.
         //   다음 복습일 = 기준일 + REVIEW_INTERVALS[reviewStage] 일
         //   '정확히 그날'이 아니라 '그날이 지났으면' 계속 대상 → 밀린 복습 유지
+        //   [냐냐 지적] 예전엔 마스터 단어를 통째로 빼고 있었다. 냐냐가 정한 규칙이 아니라
+        //   이 함수를 처음 만든 날부터 그냥 박혀 있던 조건이었다. 그 바람에 마스터 단어는
+        //   틀려서 곡선 안으로 들어와도 복습에 영영 안 나왔다 — 점수가 높으면(4.5 이상)
+        //   마스터가 안 풀리기 때문이다. 실제로 aprender 는 40일 동안 안 나왔다.
+        //   이제는 안 뺀다. 한 번도 안 틀린 단어는 lastWrongDate 가 없어서 어차피 안 나온다.
         function getReviewDueWords() {
             const today = getLocalDateString();
             return vocabulary.filter(w => {
-                if (w.mastered || !w.lastWrongDate) return false;
+                if (!w.lastWrongDate) return false;
                 if (w.lastReviewDate === today) return false; // 오늘 이미 복습함
                 const stage = w.reviewStage || 0;
                 if (stage >= REVIEW_INTERVALS.length) return false; // 복습 주기 다 마침
@@ -1687,12 +1692,12 @@ let vocabulary = [];
                 due: 0,               // 오늘 해야 할 것 (밀린 것 포함)
                 overdue: 0,           // 그중 예정일이 지난 것
                 waiting: 0,           // 곡선 안에 있지만 아직 차례가 아닌 것
-                inCurve: 0,           // 곡선 안 전체 = due + waiting + masteredInCurve
+                inCurve: 0,           // 곡선 안 전체 = due + waiting
                 graduated: 0,         // 30일차까지 다 버틴 것
                 never: 0,             // 한 번도 안 틀린 것 (곡선에 들어온 적 없음)
                 mastered: 0,          // 마스터 — 곡선과 별개 축
                 masteredNeverWrong: 0,// 마스터 중 한 번도 안 틀린 것
-                masteredInCurve: 0,   // 마스터라서 곡선 안인데도 복습에서 빠지는 것
+                masteredInCurve: 0,   // 마스터인데 곡선 안에도 들어 있는 것 (복습에는 나온다)
                 byStage: REVIEW_INTERVALS.map(() => 0)   // 곡선 안 단어의 단계별 개수
             };
             vocabulary.forEach(w => {
@@ -1706,8 +1711,7 @@ let vocabulary = [];
                 if (stage >= REVIEW_INTERVALS.length) { stats.graduated++; return; }
                 stats.inCurve++;
                 stats.byStage[stage]++;
-                // 마스터인 동안은 복습 대상에서 빠진다 (getReviewDueWords 의 첫 조건)
-                if (w.mastered) { stats.masteredInCurve++; return; }
+                if (w.mastered) stats.masteredInCurve++;
                 if (w.lastReviewDate === today) { stats.waiting++; return; }
                 const gap = daysSince(w.lastReviewDate || w.lastWrongDate);
                 if (gap >= REVIEW_INTERVALS[stage]) {
@@ -1766,7 +1770,7 @@ let vocabulary = [];
                     <p class="text-[11px] font-bold text-emerald-700">⭐ 마스터 ${s.mastered}개 — 곡선과는 별개예요</p>
                     <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
                         위 네 칸과 겹칩니다: 한 번도 안 틀린 것 ${s.masteredNeverWrong}개 · 곡선 안에 있는 것 ${s.masteredInCurve}개.
-                        ${s.masteredInCurve ? `마스터인 동안은 복습에 안 나옵니다 (곡선 안 ${s.masteredInCurve}개가 그래서 빠져 있어요).` : '마스터인 동안은 복습에 안 나옵니다.'}
+                        마스터라도 틀린 적이 있으면 곡선을 따라 복습에 나옵니다.
                     </p>
                 </div>
                 <p class="text-[10px] text-slate-400 mt-3 leading-relaxed">
@@ -1791,7 +1795,8 @@ let vocabulary = [];
             if (!ds || ds < today) return null;
             if (ds === today) return getReviewDueWords();
             return vocabulary.filter(w => {
-                if (w.mastered || !w.lastWrongDate) return false;
+                // 오늘 목록(getReviewDueWords)과 같은 기준 — 마스터라고 빼지 않는다
+                if (!w.lastWrongDate) return false;
                 const stage = w.reviewStage || 0;
                 if (stage >= REVIEW_INTERVALS.length) return false;
                 const base = w.lastReviewDate || w.lastWrongDate;
