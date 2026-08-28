@@ -2006,9 +2006,10 @@ let vocabulary = [];
         const GRAMMAR_FILL_MAX = 1.5;   // 빈칸 복습 만점/최저점
         const GRAMMAR_TRANS_OK = 2;     // 한→스 미션에서 문법을 제대로 씀
         const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
-        // [냐냐 요청] 스→한 자유 문장에서 문법을 제대로 쓴 경우는 절반만.
+        // [냐냐 요청] 스→한 자유 작문에서 문법을 제대로 쓴 경우만 절반.
         //   한→스는 그 문법을 써야만 풀리는 미션을 내주지만, 자유 문장은 아는 걸 골라 쓰는 거라
         //   같은 +2 를 주면 너무 쉽게 쌓인다. 틀렸을 때는 똑같이 −2 (틀린 건 어느 쪽이든 약점)
+        //   ⚠️ 질문에 답하기·내 예문 연습은 +2 다 (예전엔 이 둘도 +1 이었다).
         const GRAMMAR_FREE_OK = 1;
 
         // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 점수 — 스펠링만 본다.
@@ -2137,6 +2138,7 @@ let vocabulary = [];
         function openHelpModal() {
             const body = document.getElementById('help-modal-body');
             if (body) body.innerHTML = buildHelpHtml();
+            switchHelpTab('word');   // 열 때는 항상 단어 탭부터
             document.getElementById('help-modal').classList.remove('hidden');
         }
         function closeHelpModal() {
@@ -2161,19 +2163,18 @@ let vocabulary = [];
             const SCORE_TABLE = [
                 { group: '퀴즈', color: 'text-indigo-600 bg-indigo-50 border-indigo-200', rows: [
                     ['객관식', '+1', '−2'],
-                    ['주관식', '+2', '−1'],
+                    ['주관식', '+2', '−2'],
                     ['주관식 · 유의어 쓴 뒤 다시 정답', '+2', '−2'],
                     ['주관식 · 오타·악센트 고쳐서 다시 정답', '+1', '−2'],
-                    ['동사 활용형', '+2', '−1'],
+                    ['동사 활용형', '+2', '−2'],
                     ['동사 활용형 · 악센트 고쳐서 다시 정답', '+1', '−2']
                 ]},
                 { group: '미니게임', color: 'text-teal-600 bg-teal-50 border-teal-200', rows: [
-                    ['속사포', '+0.5', '−1'],
-                    ['떨어지는 단어', '+1', '판정 없음'],
+                    ['속사포', '+0.8', '−1'],
+                    ['떨어지는 단어', '+0.8', '판정 없음'],
                     ['듣기 받아쓰기', '점수 없음', '점수 없음']
                 ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
-                    ['깜박이', '+0.2', '−2'],
                     ['단어 빈칸', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
                     ['쓰기 복습 · 1바퀴에 바로 맞힘', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 유의어 쓴 뒤 다시 정답', '+2', '(점수 없이 2바퀴로)'],
@@ -2204,7 +2205,9 @@ let vocabulary = [];
                     <td class="py-2.5 px-3 font-semibold text-slate-600">${res}</td>
                 </tr>`).join('');
 
-            return `
+            // [냐냐 요청] 단어 설명과 문법 설명을 아예 갈라서 탭으로 본다.
+            //   한 두루마리에 다 이어 붙여 놓으니 문법 규칙을 찾으려면 한참 내려야 했다.
+            const wordHtml = `
             <div class="space-y-2">
                 <p class="text-sm text-slate-600 font-semibold leading-relaxed">
                     모든 단어는 <b class="text-violet-600">점수 하나(−10 ~ +10)</b>로 관리돼요.
@@ -2239,8 +2242,10 @@ let vocabulary = [];
             <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
                 <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-hand-pointer text-amber-500"></i> 직접 누르는 버튼</h4>
                 <table class="w-full text-xs"><tbody>${manualRows}</tbody></table>
-            </div>
+            </div>`;
 
+            // ── 여기부터 문법 탭 ──────────────────────────────────
+            const grammarHtml = `
             <!-- [냐냐 요청] 문법표 점수 규칙 -->
             <div class="bg-[#eef5fb] rounded-2xl border border-[#c3d9ec] p-4 space-y-3">
                 <h4 class="text-sm font-black text-[#2c5578] flex items-center gap-2"><i class="fa-solid fa-book-open text-[#5896cb]"></i> 문법표 점수</h4>
@@ -2259,7 +2264,8 @@ let vocabulary = [];
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.0 / +0.5</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 <b>70%</b></td><td class="py-2 px-3 font-bold text-slate-400">0 (본전)</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.5 / −1.5</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">번역 미션에서 <b>그 문법을 제대로 씀</b></td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">번역 미션에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 질문에 답하기 · 내 예문 연습</span></td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600"><b>스→한 자유 작문</b>에서 제대로 씀<br><span class="text-[10px] font-semibold text-slate-400">아는 문법을 골라 쓰는 거라 절반</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">번역에서 그 문법을 <b>틀리게 씀</b></td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장은 맞음</td><td class="py-2 px-3 font-bold text-slate-400">0</td></tr>
                         <tr><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장도 틀림</td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
@@ -2278,8 +2284,10 @@ let vocabulary = [];
                     번역에서 <b>단어를 틀려도 문법표 점수는 안 깎여요.</b> 문법이 맞았으면 문법은 맞은 거예요.
                     반대로 번역 결과가 <b>단어 점수를 바꾸지도 않아요</b> — 번역은 유의어·문맥에 따라 답이 여러 개라서요.
                 </p>
-            </div>
+            </div>`;
 
+            // ── 다시 단어 탭 (복습·채점 규칙은 단어 이야기) ──────────
+            const wordHtml2 = `
             <div class="bg-violet-50 rounded-2xl border border-violet-200 p-4 space-y-3">
                 <h4 class="text-sm font-black text-violet-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-violet-500"></i> 오늘의 복습 — 어떤 단어가 뽑히나요?</h4>
                 <p class="text-xs text-violet-900 font-semibold leading-relaxed">
@@ -2354,6 +2362,33 @@ let vocabulary = [];
                     카드에 뜨는 <b>%</b> 배지는 <b>시도 3회 이상</b>일 때만 보여요. 최근 실력만 반영하려고 <b>한 달마다 초기화</b>됩니다.
                 </p>
             </div>`;
+
+            const tabBtn = (key, label, icon) => `
+                <button id="help-tab-btn-${key}" onclick="switchHelpTab('${key}')"
+                    class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all">${icon} ${label}</button>`;
+            return `
+            <div class="sticky top-0 z-10 bg-white pb-3 -mt-1 pt-1">
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                    ${tabBtn('word', '단어 점수', '📖')}
+                    ${tabBtn('grammar', '문법 점수', '📋')}
+                </div>
+            </div>
+            <div id="help-pane-word" class="space-y-4">${wordHtml}${wordHtml2}</div>
+            <div id="help-pane-grammar" class="hidden space-y-4">${grammarHtml}</div>`;
+        }
+
+        // [냐냐 요청] 설명 모달의 단어 / 문법 탭 전환
+        function switchHelpTab(which) {
+            const on  = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all bg-white text-slate-900 shadow-sm';
+            const off = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all text-slate-500 hover:text-slate-800';
+            ['word', 'grammar'].forEach(key => {
+                const pane = document.getElementById('help-pane-' + key);
+                const btn = document.getElementById('help-tab-btn-' + key);
+                if (pane) pane.classList.toggle('hidden', key !== which);
+                if (btn) btn.className = (key === which) ? on : off;
+            });
+            const body = document.getElementById('help-modal-body');
+            if (body) body.scrollTop = 0;   // 탭을 바꾸면 맨 위부터 보여준다
         }
 
         // ============================================================

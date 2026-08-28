@@ -1967,7 +1967,12 @@ ${refGrammar}${refWords}
             });
         }
 
-        function applyEsKoGrammarScores(feedback, notes) {
+        //   [냐냐 요청] 문법을 제대로 썼을 때 주는 점수는 모드마다 다르다.
+        //     한→스 랜덤 미션 / 질문에 답하기 / 내 예문 연습 = +2
+        //     스→한 자유 작문 = +1 (아는 문법을 골라 쓰는 거라 절반)
+        //     틀리게 쓴 경우는 어디서든 −2.
+        function applyEsKoGrammarScores(feedback, notes, okDelta) {
+            const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
             const list = flattenScoredList(feedback, 'grammarOk', 'grammarBad', 'usedGrammar', 'title', 'usage');
             if (!list.length || !notes || !notes.length) return;
@@ -1983,7 +1988,7 @@ ${refGrammar}${refWords}
                 if (!note || done.has(note.id)) return;   // 지어낸 제목·중복은 버린다
                 done.add(note.id);
                 const usage = item.ok ? 'correct' : 'wrong';
-                const delta = item.ok ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_BAD;
+                const delta = item.ok ? gainOk : GRAMMAR_TRANS_BAD;
                 const prev = {
                     score: (typeof grammarScores !== 'undefined') ? grammarScores[note.id] : undefined,
                     transUsed: (typeof grammarTransUsed !== 'undefined') ? grammarTransUsed[note.id] : undefined,
@@ -2135,8 +2140,9 @@ ${refGrammar}${refWords}
         }
 
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
-        function applyAiWritingScores(feedback, notes) {
-            applyEsKoGrammarScores(feedback, notes);
+        //   okDelta 를 안 주면 +2 (질문에 답하기·내 예문 연습). 스→한 자유 작문만 +1 을 넘긴다.
+        function applyAiWritingScores(feedback, notes, okDelta) {
+            applyEsKoGrammarScores(feedback, notes, okDelta);
             applyEsKoWordScores(feedback);
             renderEsKoGrammarRefs();
         }
@@ -2333,7 +2339,8 @@ ${noteListText}
                 const coachIcon = document.getElementById('ai-coach-icon');
 
                 // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
-                applyAiWritingScores(feedback, scoreNotes);
+                // 스→한 자유 작문만 문법 점수를 절반(+1)으로 준다 — 아는 문법을 골라 쓰는 거라
+                applyAiWritingScores(feedback, scoreNotes, GRAMMAR_FREE_OK);
 
                 resultBox.classList.remove('hidden');
 

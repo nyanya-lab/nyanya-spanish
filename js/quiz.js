@@ -1254,15 +1254,12 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 AudioFX.playError();
                 quizSession.wrongList.push(q.word);
 
-                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 -2 / 주관식 -1
-                //   재입력(유의어·오타) 기회를 줬는데도 틀리면 -2
+                // [냐냐 요청] 오답은 어떤 문제든 -2. 예전엔 주관식만 -1 이었는데,
+                //   찍어서 맞힐 수 있는 객관식이 더 세게 깎이는 게 거꾸로였다.
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
                     const wasWeak = vocabItem.weak;
-                    const isProductionW = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
-                    let penalty = isProductionW ? -1 : -2;
-                    if (q._retryReason) penalty = -2;
-                    addWordScore(vocabItem, penalty, { correct: false });
+                    addWordScore(vocabItem, -2, { correct: false });
                     if (!wasWeak && vocabItem.weak) {
                         if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
                         if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);
