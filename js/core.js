@@ -2186,7 +2186,7 @@ let vocabulary = [];
                 ]},
                 { group: '미니게임', color: 'text-teal-600 bg-teal-50 border-teal-200', rows: [
                     ['속사포', '+0.8', '−1'],
-                    ['떨어지는 단어', '+0.8', '판정 없음'],
+                    ['떨어지는 단어', '+0.8', '−0.5 <span class="text-[10px] font-semibold text-slate-400">(바닥까지 놓쳤을 때)</span>'],
                     ['듣기 받아쓰기', '점수 없음', '점수 없음']
                 ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [

@@ -82,12 +82,14 @@
         // [냐냐 PATCH-0배치] 게임 결과를 통합 점수(score)에 반영
         //   [냐냐 요청] 속사포·떨어지는 단어 둘 다 정답 +0.8로 통일
         //   속사포: 정답 +0.8 / 오답 -1
-        //   떨어지는 단어: 정답 +0.8 (오답 판정 없음)
+        //   떨어지는 단어: 정답 +0.8 / 바닥까지 놓치면 -0.5 (틀린 입력은 판정 없음)
         //   듣기 받아쓰기: 문장 단위라 단어 점수 반영 없음
         //   게임 정답만으로는 마스터 못 뚫음 (주관식 정답 경험이 있어야 마스터)
         const GAME_SCORE = {
             rapid: { correct: 0.8, wrong: -1 },
-            fall:  { correct: 0.8, wrong: 0 }
+            // [냐냐 요청] 떨어지는 단어도 벌점을 준다. 예전엔 0 이라 이 게임만 반복하면
+            //   점수가 손해 없이 계속 올랐다 (유일하게 잃을 게 없는 경로였다).
+            fall:  { correct: 0.8, wrong: -0.5 }
         };
         function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
             const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
@@ -433,6 +435,10 @@
                     it.el.remove();
                     items.splice(i, 1);
                     gameState.lives--;
+                    // [냐냐 요청] 바닥까지 떨어뜨린 단어에 벌점 (-0.5).
+                    //   틀린 입력에는 점수를 못 매긴다 — 어느 단어를 겨냥한 건지 알 수 없어서다.
+                    //   놓친 건 어느 단어인지 분명하므로 여기서만 준다.
+                    applyGameScore(it.id, false, 'fall');
                     // [냐냐 요청] 놓친 단어 기록 (결과 화면 표시용)
                     if (!gameState.missedIds) gameState.missedIds = [];
                     if (!gameState.missedIds.includes(it.id)) gameState.missedIds.push(it.id);
@@ -465,7 +471,7 @@
             }
             if (matchIdx >= 0) {
                 const it = items[matchIdx];
-                applyGameScore(it.id, true, 'fall'); // [0배치] 떨어지는 단어: 정답 +1
+                applyGameScore(it.id, true, 'fall'); // 떨어지는 단어: 정답 +0.8
                 gameState.score += 10;
                 gameState.correct++;
                 // [냐냐 요청] 맞춘 단어 기록 (결과 화면 표시용)
