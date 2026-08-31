@@ -1233,13 +1233,15 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 if (!quizSession.correctWordIds) quizSession.correctWordIds = [];
                 if (!quizSession.correctWordIds.includes(q.word.id)) quizSession.correctWordIds.push(q.word.id);
 
-                // [냐냐 PATCH-0배치] 통합 점수 반영 — 객관식 +1 / 주관식 +2
+                // 통합 점수 반영 — 객관식 +0.5 / 주관식 +2
                 //   유의어 재입력 후 정답 +2 · 오타 재입력 후 정답 +1
+                //   [냐냐 요청] 객관식은 +1 이었는데 4지선다라 찍어도 맞을 수 있어 절반으로 낮췄다.
+                //   (마스터는 어차피 주관식을 한 번 통과해야 열리므로 객관식만으로는 못 뚫는다)
                 const vocabItemC = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItemC) {
                     const wasMasteredC = vocabItemC.mastered;
                     const isProductionC = (q.type === 'subjective' || q.type === 'conjugation' || q.type === 'idiom-subjective');
-                    let gain = isProductionC ? 2 : 1;
+                    let gain = isProductionC ? 2 : 0.5;
                     if (q._retryReason === 'typo') gain = 1;
                     else if (q._retryReason === 'synonym') gain = 2;
                     addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
