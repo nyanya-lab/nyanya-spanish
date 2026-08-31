@@ -248,6 +248,7 @@ let vocabulary = [];
                 masteredGrammar: masteredGrammar,
                 grammarScores: grammarScores,             // [냐냐 요청] 문법표 점수
                 grammarTransUsed: grammarTransUsed,       // [냐냐 요청] 번역에서 써본 문법 (마스터 자격)
+                grammarReview: grammarReview,             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
@@ -388,6 +389,7 @@ let vocabulary = [];
                 masteredGrammar = payload.masteredGrammar || {};
                 grammarScores = payload.grammarScores || {};             // [냐냐 요청] 문법표 점수
                 grammarTransUsed = payload.grammarTransUsed || {};       // [냐냐 요청] 번역에서 써본 문법
+                grammarReview = payload.grammarReview || {};             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
@@ -415,6 +417,7 @@ let vocabulary = [];
                 masteredGrammar = {};
                 grammarScores = {};
                 grammarTransUsed = {};
+                grammarReview = {};
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 grammarCellWords = {};
@@ -1765,6 +1768,92 @@ let vocabulary = [];
                     <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                     ${bars}
                 </div>`;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 문법 망각곡선 — 단어와 같은 주기(1·3·7·14·30일)를 쓴다.
+        //   복습 방법은 빈칸이 아니라 'AI가 만든 문장을 내가 번역하기' 다.
+        //   그래서 칸을 앞으로 밀어주는 건 한→스 미션에서 그 문법을 제대로 썼을 때뿐이다.
+        //   (스→한·질문·예문은 아는 문법을 골라 쓰는 거라 '복습했다'의 증거로 약하다)
+        //   반대로 뒤로 미는 건 어디서든 한다 — 틀린 건 어디서 틀렸든 틀린 거니까.
+        //   빈칸은 70% 미만일 때만 뒤로 민다. 잘 봤다고 앞으로 밀어주진 않는다.
+        // ============================================================
+        function getGrammarReviewRec(id) {
+            if (!grammarReview[id]) grammarReview[id] = { stage: 0, lastWrongDate: null, lastReviewDate: null };
+            return grammarReview[id];
+        }
+
+        // 진입(곡선 밖이었으면) 또는 한 칸 뒤로
+        function grammarReviewDemote(id) {
+            if (!id) return;
+            const rec = getGrammarReviewRec(id);
+            const today = getLocalDateString();
+            if (rec.lastDemoteDate === today) return;   // 하루에 한 번만 (단어와 같은 규칙)
+            rec.lastDemoteDate = today;
+            const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
+            rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;   // 처음 들어오면 0단계부터
+            rec.lastWrongDate = today;
+            rec.lastReviewDate = null;
+        }
+
+        // 한 칸 앞으로 (곡선 안에 있을 때만)
+        function grammarReviewAdvance(id) {
+            if (!id) return;
+            const rec = grammarReview[id];
+            if (!rec || !rec.lastWrongDate) return;     // 곡선 밖이면 할 일 없음
+            const before = rec.stage || 0;
+            rec.stage = before + 1;
+            rec.lastReviewDate = getLocalDateString();
+            if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length
+                && typeof showToast === 'function') {
+                const t = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === id);
+                showToast(`"${(t && t.title) || '이 문법'}" 망각곡선 졸업! 🎓`, "success");
+            }
+        }
+
+        // 오늘 복습할 문법 노트 (약한 것부터)
+        function getGrammarDueList() {
+            const today = getLocalDateString();
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            return tables.filter(t => {
+                const rec = grammarReview[t.id];
+                if (!rec || !rec.lastWrongDate) return false;
+                if (rec.lastReviewDate === today) return false;
+                const stage = rec.stage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return false;      // 졸업
+                const base = rec.lastReviewDate || rec.lastWrongDate;
+                return daysSince(base) >= REVIEW_INTERVALS[stage];
+            }).sort((a, b) => getGrammarScore(a.id) - getGrammarScore(b.id));
+        }
+
+        // 문법 탭 맨 위 '오늘 복습할 문법' 줄
+        function renderGrammarReviewBanner() {
+            const box = document.getElementById('grammar-review-banner');
+            if (!box) return;
+            const due = getGrammarDueList();
+            if (!due.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            const first = due[0];
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-black text-amber-700">🔁 오늘 다시 볼 문법 ${due.length}개</p>
+                        <p class="text-[11px] text-amber-900 font-semibold mt-0.5 truncate">
+                            다음: <b>${escapeHtml(first.title || '제목 없음')}</b>
+                            <span class="text-amber-500">— AI가 이 문법을 써야 풀리는 문장을 내줘요</span>
+                        </p>
+                    </div>
+                    <button onclick="startGrammarReview()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">
+                        번역으로 복습하기 <i class="fa-solid fa-arrow-right ml-0.5"></i>
+                    </button>
+                </div>`;
+        }
+
+        // 오늘 복습할 문법 중 가장 약한 것으로 번역 미션 시작
+        function startGrammarReview() {
+            const due = getGrammarDueList();
+            if (!due.length) { showToast("오늘 복습할 문법이 없어요! 🎉", "info"); return; }
+            if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id);
         }
 
         // [냐냐 요청] 달력에서 어떤 날을 누르면 그날 복습 예정 단어를 보여주기 위한 계산.
@@ -3578,6 +3667,8 @@ let vocabulary = [];
         // [냐냐 요청] 문법표 점수 — 단어와 같은 척도(-10~+10)·같은 등급을 쓴다
         let grammarScores = {};        // {tableId: -10~+10}
         let grammarTransUsed = {};     // {tableId: true} 번역 미션에서 그 문법을 제대로 써본 적 있음 (마스터 자격)
+        // [냐냐 요청] 문법 망각곡선 {tableId: {stage, lastWrongDate, lastReviewDate, lastDemoteDate}}
+        let grammarReview = {};
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
@@ -3827,6 +3918,7 @@ let vocabulary = [];
         }
 
         function renderGrammarTables() {
+            renderGrammarReviewBanner();   // [냐냐 요청] 오늘 다시 볼 문법 줄
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
             const query = (document.getElementById('grammar-search')?.value || '').trim().toLowerCase();

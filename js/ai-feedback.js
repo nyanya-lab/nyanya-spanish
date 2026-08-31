@@ -1558,6 +1558,14 @@ ${refGrammar}${refWords}
                     else if (usage === 'wrong') { gDelta = GRAMMAR_TRANS_BAD; }
                     else if (!feedback.isCorrect) { gDelta = GRAMMAR_TRANS_BAD; }   // 안 쓰고 문장도 틀림
                     if (gDelta !== 0 || transUsed) addGrammarScore(aiCurrentGrammarForMission.id, gDelta, { transUsed });
+                    // [냐냐 요청] 문법 망각곡선 — 한→스 미션이 곧 문법 복습이다.
+                    //   제대로 썼으면 다음 칸으로, 틀리게 썼으면 진입/한 칸 뒤로.
+                    //   안 쓴 경우(unused)는 복습을 한 게 아니므로 건드리지 않는다.
+                    if (usage === 'correct' && typeof grammarReviewAdvance === 'function') {
+                        grammarReviewAdvance(aiCurrentGrammarForMission.id);
+                    } else if (usage === 'wrong' && typeof grammarReviewDemote === 'function') {
+                        grammarReviewDemote(aiCurrentGrammarForMission.id);
+                    }
                     aiLastGrammarDelta = { usage, delta: gDelta };
                 }
 
@@ -1997,6 +2005,9 @@ ${refGrammar}${refWords}
                     mastered: (typeof masteredGrammar !== 'undefined') ? masteredGrammar[note.id] : undefined
                 };
                 addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
+                // [냐냐 요청] 틀리게 쓴 문법은 어느 모드에서든 곡선에 들어온다.
+                //   (앞으로 미는 건 한→스 미션에서만 — 여기선 고른 문법이라 증거가 약하다)
+                if (!item.ok && typeof grammarReviewDemote === 'function') grammarReviewDemote(note.id);
                 aiLastEsKoGrammar.push({ note, usage, delta, prev, undone: false });
             });
         }
