@@ -1104,6 +1104,10 @@ Return JSON only, no markdown.`;
                     else delta += isConj(d.key) ? -0.1 : -0.5;
                 });
                 delta = Math.round(delta * 100) / 100; // 소수점 오차 정리
+                // [냐냐 요청] 한 판 상한 — 칸이 많다고 주관식보다 크게 붙으면 안 된다
+                if (typeof WORD_FILL_MAX === 'number') {
+                    delta = Math.max(-WORD_FILL_MAX, Math.min(WORD_FILL_MAX, delta));
+                }
                 // [냐냐 요청] 망각곡선 복습 대상 판정: 관용구/예문 칸은 제외하고,
                 //   핵심 칸(뜻·철자·동사변형)에서 틀렸을 때만 lastWrongDate를 찍는다.
                 const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));

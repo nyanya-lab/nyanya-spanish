@@ -1917,7 +1917,9 @@ ${refGrammar}${refWords}
             return out;
         }
 
-        function applyEsKoWordScores(feedback) {
+        //   okDelta 를 안 주면 +2. 스→한 자유 작문만 +1 을 넘긴다 (문법과 같은 규칙).
+        function applyEsKoWordScores(feedback, okDelta) {
+            const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling');
             if (!list.length || typeof vocabulary === 'undefined') return;
@@ -1956,7 +1958,7 @@ ${refGrammar}${refWords}
                 if (!w || done.has(w.id)) return;
                 done.add(w.id);
                 const ok = item.ok;
-                const delta = ok ? WORD_SPELL_OK : WORD_SPELL_BAD;
+                const delta = ok ? gainOk : WORD_SPELL_BAD;
                 // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
                 //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
                 //   델타만 빼면 안 된다 — 오답이면 lastWrongDate·reviewStage 까지 바뀌기 때문.
@@ -2140,10 +2142,11 @@ ${refGrammar}${refWords}
         }
 
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
-        //   okDelta 를 안 주면 +2 (질문에 답하기·내 예문 연습). 스→한 자유 작문만 +1 을 넘긴다.
-        function applyAiWritingScores(feedback, notes, okDelta) {
-            applyEsKoGrammarScores(feedback, notes, okDelta);
-            applyEsKoWordScores(feedback);
+        //   halfCredit = 스→한 자유 작문. 아는 걸 골라 쓰는 거라 단어·문법 둘 다 절반(+1)만 준다.
+        //   나머지 모드(한→스 미션·질문에 답하기·내 예문 연습)는 +2. 틀리면 어디서든 −2.
+        function applyAiWritingScores(feedback, notes, halfCredit) {
+            applyEsKoGrammarScores(feedback, notes, halfCredit ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_OK);
+            applyEsKoWordScores(feedback, halfCredit ? WORD_SPELL_FREE_OK : WORD_SPELL_OK);
             renderEsKoGrammarRefs();
         }
         // 새 채점을 시작하기 전에 지난 결과 카드를 치운다
@@ -2339,8 +2342,8 @@ ${noteListText}
                 const coachIcon = document.getElementById('ai-coach-icon');
 
                 // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
-                // 스→한 자유 작문만 문법 점수를 절반(+1)으로 준다 — 아는 문법을 골라 쓰는 거라
-                applyAiWritingScores(feedback, scoreNotes, GRAMMAR_FREE_OK);
+                // 스→한 자유 작문만 단어·문법 점수를 절반(+1)으로 준다 — 아는 걸 골라 쓰는 거라
+                applyAiWritingScores(feedback, scoreNotes, true);
 
                 resultBox.classList.remove('hidden');
 

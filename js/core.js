@@ -2003,7 +2003,9 @@ let vocabulary = [];
         //   ⚠️ 마스터·완벽은 점수만으로는 안 붙는다. 번역 미션에서 그 문법을 한 번이라도
         //      제대로 써봐야(grammarTransUsed) 열린다 — 단어의 subjectivePassed 와 같은 장치.
         // ============================================================
-        const GRAMMAR_FILL_MAX = 1.5;   // 빈칸 복습 만점/최저점
+        // [냐냐 요청] 1.5 → 2. 표 하나당 한 번만 붙는 점수라 너무 안 올랐다
+        //   (문법 노트 24개 평균이 1.31점, 완벽 구간은 0개였다)
+        const GRAMMAR_FILL_MAX = 2;     // 빈칸 복습 만점/최저점
         const GRAMMAR_TRANS_OK = 2;     // 한→스 미션에서 문법을 제대로 씀
         const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
         // [냐냐 요청] 스→한 자유 작문에서 문법을 제대로 쓴 경우만 절반.
@@ -2016,6 +2018,14 @@ let vocabulary = [];
         //   뜻 판정은 유의어·문맥 때문에 부정확해서 예전부터 안 건드렸다. 스펠링은 객관적이라 괜찮다.
         const WORD_SPELL_OK = 2;
         const WORD_SPELL_BAD = -2;
+        // [냐냐 요청] 스→한 자유 작문은 아는 단어를 골라 쓰는 거라 절반만 준다 (문법과 같은 규칙).
+        //   한→스 미션·질문에 답하기·내 예문 연습은 그대로 +2.
+        const WORD_SPELL_FREE_OK = 1;
+
+        // [냐냐 요청] 단어 빈칸 한 판에 붙는 점수 상한.
+        //   칸마다 ±0.7 이 더해져서, 칸이 많으면 한 판에 +2.8 이 붙었다 —
+        //   주관식 한 문제(+2)보다 큰 값이 한 번에 붙는 게 후했다.
+        const WORD_FILL_MAX = 2.5;
 
         function getGrammarScore(id) {
             const s = grammarScores[id];
@@ -2180,7 +2190,7 @@ let vocabulary = [];
                     ['듣기 받아쓰기', '점수 없음', '점수 없음']
                 ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
-                    ['단어 빈칸', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
+                    ['단어 빈칸 <span class="text-[10px] font-semibold text-slate-400">(한 판 합계 최대 ±2.5)</span>', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
                     ['쓰기 복습 · 1바퀴에 바로 맞힘', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 유의어 쓴 뒤 다시 정답', '+2', '(점수 없이 2바퀴로)'],
                     ['쓰기 복습 · 1바퀴 · 오타·악센트 고쳐서 다시 정답', '+1', '(점수 없이 2바퀴로)'],
@@ -2271,10 +2281,10 @@ let vocabulary = [];
                         </tr>
                     </thead>
                     <tbody>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">문법표 빈칸 <b>다 맞음</b> (100%)</td><td class="py-2 px-3 font-black text-emerald-600">+1.5</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.0 / +0.5</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">문법표 빈칸 <b>다 맞음</b> (100%)</td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.3 / +0.7</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 <b>70%</b></td><td class="py-2 px-3 font-bold text-slate-400">0 (본전)</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.5 / −1.5</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.7 / −2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">번역 미션에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 질문에 답하기 · 내 예문 연습</span></td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600"><b>스→한 자유 작문</b>에서 제대로 씀<br><span class="text-[10px] font-semibold text-slate-400">아는 문법을 골라 쓰는 거라 절반</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">번역에서 그 문법을 <b>틀리게 씀</b></td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
@@ -2293,7 +2303,7 @@ let vocabulary = [];
                 </p>
                 <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
                     번역에서 <b>단어를 틀려도 문법표 점수는 안 깎여요.</b> 문법이 맞았으면 문법은 맞은 거예요.
-                    반대로 번역 결과가 <b>단어 점수를 바꾸지도 않아요</b> — 번역은 유의어·문맥에 따라 답이 여러 개라서요.
+                    단어 점수는 <b>단어대로 따로</b> 붙어요 — 철자를 제대로 쓴 단어는 +2(스→한은 +1), 틀리게 쓴 단어는 −2.
                 </p>
             </div>`;
 
