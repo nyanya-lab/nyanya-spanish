@@ -1727,10 +1727,11 @@ let vocabulary = [];
             return stats;
         }
 
+        // [냐냐 요청] 학습기록의 망각곡선 칸 — 왼쪽 단어 / 오른쪽 문법으로 반반.
+        //   두 곡선이 규칙은 같고 대상만 다르므로, 한 틀로 그리고 이름만 바꿔 끼운다.
         function renderReviewCurveCard() {
             const box = document.getElementById('review-curve-body');
             if (!box) return;
-            const s = getReviewCurveStats();
             const num = (n, cls) => `<span class="text-lg font-black ${cls}">${n}</span><span class="text-[10px] font-bold text-slate-400 ml-0.5">개</span>`;
             const cell = (label, n, cls, desc) => `
                 <div class="bg-slate-50 rounded-2xl px-3 py-2.5">
@@ -1739,34 +1740,47 @@ let vocabulary = [];
                     <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">${desc}</p>
                 </div>`;
 
-            // 단계 막대 — 곡선 안에서 가장 많은 칸을 기준으로 길이를 잡는다
-            const maxStage = Math.max(1, ...s.byStage);
-            const bars = REVIEW_INTERVALS.map((days, i) => {
-                const n = s.byStage[i];
-                const pct = Math.round((n / maxStage) * 100);
-                const meaning = i === 0 ? '처음 틀린 뒤 첫 복습' : `${i}번 복습한 단어`;
+            const half = (title, icon, s, unit, barColor, howto) => {
+                // 단계 막대 — 곡선 안에서 가장 많은 칸을 기준으로 길이를 잡는다
+                const maxStage = Math.max(1, ...s.byStage);
+                const bars = REVIEW_INTERVALS.map((days, i) => {
+                    const n = s.byStage[i];
+                    const pct = Math.round((n / maxStage) * 100);
+                    return `
+                        <div class="flex items-center gap-2">
+                            <span class="w-12 shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 text-center">${days}일차</span>
+                            <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full ${barColor} rounded-full transition-all" style="width: ${n ? Math.max(pct, 4) : 0}%"></div>
+                            </div>
+                            <span class="w-10 shrink-0 text-right text-[11px] font-black text-slate-600">${n}개</span>
+                        </div>`;
+                }).join('');
                 return `
-                    <div class="flex items-center gap-2">
-                        <span class="w-12 shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 text-center">${days}일차</span>
-                        <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-amber-400 rounded-full transition-all" style="width: ${n ? Math.max(pct, 4) : 0}%"></div>
-                        </div>
-                        <span class="w-10 shrink-0 text-right text-[11px] font-black text-slate-600">${n}개</span>
-                        <span class="hidden sm:inline w-28 shrink-0 text-[10px] text-slate-400">${meaning}</span>
-                    </div>`;
-            }).join('');
+                <div class="space-y-3">
+                    <div class="flex items-baseline gap-2">
+                        <p class="text-xs font-black text-slate-700">${icon} ${title}</p>
+                        <p class="text-[10px] text-slate-400 font-semibold">${howto}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        ${cell('오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600',
+                            s.overdue ? `그중 밀린 것 ${s.overdue}개` : (s.due ? '오늘이 예정일' : '오늘 치 다 했어요 ✨'))}
+                        ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
+                        ${cell('곡선 졸업', s.graduated, 'text-emerald-600', `30일차까지 다 버틴 ${unit}`)}
+                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500', '아직 곡선에 안 들어옴')}
+                    </div>
+                    <div class="space-y-1.5">
+                        <p class="text-[10px] font-bold text-slate-500">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
+                        ${bars}
+                    </div>
+                </div>`;
+            };
 
+            const wordStats = getReviewCurveStats();
+            const grammarStats = (typeof getGrammarCurveStats === 'function') ? getGrammarCurveStats() : null;
             box.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    ${cell('오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600',
-                        s.overdue ? `그중 밀린 것 ${s.overdue}개` : (s.due ? '오늘이 예정일' : '오늘 치 다 했어요 ✨'))}
-                    ${cell('곡선 안에 있는 단어', s.inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
-                    ${cell('곡선 졸업', s.graduated, 'text-emerald-600', '30일차까지 다 버틴 단어')}
-                    ${cell('한 번도 안 틀림', s.never, 'text-slate-500', '아직 곡선에 안 들어옴')}
-                </div>
-                <div class="mt-4 space-y-1.5">
-                    <p class="text-[10px] font-bold text-slate-500 mb-1">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
-                    ${bars}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 md:divide-x md:divide-slate-100">
+                    <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로')}</div>
+                    ${grammarStats ? `<div class="md:pl-6 pt-5 md:pt-0 border-t md:border-t-0 border-slate-100">${half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')}</div>` : ''}
                 </div>`;
         }
 
@@ -1826,34 +1840,84 @@ let vocabulary = [];
             }).sort((a, b) => getGrammarScore(a.id) - getGrammarScore(b.id));
         }
 
-        // 문법 탭 맨 위 '오늘 복습할 문법' 줄
-        function renderGrammarReviewBanner() {
-            const box = document.getElementById('grammar-review-banner');
-            if (!box) return;
-            const due = getGrammarDueList();
-            if (!due.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-            const first = due[0];
-            box.classList.remove('hidden');
-            box.innerHTML = `
-                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                    <div class="min-w-0 flex-1">
-                        <p class="text-xs font-black text-amber-700">🔁 오늘 다시 볼 문법 ${due.length}개</p>
-                        <p class="text-[11px] text-amber-900 font-semibold mt-0.5 truncate">
-                            다음: <b>${escapeHtml(first.title || '제목 없음')}</b>
-                            <span class="text-amber-500">— AI가 이 문법을 써야 풀리는 문장을 내줘요</span>
-                        </p>
-                    </div>
-                    <button onclick="startGrammarReview()" class="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">
-                        번역으로 복습하기 <i class="fa-solid fa-arrow-right ml-0.5"></i>
-                    </button>
-                </div>`;
-        }
-
         // 오늘 복습할 문법 중 가장 약한 것으로 번역 미션 시작
         function startGrammarReview() {
             const due = getGrammarDueList();
             if (!due.length) { showToast("오늘 복습할 문법이 없어요! 🎉", "info"); return; }
             if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id);
+        }
+
+        // [냐냐 요청] 복습 탭 맨 위 '오늘의 망각곡선' 줄 — 폰에서는 여기가 유일한 입구다
+        //   (헤더의 복습 버튼은 lg 이상에서만 보인다)
+        function renderReviewDueBar() {
+            const box = document.getElementById('review-due-bar');
+            if (!box) return;
+            const nW = (typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0;
+            const nG = (typeof getGrammarDueList === 'function') ? getGrammarDueList().length : 0;
+            if (!nW && !nG) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            box.classList.remove('hidden');
+            const btn = (n, label, sub, fn) => n ? `
+                <button onclick="${fn}" class="flex-1 min-w-0 bg-white hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2 text-left transition-all active:scale-95">
+                    <p class="text-[10px] font-bold text-amber-600">${label} <span class="text-amber-400 font-semibold">${sub}</span></p>
+                    <p class="text-sm font-black text-amber-700">${n}개 <i class="fa-solid fa-arrow-right text-[10px]"></i></p>
+                </button>` : '';
+            box.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5 flex items-stretch gap-2">
+                    ${btn(nW, '📖 단어', '쓰기 복습', 'startTodayReviewShortcut()')}
+                    ${btn(nG, '📋 문법', 'AI 문장 번역', 'startGrammarReview()')}
+                </div>`;
+        }
+
+        // 헤더 '복습 · 문법' 버튼 갱신 (단어 쪽은 renderTodayReview 가 한다)
+        function renderGrammarReviewBtn() {
+            const btn = document.getElementById('grammar-review-btn');
+            const badge = document.getElementById('grammar-review-count-badge');
+            if (!btn || !badge) return;
+            const n = (typeof getGrammarDueList === 'function') ? getGrammarDueList().length : 0;
+            const label = btn.querySelector('span');
+            if (n === 0) {
+                badge.innerText = '완료 ✓';
+                btn.disabled = true;
+                btn.classList.remove('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.add('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.remove('text-amber-700'); badge.classList.add('text-slate-400');
+                if (label) { label.classList.remove('text-amber-600'); label.classList.add('text-slate-400'); }
+            } else {
+                badge.innerText = n + '개';
+                btn.disabled = false;
+                btn.classList.add('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.remove('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
+                if (label) { label.classList.add('text-amber-600'); label.classList.remove('text-slate-400'); }
+            }
+        }
+
+        // [냐냐 요청] 문법 곡선 현황 — 학습기록 카드의 오른쪽 반을 채운다.
+        //   단어(getReviewCurveStats)와 같은 모양으로 돌려준다.
+        function getGrammarCurveStats() {
+            const today = getLocalDateString();
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const stats = {
+                total: tables.length, due: 0, overdue: 0, waiting: 0, inCurve: 0,
+                graduated: 0, never: 0, byStage: REVIEW_INTERVALS.map(() => 0)
+            };
+            tables.forEach(t => {
+                const rec = grammarReview[t.id];
+                if (!rec || !rec.lastWrongDate) { stats.never++; return; }
+                const stage = rec.stage || 0;
+                if (stage >= REVIEW_INTERVALS.length) { stats.graduated++; return; }
+                stats.inCurve++;
+                stats.byStage[stage]++;
+                if (rec.lastReviewDate === today) { stats.waiting++; return; }
+                const gap = daysSince(rec.lastReviewDate || rec.lastWrongDate);
+                if (gap >= REVIEW_INTERVALS[stage]) {
+                    stats.due++;
+                    if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                } else {
+                    stats.waiting++;
+                }
+            });
+            return stats;
         }
 
         // [냐냐 요청] 달력에서 어떤 날을 누르면 그날 복습 예정 단어를 보여주기 위한 계산.
@@ -1948,6 +2012,8 @@ let vocabulary = [];
 
         function renderTodayReview() {
             renderTodayWrongBtn(); // 버튼이 헤더에 있을 때만 동작 (지금은 내려가 있어 그냥 통과)
+            renderGrammarReviewBtn(); // [냐냐 요청] 헤더 복습의 문법 쪽도 같이 갱신
+            renderReviewDueBar();     // [냐냐 요청] 복습 탭 위 줄 (폰 입구)
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
             const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
@@ -3918,7 +3984,6 @@ let vocabulary = [];
         }
 
         function renderGrammarTables() {
-            renderGrammarReviewBanner();   // [냐냐 요청] 오늘 다시 볼 문법 줄
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
             const query = (document.getElementById('grammar-search')?.value || '').trim().toLowerCase();
@@ -7353,6 +7418,7 @@ let vocabulary = [];
                     (typeof gfillState !== 'undefined' && gfillState) ||
                     (typeof writePracticeState !== 'undefined' && writePracticeState);
                 if (typeof resetReviewTab === 'function' && !reviewInProgress) resetReviewTab();
+                renderReviewDueBar();   // [냐냐 요청] 오늘의 망각곡선 줄 갱신
             } else if (tabId === 'ai-feedback') {
                 // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
                 //   '아직 아무것도 안 한 완전 처음' 상태일 때만 초기화한다.
