@@ -1901,7 +1901,10 @@ ${refGrammar}${refWords}
         //      뒤 조각이 진짜 품사 이름일 때만 가른다.
         const AI_POS_WORDS = new Set(['noun', 'verb', 'adjective', 'adverb', 'preposition',
             'pronoun', 'conjunction', 'interrogative', 'phrase']);
-        function flattenScoredList(feedback, okKey, badKey, legacyKey, legacyName, legacyFlag) {
+        //   [냐냐 요청] neutralKey 는 '점수를 안 주는' 칸이다 (ok === null).
+        //     철자는 맞는데 활용·성수를 틀린 낱말 — 맞다고 +2 를 주면 성수일치 지적 바로 밑에
+        //     그 동사가 +2 로 붙어 앞뒤가 안 맞는다. 틀렸다고 −2 를 주기엔 낱말을 아는 건 맞다.
+        function flattenScoredList(feedback, okKey, badKey, legacyKey, legacyName, legacyFlag, neutralKey) {
             const out = [];
             const push = (v, ok) => {
                 let s = String(v || '').trim();
@@ -1915,14 +1918,18 @@ ${refGrammar}${refWords}
                 if (s) out.push({ name: s, ok, pos });
             };
             if (Array.isArray(feedback && feedback[okKey])) feedback[okKey].forEach(v => push(v, true));
+            if (neutralKey && Array.isArray(feedback && feedback[neutralKey])) feedback[neutralKey].forEach(v => push(v, null));
             if (Array.isArray(feedback && feedback[badKey])) feedback[badKey].forEach(v => push(v, false));
             // [냐냐 요청] AI 가 같은 항목을 맞음·틀림 양쪽에 넣어 오는 일이 있다.
             //   그럴 땐 틀림을 따른다 — 고쳐놓고 '제대로 썼다'고 하는 것보다, 한 번 더
             //   짚고 넘어가는 쪽이 덜 억울하다 (게다가 점수는 해제 버튼으로 되돌릴 수 있다).
-            const bad = new Set(out.filter(e => !e.ok).map(e => e.name.toLowerCase()));
-            if (bad.size) {
+            const bad = new Set(out.filter(e => e.ok === false).map(e => e.name.toLowerCase()));
+            const neutral = new Set(out.filter(e => e.ok === null).map(e => e.name.toLowerCase()));
+            if (bad.size || neutral.size) {
                 for (let i = out.length - 1; i >= 0; i--) {
-                    if (out[i].ok && bad.has(out[i].name.toLowerCase())) out.splice(i, 1);
+                    const n = out[i].name.toLowerCase();
+                    if (out[i].ok === true && (bad.has(n) || neutral.has(n))) out.splice(i, 1);
+                    else if (out[i].ok === null && bad.has(n)) out.splice(i, 1);
                 }
             }
             if (!out.length && Array.isArray(feedback && feedback[legacyKey])) {
@@ -2084,7 +2091,7 @@ ${refGrammar}${refWords}
                 if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w.id, it.idiom);
                 aiLastIdiomHits.push({ word: w, idiom: it.idiom, ok: true });
             });
-            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling');
+            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
             if (!list.length || typeof vocabulary === 'undefined') return;
 
             // 관사를 떼고 악센트까지 그대로 비교한다 (carne ≠ carné 와 같은 이유)
@@ -2122,7 +2129,8 @@ ${refGrammar}${refWords}
                 //   AI 가 표현을 통째로 짚어 준 경우 — 위 훑기가 못 잡은 것만 (틀리게 쓴 것이 여기 걸린다)
                 if (typeof idiomReviewDemote === 'function') {
                     const hitIdiom = findIdiomEntryByText(item.name);
-                    if (hitIdiom && !aiLastIdiomHits.some(h => h.word.id === hitIdiom.w.id && h.idiom === hitIdiom.it.idiom)) {
+                    // 형태를 틀린 낱말(ok === null)은 곡선도 안 건드린다 — 점수를 안 주기로 한 것과 같은 이유
+                    if (hitIdiom && item.ok !== null && !aiLastIdiomHits.some(h => h.word.id === hitIdiom.w.id && h.idiom === hitIdiom.it.idiom)) {
                         if (item.ok) { if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(hitIdiom.w.id, hitIdiom.it.idiom); }
                         else idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
                         aiLastIdiomHits.push({ word: hitIdiom.w, idiom: hitIdiom.it.idiom, ok: item.ok });
@@ -2134,8 +2142,10 @@ ${refGrammar}${refWords}
                     : ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null));
                 if (!w || done.has(w.id)) return;
                 done.add(w.id);
-                const ok = item.ok;
-                const delta = ok ? gainOk : WORD_SPELL_BAD;
+                // [냐냐 요청] 철자는 맞는데 활용·성수를 틀린 낱말은 점수를 안 준다 (0점, 곡선도 그대로).
+                const noScore = (item.ok === null);
+                const ok = (item.ok === true);
+                const delta = noScore ? 0 : (ok ? gainOk : WORD_SPELL_BAD);
                 // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
                 //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
                 //   델타만 빼면 안 된다 — 오답이면 lastWrongDate·reviewStage 까지 바뀌기 때문.
@@ -2143,8 +2153,8 @@ ${refGrammar}${refWords}
                 // [냐냐 요청] 등급이 바뀌면 결과 카드에서 알려준다 (안 바뀌면 아무 말 안 한다)
                 const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
                 // 정답률·망각곡선까지 같이 반영되도록 단어 점수는 addWordScore 로 (퀴즈·복습과 같은 경로)
-                if (typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
-                aiLastEsKoWords.push({ word: w, ok, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+                if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
+                aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             });
         }
 
@@ -2271,9 +2281,10 @@ ${refGrammar}${refWords}
                "grammarOk": ["EXACT note titles from the list above that this sentence uses CORRECTLY"],
                "grammarBad": ["EXACT note titles from the list above that this sentence uses INCORRECTLY"],
                "wordsOk": ["each content word the student spelled CORRECTLY, written as \\"dictionary form|part of speech\\""],
+               "wordsForm": ["each content word spelled correctly but put in the WRONG FORM, written as \\"dictionary form|part of speech\\""],
                "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""]`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
+            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" when the student misspelled it (put the dictionary form of the word they were CLEARLY trying to write); "wordsForm" when the spelling is a real Spanish word but you had to change THAT WORD'S OWN form in correctedText — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos); "wordsOk" for everything else, that is, the word survives into correctedText in the very form the student wrote it. A correctly spelled word in the right form goes in "wordsOk" even if it was a poor word choice for the meaning, and swapping one word for a DIFFERENT word (Cuál → Qué) is a word choice, not a form, so that word still counts as "wordsOk". Never list a word the student did not write. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
             IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. Most sentences match 0-2 notes; listing many is a sign you are guessing. Do NOT list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
             DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
             - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule.
@@ -2281,12 +2292,13 @@ ${refGrammar}${refWords}
             A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
-        const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsBad"];
+        const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsForm", "wordsBad"];
         function aiScoringSchemaProps() {
             return {
                 grammarOk: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 제대로 쓴 문법 노트 제목들 (목록에 있는 제목 그대로)" },
                 grammarBad: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 틀리게 쓴 문법 노트 제목들" },
-                wordsOk: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 맞은 낱말의 사전형들" },
+                wordsOk: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링도 형태도 맞은 낱말의 사전형들" },
+                wordsForm: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링은 맞지만 활용·성수 형태를 틀린 낱말의 사전형들 (점수 없음)" },
                 wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" }
             };
         }
@@ -2782,7 +2794,7 @@ ${refGrammar}${refWords}
 
             if (state === 'normal') {
                 e.delta = e.baseDelta;
-                addWordScore(e.word, e.delta, { correct: e.ok });
+                if (e.delta) addWordScore(e.word, e.delta, { correct: e.ok });
             } else if (state === 'looked') {
                 e.delta = LOOKUP_PENALTY;
                 // 틀린 것과 같이 친다 — 그래야 망각곡선에 들어가 다시 만나게 된다
@@ -2838,11 +2850,14 @@ ${refGrammar}${refWords}
 
             // 단어는 개수가 많을 수 있어 한 줄짜리 칩으로
             const wordHtml = aiLastEsKoWords.map((w, i) => {
+                // 철자는 맞고 형태만 틀린 낱말은 초록도 빨강도 아니다 — 점수가 없다는 걸 회색으로 보여준다
                 const cls = w.undone ? 'border-slate-200 bg-slate-50 text-slate-400'
                           : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
-                          : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'));
+                          : (w.noScore ? 'border-slate-300 bg-slate-50 text-slate-500'
+                          : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600')));
+                const mark = w.undone ? '해제됨' : (w.noScore && !w.lookedUp ? '형태 틀림 · 0' : (w.delta > 0 ? '+' : '') + w.delta);
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
-                    <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.undone ? '해제됨' : (w.delta > 0 ? '+' : '') + w.delta}</span>
+                    <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${mark}</span>
                     <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
                     <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${(w.lookedUp || w.undone) ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
                 </span>`;
