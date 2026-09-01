@@ -2195,6 +2195,36 @@ let vocabulary = [];
         //   한→스 미션·질문에 답하기·내 예문 연습은 그대로 +2.
         const WORD_SPELL_FREE_OK = 1;
 
+        // [냐냐 요청] 등급이 바뀐 것을 결과 화면에서 짚어준다.
+        //   쓰기 복습에만 있던 걸 단어 빈칸·퀴즈·AI 첨삭이 같이 쓰도록 여기로 올린다.
+        const IS_MASTER_GRADE = (g) => g === 'mastered' || g === 'perfect';
+        const IS_WEAK_GRADE = (g) => g === 'weak' || g === 'critical';
+        // 점수를 매기기 전후의 등급을 재준다
+        function withGradeShift(w, apply) {
+            const before = getWordGrade(w);
+            apply();
+            return { gradeBefore: before, gradeAfter: getWordGrade(w) };
+        }
+        // 결과 화면에 붙일 '등급이 바뀐 단어' 블록. 바뀐 게 없으면 빈 글자를 준다.
+        //   rows = [{ word, meaning, gradeBefore, gradeAfter }]
+        function gradeShiftHtml(rows) {
+            const list = (rows || []).filter(r => r && r.gradeBefore !== r.gradeAfter);
+            if (!list.length) return '';
+            const newMaster = list.filter(r => !IS_MASTER_GRADE(r.gradeBefore) && IS_MASTER_GRADE(r.gradeAfter));
+            const newWeak = list.filter(r => !IS_WEAK_GRADE(r.gradeBefore) && IS_WEAK_GRADE(r.gradeAfter));
+            const lostMaster = list.filter(r => IS_MASTER_GRADE(r.gradeBefore) && !IS_MASTER_GRADE(r.gradeAfter));
+            const chip = (r, tone) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${tone}">${escapeHtml(r.word)}${r.meaning ? `<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span>` : ''}</span>`;
+            const block = (title, arr, titleCls, tone) => arr.length ? `
+                <div class="text-left">
+                    <p class="text-xs font-black ${titleCls} mb-1.5">${title} ${arr.length}개</p>
+                    <div class="-m-0.5">${arr.map(r => chip(r, tone)).join('')}</div>
+                </div>` : '';
+            const inner = block('🟩 이번에 마스터', newMaster, 'text-emerald-700', 'bg-emerald-100 border-emerald-300 text-emerald-800')
+                        + block('🟨 약점이 됐어요', newWeak, 'text-amber-700', 'bg-amber-50 border-amber-300 text-amber-800')
+                        + block('↩️ 마스터가 풀렸어요', lostMaster, 'text-slate-500', 'bg-slate-100 border-slate-300 text-slate-600');
+            return inner ? `<div class="space-y-3">${inner}</div>` : '';
+        }
+
         // [냐냐 요청] 찾아보고 쓴 것 — 결과 카드에서 내가 직접 표시한다.
         //   자동으로 알아내려면 '언제부터 언제까지 무엇을 열어본 것을 조회로 볼지' 를 정해야 하는데
         //   경계가 흐릿해서 억울한 감점이 생긴다. 내가 아는 걸 내가 말하는 쪽이 정확하다.

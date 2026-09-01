@@ -1992,9 +1992,11 @@ ${refGrammar}${refWords}
                 //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
                 //   델타만 빼면 안 된다 — 오답이면 lastWrongDate·reviewStage 까지 바뀌기 때문.
                 const prev = snapshotWordScoreState(w);
+                // [냐냐 요청] 등급이 바뀌면 결과 카드에서 알려준다 (안 바뀌면 아무 말 안 한다)
+                const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
                 // 정답률·망각곡선까지 같이 반영되도록 단어 점수는 addWordScore 로 (퀴즈·복습과 같은 경로)
                 if (typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
-                aiLastEsKoWords.push({ word: w, ok, delta, baseDelta: delta, prev, state: 'normal', undone: false });
+                aiLastEsKoWords.push({ word: w, ok, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             });
         }
 
@@ -2685,16 +2687,26 @@ ${refGrammar}${refWords}
                 </span>`;
             }).join('');
 
+            // [냐냐 요청] 등급이 바뀐 단어가 있을 때만 한 덩어리 보여준다.
+            //   해제·찾아봄으로 점수를 바꾸면 여기도 같이 다시 계산된다 (지금 등급을 그때그때 읽으므로)
+            const shiftRows = aiLastEsKoWords.map(e => ({
+                word: e.word.word, meaning: e.word.meaning || '',
+                gradeBefore: e.gradeBefore, gradeAfter: (typeof getWordGrade === 'function') ? getWordGrade(e.word) : e.gradeBefore
+            }));
+            const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
+            const shiftHtml = shiftInner ? `<div class="mt-3 pt-3 border-t border-slate-200">${shiftInner}</div>` : '';
+
             box.innerHTML = `
                 ${grammarHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
                 </div>
                 <div class="space-y-1.5">${grammarHtml}</div>` : ''}
-                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 찾아보고 쓴 건 눌러서 표시하면 점수가 ${LOOKUP_PENALTY} 가 돼요 (망각곡선에도 들어가요) · ↺ 는 AI 가 잘못 짚었을 때 · 둘 다 다시 누르면 원래대로</p>` : ''}
                 ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
-                <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}`;
+                <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}
+                ${shiftHtml}
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 찾아보고 쓴 건 눌러서 표시하면 점수가 ${LOOKUP_PENALTY} 가 돼요 (망각곡선에도 들어가요) · ↺ 는 AI 가 잘못 짚었을 때 · 둘 다 다시 누르면 원래대로</p>` : ''}`;
             box.classList.remove('hidden');
         }
 

@@ -1261,10 +1261,16 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 const vocabItem = vocabulary.find(w => w.id === q.word.id);
                 if (vocabItem) {
                     const wasWeak = vocabItem.weak;
+                    // [냐냐 요청] 틀려서 마스터가 풀리는 경우도 있는데 아무 표시가 없었다
+                    const wasMastered = vocabItem.mastered;
                     addWordScore(vocabItem, -2, { correct: false });
                     if (!wasWeak && vocabItem.weak) {
                         if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
                         if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);
+                    }
+                    if (wasMastered && !vocabItem.mastered) {
+                        if (!quizSession.lostMasterIds) quizSession.lostMasterIds = [];
+                        if (!quizSession.lostMasterIds.includes(vocabItem.id)) quizSession.lostMasterIds.push(vocabItem.id);
                     }
                 }
                 coach.innerText = "🤔💭";
@@ -1387,6 +1393,15 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     const items = newlyWeak.map(id => { const w = vocabulary.find(v => v.id === id); return w ? `<span class="inline-block bg-white/70 rounded-lg px-2 py-0.5 text-xs font-bold text-amber-700 m-0.5">${w.word}</span>` : ''; }).join('');
                     parts.push(`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-3">
                         <p class="text-xs font-black text-amber-700 mb-1.5">⭐ 약점 단어 추가 (${newlyWeak.length}개)</p>
+                        <div class="flex flex-wrap">${items}</div>
+                    </div>`);
+                }
+                // [냐냐 요청] 마스터가 풀린 단어 — 조용히 지나가면 더 당황스럽다
+                const lostMaster = (quizSession.lostMasterIds || []).filter(id => !autoMastered.includes(id));
+                if (lostMaster.length > 0) {
+                    const items = lostMaster.map(id => { const w = vocabulary.find(v => v.id === id); return w ? `<span class="inline-block bg-white/70 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-600 m-0.5">${w.word}</span>` : ''; }).join('');
+                    parts.push(`<div class="bg-slate-100 border border-slate-300 rounded-2xl p-3">
+                        <p class="text-xs font-black text-slate-600 mb-1.5">↩️ 마스터가 풀렸어요 (${lostMaster.length}개)</p>
                         <div class="flex flex-wrap">${items}</div>
                     </div>`);
                 }

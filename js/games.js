@@ -1097,7 +1097,8 @@ Return JSON only, no markdown.`;
             // 결과 저장 + 표시
             const detail = blanks.map((b, i) => ({ key: b.key, label: b.label, language: b.language, expected: b.expected, userAnswer: answers[i], correct: graded[i].correct, correctAnswer: graded[i].correctAnswer }));
             const allCorrect = detail.every(d => d.correct);
-            fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect });
+            fillState.results.push({ word: fillState.current.word, blanks: detail, allCorrect,
+                                     ...(fillState.current.gradeShift || {}) });
 
             // [냐냐 PATCH-0배치] 단어 빈칸 복습 점수: 정답 칸당 +0.7 / 오답 칸당 -0.5
             //   [냐냐 요청] 단, 동사변형(conj-*) 칸은 한 문제에 6칸까지 나올 수 있어
@@ -1121,7 +1122,10 @@ Return JSON only, no markdown.`;
                 // [냐냐 요청] 스페인어 '단어' 칸을 직접 써서 맞혔으면 = 주관식 정답 → 마스터 자격
                 //   (한국어 뜻 칸이나 관용구·예문 칸은 해당 없음)
                 const wordBlankPassed = detail.some(d => d.key === 'word' && d.language === 'es' && d.correct);
-                addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
+                const gShift = withGradeShift(fillState.current.word, () => {
+                    addWordScore(fillState.current.word.id, delta, { correct: allCorrect, skipReviewDate: !coreWrong });
+                });
+                fillState.current.gradeShift = gShift;   // 결과 화면에서 쓴다
                 // ⚠️ addWordScore는 correct===true 일 때만 subjective를 반영한다.
                 //   단어 칸은 맞고 예문 칸만 틀린 경우도 인정해야 하므로 여기서 직접 세운다.
                 //   [냐냐 요청] 세운 뒤 syncWordFlags 를 다시 불러야 마스터 플래그가 그 자리에서 붙는다.
@@ -1234,6 +1238,12 @@ Return JSON only, no markdown.`;
             const masterCandidates = results.filter(r => r.allCorrect && r.word && !r.word.mastered).map(r => r.word);
             fillState = null;
 
+            // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어 (마스터 / 약점 / 마스터 풀림)
+            const shiftHtml = (typeof gradeShiftHtml === 'function')
+                ? gradeShiftHtml(results.map(r => ({ word: r.word.word, meaning: r.word.meaning || '',
+                                                     gradeBefore: r.gradeBefore, gradeAfter: r.gradeAfter })))
+                : '';
+
             let listHtml = '';
             results.forEach(r => {
                 const icon = r.allCorrect ? '<span class="text-emerald-500">✓</span>' : '<span class="text-red-400">✗</span>';
@@ -1259,6 +1269,7 @@ Return JSON only, no markdown.`;
                     <div class="text-6xl">${correct === total ? '🎉' : '💪'}</div>
                     <h3 class="text-xl font-black text-slate-900">빈칸 복습 완료!</h3>
                     <p class="text-sm text-slate-500">${total}문제 중 <b class="text-emerald-600">${correct}개</b> 다 맞혔어요! (정답률 ${total ? Math.round(correct / total * 100) : 0}%)</p>
+                    ${shiftHtml}
                     ${masteryHtml}
                     <div class="text-left space-y-1.5 max-h-72 overflow-y-auto">
                         <p class="text-xs font-bold text-slate-500 mb-1">복습한 단어들</p>

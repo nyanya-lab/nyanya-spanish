@@ -3288,22 +3288,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <p class="text-xs font-black ${ok ? 'text-emerald-600' : 'text-rose-500'} mb-1.5">${title} ${arr.length}개</p>
                         <div class="-m-0.5">${arr.map(r => chip(r, ok)).join('')}</div>
                     </div>` : '';
-                // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어들 — 마스터가 됐는지, 약점으로 떨어졌는지
-                const newMaster = res.filter(r => !WRITE_IS_MASTER(r.gradeBefore) && WRITE_IS_MASTER(r.gradeAfter));
-                const newWeak = res.filter(r => !WRITE_IS_WEAK(r.gradeBefore) && WRITE_IS_WEAK(r.gradeAfter));
-                const lostMaster = res.filter(r => WRITE_IS_MASTER(r.gradeBefore) && !WRITE_IS_MASTER(r.gradeAfter));
-                const shiftChip = (r, tone) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${tone}">${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
-                const shiftBlock = (title, arr, titleCls, chipTone) => arr.length ? `
-                    <div class="text-left">
-                        <p class="text-xs font-black ${titleCls} mb-1.5">${title} ${arr.length}개</p>
-                        <div class="-m-0.5">${arr.map(r => shiftChip(r, chipTone)).join('')}</div>
-                    </div>` : '';
-                const shiftLists = (newMaster.length || newWeak.length || lostMaster.length) ? `
-                    <div class="pt-2 mt-2 border-t border-slate-100 space-y-3">
-                        ${shiftBlock('🟩 이번에 마스터', newMaster, 'text-emerald-700', 'bg-emerald-100 border-emerald-300 text-emerald-800')}
-                        ${shiftBlock('🟨 약점이 됐어요', newWeak, 'text-amber-700', 'bg-amber-50 border-amber-300 text-amber-800')}
-                        ${shiftBlock('↩️ 마스터가 풀렸어요', lostMaster, 'text-slate-500', 'bg-slate-100 border-slate-300 text-slate-600')}
-                    </div>` : '';
+                // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어들 (core.js 의 공용 표시를 쓴다)
+                const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(res) : '';
+                const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
 
                 const resultLists = (okList.length || noList.length) ? `
                     <div class="pt-2 mt-2 border-t border-slate-100 space-y-3">
@@ -3543,7 +3530,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   두 번 베껴 쓴 뒤에 맞힌 것이라 기억했다는 증거가 아니다.
             //   그래도 다시 붙잡긴 했으니 끝내 틀린 −2 와는 구분해 준다.
             if (isMatch) {
-                const shift = writeApplyWithGrade(w, () => {
+                const shift = withGradeShift(w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false });
                 });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
@@ -3555,7 +3542,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                const shift = writeApplyWithGrade(w, () => {
+                const shift = withGradeShift(w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
                 });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
@@ -3577,17 +3564,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 쓰기 복습으로도 마스터가 되고 약점으로도 떨어지는데, 결과 화면이
         //   맞은/틀린 것만 보여줘서 그 변화를 알 수가 없었다. 점수를 매기기 전후의 등급을
         //   재두었다가 결과 화면에서 짚어준다.
-        function writeApplyWithGrade(w, apply) {
-            const g = (x) => (typeof getWordGrade === 'function') ? getWordGrade(x) : null;
-            const before = g(w);
-            apply();
-            return { gradeBefore: before, gradeAfter: g(w) };
-        }
-        const WRITE_IS_MASTER = (g) => g === 'mastered' || g === 'perfect';
-        const WRITE_IS_WEAK = (g) => g === 'weak' || g === 'critical';
+        //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
-            const shift = writeApplyWithGrade(w, () => {
+            const shift = withGradeShift(w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
             });
             if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
