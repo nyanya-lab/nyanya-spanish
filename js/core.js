@@ -141,9 +141,6 @@ let vocabulary = [];
             const custom = (localStorage.getItem(FIREBASE_URL_KEY) || '').trim();
             return custom ? normalizeDbUrl(custom) : DEFAULT_FIREBASE_DB_URL;
         }
-        function hasFirebaseDbUrl() {
-            return !!getFirebaseDbUrl();
-        }
         // 콘솔에서 복사한 주소는 끝에 `/` 나 `.json` 이 붙어 오기도 하고 https:// 가 빠지기도 한다.
         function normalizeDbUrl(raw) {
             let url = String(raw || '').trim();
@@ -3381,103 +3378,6 @@ let vocabulary = [];
             `;
         }
 
-        // 퀴즈 차트: 전체 풀이 갯수(꺾은선) + 오답률%(막대)를 한 차트에 겹쳐서 표시
-        function renderQuizChart(series) {
-            const container = document.getElementById('record-quiz-chart');
-            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
-
-            const width = CHART_VIEW_WIDTH;
-            const height = 180;
-            const padding = { top: 16, right: 12, bottom: 28, left: 36 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-            const baseY = height - padding.bottom;
-
-            const withRate = series.map(d => ({
-                ...d,
-                wrongRate: d.quizTotal > 0 ? ((d.quizTotal - d.quizCorrect) / d.quizTotal) * 100 : 0
-            }));
-
-            const maxTotal = Math.max(1, ...withRate.map(d => d.quizTotal));
-            // [냐냐 PATCH] 좌우 여백(inset) — 첫/마지막 막대가 축에 붙어 잘리는 것 방지
-            const xInset = Math.min(14, chartW * 0.06);
-            const xSpan = chartW - xInset * 2;
-            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
-            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
-            const groupWidth = series.length > 0 ? chartW / series.length : chartW;
-            const barWidth = Math.min(8, groupWidth * 0.5);
-
-            // 오답률(%)은 0~100 고정 스케일의 막대로
-            let bars = '';
-            withRate.forEach((d, i) => {
-                const barH = (d.wrongRate / 100) * chartH;
-                const barX = (xOf(i) - barWidth / 2).toFixed(1);
-                const barY = (baseY - barH).toFixed(1);
-                const text = `${d.fullLabel}: 오답률 ${Math.round(d.wrongRate)}% (${d.quizTotal - d.quizCorrect}/${d.quizTotal}개)`.replace(/'/g, "\\'");
-                bars += `<rect x="${barX}" y="${barY}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#fb7185" opacity="0.7" rx="1.5"/>`;
-                // 막대가 너무 얇아서 탭하기 어려우므로, 막대 전체 높이를 덮는 투명한 클릭 영역을 따로 추가
-                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
-            });
-
-            // 전체 풀이 갯수는 자기 자신의 최댓값 기준 꺾은선으로
-            const yOfTotal = (val) => padding.top + chartH - (val / maxTotal) * chartH;
-            const linePath = withRate.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfTotal(d.quizTotal).toFixed(1)}`).join(' ');
-            const lineDots = withRate.map((d, i) => {
-                const cx = xOf(i).toFixed(1);
-                const cy = yOfTotal(d.quizTotal).toFixed(1);
-                const text = `${d.fullLabel}: 전체 ${d.quizTotal}문제`.replace(/'/g, "\\'");
-                return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="#8b5cf6"/><circle cx="${cx}" cy="${cy}" r="9" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-quiz-chart-tooltip', '${text}')"/>`;
-            }).join('');
-
-            container.innerHTML = `
-                ${recordChartTooltipDiv('record-quiz-chart-tooltip')}
-                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
-                    ${recordChartGridlines(maxTotal, padding, chartW, chartH, width)}
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
-                    ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    ${lineDots}
-                    ${recordChartXLabels(withRate, xOf, height)}
-                </svg>
-            `;
-        }
-
-        // AI 첨삭 차트: 일별 횟수 막대그래프
-        function renderAiChart(series) {
-            const container = document.getElementById('record-ai-chart');
-            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
-
-            const width = CHART_VIEW_WIDTH;
-            const height = 140;
-            const padding = { top: 16, right: 12, bottom: 28, left: 36 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-            const baseY = height - padding.bottom;
-
-            const maxVal = Math.max(1, ...series.map(d => d.aiSessions));
-            const groupWidth = chartW / series.length;
-            const barWidth = Math.min(10, groupWidth * 0.6);
-            const xOfGroup = (i) => padding.left + i * groupWidth + groupWidth / 2;
-
-            let bars = '';
-            series.forEach((d, i) => {
-                const barH = (d.aiSessions / maxVal) * chartH;
-                const text = `${d.fullLabel}: ${d.aiSessions}회`.replace(/'/g, "\\'");
-                bars += `<rect x="${(xOfGroup(i) - barWidth / 2).toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barH.toFixed(1)}" fill="#6366f1" rx="2"/>`;
-                bars += `<rect x="${(xOfGroup(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-ai-chart-tooltip', '${text}')"/>`;
-            });
-
-            container.innerHTML = `
-                ${recordChartTooltipDiv('record-ai-chart-tooltip')}
-                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
-                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '회')}
-                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
-                    ${bars}
-                    ${recordChartXLabels(series, xOfGroup, height)}
-                </svg>
-            `;
-        }
-
         // [냐냐 PATCH] 학습 활동 통합 그래프: 총합=꺾은선(왼쪽축), 퀴즈·AI·복습·게임=막대(오른쪽축)
         // 색은 일지 숫자색과 맞춤: 퀴즈=amber, AI=indigo, 복습=sky, 게임=pink
         // [냐냐 PATCH] 신규등록은 값이 워낙 커서 막대만 1/10 축소 표시 (총합·툴팁은 실제 갯수 그대로)
@@ -4381,14 +4281,6 @@ let vocabulary = [];
             saveGrammarFilterPrefs();   // [냐냐 요청] 열어둔 노트도 기억
         }
 
-        function expandAllGrammar(open) {
-            getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = open; });
-            grammarViewMode = open ? 'all-open' : 'default';
-            if (open) grammarGroupCollapsed = {};   // 다 펼칠 땐 접힌 주제도 열어준다
-            saveGrammarFilterPrefs();
-            renderGrammarTables();
-        }
-
         // ============================================================
         // [냐냐 요청] ⤢ 버튼 3단계 순환 — 접힌 데서 시작해 점점 펼쳐진다
         //   default    : 주제까지 다 접힘 (주제 줄만 = 목차)  ← 기본
@@ -4449,20 +4341,6 @@ let vocabulary = [];
             if (icon) { icon.classList.add('animate-spin'); setTimeout(() => icon.classList.remove('animate-spin'), 500); }
             renderGrammarTables();
             if (typeof updateStats === 'function') updateStats();
-        }
-
-        // [냐냐 PATCH] 문법표 칸 강조 토글 (별표 클릭 → 노란색)
-        function toggleGrammarCellHighlight(tableId, ri, ci) {
-            if (!grammarCellHighlights[tableId]) grammarCellHighlights[tableId] = {};
-            const key = `${ri}-${ci}`;
-            if (grammarCellHighlights[tableId][key]) {
-                delete grammarCellHighlights[tableId][key];
-                if (Object.keys(grammarCellHighlights[tableId]).length === 0) delete grammarCellHighlights[tableId];
-            } else {
-                grammarCellHighlights[tableId][key] = true;
-            }
-            renderGrammarTables();
-            saveToStorage();
         }
 
         // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
@@ -4816,12 +4694,6 @@ let vocabulary = [];
             sel.innerHTML = opts;
             sel.value = cur; // 옵션 채운 뒤 값 지정 (빈 select에 미리 넣으면 안 먹힘)
         }
-        function selectGeIcon(icon) {
-            const sel = document.getElementById('ge-icon');
-            if (sel) sel.value = icon;
-            renderGeIconPicker();
-        }
-
         // ============================================================
         // [냐냐 PATCH] 주제 관리 — 아이콘+주제 이름 목록을 직접 편집
         //   여기서 만든 주제로 필터(주제)·아이콘 피커·조회 표시가 전부 연동됨
@@ -5380,14 +5252,6 @@ let vocabulary = [];
                 doRemove,
                 { okLabel: '지울래요', cancelLabel: '아니요' }
             );
-        }
-
-        // [냐냐 요청] 앞뒤 빈 줄만 걷어내고, 줄 앞 스페이스 들여쓰기는 살려두는 정리 함수
-        function trimBlankLines(str) {
-            return String(str == null ? '' : str)
-                .replace(/^(?:[ \t]*\r?\n)+/, '')    // 맨 앞 빈 줄들
-                .replace(/(?:\r?\n[ \t]*)+$/, '')    // 맨 뒤 빈 줄들
-                .replace(/[ \t]+$/, '');             // 마지막 줄 끝 공백
         }
 
         // ============================================================
@@ -6658,12 +6522,6 @@ let vocabulary = [];
             grammarCellWords[tableId][key] = wordId;
         }
 
-        // 이 노트에 연결이 하나라도 있나 (= 단어 시험처럼 쓰는 표인가)
-        function noteHasCellWords(tableId) {
-            const all = grammarCellWords[tableId];
-            return !!(all && Object.keys(all).length);
-        }
-
         // 카드의 연결 아이콘 → 수정창을 열고 그 표의 연결창까지 한 번에 띄운다
         //   (예전엔 수정 → 표 블록 찾기 → '단어 연결' 로 세 번 눌러야 했다)
         function openGrammarWordLinkFor(tableId) {
@@ -7299,23 +7157,6 @@ let vocabulary = [];
                     await saveToStorage();
                     showToast("표를 삭제했어요", "success");
                 }
-            );
-        }
-
-        function resetGrammarTable(id) {
-            // 기본 표를 수정했던 걸 원래대로 되돌림
-            const wasEdited = customGrammarTables.find(c => c.id === id);
-            if (!wasEdited) { showToast("이미 기본 상태예요", "info"); return; }
-            showConfirm(
-                "기본값으로 되돌릴까요?",
-                "수정한 내용이 사라지고 원래 기본 표로 돌아가요.",
-                async () => {
-                    customGrammarTables = customGrammarTables.filter(c => c.id !== id);
-                    renderGrammarTables();
-                    await saveToStorage();
-                    showToast("기본 표로 되돌렸어요", "success");
-                },
-                { okLabel: '되돌리기', cancelLabel: '취소', okStyle: 'primary' }
             );
         }
 

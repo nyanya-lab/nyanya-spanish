@@ -34,10 +34,6 @@
             }
         }
 
-        function toggleVerbTypeDetails() {
-            // [냐냐 PATCH] 규칙/불규칙·불규칙유형은 이제 각 시제 블록마다 있음 (전역 콤보박스 제거) — 호환용 빈 함수
-        }
-
         // [냐냐 PATCH] 동사 시제: 관용구처럼 '시제 블록'을 +/− 로 추가/삭제.
         //   각 블록 = 시제종류 select + 규칙/불규칙 select + 불규칙유형 select + AI추천 + 삭제 + 입력칸(6인칭 또는 현재분사 1칸)
         const CONJ_PERSON_KEYS = ['yo','tu','el','nos','vos','ellos'];
@@ -821,32 +817,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!wordId) {
                 setTimeout(() => { const wi = document.getElementById('input-word'); if (wi) wi.focus(); }, 50);
             }
-        }
-
-        // [냐냐 PATCH] 노트 작성 시 엔터를 누르면 자동으로 '· ' 글머리 기호 추가 (지우는 건 자유)
-        // [냐냐 PATCH] 문법표 설명/팁에서 엔터 = 자동 · 기호 (단어장 노트처럼)
-        // [냐냐 PATCH] 설명/팁 입력 시작할 때 비어있으면 기본 기호(· ) 넣기
-        function grammarNoteFocusDefault(event, stateKey) {
-            const ta = event.target;
-            if ((ta.value || '').trim() === '') {
-                ta.value = '· ';
-                ta.selectionStart = ta.selectionEnd = ta.value.length;
-                if (grammarEditorState && stateKey) grammarEditorState[stateKey] = ta.value;
-            }
-        }
-
-        function handleGrammarNoteEnter(event, stateKey) {
-            if (event.key !== 'Enter' || event.shiftKey) return;
-            event.preventDefault();
-            const textarea = event.target;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const value = textarea.value;
-            const insertion = '\n· ';
-            textarea.value = value.slice(0, start) + insertion + value.slice(end);
-            const newPos = start + insertion.length;
-            textarea.selectionStart = textarea.selectionEnd = newPos;
-            if (grammarEditorState && stateKey) grammarEditorState[stateKey] = textarea.value;
         }
 
         // [냐냐 요청] 메모에서 Alt+Enter(또는 Shift+Enter) 는 줄바꿈, 그냥 Enter 는 저장.
@@ -2857,13 +2827,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             setTimeout(bind, 500); // 안전망
         })();
 
-        // 예전 이름 호환
-        function toggleDisplaySection(key){ const b=document.querySelector('[data-disp-section="'+key+'"]'); if(b) b.click(); }
-        function toggleDisplayTense(key){ const b=document.querySelector('[data-disp-tense="'+key+'"]'); if(b) b.click(); }
-        function toggleAllDisplay(){ const b=document.querySelector('[data-disp-action="all"]'); if(b) b.click(); }
-        function resetDisplayPrefs(){ const b=document.querySelector('[data-disp-action="reset"]'); if(b) b.click(); }
-        function applyDisplayPrefs(){ const b=document.querySelector('[data-disp-action="apply"]'); if(b) b.click(); else closeDisplayPanel(); }
-
         // [냐냐 PATCH-6배치] 카드 안의 동사 변형표 — 등록된 시제 중 "설정에서 켠 시제"만 전부 표시
         function buildCardConjHtml(w) {
             const irrByTense = w.irregularByTense || {};
@@ -3167,12 +3130,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
 
-        function startWritePractice() {
-            const pool = (lastFilteredWords || []).filter(w => w && w.word);
-            if (!pool.length) { showToast("연습할 단어가 없어요!", "error"); return; }
-            beginWritePractice(pool, { isTodayReview: false });
-        }
-
         // [냐냐 요청] 쓰기 복습 공용 시작점 — 테스트부터 하고, 틀린 것만 익힌다.
         //   1바퀴: 가리고 쓰기 (전체) — 한 번에 맞히면 +2, 거기서 끝
         //   2바퀴: 1바퀴에서 틀린 것만 보면서 2번씩 쓰기 (익히기, 점수 없음)
@@ -3268,7 +3225,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (s.phase === 1 && s.wrongPool.length > 0) {
                     s.phase = 2;
                     s.pool = s.wrongPool.slice();
-                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
                     s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.grading = false; s.feedback = null;
                     gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
                         `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
@@ -3279,7 +3236,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (s.phase === 2) {
                     s.phase = 3;
                     s.pool = shuffleArray(s.wrongPool.slice());
-                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = ''; s.showDetail = false;
+                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
                     s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.grading = false; s.feedback = null;
                     gate('🙈', '이제 가리고 써볼 차례!',
                         '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
@@ -3485,17 +3442,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
         }
 
-        // [냐냐 요청] 단어 정보 펼치기/접기. 다시 그리므로 입력 중이던 값은 보존한다.
-        function toggleWritePracticeDetail() {
-            if (!writePracticeState) return;
-            const el = document.getElementById('write-practice-input');
-            const keep = el ? el.value : '';
-            writePracticeState.showDetail = !writePracticeState.showDetail;
-            renderWritePractice();
-            const el2 = document.getElementById('write-practice-input');
-            if (el2) el2.value = keep;
-        }
-
         function skipWritePractice() {
             const s = writePracticeState;
             if (!s || s.grading) return;
@@ -3503,7 +3449,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             s.done = 0;
             s.retry = false;
             s.lastWrong = '';
-            s.showDetail = false;
             s.retryReason = null;   // [냐냐 요청] 봐준 이유는 단어마다 초기화
             s.usedRetries = {};
             s.hint = '';
@@ -3551,7 +3496,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (s.phase === 2) {
                 if (isMatch) {
                     s.done++;
-                    if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; s.showDetail = false; }
+                    if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; }
                     else el.value = '';
                     renderWritePractice();
                 } else {

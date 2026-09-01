@@ -1642,8 +1642,6 @@ ${refGrammar}${refWords}
             if (box) box.innerText = "'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.";
             const input = document.getElementById('ai-example-input');
             if (input) input.value = '';
-            const hint = document.getElementById('ai-example-hint-box');
-            if (hint) hint.classList.add('hidden');
             document.getElementById('ai-feedback-result').classList.add('hidden');
         }
 
@@ -1715,13 +1713,6 @@ ${refGrammar}${refWords}
                     btn.innerHTML = orig;
                 }
             }
-        }
-
-        // 예문 연습 힌트 (단어 정보)
-        function toggleExampleHint() {
-            const box = document.getElementById('ai-example-hint-box');
-            if (!box) return;
-            box.classList.toggle('hidden');
         }
 
         // 예문 연습 답변 제출 — 기존 한->스 채점 로직을 재사용 (aiCurrentWordForMission/aiCurrentKoreanSentence 세팅됨)
@@ -2557,10 +2548,6 @@ ${noteListText}
                 }
             }
             return best;
-        }
-
-        function wordExistsInVocab(rawWord) {
-            return !!findVocabWordByForm(rawWord);
         }
 
         // [냐냐 요청] 핵심 분석 접기/펼치기. open 을 주면 그 상태로, 안 주면 뒤집는다
