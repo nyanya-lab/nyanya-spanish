@@ -2036,24 +2036,27 @@ let vocabulary = [];
             const badge = document.getElementById('today-review-count-badge');
             if (!btn || !badge) return;
 
+            // [냐냐 요청] 문법 버튼은 회색이 되는데 단어 버튼만 안 됐다. 지우려던 클래스가
+            //   실제 마크업과 달랐기 때문이다 — 버튼은 bg-white/70 인데 bg-amber-50 을 지우고 있었고,
+            //   글자도 .tracking-widest 를 찾았는데 그 클래스는 버튼 바깥의 '복습' 글자에 있다.
+            //   문법 쪽(renderGrammarReviewBtn)과 같은 클래스를 쓰도록 맞춘다.
+            const label = btn.querySelector('span');
             if (words.length === 0) {
                 // 완료 상태 (회색 비활성)
                 badge.innerText = '완료 ✓';
                 btn.disabled = true;
-                btn.classList.remove('bg-amber-50', 'hover:bg-amber-100', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
-                btn.classList.add('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                btn.classList.remove('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.add('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
                 badge.classList.remove('text-amber-700'); badge.classList.add('text-slate-400');
-                btn.querySelector('.tracking-widest')?.classList.remove('text-amber-600');
-                btn.querySelector('.tracking-widest')?.classList.add('text-slate-400');
+                if (label) { label.classList.remove('text-amber-600'); label.classList.add('text-slate-400'); }
             } else {
                 // 활성 상태 (호박색)
                 badge.innerText = words.length + '개';
                 btn.disabled = false;
-                btn.classList.add('bg-amber-50', 'hover:bg-amber-100', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
-                btn.classList.remove('bg-slate-50', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                btn.classList.add('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.remove('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
                 badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
-                btn.querySelector('.tracking-widest')?.classList.add('text-amber-600');
-                btn.querySelector('.tracking-widest')?.classList.remove('text-slate-400');
+                if (label) { label.classList.add('text-amber-600'); label.classList.remove('text-slate-400'); }
             }
         }
 
