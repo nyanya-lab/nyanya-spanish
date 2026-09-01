@@ -2489,6 +2489,16 @@ ${refGrammar}${refWords}
             return n.gram.length !== before;
         }
 
+        // 찾아보고 썼다고 표시하면, 첨삭 노트에서도 '맞음' 이 아니게 한다.
+        //   찾아봐야 쓸 수 있었다면 약한 문법에 잡히는 게 맞다.
+        function setAiNoteGramOk(noteKey, gramId, ok) {
+            if (!noteKey || !gramId || typeof aiNotes === 'undefined') return;
+            const n = aiNotes.find(x => x && x.t === noteKey);
+            if (!n || !Array.isArray(n.gram)) return;
+            const g = n.gram.find(x => x.id === gramId);
+            if (g) g.ok = ok;
+        }
+
         // 이 기록 자체를 없앤다 — AI 가 문장을 통째로 잘못 봤을 때
         function deleteAiNote(key) {
             if (typeof aiNotes === 'undefined') return;
@@ -2558,6 +2568,58 @@ ${refGrammar}${refWords}
             showToast(`"${e.note.title}" 점수를 되돌렸어요${dropped ? ' · 첨삭 노트에서도 뺐어요' : ''}`, "info");
         }
 
+        // [냐냐 요청] "이건 찾아보고 썼어" 를 내가 눌러서 표시한다. 다시 누르면 원래대로.
+        //   해제(↺)와는 다른 뜻이다 — 해제는 'AI 가 잘못 짚었다', 이건 '맞게 썼지만 찾아봤다'.
+        function toggleGrammarLookedUp(i) {
+            const e = aiLastEsKoGrammar[i];
+            if (!e || e.undone) return;
+            if (e.baseDelta === undefined) e.baseDelta = e.delta;
+            const on = !e.lookedUp;
+            const id = e.note.id;
+
+            // 해제와 같은 경로로 원래대로 되돌린 뒤 다시 매긴다 (점수가 겹쳐 쌓이지 않게)
+            if (typeof grammarScores !== 'undefined') {
+                if (e.prev.score === undefined) delete grammarScores[id]; else grammarScores[id] = e.prev.score;
+            }
+            if (typeof grammarTransUsed !== 'undefined') {
+                if (e.prev.transUsed === undefined) delete grammarTransUsed[id]; else grammarTransUsed[id] = e.prev.transUsed;
+            }
+            if (typeof masteredGrammar !== 'undefined') {
+                if (e.prev.mastered === undefined) delete masteredGrammar[id]; else masteredGrammar[id] = e.prev.mastered;
+            }
+
+            e.lookedUp = on;
+            e.delta = on ? LOOKUP_PENALTY : e.baseDelta;
+            // 찾아보고 쓴 걸로는 마스터 자격(번역에서 써봄)을 주지 않는다
+            addGrammarScore(id, e.delta, { transUsed: on ? false : (e.usage === 'correct') });
+            setAiNoteGramOk(_lastAiNoteKey, id, on ? false : (e.usage === 'correct'));
+
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderEsKoGrammarRefs();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            if (typeof renderAiNoteList === 'function') renderAiNoteList();
+            showToast(on ? `"${e.note.title}" 는 찾아보고 쓴 걸로 했어요 (${LOOKUP_PENALTY})`
+                         : `"${e.note.title}" 점수를 되돌렸어요`, "info");
+        }
+
+        function toggleWordLookedUp(i) {
+            const e = aiLastEsKoWords[i];
+            if (!e || e.undone) return;
+            if (e.baseDelta === undefined) e.baseDelta = e.delta;
+            const on = !e.lookedUp;
+            restoreWordScoreState(e.word, e.prev);
+            e.lookedUp = on;
+            e.delta = on ? LOOKUP_PENALTY : e.baseDelta;
+            // 스펠링 자체는 맞게 썼으므로 정답/오답 통계와 망각곡선은 건드리지 않는다 (점수만 깎는다)
+            if (typeof addWordScore === 'function') addWordScore(e.word, e.delta, { correct: e.ok });
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderEsKoGrammarRefs();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof updateStats === 'function') updateStats();
+            showToast(on ? `"${e.word.word}" 는 찾아보고 쓴 걸로 했어요 (${LOOKUP_PENALTY})`
+                         : `"${e.word.word}" 점수를 되돌렸어요`, "info");
+        }
+
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
         function renderEsKoGrammarRefs() {
             const box = document.getElementById('ai-mission-refs');
@@ -2567,8 +2629,8 @@ ${refGrammar}${refWords}
             // [냐냐 요청] 각 항목에 '해제' 버튼 — AI 가 의도와 다르게 알아들었을 때 그 점수만 되돌린다.
             const grammarHtml = aiLastEsKoGrammar.map((g, i) => {
                 const ok = g.usage === 'correct';
-                const txt = ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요';
-                const cls = ok ? 'text-emerald-600' : 'text-rose-500';
+                const txt = g.lookedUp ? '찾아보고 썼어요' : (ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요');
+                const cls = g.lookedUp ? 'text-amber-600' : (ok ? 'text-emerald-600' : 'text-rose-500');
                 return `<div class="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 ${g.undone ? 'opacity-50' : ''}">
                     <button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
@@ -2576,13 +2638,15 @@ ${refGrammar}${refWords}
                     </button>
                     ${g.undone
                         ? '<span class="text-[10px] font-bold text-slate-400 shrink-0">해제됨</span>'
-                        : `<button type="button" onclick="undoEsKoGrammarScore(${i})" title="이 점수 해제" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
+                        : `<button type="button" onclick="toggleGrammarLookedUp(${i})" title="${g.lookedUp ? '찾아본 표시 풀기' : '찾아보고 썼어요 (점수 ' + LOOKUP_PENALTY + ')'}" class="shrink-0 w-6 h-6 rounded-full ${g.lookedUp ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 hover:bg-amber-100 text-slate-400 hover:text-amber-600'} text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
+                           <button type="button" onclick="undoEsKoGrammarScore(${i})" title="이 점수 해제" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                 </div>`;
             }).join('');
 
             // 단어는 개수가 많을 수 있어 한 줄짜리 칩으로
             const wordHtml = aiLastEsKoWords.map((w, i) => {
-                const cls = w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600';
+                const cls = w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600');
                 if (w.undone) {
                     return `<span class="inline-flex items-baseline gap-1 border rounded-lg px-2 py-0.5 border-slate-200 bg-slate-50 text-slate-400">
                         <b class="line-through">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">해제됨</span>
@@ -2590,6 +2654,7 @@ ${refGrammar}${refWords}
                 }
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
                     <b>${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.delta > 0 ? '+' : ''}${w.delta}</span>
+                    <button type="button" onclick="toggleWordLookedUp(${i})" title="${w.lookedUp ? '찾아본 표시 풀기' : '찾아보고 썼어요 (점수 ' + LOOKUP_PENALTY + ')'}" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${w.lookedUp ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
                     <button type="button" onclick="undoEsKoWordScore(${i})" title="이 점수 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
                 </span>`;
             }).join('');
@@ -2599,6 +2664,7 @@ ${refGrammar}${refWords}
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
                 </div>
                 <div class="space-y-1.5">${grammarHtml}</div>` : ''}
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 찾아보고 쓴 건 눌러서 표시하면 점수를 ${LOOKUP_PENALTY} 로 바꿔요 · ↺ 는 AI 가 잘못 짚었을 때</p>` : ''}
                 ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
