@@ -2029,9 +2029,16 @@ ${refGrammar}${refWords}
         }
 
         // 첨삭이 짚은 표현이 내 관용구 목록에 있나 (관사·자리표시자·악센트를 무시하고 맞춰본다)
+        // 자리표시자를 떼면 낱말 하나만 남는 표현이 1113개 중 84개 있다 ("ser [시간/날짜]" → "ser").
+        //   그 조각은 아무 문장에나 걸린다 — es 한 번 썼다고 'ser [색깔형용사]' 곡선이 앞으로 가면 안 된다.
+        //   두 낱말 이상이거나 6글자가 넘는 것만 표현으로 인정한다 (pintarse·desayunar 같은 건 그대로 잡힌다).
+        function idiomKeyUsable(k) {
+            return !!k && (k.split(' ').length >= 2 || k.length >= 6);
+        }
+
         function findIdiomEntryByText(raw) {
             const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, false) : String(raw || '').toLowerCase();
-            if (!key || key.length < 3) return null;
+            if (!idiomKeyUsable(key)) return null;
             for (const w of vocabulary) {
                 const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
                 for (const it of list) {
@@ -2055,7 +2062,7 @@ ${refGrammar}${refWords}
                 list.forEach(it => {
                     const k = norm(it.idiom);
                     // 너무 짧은 조각은 우연히 걸린다 (두 낱말 이상이거나 6글자 넘는 것만)
-                    if (!k || (k.length < 6 && k.split(' ').length < 2)) return;
+                    if (!idiomKeyUsable(k)) return;
                     if (hay.includes(' ' + k + ' ')) out.push({ w, it });
                 });
             });
