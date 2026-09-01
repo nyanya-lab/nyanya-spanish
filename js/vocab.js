@@ -3578,6 +3578,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why };
             writePracticeSave();
             renderWritePractice();
+            // [냐냐 요청] 틀렸을 때 정답을 한 번 읽어준다. 화면에 이미 답이 떠 있으니
+            //   새어나갈 게 없고, 눈으로만 보고 넘어가는 것보다 귀로 한 번 듣는 게 남는다.
+            //   (음소거면 speakSpanishVoice 가 알아서 안 읽는다)
+            if (typeof speakSpanishVoice === 'function') {
+                setTimeout(() => speakSpanishVoice(w.word), 150);
+            }
         }
         function writeFirstRoundNext() {
             const s = writePracticeState;

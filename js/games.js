@@ -1201,6 +1201,15 @@ Return JSON only, no markdown.`;
                     return `<div class="text-xs flex items-baseline gap-1.5"><span class="font-bold text-slate-400 shrink-0">${escapeHtml(d.label)}</span>${icon}<span class="text-slate-500">${mine}</span>${ans}</div>`;
                 }).join('');
             }
+            // [냐냐 요청] 스페인어 칸을 틀렸으면 그 단어를 한 번 읽어준다.
+            //   화면에 이미 정답이 떠 있어서 새어나갈 게 없고, 귀로 한 번 듣는 게 남는다.
+            //   한국어 뜻 칸만 틀린 경우엔 읽어줄 게 없으니 넘어간다. (음소거면 안 읽힌다)
+            const esWrong = detail.some(d => !d.correct && d.language === 'es');
+            if (esWrong && typeof speakSpanishVoice === 'function') {
+                const w = fillState.current && fillState.current.word;
+                if (w && w.word) setTimeout(() => speakSpanishVoice(w.word), 150);
+            }
+
             const btn = document.getElementById('fill-action-btn');
             if (btn) {
                 btn.disabled = false;
