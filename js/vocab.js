@@ -3423,9 +3423,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // [냐냐 요청] 품사 뱃지
             const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
-            // [냐냐 요청] 관용구 문제는 한눈에 알아보게. 단어 하나가 아니라 표현을 쓰는 자리다
+            // [냐냐 요청] 관용구 문제는 한눈에 알아보게. 단어 하나가 아니라 표현을 쓰는 자리다.
+            //   ⚠️ 어느 단어의 표현인지는 답을 가린 동안 적으면 안 된다 — 그 단어가 대개 정답
+            //   안에 그대로 들어 있어서 답을 알려주는 꼴이 된다
+            //   (예: '📘 관용구 · la línea' → 정답 'estar en la línea de [상황]').
+            //   정답이 이미 드러난 화면(다시 쓰기)에서만 같이 적는다.
+            const showIdiomBase = !!s.retry;
             const posHtml = w._isIdiomTask
-                ? `<span class="inline-block text-[10px] font-black text-violet-600 bg-violet-100 border border-violet-200 rounded-lg px-2 py-0.5">📘 관용구 · ${escapeHtml((w._idiomOf || {}).word || '')}</span>`
+                ? `<span class="inline-block text-[10px] font-black text-violet-600 bg-violet-100 border border-violet-200 rounded-lg px-2 py-0.5">📘 관용구${showIdiomBase ? ` · ${escapeHtml((w._idiomOf || {}).word || '')}` : ''}</span>`
                 : (posLabel
                     ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
                     : '');
