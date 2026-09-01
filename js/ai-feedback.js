@@ -5,6 +5,7 @@
         // [냐냐 요청] 이번 미션이 참고한 문법 노트와 같이 섞은 단어들 (첨삭 때 근거로 같이 넘김)
         let aiCurrentGrammarForMission = null;
         let aiCurrentExtraWordsForMission = [];
+        let aiLastCorrectedText = '';   // 미션 참고 칩을 '실제로 쓴 것' 으로 추리는 데 쓴다
         let aiLastGrammarDelta = null;   // [냐냐 요청] 직전 첨삭에서 문법표 점수가 얼마나 움직였는지
         let aiForcedGrammarId = null;    // [냐냐 요청] 노트에서 '이 문법으로 번역 연습'을 눌렀을 때 딱 한 번 쓰임
 
@@ -1060,7 +1061,19 @@
             const box = document.getElementById('ai-mission-refs');
             if (!box) return;
             const g = aiCurrentGrammarForMission;
-            const words = [aiCurrentWordForMission, ...(aiCurrentExtraWordsForMission || [])].filter(Boolean);
+            // [냐냐 요청] 덧붙임 단어는 '미션을 만들 때 후보로 준 것' 이라 문장에 안 들어갈 수 있다.
+            //   채점이 끝난 뒤에는 실제로 정답 문장에 나온 것만 남긴다 (안 그러면 beber 처럼
+            //   쓰지도 않은 단어가 '이번 미션이 참고한 내용' 에 남아서 헷갈린다).
+            //   목표 단어는 미션의 핵심이라 안 썼어도 그대로 둔다.
+            const usedInSentence = (word) => {
+                const t = (aiLastCorrectedText || '').toLowerCase();
+                if (!t) return true;                       // 아직 채점 전이면 다 보여준다
+                //   'el/la estudiante' 처럼 슬래시가 낀 관사도 떼야 한다 (core.js 의 규칙을 그대로 쓴다)
+                const key = String(word.word || '').toLowerCase().replace(RE_LEADING_ARTICLE, '').trim();
+                return !!key && t.includes(key);
+            };
+            const words = [aiCurrentWordForMission,
+                           ...(aiCurrentExtraWordsForMission || []).filter(usedInSentence)].filter(Boolean);
             if (!g && !words.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
             const wordChips = words.map(w =>
                 `<span class="inline-flex items-baseline gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
@@ -1341,6 +1354,7 @@
             if (refsBox) { refsBox.classList.add('hidden'); refsBox.innerHTML = ''; }
             aiCurrentGrammarForMission = null;
             aiCurrentExtraWordsForMission = [];
+            aiLastCorrectedText = '';
             aiLastGrammarDelta = null;
 
             if (vocabulary.length === 0) {
@@ -1485,7 +1499,7 @@ ${extraWords.length ? `
             Student's Spanish Answer: "${userText}"
 ${refGrammar}${refWords}
             Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
-            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an encouraging and extremely precise professional Spanish tutor tutoring a passionate student named "냐냐".
@@ -1503,7 +1517,7 @@ ${refGrammar}${refWords}
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'. But if your correctedText changed the very part that this note governs, it is 'wrong', never 'correct'."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
+               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'. But judge THE NOTE'S OWN RULE: it is 'wrong' only when that rule is what you had to fix. If you changed nearby words for a different reason (agreement, word choice, another rule) while the note's own rule was applied correctly, it stays 'correct'."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.${AI_SCORING_RULES_TEXT}
@@ -1591,9 +1605,10 @@ ${refGrammar}${refWords}
                 //   단어 스펠링도, 문장이 쓴 다른 문법도 전혀 반영하지 않았다.
                 //   나머지 세 모드와 같은 대접을 해준다. 미션 문법은 위에서 이미 처리했으므로
                 //   목록에서 빼뒀다 (두 번 붙으면 안 된다).
+                aiLastCorrectedText = String(feedback.correctedText || '').replace(/<[^>]*>/g, '');
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
-                resultBox.classList.remove('hidden');
+
 
                 if (feedback.isCorrect) {
                     coachIcon.innerText = "🏆🏅";
@@ -1776,7 +1791,7 @@ ${refGrammar}${refWords}
             Reference example sentence (for context): "${refExample}"
             Student's Spanish Answer: "${userText}"
 
-            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${aiScoringNoteListText(exScoreNotes)}
             ${buildLearnerProfileSummary()}`;
 
@@ -1909,6 +1924,7 @@ ${refGrammar}${refWords}
         // ============================================================
         let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
         let aiLastEsKoWords = [];     // [{ word, ok, delta }] — 스펠링 판정 결과
+        let aiLastIdiomHits = [];     // [{ word, idiom, ok }] — 이 문장이 쓴 관용구 (곡선만 돌린다)
 
         // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 의 스펠링 점수 — 맞으면 +2 / 틀리면 −2.
         //   AI 가 돌려준 단어를 실제 단어장과 이름으로 맞춰본다. 없는 단어는 버린다.
@@ -1971,9 +1987,24 @@ ${refGrammar}${refWords}
             'nada','nadie','nunca','algo','alguien','muy','ya','tan','solo'
         ]);
 
+        // 첨삭이 짚은 표현이 내 관용구 목록에 있나 (관사·자리표시자·악센트를 무시하고 맞춰본다)
+        function findIdiomEntryByText(raw) {
+            const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, false) : String(raw || '').toLowerCase();
+            if (!key || key.length < 3) return null;
+            for (const w of vocabulary) {
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                for (const it of list) {
+                    const k2 = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(it.idiom, false) : String(it.idiom).toLowerCase();
+                    if (k2 && k2 === key) return { w, it };
+                }
+            }
+            return null;
+        }
+
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
+            aiLastIdiomHits = [];
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling');
             if (!list.length || typeof vocabulary === 'undefined') return;
 
@@ -2006,6 +2037,17 @@ ${refGrammar}${refWords}
             list.forEach(item => {
                 const key = norm(item.name);
                 // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
+                // [냐냐 요청] 관용구를 문장에 썼으면 그 표현의 곡선을 돌린다.
+                //   점수는 손대지 않는다 — 점수는 단어 기준 그대로 두기로 했다.
+                //   (그래야 단어와 관용구가 같이 잡혀도 같은 단어에 두 번 붙지 않는다)
+                if (typeof idiomReviewDemote === 'function') {
+                    const hitIdiom = findIdiomEntryByText(item.name);
+                    if (hitIdiom) {
+                        if (item.ok) { if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(hitIdiom.w.id, hitIdiom.it.idiom); }
+                        else idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
+                        aiLastIdiomHits.push({ word: hitIdiom.w, idiom: hitIdiom.it.idiom, ok: item.ok });
+                    }
+                }
                 const exact = pickByPos(byWord.get(key), item.pos);
                 // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지)
                 const w = exact || (AI_FUNCTION_WORDS.has(key) ? null
@@ -2150,7 +2192,10 @@ ${refGrammar}${refWords}
         const AI_SCORING_RULES_TEXT = `
             IMPORTANT for "wordsOk"/"wordsBad": both are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the two lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Judge SPELLING ONLY — accents count (año and ano are different words); a correctly spelled word goes in "wordsOk" even if it was a poor word choice for the meaning. For a misspelled word, put the dictionary form of the word they were CLEARLY trying to write into "wordsBad". Never list a word the student did not write. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
             IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. Most sentences match 0-2 notes; listing many is a sign you are guessing. Do NOT list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
-            DECIDING which of the two lists a note goes in: compare the student's ORIGINAL sentence against your own "correctedText". If you changed ANY part that the note governs — reordered it, added or removed a word, fixed a form, an agreement or an accent — then that note goes in "grammarBad". NEVER in "grammarOk". "grammarOk" is only for a note the student used correctly and that you left completely untouched. Worked example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa"; a note about location expressions MUST go in "grammarBad", because the phrase you fixed is exactly what that note governs. Before you output "grammarOk", walk through every entry in it and confirm you did not touch that part of the sentence. A note must never appear in both lists.`;
+            DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
+            - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule.
+            - "grammarOk" when the student applied the note's rule correctly, even if you changed other words nearby for a DIFFERENT reason. Example: the student wrote "¿Cuál pantalones es más caros que aquel?" and you fixed the interrogative (Cuál→Qué), the verb agreement (es→son) and the demonstrative (aquel→esos) — a note about COMPARATIVES stays in "grammarOk", because "más ... que" itself was used correctly. Do not punish a note just because a word standing next to it changed.
+            A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
         const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsBad"];
@@ -2619,21 +2664,23 @@ ${refGrammar}${refWords}
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
         }
 
-        function undoEsKoGrammarScore(i) {
-            const e = aiLastEsKoGrammar[i];
-            if (!e) return;
-            const to = e.state === 'undone' ? 'normal' : 'undone';
-            setGrammarEntryState(i, to);
-            showToast(to === 'undone' ? `"${e.note.title}" 점수를 되돌렸어요` : `"${e.note.title}" 점수를 다시 넣었어요`, "info");
+        // [냐냐 요청] 버튼 하나로 세 상태를 돌린다 — 그대로 → 찾아봄 → 해제 → 그대로.
+        //   (돋보기는 '자세히 보기' 로 넘겼다)
+        const AI_ENTRY_CYCLE = ['normal', 'looked', 'undone'];
+        function nextEntryState(cur) {
+            const i = AI_ENTRY_CYCLE.indexOf(cur || 'normal');
+            return AI_ENTRY_CYCLE[(i + 1) % AI_ENTRY_CYCLE.length];
+        }
+        function aiEntryStateLabel(state) {
+            return state === 'looked' ? '찾아보고 썼어요' : state === 'undone' ? '해제됨' : '점수 그대로';
         }
 
-        function toggleGrammarLookedUp(i) {
+        function cycleGrammarEntry(i) {
             const e = aiLastEsKoGrammar[i];
             if (!e) return;
-            const to = e.state === 'looked' ? 'normal' : 'looked';
+            const to = nextEntryState(e.state);
             setGrammarEntryState(i, to);
-            showToast(to === 'looked' ? `"${e.note.title}" 는 찾아보고 쓴 걸로 했어요 (${LOOKUP_PENALTY})`
-                                      : `"${e.note.title}" 를 원래대로 돌렸어요`, "info");
+            showToast(`"${e.note.title}" · ${aiEntryStateLabel(to)}${to === 'looked' ? ` (${LOOKUP_PENALTY})` : ''}`, "info");
         }
 
         function setWordEntryState(i, state) {
@@ -2662,21 +2709,12 @@ ${refGrammar}${refWords}
             if (typeof updateStats === 'function') updateStats();
         }
 
-        function undoEsKoWordScore(i) {
+        function cycleWordEntry(i) {
             const e = aiLastEsKoWords[i];
             if (!e) return;
-            const to = e.state === 'undone' ? 'normal' : 'undone';
+            const to = nextEntryState(e.state);
             setWordEntryState(i, to);
-            showToast(to === 'undone' ? `"${e.word.word}" 점수를 되돌렸어요` : `"${e.word.word}" 점수를 다시 넣었어요`, "info");
-        }
-
-        function toggleWordLookedUp(i) {
-            const e = aiLastEsKoWords[i];
-            if (!e) return;
-            const to = e.state === 'looked' ? 'normal' : 'looked';
-            setWordEntryState(i, to);
-            showToast(to === 'looked' ? `"${e.word.word}" 는 찾아보고 쓴 걸로 했어요 (${LOOKUP_PENALTY})`
-                                      : `"${e.word.word}" 를 원래대로 돌렸어요`, "info");
+            showToast(`"${e.word.word}" · ${aiEntryStateLabel(to)}${to === 'looked' ? ` (${LOOKUP_PENALTY})` : ''}`, "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
@@ -2687,7 +2725,7 @@ ${refGrammar}${refWords}
             //   점수 카드가 그걸 덮어써서 단어 점수와 해제·찾아봄 버튼이 안 보였다. 위에 남겨둔다.
             const keep = box.querySelector('[data-mission-refs]');
             const keepHtml = keep ? keep.outerHTML : '';
-            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length) {
+            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length && !(aiLastIdiomHits || []).length) {
                 box.innerHTML = keepHtml;
                 box.classList.toggle('hidden', !keepHtml);
                 return;
@@ -2704,8 +2742,8 @@ ${refGrammar}${refWords}
                         <div class="text-[10px] font-bold ${g.undone ? 'text-slate-400 line-through' : cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
                     </button>
                     ${g.undone ? '<span class="text-[10px] font-bold text-slate-400 shrink-0 mr-1">해제됨</span>' : ''}
-                    ${`<button type="button" onclick="toggleGrammarLookedUp(${i})" title="${g.lookedUp ? '찾아본 표시 풀기' : '찾아보고 썼어요 (점수 ' + LOOKUP_PENALTY + ')'}" class="shrink-0 w-6 h-6 rounded-full ${g.lookedUp ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 hover:bg-amber-100 text-slate-400 hover:text-amber-600'} text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
-                           <button type="button" onclick="undoEsKoGrammarScore(${i})" title="${g.undone ? '점수 다시 넣기' : '이 점수 해제'}" class="shrink-0 w-6 h-6 rounded-full ${g.undone ? 'bg-slate-700 text-white' : 'bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-500'} text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
+                    ${`<button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-teal-100 text-slate-400 hover:text-teal-600 text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
+                           <button type="button" onclick="cycleGrammarEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="shrink-0 w-6 h-6 rounded-full ${g.lookedUp ? 'bg-amber-100 text-amber-600' : (g.undone ? 'bg-slate-700 text-white' : 'bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600')} text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                 </div>`;
             }).join('');
 
@@ -2716,8 +2754,8 @@ ${refGrammar}${refWords}
                           : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'));
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
                     <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.undone ? '해제됨' : (w.delta > 0 ? '+' : '') + w.delta}</span>
-                    <button type="button" onclick="toggleWordLookedUp(${i})" title="${w.lookedUp ? '찾아본 표시 풀기' : '찾아보고 썼어요 (점수 ' + LOOKUP_PENALTY + ')'}" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${w.lookedUp ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
-                    <button type="button" onclick="undoEsKoWordScore(${i})" title="${w.undone ? '점수 다시 넣기' : '이 점수 해제'}" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${w.undone ? 'opacity-100 text-slate-600' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
+                    <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
+                    <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${(w.lookedUp || w.undone) ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
                 </span>`;
             }).join('');
 
@@ -2728,6 +2766,19 @@ ${refGrammar}${refWords}
                 gradeBefore: e.gradeBefore, gradeAfter: (typeof getWordGrade === 'function') ? getWordGrade(e.word) : e.gradeBefore
             }));
             const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
+            // [냐냐 요청] 이 문장이 쓴 관용구 — 점수는 안 붙고 곡선만 돈다는 걸 분명히 적는다
+            const idiomHtml = (aiLastIdiomHits || []).length ? `
+                <div class="mt-3 pt-3 border-t border-slate-200">
+                    <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-bookmark text-violet-500"></i><span>이 문장이 쓴 관용구</span>
+                        <span class="font-normal text-slate-400">점수는 단어에 붙고, 여기선 망각곡선만 움직여요</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                        ${aiLastIdiomHits.map(h => `<span class="inline-flex items-center gap-1 border rounded-lg px-2 py-0.5 ${h.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'}">
+                            <b>${escapeHtml(h.idiom)}</b><span class="text-[10px]">${h.ok ? '곡선 한 칸 앞으로' : '곡선에 들어갔어요'}</span>
+                        </span>`).join('')}
+                    </div>
+                </div>` : '';
             const shiftHtml = shiftInner ? `<div class="mt-3 pt-3 border-t border-slate-200">${shiftInner}</div>` : '';
 
             box.innerHTML = keepHtml + `
@@ -2740,8 +2791,9 @@ ${refGrammar}${refWords}
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}
+                ${idiomHtml}
                 ${shiftHtml}
-                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 찾아보고 쓴 건 눌러서 표시하면 점수가 ${LOOKUP_PENALTY} 가 돼요 (망각곡선에도 들어가요) · ↺ 는 AI 가 잘못 짚었을 때 · 둘 다 다시 누르면 원래대로</p>` : ''}`;
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 자세히 보기 · ↺ 눌러서 점수 바꾸기 (그대로 → 찾아보고 씀 ${LOOKUP_PENALTY} → 해제)</p>` : ''}`;
             box.classList.remove('hidden');
         }
 
@@ -2780,7 +2832,7 @@ ${refGrammar}${refWords}
             //   그냥 '문장에 실제로 쓴 단어'를 사전형으로 돌려받아 단어장과 대조한다.
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
 
-            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
 ${noteListText}
             ${buildLearnerProfileSummary()}`;
             

@@ -807,7 +807,11 @@ let quizSession = null;
             // 관용구
             const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
             if (idiomList.length > 0) {
-                const items = idiomList.map(x => `<span class="block text-sm text-slate-700 leading-relaxed">· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>`).join('');
+                // [냐냐 요청] 표현마다 발음 듣기 — 통으로 소리내 봐야 입에 붙는다
+                const items = idiomList.map(x => `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed">
+                    <span>· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>
+                    ${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(x.idiom) : ''}
+                </span>`).join('');
                 sections.push(`
                     <div>
                         <span class="block text-xs font-black text-emerald-600 mb-1.5">💬 관용구</span>

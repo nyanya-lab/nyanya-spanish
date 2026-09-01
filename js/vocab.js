@@ -3150,6 +3150,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return (vocabulary || []).reduce((a, w) => a + wordIdiomList(w).length, 0);
         }
         // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
+        // [냐냐 요청] 관용구도 소리내 들어본다. 표현은 통으로 들어야 입에 붙는다.
+        //   따옴표가 섞여도 onclick 이 안 깨지게 인덱스가 아니라 escape 한 글자를 넘긴다.
+        function speakIdiom(text) {
+            if (typeof speakSpanishVoice === 'function') speakSpanishVoice(String(text || ''), 0.9);
+        }
+        function idiomSpeakerHtml(idiomText) {
+            const safe = escapeHtml(String(idiomText || '')).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+            return `<button type="button" onclick="event.stopPropagation(); speakIdiom(this.dataset.t)" data-t="${safe}" title="발음 듣기" class="shrink-0 w-5 h-5 rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 text-[10px] transition-colors"><i class="fa-solid fa-volume-high"></i></button>`;
+        }
+
         function wordIdiomList(w) {
             if (!w) return [];
             const arr = Array.isArray(w.idioms) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
@@ -3954,7 +3964,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const filtered = vocabulary.filter(w => {
                 const queryInWord = stripAccents(w.word.toLowerCase()).includes(searchVal);
                 const queryInMeaning = stripAccents(w.meaning.toLowerCase()).includes(searchVal);
-                const matchesSearch = queryInWord || queryInMeaning; // [냐냐 PATCH] 메모 제외, 단어·뜻만 검색
+                // [냐냐 요청] 관용구도 찾아준다. 1113개가 검색에서 통째로 빠져 있어서
+                //   'ganas' 를 쳐도 morirse de ganas 를 못 찾았다 (뭘 등록했는지 알 길이 없었다).
+                const queryInIdiom = searchVal.length > 0 && wordIdiomList(w).some(it =>
+                    stripAccents(String(it.idiom).toLowerCase()).includes(searchVal)
+                    || stripAccents(String(it.idiomMeaning).toLowerCase()).includes(searchVal));
+                const matchesSearch = queryInWord || queryInMeaning || queryInIdiom; // 메모는 여전히 제외
                 const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
                 // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
                 const matchesMastery = masteryFilter === 'all'
