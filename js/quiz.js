@@ -664,7 +664,9 @@ let quizSession = null;
         //      \uc0c1\uad00\uc5c6\uc9c0\ub9cc, \uc0b4\ub824\uc11c \ube44\uad50\ud558\ub294 \ucabd(keepAccents)\uc740 \ubaa8\uc591\uc774 \ub2e4\ub974\uba74 \uac19\uc740 \uae00\uc790\ub97c \uc624\ub2f5\uc73c\ub85c \ubcf8\ub2e4.
         //      \ub9e5\u00b7\uc544\uc774\ud3f0\uc5d0\uc11c \ubcf5\uc0ac\ud574 \ubd99\uc5ec\ub123\uc73c\uba74 \ubd84\ud574\ud615\uc774 \ub4e4\uc5b4\uc62c \uc218 \uc788\ub2e4.
         function normalizeSpanishAnswer(s, keepAccents) {
-            const base = String(s || '').toLowerCase().trim().normalize('NFC');
+            const base = String(s || '').toLowerCase().trim().normalize('NFC')
+                // [냐냐 요청] 'Q.' 'A.' 는 문답 딱지지 표현이 아니다 — 맨 앞에서 떼고 시작한다
+                .replace(RE_QA_MARKER, '');
             return (keepAccents ? base : base.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
                 // [냐냐 PATCH] 대괄호 자리표시자·한글은 통째로 제거 — "antes de [명사/동사원형]" → "antes de"
                 //   (냐냐가 저 안의 한글을 똑같이 칠 수는 없으니 채점 대상에서 뺌)

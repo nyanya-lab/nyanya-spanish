@@ -1335,7 +1335,8 @@ let vocabulary = [];
             //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
             //   단어 목록은 여기 늘어놓지 않고 '단어 보기'로 팝업에서 단계별로 본다.
             const today = getLocalDateString();
-            const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
+            const plan3 = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
+            const due = plan3 ? plan3.word : null;
             let planHtml = '';
             if (due) {
                 // 기준 설명('밀린 것 포함' / '오늘 걸 다 하면')은 여기 안 쓴다.
@@ -1343,12 +1344,17 @@ let vocabulary = [];
                 planHtml = `
                     <div class="mt-2 pt-2 border-t border-violet-100">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <span class="font-black text-amber-700">📖 복습 예정</span>
-                            <span class="font-black text-amber-600">${due.length}개</span>
+                            <span class="font-black text-amber-700">복습 예정</span>
+                            <span class="font-black text-amber-600">${plan3.total}개</span>
                         </div>
+                        ${plan3.total ? `<div class="space-y-0.5 mb-1.5">
+                            <div class="flex items-center justify-between"><span class="text-slate-500">📖 단어</span><span class="font-bold text-slate-700">${due.length}개</span></div>
+                            <div class="flex items-center justify-between"><span class="text-slate-500">📘 관용구</span><span class="font-bold text-slate-700">${plan3.idiom.length}개</span></div>
+                            <div class="flex items-center justify-between"><span class="text-slate-500">📋 문법</span><span class="font-bold text-slate-700">${plan3.grammar.length}개</span></div>
+                        </div>` : ''}
                         ${due.length
                             ? `<button onclick="openReviewPlanModal('${ds}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"><i class="fa-solid fa-list-ul"></i> 단어 보기 (${due.length}개)</button>`
-                            : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>'}
+                            : (plan3.total ? '' : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>')}
                     </div>`;
             }
 
@@ -1481,12 +1487,12 @@ let vocabulary = [];
                     const isPast = ds < todayStr;
                     const showX = isPast && n === 0;
                     // [냐냐 요청] 앞으로 복습이 잡힌 날은 점을 찍어둔다 — 눌러보지 않아도 몰리는 날이 보이게.
-                    const plan = (!isPast && typeof getReviewScheduledOn === 'function') ? (getReviewScheduledOn(ds) || []).length : 0;
+                    const plan = (!isPast && typeof getAllScheduledOn === 'function') ? ((getAllScheduledOn(ds) || {}).total || 0) : 0;
                     const dot = plan > 0 ? `<span class="absolute bottom-0.5 w-1 h-1 rounded-full bg-amber-500"></span>` : '';
                     const inner = showX
                         ? `<span class="relative flex items-center justify-center w-full h-full"><span class="text-slate-300">${d}</span><i class="fa-solid fa-xmark absolute text-slate-300/60 text-[13px]"></i></span>`
                         : `<span class="relative flex items-center justify-center w-full h-full">${d}${dot}</span>`;
-                    const planTitle = plan > 0 ? ` · 복습 예정 ${plan}개` : '';
+                    const planTitle = plan > 0 ? ` · 복습 예정 ${plan}개 (단어·관용구·문법)` : '';
                     cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${planTitle} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
@@ -2103,6 +2109,55 @@ let vocabulary = [];
                 const base = w.lastReviewDate || w.lastWrongDate;
                 return addDaysToDateString(base, REVIEW_INTERVALS[stage]) === ds;
             }).sort((a, b) => getScore(a) - getScore(b));
+        }
+
+        // [냐냐 요청] 달력 예정에 문법·관용구도 넣는다. 곡선이 셋인데 단어만 보이면
+        //   '오늘 할 일'이 실제보다 적어 보인다. 계산 규칙은 단어와 같다.
+        function getGrammarScheduledOn(ds) {
+            const today = getLocalDateString();
+            if (!ds || ds < today) return null;
+            if (ds === today) return (typeof getGrammarDueList === 'function') ? getGrammarDueList() : [];
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            return tables.filter(t => {
+                const rec = grammarReview[t.id];
+                if (!rec || !rec.lastWrongDate) return false;
+                const stage = rec.stage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return false;
+                const base = rec.lastReviewDate || rec.lastWrongDate;
+                return addDaysToDateString(base, REVIEW_INTERVALS[stage]) === ds;
+            });
+        }
+
+        function getIdiomScheduledOn(ds) {
+            const today = getLocalDateString();
+            if (!ds || ds < today) return null;
+            if (ds === today) return (typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
+            const out = [];
+            Object.keys(idiomReview || {}).forEach(key => {
+                const rec = idiomReview[key];
+                if (!rec || !rec.lastWrongDate) return;
+                const stage = rec.stage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return;
+                const base = rec.lastReviewDate || rec.lastWrongDate;
+                if (addDaysToDateString(base, REVIEW_INTERVALS[stage]) !== ds) return;
+                const sep = key.indexOf('::');
+                if (sep < 0) return;
+                const w = vocabulary.find(v => String(v.id) === key.slice(0, sep));
+                if (!w) return;
+                const text = key.slice(sep + 2);
+                const found = ((typeof wordIdiomList === 'function') ? wordIdiomList(w) : []).find(x => x.idiom === text);
+                if (found) out.push({ word: w, idiom: found, key, stage });
+            });
+            return out;
+        }
+
+        // 그날 할 복습을 셋 합쳐서 — { word, grammar, idiom, total }
+        function getAllScheduledOn(ds) {
+            const word = getReviewScheduledOn(ds);
+            if (word === null) return null;                    // 지난 날
+            const grammar = getGrammarScheduledOn(ds) || [];
+            const idiom = getIdiomScheduledOn(ds) || [];
+            return { word, grammar, idiom, total: word.length + grammar.length + idiom.length };
         }
 
         // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
@@ -4789,6 +4844,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         const RE_PLACEHOLDER = /[\[\(（【][^\]\)）】]*[\]\)）】]/g;      // "antes de [명사/동사원형]" 의 대괄호 뭉치
         const RE_HANGUL = /[ㄱ-ㅎㅏ-ㅣ가-힣]/g;                        // 답에 한글이 섞일 일은 없다
         const RE_LEADING_ARTICLE = /^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i;
+        // [냐냐 요청] 문답으로 적어둔 표현의 머리표 — "Q. ¿De dónde ser (주어)?" / "A.(주어) ser de [국가명사]".
+        //   이건 표현의 일부가 아니라 '질문/대답' 이라는 딱지다. 그대로 두면 기호가 걷힌 뒤
+        //   'a ser de' 처럼 앞에 a·q 가 남아서, 제대로 써도 오답이 됐다.
+        const RE_QA_MARKER = /^\s*[QA]\s*[.:)]\s*/i;
 
         // ============================================================
         // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습·단어 빈칸이 같이 쓴다.
@@ -4845,6 +4904,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //      남겨두면 안 쳐도 되는 마침표가 '빠뜨린 글자'로 빨갛게 칠해진다.
         function typeableForm(s) {
             return String(s || '')
+                .replace(RE_QA_MARKER, '')
                 .replace(RE_PLACEHOLDER, ' ')
                 .replace(RE_HANGUL, ' ')
                 .replace(/\s+/g, ' ').trim()
