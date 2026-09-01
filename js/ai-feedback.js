@@ -6,7 +6,6 @@
         let aiCurrentGrammarForMission = null;
         let aiCurrentExtraWordsForMission = [];
         let aiLastCorrectedText = '';   // 미션 참고 칩을 '실제로 쓴 것' 으로 추리는 데 쓴다
-        let aiLastGrammarDelta = null;   // [냐냐 요청] 직전 첨삭에서 문법표 점수가 얼마나 움직였는지
         let aiForcedGrammarId = null;    // [냐냐 요청] 노트에서 '이 문법으로 번역 연습'을 눌렀을 때 딱 한 번 쓰임
 
         // [냐냐 요청] 문법 노트 → AI 첨삭으로 바로 가서 그 문법으로 미션 생성
@@ -1088,15 +1087,7 @@
                 ${g ? `<button type="button" onclick="openGrammarNoteFromMission('${g.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
                     <span class="text-[10px] font-bold text-violet-500">문법</span>
                     <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.icon || '📋')} ${escapeHtml(g.title || '')}</div>
-                    ${aiLastGrammarDelta ? (() => {
-                        const u = aiLastGrammarDelta.usage, d = aiLastGrammarDelta.delta;
-                        const txt = u === 'correct' ? '이 문법을 제대로 썼어요'
-                                  : u === 'wrong' ? '이 문법을 쓰긴 했는데 틀렸어요'
-                                  : (d < 0 ? '이 문법을 안 쓰고 번역했는데 문장도 틀렸어요' : '이 문법을 안 쓰고 번역했어요 (점수 변화 없음)');
-                        const cls = d > 0 ? 'text-emerald-600' : d < 0 ? 'text-rose-500' : 'text-slate-400';
-                        return `<div class="text-[10px] font-bold ${cls} mt-1">${txt}${d !== 0 ? ` · 점수 ${d > 0 ? '+' : ''}${d}` : ''}</div>`;
-                    })() : ''}
-                    <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">이 문법으로 문장을 만들었어요 · 눌러서 노트 보기 →</div>
                 </button>` : ''}
                 ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}
                 </div>`;
@@ -1355,7 +1346,6 @@
             aiCurrentGrammarForMission = null;
             aiCurrentExtraWordsForMission = [];
             aiLastCorrectedText = '';
-            aiLastGrammarDelta = null;
 
             if (vocabulary.length === 0) {
                 missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
@@ -1516,8 +1506,7 @@ ${refGrammar}${refWords}
                "changes": [
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'. But judge THE NOTE'S OWN RULE: it is 'wrong' only when that rule is what you had to fix. If you changed nearby words for a different reason (agreement, word choice, another rule) while the note's own rule was applied correctly, it stays 'correct'."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.${AI_SCORING_RULES_TEXT}
@@ -1556,12 +1545,11 @@ ${refGrammar}${refWords}
                     },
                     tip: { type: "STRING" },
                     // [냐냐 요청] 참조 문법을 제대로 썼는지 — 문장 전체 정오(isCorrect)와 별개로 판정
-                    grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" },
                     ...aiIssueSchemaProp(),
                     ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1579,61 +1567,14 @@ ${refGrammar}${refWords}
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
-                // [냐냐 요청] 참조 문법표 점수 반영 — 제대로 씀 +2 / 틀림 −2 /
-                //   안 쓰고 문장은 맞음 0 / 안 쓰고 문장도 틀림 −2
-                //   ⚠️ 단어 점수는 여기서 건드리지 않는다 (번역은 유의어·문맥 탓에 단어 오답 판정이 부정확)
-                aiLastGrammarDelta = null;
-                if (aiCurrentGrammarForMission && typeof addGrammarScore === 'function') {
-                    const usage = (feedback.grammarPointUsage || 'unused').toString().toLowerCase();
-                    let gDelta = 0, transUsed = false;
-                    if (usage === 'correct') { gDelta = GRAMMAR_TRANS_OK; transUsed = true; }
-                    else if (usage === 'wrong') { gDelta = GRAMMAR_TRANS_BAD; }
-                    else if (!feedback.isCorrect) { gDelta = GRAMMAR_TRANS_BAD; }   // 안 쓰고 문장도 틀림
-                    if (gDelta !== 0 || transUsed) addGrammarScore(aiCurrentGrammarForMission.id, gDelta, { transUsed });
-                    // [냐냐 요청] 문법 망각곡선 — 한→스 미션이 곧 문법 복습이다.
-                    //   제대로 썼으면 다음 칸으로, 틀리게 썼으면 진입/한 칸 뒤로.
-                    //   안 쓴 경우(unused)는 복습을 한 게 아니므로 건드리지 않는다.
-                    if (usage === 'correct' && typeof grammarReviewAdvance === 'function') {
-                        grammarReviewAdvance(aiCurrentGrammarForMission.id);
-                    } else if (usage === 'wrong' && typeof grammarReviewDemote === 'function') {
-                        grammarReviewDemote(aiCurrentGrammarForMission.id);
-                    }
-                    aiLastGrammarDelta = { usage, delta: gDelta };
-                }
-
-                // [냐냐 요청] 한→스만 옛 방식으로 남아 있었다 — 지정된 문법 하나에만 점수를 주고
-                //   단어 스펠링도, 문장이 쓴 다른 문법도 전혀 반영하지 않았다.
-                //   나머지 세 모드와 같은 대접을 해준다. 미션 문법은 위에서 이미 처리했으므로
-                //   목록에서 빼뒀다 (두 번 붙으면 안 된다).
+                // [냐냐 요청] 미션에 붙은 단어·문법은 '문장을 만드는 재료' 일 뿐이다.
+                //   말이 통하게 옮겼으면 맞는 것이므로, 그것들을 썼는지로 따로 점수를 매기지 않는다.
+                //   점수는 네 모드 모두 아래 applyAiWritingScores 한 곳에서만 나온다.
+    
                 aiLastCorrectedText = String(feedback.correctedText || '').replace(/<[^>]*>/g, '');
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
 
-                // [냐냐 요청] 이 미션은 '이 단어를 쓰게 만든' 한국어 문장이라 목표 단어는 필수다.
-                //   빼먹었으면 그 단어를 깎는다. 문법 쪽에는 이미 같은 규칙이 있었는데 단어에만 없었다.
-                //   ⚠️ 반드시 '내가 쓴 원문' 으로 본다. 교정본에는 AI 가 목표 단어를 넣어주기 때문에
-                //      그걸로 판단하면 안 쓴 것도 쓴 걸로 잡힌다 (실제로 그랬다).
-                if (aiCurrentWordForMission) {
-                    const bare = (t) => String(t || '').toLowerCase().replace(RE_LEADING_ARTICLE, '').trim();
-                    const need = bare(aiCurrentWordForMission.word);
-                    const mineNorm = (typeof normalizeSpanishAnswer === 'function')
-                        ? normalizeSpanishAnswer(userText, false) : String(userText).toLowerCase();
-                    // 활용형으로 썼을 수도 있으니 앞부분이 겹치면 쓴 것으로 본다 (hablar → hablo)
-                    const stem = need.length > 4 ? need.slice(0, need.length - 2) : need;
-                    const used = !!need && (mineNorm.includes(need) || (stem.length >= 3 && mineNorm.includes(stem)));
-                    const already = aiLastEsKoWords.some(e => e.word.id === aiCurrentWordForMission.id);
-                    if (!used && !already) {
-                        const w = vocabulary.find(v => v.id === aiCurrentWordForMission.id);
-                        if (w) {
-                            const prev = snapshotWordScoreState(w);
-                            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-                            addWordScore(w, WORD_SPELL_BAD, { correct: false });
-                            aiLastEsKoWords.push({ word: w, ok: false, delta: WORD_SPELL_BAD, baseDelta: WORD_SPELL_BAD,
-                                                   prev, gradeBefore, state: 'normal', undone: false, missedTarget: true });
-                            renderEsKoGrammarRefs();
-                        }
-                    }
-                }
 
 
                 if (feedback.isCorrect) {
@@ -1680,11 +1621,7 @@ ${refGrammar}${refWords}
                 ];
                 renderChatThread();
 
-                // 한→스는 미션에 붙은 노트 하나만 본다. 'unused' 는 쓰지 않은 것이라 셈에서 뺀다
-                const koEsUsage = (feedback.grammarPointUsage || 'unused').toString().toLowerCase();
-                const koEsHits = (aiCurrentGrammarForMission && koEsUsage !== 'unused')
-                    ? [{ note: aiCurrentGrammarForMission, usage: koEsUsage }] : [];
-                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback, koEsHits);
+                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -2238,7 +2175,10 @@ ${refGrammar}${refWords}
                 addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
                 // [냐냐 요청] 틀리게 쓴 문법은 어느 모드에서든 곡선에 들어온다.
                 //   (앞으로 미는 건 한→스 미션에서만 — 여기선 고른 문법이라 증거가 약하다)
-                if (!item.ok && typeof grammarReviewDemote === 'function') grammarReviewDemote(note.id);
+                // [냐냐 요청] 곡선은 네 모드 어디서든 돈다. 예전엔 '전진' 이 한→스의 지정 문법
+                //   판정에만 붙어 있어서, 그 길을 없애면 문법이 곡선에서 영영 못 나왔다.
+                if (item.ok) { if (typeof grammarReviewAdvance === 'function') grammarReviewAdvance(note.id); }
+                else if (typeof grammarReviewDemote === 'function') grammarReviewDemote(note.id);
                 aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, state: 'normal', undone: false });
             });
         }
@@ -2786,7 +2726,8 @@ ${refGrammar}${refWords}
             if (state === 'normal') {
                 e.delta = e.baseDelta;
                 addGrammarScore(id, e.delta, { transUsed: e.usage === 'correct' });
-                if (e.usage !== 'correct' && typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
+                if (e.usage === 'correct') { if (typeof grammarReviewAdvance === 'function') grammarReviewAdvance(id); }
+                else if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
             } else if (state === 'looked') {
                 e.delta = LOOKUP_PENALTY;
                 // [냐냐 요청] 찾아봐도 번역에서 쓴 건 쓴 거라 마스터 자격은 그대로 둔다.
@@ -2894,7 +2835,6 @@ ${refGrammar}${refWords}
                           : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
                           : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'));
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
-                    ${w.missedTarget ? '<span class="text-[9px] font-black text-rose-500" title="이번 미션의 목표 단어인데 안 썼어요">못 씀</span>' : ''}
                     <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.undone ? '해제됨' : (w.delta > 0 ? '+' : '') + w.delta}</span>
                     <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
                     <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${(w.lookedUp || w.undone) ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
