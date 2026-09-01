@@ -3108,7 +3108,22 @@ let vocabulary = [];
         function openAiNotesByIssue(issue) {
             changeTab('ai-feedback');
             if (typeof switchAiMode === 'function') switchAiMode('note');
-            if (typeof setAiNoteFilter === 'function') setAiNoteFilter(issue);
+            if (typeof setAiNoteFilter === 'function') setAiNoteFilter('issue:' + issue);
+        }
+
+        // [냐냐 요청] 첨삭 노트의 '약한 문법' 에서 그 문법 노트로 바로 건너뛴다
+        function goToGrammarNote(id) {
+            const t = getAllGrammarTables().find(x => x.id === id);
+            if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }
+            changeTab('grammar');
+            grammarOpenState[id] = true;
+            renderGrammarTables();
+            setTimeout(() => {
+                const body = document.querySelector(`[data-grammar-body="${id}"]`);
+                const card = body ? body.closest('.bg-white, [data-grammar-card]') || body : null;
+                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 120);
+            showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗`, "info");
         }
 
         // [냐냐 PATCH] 날짜 표시 형식: 2026-07-09 → 2026/07/09, 축 라벨은 07/09

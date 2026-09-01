@@ -1630,7 +1630,11 @@ ${refGrammar}${refWords}
                 ];
                 renderChatThread();
 
-                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback);
+                // 한→스는 미션에 붙은 노트 하나만 본다. 'unused' 는 쓰지 않은 것이라 셈에서 뺀다
+                const koEsUsage = (feedback.grammarPointUsage || 'unused').toString().toLowerCase();
+                const koEsHits = (aiCurrentGrammarForMission && koEsUsage !== 'unused')
+                    ? [{ note: aiCurrentGrammarForMission, usage: koEsUsage }] : [];
+                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback, koEsHits);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -2173,7 +2177,9 @@ ${refGrammar}${refWords}
         //   숫자만 세던 '내 학습 수준' 과 달리, 실제로 내가 쓴 문장과 교정본을 통째로 남긴다.
         //   화면에 그릴 때 core.js 의 charDiffOps 로 두 문장을 대조하므로, 여기서는 표시용
         //   태그를 다 벗겨 맨 글자만 저장한다 (용량도 줄고, 나중에 검색하기도 쉽다).
-        function recordAiNote(mode, ask, mine, feedback) {
+        //   gramHits 를 안 주면 방금 채점이 남긴 aiLastEsKoGrammar 를 그대로 쓴다. AI 가 지어낸
+        //   제목은 채점 단계에서 이미 걸러진 뒤라, 여기 오는 건 전부 실제로 있는 노트다.
+        function recordAiNote(mode, ask, mine, feedback, gramHits) {
             if (typeof aiNotes === 'undefined' || !feedback) return;
             const plain = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
             const mineText = plain(mine);
@@ -2189,6 +2195,7 @@ ${refGrammar}${refWords}
                 tip: plain(feedback.tip),
                 natural: plain(feedback.moreNatural),         // 더 자연스러운 표현 (있을 때만)
                 issue: (issue && issue !== '없음') ? issue : '',
+                gram: aiNoteGramHits(gramHits),               // [{ id, n(제목), ok }]
                 ok: !!feedback.isCorrect
             });
             if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;
@@ -2216,6 +2223,7 @@ ${refGrammar}${refWords}
         //   적으면 (escape 를 해도) 브라우저가 &#39; 를 ' 로 되돌린 뒤에 JS 를 읽어서 호출이 깨진다.
         //   그래서 어디서든 '몇 번째'만 넘기고 값은 여기 배열에서 찾는다 — 단어 빠른찾기와 같은 방식.
         let _aiNoteFilterVals = [];   // 노트 필터 줄의 칩 값
+        let _aiNoteGramVals = [];     // 약한 문법 칩 값
 
         function setAiNoteFilterAt(i) {
             const v = _aiNoteFilterVals[i];
@@ -2261,10 +2269,34 @@ ${refGrammar}${refWords}
                 .join(' ');
         }
 
+        // 필터는 접두사로 갈래를 구분한다: 'all' | 'wrong' | 'issue:어순' | 'gram:<노트id>'
         function aiNoteMatches(n) {
             if (aiNoteFilter === 'all') return true;
             if (aiNoteFilter === 'wrong') return !n.ok;
-            return n.issue === aiNoteFilter;
+            if (aiNoteFilter.startsWith('issue:')) return n.issue === aiNoteFilter.slice(6);
+            if (aiNoteFilter.startsWith('gram:')) {
+                const id = aiNoteFilter.slice(5);
+                return (n.gram || []).some(g => g.id === id && !g.ok);
+            }
+            return false;
+        }
+
+        // [냐냐 요청] 약한 문법 — 첨삭에서 쓴 문법 노트를 정답률 낮은 순으로.
+        //   '어순/시제' 같은 뭉뚱그린 유형이 아니라 '소유형용사', '정관사' 처럼
+        //   내 문법 노트 이름 그대로 나온다. AI 가 첨삭할 때마다 짚어준 걸 세는 것뿐이다.
+        function aiNoteGrammarStats() {
+            const by = new Map();
+            (aiNotes || []).forEach(n => (n.gram || []).forEach(g => {
+                if (!g || !g.id) return;
+                if (!by.has(g.id)) by.set(g.id, { id: g.id, name: g.n || '(이름 없는 노트)', total: 0, bad: 0 });
+                const e = by.get(g.id);
+                e.total++;
+                if (!g.ok) e.bad++;
+                if (g.n) e.name = g.n;          // 제목이 바뀌었으면 최근 것으로
+            }));
+            return [...by.values()]
+                .map(e => Object.assign(e, { rate: Math.round(((e.total - e.bad) / e.total) * 100) }))
+                .sort((a, b) => (a.rate - b.rate) || (b.bad - a.bad) || (b.total - a.total));
         }
 
         function setAiNoteFilter(v) {
@@ -2294,10 +2326,48 @@ ${refGrammar}${refWords}
             return fmtDateShort(ds);
         }
 
+        function renderAiNoteGrammarBox() {
+            const box = document.getElementById('ai-note-grammar');
+            if (!box) return;
+            const stats = aiNoteGrammarStats();
+            if (!stats.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+
+            _aiNoteGramVals = [];
+            const chips = stats.slice(0, 10).map(e => {
+                const idx = _aiNoteGramVals.push('gram:' + e.id) - 1;
+                const on = aiNoteFilter === 'gram:' + e.id;
+                // 정답률로 색을 나눈다 — 반도 못 맞히면 빨강, 8할 넘으면 초록
+                const tone = e.rate < 50 ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                           : e.rate < 80 ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                           : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
+                const sel = on ? 'ring-2 ring-slate-700 ring-offset-1' : '';
+                const dis = e.bad === 0 ? ' title="틀린 적이 없어요"' : ' title="이 문법으로 틀린 문장만 보기"';
+                return `<button onclick="setAiNoteGramAt(${idx})"${dis} class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${tone} ${sel}">
+                    ${escapeHtml(e.name)}
+                    <span class="font-normal opacity-70">${e.total - e.bad}/${e.total} · ${e.rate}%</span>
+                </button>`;
+            }).join('');
+
+            box.innerHTML = `
+                <div class="flex items-baseline gap-2 mb-2 flex-wrap">
+                    <span class="text-xs font-bold text-slate-700">약한 문법</span>
+                    <span class="text-[10px] text-slate-400">첨삭에서 쓴 내 문법 노트를 정답률 낮은 순으로. 눌러서 그때 문장을 봐요</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">${chips}</div>`;
+        }
+
+        function setAiNoteGramAt(i) {
+            const v = _aiNoteGramVals[i];
+            if (v === undefined) return;
+            setAiNoteFilter(aiNoteFilter === v ? 'wrong' : v);   // 같은 걸 다시 누르면 해제
+        }
+
         function renderAiNoteList() {
             const box = document.getElementById('ai-note-list');
             const filterBox = document.getElementById('ai-note-filters');
             if (!box) return;
+            renderAiNoteGrammarBox();
 
             const notes = Array.isArray(aiNotes) ? aiNotes : [];
             const wrongCount = notes.filter(n => !n.ok).length;
@@ -2319,7 +2389,7 @@ ${refGrammar}${refWords}
                 filterBox.innerHTML =
                     chip('wrong', '틀린 것만', wrongCount, rose) +
                     chip('all', '전체', notes.length, slate) +
-                    issues.map(([t, c]) => chip(t, escapeHtml(t), c, amber)).join('');
+                    issues.map(([t, c]) => chip('issue:' + t, escapeHtml(t), c, amber)).join('');
             }
 
             if (notes.length === 0) {
@@ -2331,6 +2401,18 @@ ${refGrammar}${refWords}
             if (matched.length === 0) {
                 box.innerHTML = `<p class="text-slate-400 text-xs py-2">이 조건에 맞는 문장이 없어요.</p>`;
                 return;
+            }
+
+            // 문법으로 걸러 보는 중이면, 그 노트를 바로 열어볼 수 있게 한 줄 띄운다
+            let jump = '';
+            if (aiNoteFilter.startsWith('gram:')) {
+                const gid = aiNoteFilter.slice(5);
+                const st = aiNoteGrammarStats().find(e => e.id === gid);
+                if (st) {
+                    jump = `<button onclick="goToGrammarNote('${escapeAttr(gid)}')" class="w-full text-left px-3 py-2 mb-1 rounded-2xl bg-teal-50 border border-teal-100 text-[11px] font-bold text-teal-700 hover:bg-teal-100 transition-all">
+                        <i class="fa-solid fa-book-open mr-1"></i>${escapeHtml(st.name)} 노트 열어보기 <i class="fa-solid fa-arrow-right text-[9px] opacity-60"></i>
+                    </button>`;
+                }
             }
 
             const page = matched.slice(0, aiNoteShown);
@@ -2371,10 +2453,29 @@ ${refGrammar}${refWords}
                         ${hasDetail ? `<button onclick="toggleAiNote('${key}')" class="mt-1.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">${open ? '접기' : '선생님 총평 보기'}</button>` : ''}
                     </div>`;
             }).join('');
+            box.innerHTML = jump + box.innerHTML;
 
             if (matched.length > page.length) {
                 box.innerHTML += `<button onclick="showMoreAiNotes()" class="w-full py-2 text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all">${matched.length - page.length}개 더 보기</button>`;
             }
+        }
+
+        // 이 문장이 건드린 문법 노트를 { id, n, ok } 로 간추린다.
+        //   제목도 같이 남긴다 — 나중에 노트를 지워도 "그때 뭘 틀렸는지"는 남아야 한다.
+        function aiNoteGramHits(gramHits) {
+            const src = Array.isArray(gramHits) ? gramHits
+                      : (typeof aiLastEsKoGrammar !== 'undefined' ? aiLastEsKoGrammar : []);
+            const out = [];
+            const seen = new Set();
+            (src || []).forEach(e => {
+                const note = e && (e.note || e);
+                const id = note && note.id;
+                const title = note && note.title;
+                if (!id || seen.has(id)) return;
+                seen.add(id);
+                out.push({ id: id, n: String(title || ''), ok: (e.usage ? e.usage === 'correct' : !!e.ok) });
+            });
+            return out;
         }
 
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
