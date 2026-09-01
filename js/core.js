@@ -2781,8 +2781,9 @@ let vocabulary = [];
         //   DELE 는 시험이라 앱이 등급을 줄 수는 없다. 다만 CEFR 이 실제로 나누는 세 축은
         //   이 앱에 이미 다 쌓여 있어서, 그걸로 "지금 어디쯤인지" 는 가늠할 수 있다.
         //     ① 어휘 — 개수가 아니라 '어떤 단어를 아느냐'. AI 가 단어를 CEFR 로 분류한다
-        //     ② 동사 시제 — CEFR 이 가장 또렷하게 가르는 축 (접속법을 알면 B1)
-        //     ③ 정답률 — 최근 30일 퀴즈. 평생 누적을 쓰면 실력이 늘어도 안 움직인다
+        //     ② 문법 노트 — 같은 방식으로 내 문법표 제목을 CEFR 로 분류한다
+        //     ③ 동사 시제 — 문법 중에서도 CEFR 이 가장 또렷하게 가르는 축이라 따로 뽑는다
+        //     ④ 정답률 — 최근 30일 퀴즈. 평생 누적을 쓰면 실력이 늘어도 안 움직인다
         //   전체 수준은 셋 중 '가장 낮은 축'. 단어만 많고 접속법을 모르면 B1 이 아니다.
         //   AI 를 부르므로 하루 한 번만 자동으로 돌고, 나머지는 새로고침 버튼으로 돌린다.
         // ============================================================
@@ -2878,6 +2879,18 @@ let vocabulary = [];
             return { words: picked.map(w => clean(w.word)).filter(Boolean), poolSize: pool.length };
         }
 
+        // 문법 노트도 같은 기준으로 — 약점으로 찍힌 노트는 아직 '아는 것' 이 아니다
+        function deleGrammarSample(limit = 80) {
+            const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const pool = all.filter(t => {
+                if (!t || !t.id || !String(t.title || '').trim()) return false;
+                const g = getGrammarGrade(t.id);
+                return g !== 'weak' && g !== 'critical';
+            });
+            const picked = pool.slice(0, limit);
+            return { titles: picked.map(t => String(t.title).trim()), poolSize: pool.length, allSize: all.length };
+        }
+
         // 분포에서 '위에서 25% 지점' 의 레벨 — 네 단어 중 하나는 이 수준이라는 뜻
         function deleVocabLevelFromCounts(counts) {
             const total = DELE_LEVELS.reduce((a, lv) => a + (counts[lv] || 0), 0);
@@ -2904,6 +2917,8 @@ let vocabulary = [];
             let vocab = deleResult && deleResult.vocab ? deleResult.vocab : null;
 
             const sample = deleVocabSample();
+            const gSample = deleGrammarSample();
+            let gram = deleResult && deleResult.gram ? deleResult.gram : null;
             const canAsk = (typeof getGeminiApiKey === 'function') && !!getGeminiApiKey();
             const enough = sample.words.length >= 20;
 
@@ -2911,30 +2926,46 @@ let vocabulary = [];
                 deleBusy = true;
                 renderDeleCard();
                 try {
+                    // 어휘와 문법을 한 번에 물어본다 — 하루 한 번 부르는 값이라 호출을 쪼개지 않는다
+                    const levelCounts = () => ({
+                        type: "OBJECT",
+                        properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "INTEGER" }])),
+                        required: DELE_LEVELS
+                    });
+                    const levelSamples = () => ({
+                        type: "OBJECT",
+                        properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "ARRAY", items: { type: "STRING" } }])),
+                        required: DELE_LEVELS
+                    });
                     const schema = {
                         type: "OBJECT",
                         properties: {
-                            counts: {
-                                type: "OBJECT",
-                                properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "INTEGER" }])),
-                                required: DELE_LEVELS
-                            },
-                            samples: {
-                                type: "OBJECT",
-                                properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "ARRAY", items: { type: "STRING" } }])),
-                                required: DELE_LEVELS
-                            },
-                            comment: { type: "STRING", description: "이 어휘 구성에 대한 한국어 한 문장 총평" }
+                            counts: levelCounts(),
+                            samples: levelSamples(),
+                            grammarCounts: levelCounts(),
+                            grammarSamples: levelSamples(),
+                            comment: { type: "STRING", description: "어휘와 문법을 아울러 한국어 한 문장 총평" }
                         },
-                        required: ["counts", "samples", "comment"]
+                        required: ["counts", "samples", "grammarCounts", "grammarSamples", "comment"]
                     };
+                    const gramBlock = gSample.titles.length
+                        ? `
+
+The same learner also keeps these ${gSample.titles.length} Spanish grammar notes (titles are Korean, often with Spanish examples in parentheses).
+Classify EVERY note into exactly one CEFR level by when that grammar point is normally taught.
+Return "grammarCounts" (the six numbers MUST add up to ${gSample.titles.length}) and "grammarSamples" (up to 3 note titles per level, copied EXACTLY as given, [] if none).
+
+Grammar notes: ${gSample.titles.join(' / ')}`
+                        : `
+
+The learner has no usable grammar notes. Return "grammarCounts" with all six values 0 and "grammarSamples" with all six empty arrays.`;
                     const prompt = `Here are ${sample.words.length} Spanish words a Korean learner has studied.
 Classify EVERY word into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common/basic it is in Spanish.
 Return "counts" = how many words fell into each level (the six numbers MUST add up to ${sample.words.length}).
 Return "samples" = up to 3 example words from the list for each level (use [] if none).
-Return "comment" = ONE short sentence IN KOREAN about this vocabulary profile, addressed to 냐냐님 (e.g. "일상 어휘는 탄탄한데 추상적인 단어가 아직 적어요"). Never answer in English.
+Return "comment" = ONE short sentence IN KOREAN about this learner's vocabulary and grammar together, addressed to 냐냐님 (e.g. "일상 어휘는 탄탄한데 접속법 노트가 아직 없어요"). Never answer in English.
 
-Words: ${sample.words.join(', ')}`;
+Words: ${sample.words.join(', ')}${gramBlock}`;
                     // callGemini 는 글자를 돌려준다 — 다른 곳과 같이 extractAndParseJson 으로 푼다
                     const data = extractAndParseJson(await callGemini(prompt, "당신은 스페인어 어휘를 CEFR 기준으로 분류하는 평가자입니다.", schema, 'low'));
                     if (!data || !data.counts) throw new Error('BAD_JSON');
@@ -2950,6 +2981,19 @@ Words: ${sample.words.join(', ')}`;
                             ? `외운 단어 ${sample.poolSize}개를 다 봤어요`
                             : `외운 단어 ${sample.poolSize}개 중 ${sample.words.length}개를 골라 봤어요`
                     };
+                    if (gSample.titles.length && data.grammarCounts) {
+                        const gCounts = {};
+                        DELE_LEVELS.forEach(l => { gCounts[l] = Math.max(0, parseInt(data.grammarCounts[l], 10) || 0); });
+                        const gTotal = DELE_LEVELS.reduce((a, l) => a + gCounts[l], 0);
+                        gram = gTotal ? {
+                            level: deleVocabLevelFromCounts(gCounts),
+                            counts: gCounts,
+                            samples: data.grammarSamples || {},
+                            detail: (gSample.poolSize >= gSample.allSize)
+                                ? `문법 노트 ${gSample.poolSize}개를 다 봤어요`
+                                : `문법 노트 ${gSample.allSize}개 중 약점이 아닌 ${gSample.poolSize}개를 봤어요`
+                        } : null;
+                    }
                     if (data.comment) deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) });
                 } catch (e) {
                     console.warn('DELE 어휘 판정 실패', e);
@@ -2964,8 +3008,8 @@ Words: ${sample.words.join(', ')}`;
 
             deleResult = Object.assign(deleResult || {}, {
                 date: getLocalDateString(),
-                tense, acc, vocab,
-                overall: deleOverall([vocab, tense, acc])
+                tense, acc, vocab, gram,
+                overall: deleOverall([vocab, gram, tense, acc])
             });
             renderDeleCard();
             saveToStorage();
@@ -2974,13 +3018,36 @@ Words: ${sample.words.join(', ')}`;
         // 어느 축이 발목을 잡는지
         function deleBottleneck(r) {
             const named = [
-                { name: '어휘', a: r.vocab }, { name: '시제', a: r.tense }, { name: '정답률', a: r.acc }
+                { name: '어휘', a: r.vocab }, { name: '문법', a: r.gram },
+                { name: '시제', a: r.tense }, { name: '정답률', a: r.acc }
             ].filter(x => x.a && x.a.level);
             if (named.length < 2) return null;
             const lo = Math.min(...named.map(x => deleIndex(x.a.level)));
             const at = named.filter(x => deleIndex(x.a.level) === lo);
             if (at.length === named.length) return null;   // 다 같으면 발목이랄 게 없다
             return at.map(x => x.name).join(' · ');
+        }
+
+        // 레벨 분포 막대 — 어휘와 문법이 같이 쓴다. 칸에 마우스를 올리면 예시가 뜬다
+        const DELE_BAR_COLOR = { A1: 'bg-slate-400', A2: 'bg-sky-400', B1: 'bg-violet-400', B2: 'bg-indigo-500', C1: 'bg-emerald-500', C2: 'bg-amber-500' };
+        function deleDistBar(axis) {
+            if (!axis || !axis.counts) return '';
+            const total = DELE_LEVELS.reduce((s, l) => s + (axis.counts[l] || 0), 0);
+            if (!total) return '';
+            return `<div class="mt-1 mb-1.5">
+                <div class="flex h-2.5 rounded-full overflow-hidden bg-slate-100">
+                    ${DELE_LEVELS.map(l => {
+                        const c = axis.counts[l] || 0;
+                        if (!c) return '';
+                        const ex = ((axis.samples && axis.samples[l]) || []).slice(0, 3).join(', ');
+                        return `<div class="${DELE_BAR_COLOR[l]}" style="width:${(c / total * 100).toFixed(1)}%" title="${l} ${c}개${ex ? ' — ' + escapeAttr(ex) : ''}"></div>`;
+                    }).join('')}
+                </div>
+                <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                    ${DELE_LEVELS.filter(l => axis.counts[l]).map(l =>
+                        `<span class="text-[10px] text-slate-400"><b class="${DELE_LEVEL_COLOR[l]}">${l}</b> ${axis.counts[l]}</span>`).join('')}
+                </div>
+            </div>`;
         }
 
         function renderDeleCard() {
@@ -3008,27 +3075,6 @@ Words: ${sample.words.join(', ')}`;
                 </div>`;
             };
 
-            // 어휘 분포 막대 (있을 때만)
-            let dist = '';
-            if (r.vocab && r.vocab.counts) {
-                const total = DELE_LEVELS.reduce((s, l) => s + (r.vocab.counts[l] || 0), 0) || 1;
-                const bar = { A1: 'bg-slate-400', A2: 'bg-sky-400', B1: 'bg-violet-400', B2: 'bg-indigo-500', C1: 'bg-emerald-500', C2: 'bg-amber-500' };
-                dist = `<div class="mt-2">
-                    <div class="flex h-2.5 rounded-full overflow-hidden bg-slate-100">
-                        ${DELE_LEVELS.map(l => {
-                            const c = r.vocab.counts[l] || 0;
-                            if (!c) return '';
-                            const ex = (r.vocab.samples && r.vocab.samples[l] || []).slice(0, 3).join(', ');
-                            return `<div class="${bar[l]}" style="width:${(c / total * 100).toFixed(1)}%" title="${l} ${c}개${ex ? ' — ' + escapeAttr(ex) : ''}"></div>`;
-                        }).join('')}
-                    </div>
-                    <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                        ${DELE_LEVELS.filter(l => r.vocab.counts[l]).map(l =>
-                            `<span class="text-[10px] text-slate-400"><b class="${DELE_LEVEL_COLOR[l]}">${l}</b> ${r.vocab.counts[l]}</span>`).join('')}
-                    </div>
-                </div>`;
-            }
-
             const neck = deleBottleneck(r);
 
             box.innerHTML = `
@@ -3039,7 +3085,8 @@ Words: ${sample.words.join(', ')}`;
                     </div>
                     ${btn}
                 </div>
-                ${axis('어휘', r.vocab)}${dist}
+                ${axis('어휘', r.vocab)}${deleDistBar(r.vocab)}
+                ${axis('문법', r.gram)}${deleDistBar(r.gram)}
                 ${axis('시제', r.tense)}
                 ${axis('정답률', r.acc)}
                 ${neck ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-2.5 py-1.5 mt-2">👉 지금 발목을 잡는 건 <b>${neck}</b> — 전체 수준은 가장 낮은 축을 따라가요</p>` : ''}
