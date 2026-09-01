@@ -1609,6 +1609,32 @@ ${refGrammar}${refWords}
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
 
+                // [냐냐 요청] 이 미션은 '이 단어를 쓰게 만든' 한국어 문장이라 목표 단어는 필수다.
+                //   빼먹었으면 그 단어를 깎는다. 문법 쪽에는 이미 같은 규칙이 있었는데 단어에만 없었다.
+                //   ⚠️ 반드시 '내가 쓴 원문' 으로 본다. 교정본에는 AI 가 목표 단어를 넣어주기 때문에
+                //      그걸로 판단하면 안 쓴 것도 쓴 걸로 잡힌다 (실제로 그랬다).
+                if (aiCurrentWordForMission) {
+                    const bare = (t) => String(t || '').toLowerCase().replace(RE_LEADING_ARTICLE, '').trim();
+                    const need = bare(aiCurrentWordForMission.word);
+                    const mineNorm = (typeof normalizeSpanishAnswer === 'function')
+                        ? normalizeSpanishAnswer(userText, false) : String(userText).toLowerCase();
+                    // 활용형으로 썼을 수도 있으니 앞부분이 겹치면 쓴 것으로 본다 (hablar → hablo)
+                    const stem = need.length > 4 ? need.slice(0, need.length - 2) : need;
+                    const used = !!need && (mineNorm.includes(need) || (stem.length >= 3 && mineNorm.includes(stem)));
+                    const already = aiLastEsKoWords.some(e => e.word.id === aiCurrentWordForMission.id);
+                    if (!used && !already) {
+                        const w = vocabulary.find(v => v.id === aiCurrentWordForMission.id);
+                        if (w) {
+                            const prev = snapshotWordScoreState(w);
+                            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+                            addWordScore(w, WORD_SPELL_BAD, { correct: false });
+                            aiLastEsKoWords.push({ word: w, ok: false, delta: WORD_SPELL_BAD, baseDelta: WORD_SPELL_BAD,
+                                                   prev, gradeBefore, state: 'normal', undone: false, missedTarget: true });
+                            renderEsKoGrammarRefs();
+                        }
+                    }
+                }
+
 
                 if (feedback.isCorrect) {
                     coachIcon.innerText = "🏆🏅";
@@ -1987,6 +2013,84 @@ ${refGrammar}${refWords}
             'nada','nadie','nunca','algo','alguien','muy','ya','tan','solo'
         ]);
 
+        // [냐냐 요청] 이 문장에 딸린 추천.
+        //   ① 문장에 나온 단어에 내가 등록해둔 관용구 중 이번에 안 쓴 것
+        //      — 아는 표현인데 안 떠올린 것이라 다음에 써먹기 좋다
+        //   ② 문장에는 나왔는데 단어장에 없는 낱말 — 등록하러 갈 수 있게
+        //   AI 를 더 부르지 않는다. 교정본과 내 단어장만으로 만든다.
+        let aiLastSuggest = { idioms: [], newWords: [] };
+
+        function buildAiSuggestions(feedback) {
+            const out = { idioms: [], newWords: [] };
+            const text = String(feedback && feedback.correctedText || '').replace(/<[^>]*>/g, '');
+            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, false) : String(t || '').toLowerCase();
+            const flat = ' ' + norm(text) + ' ';
+            if (!flat.trim()) return out;
+
+            // ① 문장에 나온 내 단어들의 관용구 (이번에 쓴 표현은 뺀다)
+            const usedIdioms = new Set((aiLastIdiomHits || []).map(h => norm(h.idiom)));
+            const seen = new Set();
+            (vocabulary || []).forEach(w => {
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                if (!list.length) return;
+                const key = norm(w.word);
+                if (!key || key.length < 3) return;
+                if (!flat.includes(' ' + key + ' ')) return;        // 그 단어가 문장에 있어야
+                list.forEach(it => {
+                    const k = norm(it.idiom);
+                    if (!k || usedIdioms.has(k) || seen.has(k)) return;
+                    seen.add(k);
+                    const rec = (typeof idiomReview !== 'undefined') ? idiomReview[idiomKey(w.id, it.idiom)] : null;
+                    out.idioms.push({ word: w, idiom: it.idiom, meaning: it.idiomMeaning || '', stage: rec ? (rec.stage || 0) : null });
+                });
+            });
+            // 곡선에 들어와 있는 것(= 약한 것)을 먼저
+            out.idioms.sort((a, b) => (a.stage === null ? 9 : a.stage) - (b.stage === null ? 9 : b.stage));
+            out.idioms = out.idioms.slice(0, 4);
+
+            // ② 문장에 나왔는데 단어장에 없는 낱말 — 분석(breakdown) 이 이미 낱말을 갈라놨으니 그걸 쓴다
+            const words = new Set();
+            (feedback && Array.isArray(feedback.breakdown) ? feedback.breakdown : []).forEach(it => {
+                const raw = String((it && it.word) || '').trim();
+                if (!raw || raw.length < 2) return;
+                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;   // 이미 있음
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(norm(raw))) return;
+                if (words.has(raw.toLowerCase())) return;
+                words.add(raw.toLowerCase());
+                out.newWords.push({ word: raw, mean: String((it && it.mean) || '').trim() });
+            });
+            out.newWords = out.newWords.slice(0, 5);
+            return out;
+        }
+
+        function aiSuggestHtml() {
+            const s = aiLastSuggest || { idioms: [], newWords: [] };
+            if (!s.idioms.length && !s.newWords.length) return '';
+            const idiomPart = s.idioms.length ? `
+                <div class="mb-2">
+                    <p class="text-[11px] font-bold text-slate-500 mb-1">📘 이 문장에 쓸 수 있었던 내 관용구</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${s.idioms.map(x => `<span class="inline-flex items-center gap-1 border border-violet-200 bg-violet-50 text-violet-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold">
+                            <b>${escapeHtml(x.idiom)}</b>
+                            <span class="text-[10px] text-slate-400">${escapeHtml(x.meaning)}</span>
+                            ${x.stage !== null ? `<span class="text-[9px] font-black text-amber-600">복습중</span>` : ''}
+                            ${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(x.idiom) : ''}
+                        </span>`).join('')}
+                    </div>
+                </div>` : '';
+            const wordPart = s.newWords.length ? `
+                <div>
+                    <p class="text-[11px] font-bold text-slate-500 mb-1">➕ 아직 단어장에 없어요</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${s.newWords.map(x => `<button type="button" onclick="openQuickWordRegister(this.dataset.w)" data-w="${escapeAttr(x.word)}" title="눌러서 등록하기" class="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
+                            <i class="fa-solid fa-plus text-[9px]"></i><b>${escapeHtml(x.word)}</b>
+                            <span class="text-[10px] text-slate-400">${escapeHtml(x.mean)}</span>
+                        </button>`).join('')}
+                    </div>
+                </div>` : '';
+            return `<div class="mt-3 pt-3 border-t border-slate-200">${idiomPart}${wordPart}</div>`;
+        }
+
         // 첨삭이 짚은 표현이 내 관용구 목록에 있나 (관사·자리표시자·악센트를 무시하고 맞춰본다)
         function findIdiomEntryByText(raw) {
             const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, false) : String(raw || '').toLowerCase();
@@ -2001,10 +2105,41 @@ ${refGrammar}${refWords}
             return null;
         }
 
+        // [냐냐 요청] 관용구는 AI 보고에 기대지 않고 문장을 직접 훑는다.
+        //   'tener ganas de' 를 써도 AI 는 tener·ganar 로 쪼개 보내서 표현이 통째로 안 잡혔다.
+        //   내 관용구 목록을 정답 문장에 대조하면 확실하다 (자리표시자·관사·악센트는 무시).
+        function detectIdiomsInText(rawText) {
+            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, false) : String(t || '').toLowerCase();
+            const hay = ' ' + norm(String(rawText || '').replace(/<[^>]*>/g, '')) + ' ';
+            if (hay.trim().length < 3) return [];
+            const out = [];
+            (vocabulary || []).forEach(w => {
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                list.forEach(it => {
+                    const k = norm(it.idiom);
+                    // 너무 짧은 조각은 우연히 걸린다 (두 낱말 이상이거나 6글자 넘는 것만)
+                    if (!k || (k.length < 6 && k.split(' ').length < 2)) return;
+                    if (hay.includes(' ' + k + ' ')) out.push({ w, it });
+                });
+            });
+            return out;
+        }
+
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
             aiLastIdiomHits = [];
+
+            // 정답 문장에 들어 있는 내 관용구 — 제대로 쓴 것이므로 곡선을 앞으로
+            //   (점수는 단어 기준 그대로 두기로 했으니 여기서 점수는 안 건드린다)
+            const seenIdiom = new Set();
+            detectIdiomsInText(feedback && feedback.correctedText).forEach(({ w, it }) => {
+                const k = `${w.id}::${it.idiom}`;
+                if (seenIdiom.has(k)) return;
+                seenIdiom.add(k);
+                if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w.id, it.idiom);
+                aiLastIdiomHits.push({ word: w, idiom: it.idiom, ok: true });
+            });
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling');
             if (!list.length || typeof vocabulary === 'undefined') return;
 
@@ -2040,9 +2175,10 @@ ${refGrammar}${refWords}
                 // [냐냐 요청] 관용구를 문장에 썼으면 그 표현의 곡선을 돌린다.
                 //   점수는 손대지 않는다 — 점수는 단어 기준 그대로 두기로 했다.
                 //   (그래야 단어와 관용구가 같이 잡혀도 같은 단어에 두 번 붙지 않는다)
+                //   AI 가 표현을 통째로 짚어 준 경우 — 위 훑기가 못 잡은 것만 (틀리게 쓴 것이 여기 걸린다)
                 if (typeof idiomReviewDemote === 'function') {
                     const hitIdiom = findIdiomEntryByText(item.name);
-                    if (hitIdiom) {
+                    if (hitIdiom && !aiLastIdiomHits.some(h => h.word.id === hitIdiom.w.id && h.idiom === hitIdiom.it.idiom)) {
                         if (item.ok) { if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(hitIdiom.w.id, hitIdiom.it.idiom); }
                         else idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
                         aiLastIdiomHits.push({ word: hitIdiom.w, idiom: hitIdiom.it.idiom, ok: item.ok });
@@ -2594,11 +2730,13 @@ ${refGrammar}${refWords}
         }
 
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
-        //   halfCredit = 스→한 자유 작문. 아는 걸 골라 쓰는 거라 단어·문법 둘 다 절반(+1)만 준다.
-        //   나머지 모드(한→스 미션·질문에 답하기·내 예문 연습)는 +2. 틀리면 어디서든 −2.
-        function applyAiWritingScores(feedback, notes, halfCredit) {
-            applyEsKoGrammarScores(feedback, notes, halfCredit ? GRAMMAR_FREE_OK : GRAMMAR_TRANS_OK);
-            applyEsKoWordScores(feedback, halfCredit ? WORD_SPELL_FREE_OK : WORD_SPELL_OK);
+        //   [냐냐 요청] 네 모드가 같은 점수를 쓴다 — 제대로 쓰면 +2, 틀리면 −2.
+        //   자유 작문만 절반이던 건 '찾아보고 쓸 수 있어서' 였는데, 이제 찾아본 건 내가
+        //   결과 카드에서 표시하면 되므로(−2) 미리 깎아둘 이유가 없다.
+        function applyAiWritingScores(feedback, notes) {
+            applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK);
+            applyEsKoWordScores(feedback, WORD_SPELL_OK);
+            aiLastSuggest = buildAiSuggestions(feedback);   // [냐냐 요청] 추천은 점수 다음에 (쓴 관용구를 알아야 뺀다)
             renderEsKoGrammarRefs();
         }
         // 새 채점을 시작하기 전에 지난 결과 카드를 치운다
@@ -2606,6 +2744,8 @@ ${refGrammar}${refWords}
             renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'이 남아 있으면 안 된다
             aiLastEsKoGrammar = [];
             aiLastEsKoWords = [];
+            aiLastIdiomHits = [];
+            aiLastSuggest = { idioms: [], newWords: [] };
             const box = document.getElementById('ai-mission-refs');
             if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
         }
@@ -2725,7 +2865,8 @@ ${refGrammar}${refWords}
             //   점수 카드가 그걸 덮어써서 단어 점수와 해제·찾아봄 버튼이 안 보였다. 위에 남겨둔다.
             const keep = box.querySelector('[data-mission-refs]');
             const keepHtml = keep ? keep.outerHTML : '';
-            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length && !(aiLastIdiomHits || []).length) {
+            const hasSuggest = !!((aiLastSuggest || {}).idioms || []).length || !!((aiLastSuggest || {}).newWords || []).length;
+            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length && !(aiLastIdiomHits || []).length && !hasSuggest) {
                 box.innerHTML = keepHtml;
                 box.classList.toggle('hidden', !keepHtml);
                 return;
@@ -2753,6 +2894,7 @@ ${refGrammar}${refWords}
                           : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
                           : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'));
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
+                    ${w.missedTarget ? '<span class="text-[9px] font-black text-rose-500" title="이번 미션의 목표 단어인데 안 썼어요">못 씀</span>' : ''}
                     <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${w.undone ? '해제됨' : (w.delta > 0 ? '+' : '') + w.delta}</span>
                     <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
                     <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${(w.lookedUp || w.undone) ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
@@ -2793,6 +2935,7 @@ ${refGrammar}${refWords}
                 <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}
                 ${idiomHtml}
                 ${shiftHtml}
+                ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
                 ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 자세히 보기 · ↺ 눌러서 점수 바꾸기 (그대로 → 찾아보고 씀 ${LOOKUP_PENALTY} → 해제)</p>` : ''}`;
             box.classList.remove('hidden');
         }
@@ -2914,7 +3057,7 @@ ${noteListText}
 
                 // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
                 // 스→한 자유 작문만 단어·문법 점수를 절반(+1)으로 준다 — 아는 걸 골라 쓰는 거라
-                applyAiWritingScores(feedback, scoreNotes, true);
+                applyAiWritingScores(feedback, scoreNotes);
 
                 resultBox.classList.remove('hidden');
 
@@ -3130,11 +3273,11 @@ ${noteListText}
             if (chev) chev.style.transform = willOpen ? 'rotate(180deg)' : '';
         }
 
-        // 항상 접은 채로 시작 — 새 첨삭 결과를 그릴 때마다 비우면서 같이 되접는다
-        //   (한 번 펼쳐두면 그 상태가 남아서 다음 첨삭 때 펼쳐진 채로 나온다)
+        // [냐냐 요청] 펼친 채로 시작한다. 여기가 '내가 등록한 단어랑 아닌 것' 을 보는 자리인데
+        //   접혀 있으니 아무도 안 열어봤다. 접고 싶으면 머리를 눌러 접으면 된다.
         function resetBreakdown(grid) {
             if (grid) grid.innerHTML = '';
-            toggleAiBreakdown(false);
+            toggleAiBreakdown(true);
         }
 
         function buildBreakdownRow(word, mean) {
