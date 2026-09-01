@@ -3446,14 +3446,62 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const t = getAllGrammarTables().find(x => x.id === id);
             if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }
             changeTab('grammar');
+
+            // [냐냐 요청] 데려다 놓기 전에 '가리고 있는 것'을 먼저 다 걷는다.
+            //   검색어·주제 필터·마스터 필터가 걸려 있거나 그 주제가 접혀 있으면
+            //   노트가 목록에 아예 안 그려진다. 그러면 펼쳐놔도 갈 자리가 없다.
+            let 걷어냄 = false;
+            const search = document.getElementById('grammar-search');
+            if (search && search.value) { search.value = ''; 걷어냄 = true; }
+            const clearBtn = document.getElementById('grammar-search-clear');
+            if (clearBtn) clearBtn.classList.add('hidden');
+            if (grammarFilterTopics.length || grammarFilterMastery !== 'all') {
+                걷어냄 = true;
+                pendingGrammarTopics = [];
+                pendingGrammarMastery = 'all';
+                grammarFilterTopics = [];
+                grammarFilterMastery = 'all';
+                if (typeof syncGrammarFilterPanelUI === 'function') syncGrammarFilterPanelUI();
+            }
+            delete grammarGroupCollapsed[grammarTopicKey(t)];   // 그 주제는 펼쳐 둔다
             grammarOpenState[id] = true;
+            saveGrammarFilterPrefs();
             renderGrammarTables();
-            setTimeout(() => {
-                const body = document.querySelector(`[data-grammar-body="${id}"]`);
-                const card = body ? body.closest('.bg-white, [data-grammar-card]') || body : null;
-                if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 120);
-            showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗`, "info");
+
+            scrollToGrammarNote(id);
+            // 검색어·필터를 지웠으면 말해준다. 말없이 지우면 '내 필터가 왜 풀렸지' 가 된다
+            showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗${걷어냄 ? ' (가리고 있던 검색·필터는 풀었어요)' : ''}`, "info");
+        }
+
+        // 그 노트를 화면 가운데로. 위에 sticky 검색줄이 있어서 그 높이만큼 비켜 세운다.
+        //   scrollIntoView 는 부드럽게 움직이는 동안 다른 스크롤에 밀려 취소되는 일이 있어서,
+        //   자리를 직접 계산해 세우고 한 프레임 뒤에 한 번 더 확인한다.
+        function scrollToGrammarNote(id, tries = 0) {
+            const body = document.querySelector(`[data-grammar-body="${id}"]`);
+            if (!body) {
+                if (tries < 5) setTimeout(() => scrollToGrammarNote(id, tries + 1), 120);
+                return;
+            }
+            const card = body.closest('.rounded-2xl') || body;
+            const sticky = document.querySelector('#tab-grammar .sticky');
+            const offset = (sticky ? sticky.getBoundingClientRect().height : 0) + 70;
+            //   ⚠️ behavior:'smooth' 는 쓰지 않는다. 부드럽게 움직이는 동안 탭 전환이 세워둔
+            //      스크롤 복원에 밀려 취소되는 일이 있고, 창이 앞에 없을 땐 아예 안 움직인다.
+            //      실제로 3천 픽셀 아래 노트로 갈 때 한 픽셀도 안 갔다. 바로 세운다.
+            const go = () => {
+                const top = card.getBoundingClientRect().top + window.scrollY - offset;
+                window.scrollTo(0, Math.max(0, top));
+            };
+            go();
+            setTimeout(go, 220);          // 표가 그려지며 높이가 늘어난 뒤 한 번 더
+            flashGrammarNote(card);
+        }
+
+        // 어디에 내려놓았는지 눈에 띄게 — 잠깐 노란 테두리
+        function flashGrammarNote(card) {
+            if (!card) return;
+            card.classList.add('ring-4', 'ring-amber-300');
+            setTimeout(() => card.classList.remove('ring-4', 'ring-amber-300'), 1600);
         }
 
         // [냐냐 PATCH] 날짜 표시 형식: 2026-07-09 → 2026/07/09, 축 라벨은 07/09
