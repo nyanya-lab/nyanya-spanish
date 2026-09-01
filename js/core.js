@@ -1808,8 +1808,8 @@ let vocabulary = [];
             box.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 md:divide-x md:divide-slate-100 items-stretch">
                     <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로')}</div>
-                    ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')) : ''}
                     ${idiomStats ? col(half('관용구', '📘', idiomStats, '표현', 'bg-violet-400', '쓰기 복습으로')) : ''}
+                    ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')) : ''}
                 </div>`;
         }
 

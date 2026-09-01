@@ -3086,6 +3086,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             saveWriteMix();
             renderWriteMix();
         }
+        // [냐냐 요청] 슬라이더를 잡고 미는 게 번거로워서, 퍼센트 숫자를 눌러 0 → 50 → 100 으로
+        //   돌린다. 중간 값(30 등)에서 누르면 그보다 큰 첫 단계로 간다. 슬라이더도 그대로 쓴다.
+        const WRITE_MIX_STEPS = [0, 50, 100];
+        function cycleWriteMix() {
+            const cur = writeMix.idiom || 0;
+            const next = WRITE_MIX_STEPS.find(v => v > cur);
+            setWriteMix(next === undefined ? WRITE_MIX_STEPS[0] : next);
+        }
+
         function renderWriteMix() {
             const val = document.getElementById('write-mix-idiom');
             const lab = document.getElementById('write-mix-idiom-label');

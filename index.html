@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260901ad">
+    <link rel="stylesheet" href="css/style.css?v=20260901ae">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -108,14 +108,14 @@
                                 <span class="text-[10px] font-bold text-amber-600">단어</span>
                                 <span id="today-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
                             </button>
-                            <button id="grammar-review-btn" onclick="startGrammarReview()" title="오늘 복습할 문법 — AI가 만든 문장을 번역해서" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
-                                <span class="text-[10px] font-bold text-amber-600">문법</span>
-                                <span id="grammar-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
-                            </button>
                             <!-- [냐냐 요청] 관용구도 제 망각곡선을 따로 갖는다 -->
                             <button id="idiom-review-btn" onclick="startIdiomReview()" title="오늘 복습할 관용구 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
                                 <span class="text-[10px] font-bold text-amber-600">관용구</span>
                                 <span id="idiom-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
+                            </button>
+                            <button id="grammar-review-btn" onclick="startGrammarReview()" title="오늘 복습할 문법 — AI가 만든 문장을 번역해서" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
+                                <span class="text-[10px] font-bold text-amber-600">문법</span>
+                                <span id="grammar-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
                             </button>
                         </div>
                     </div>
@@ -659,7 +659,7 @@
                                             <span class="text-xs font-bold text-slate-600 w-24 shrink-0">📘 관용구</span>
                                             <input type="range" id="write-mix-idiom" min="0" max="100" step="10" value="0"
                                                    oninput="setWriteMix(this.value)" class="flex-1 accent-violet-600">
-                                            <span id="write-mix-idiom-label" class="text-xs font-black text-violet-600 w-10 text-right">0%</span>
+                                            <button type="button" id="write-mix-idiom-label" onclick="cycleWriteMix()" title="눌러서 0% → 50% → 100%" class="text-xs font-black text-violet-600 w-12 text-right px-1.5 py-0.5 rounded-lg hover:bg-violet-100 transition-colors">0%</button>
                                         </div>
                                         <div class="flex items-center justify-between">
                                             <span class="text-[11px] font-bold text-slate-400">✏️ 단어 뜻 <span id="write-mix-word-label" class="text-slate-600">100%</span></span>
@@ -2242,13 +2242,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260901ad"></script>
-    <script src="js/creatures.js?v=20260901ad"></script>
-    <script src="js/core.js?v=20260901ad"></script>
-    <script src="js/vocab.js?v=20260901ad"></script>
-    <script src="js/flashcards.js?v=20260901ad"></script>
-    <script src="js/quiz.js?v=20260901ad"></script>
-    <script src="js/games.js?v=20260901ad"></script>
-    <script src="js/ai-feedback.js?v=20260901ad"></script>
+    <script src="js/dictionary-data.js?v=20260901ae"></script>
+    <script src="js/creatures.js?v=20260901ae"></script>
+    <script src="js/core.js?v=20260901ae"></script>
+    <script src="js/vocab.js?v=20260901ae"></script>
+    <script src="js/flashcards.js?v=20260901ae"></script>
+    <script src="js/quiz.js?v=20260901ae"></script>
+    <script src="js/games.js?v=20260901ae"></script>
+    <script src="js/ai-feedback.js?v=20260901ae"></script>
 </body>
 </html>
