@@ -1758,11 +1758,12 @@ let vocabulary = [];
             const box = document.getElementById('review-curve-body');
             if (!box) return;
             const num = (n, cls) => `<span class="text-lg font-black ${cls}">${n}</span><span class="text-[10px] font-bold text-slate-400 ml-0.5">개</span>`;
-            const cell = (label, n, cls, desc) => `
+            // [냐냐 요청] 회색 설명 줄은 뺐다. 칸 이름만으로 읽히고, 줄 수가 달라서
+            //   단어·문법·관용구 세 칸의 높이가 어긋나는 원인이기도 했다.
+            const cell = (label, n, cls) => `
                 <div class="bg-slate-50 rounded-2xl px-3 py-2.5">
                     <p class="text-[10px] font-bold text-slate-500">${label}</p>
                     <p class="mt-0.5">${num(n, cls)}</p>
-                    <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">${desc}</p>
                 </div>`;
 
             const half = (title, icon, s, unit, barColor, howto) => {
@@ -1781,19 +1782,18 @@ let vocabulary = [];
                         </div>`;
                 }).join('');
                 return `
-                <div class="space-y-3">
+                <div class="space-y-3 h-full flex flex-col">
                     <div class="flex items-baseline gap-2">
                         <p class="text-xs font-black text-slate-700">${icon} ${title}</p>
                         <p class="text-[10px] text-slate-400 font-semibold">${howto}</p>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
-                        ${cell('오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600',
-                            s.overdue ? `그중 밀린 것 ${s.overdue}개` : (s.due ? '오늘이 예정일' : '오늘 치 다 했어요 ✨'))}
-                        ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600', '틀린 뒤 다시 익히는 중')}
-                        ${cell('곡선 졸업', s.graduated, 'text-emerald-600', `30일차까지 다 버틴 ${unit}`)}
-                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500', '아직 곡선에 안 들어옴')}
+                        ${cell(s.overdue ? `오늘 복습할 것 (밀린 것 ${s.overdue})` : '오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600')}
+                        ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600')}
+                        ${cell('곡선 졸업', s.graduated, 'text-emerald-600')}
+                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500')}
                     </div>
-                    <div class="space-y-1.5">
+                    <div class="space-y-1.5 mt-auto">
                         <p class="text-[10px] font-bold text-slate-500">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                         ${bars}
                     </div>
@@ -1806,7 +1806,7 @@ let vocabulary = [];
             const idiomStats = (typeof getIdiomCurveStats === 'function') ? getIdiomCurveStats() : null;
             const col = (inner) => `<div class="md:pl-6 pt-5 md:pt-0 border-t md:border-t-0 border-slate-100">${inner}</div>`;
             box.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 md:divide-x md:divide-slate-100">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 md:divide-x md:divide-slate-100 items-stretch">
                     <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로')}</div>
                     ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')) : ''}
                     ${idiomStats ? col(half('관용구', '📘', idiomStats, '표현', 'bg-violet-400', '쓰기 복습으로')) : ''}

@@ -3124,23 +3124,26 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
 
-        // 고른 단어들에서 비율만큼 관용구 문제로 바꿔 넣는다
+        // 비율만큼 관용구 문제를 섞어서 낸다.
+        //   [냐냐 요청] 예전엔 단어를 먼저 뽑고 그중 몇 개를 관용구로 바꿨다. 그러면 한 단어에
+        //   표현이 여럿이어도 한 번에 하나밖에 못 나왔고, 표현이 많은 단어가 오히려 손해였다.
+        //   이제 '표현' 하나하나를 후보로 놓고 전체에서 고른다 (관용구 1113개가 다 대상).
+        //   같은 단어가 단어 문제와 관용구 문제로 겹쳐 나오지는 않게 한다.
         function buildWriteTasks(pool, count) {
-            const picked = shuffleArray(pool.slice()).slice(0, count);
             const pct = writeMix.idiom || 0;
-            if (pct <= 0) return picked;
-            const want = Math.round(picked.length * pct / 100);
-            if (want <= 0) return picked;
-            // 관용구가 있는 단어만 바꿀 수 있다. 모자라면 있는 만큼만.
-            const swappable = shuffleArray(picked.filter(w => wordIdiomList(w).length > 0));
-            const targets = new Set(swappable.slice(0, want).map(w => w.id));
-            return picked.map(w => {
-                if (!targets.has(w.id)) return w;
-                const list = wordIdiomList(w);
-                // 지난번에 틀린 표현이 있으면 그것부터 다시 낸다
-                const again = w.lastWrongIdiom && list.find(x => x.idiom === w.lastWrongIdiom);
-                return makeWriteIdiomTask(w, again || list[Math.floor(Math.random() * list.length)]);
-            });
+            if (pct <= 0) return shuffleArray(pool.slice()).slice(0, count);
+
+            const wantIdiom = Math.round(count * pct / 100);
+            const entries = [];
+            pool.forEach(w => wordIdiomList(w).forEach(it => entries.push({ w, it })));
+            const idiomTasks = shuffleArray(entries).slice(0, wantIdiom)
+                .map(e => makeWriteIdiomTask(e.w, e.it));
+
+            // 관용구로 이미 나온 단어는 단어 문제에서 뺀다
+            const used = new Set(idiomTasks.map(t => t._idiomOf.id));
+            const rest = shuffleArray(pool.filter(w => !used.has(w.id)))
+                .slice(0, Math.max(0, count - idiomTasks.length));
+            return shuffleArray(idiomTasks.concat(rest));
         }
         const WRITE_COUNT_MIN = 1;
         const WRITE_COUNT_MAX = 200;
@@ -3701,10 +3704,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
-            // 그 표현을 맞혔으면 '틀린 표현' 표시를 지우고 곡선을 한 칸 앞으로
-            if (w._isIdiomTask && w._idiomOf) {
-                if (w._idiomOf.lastWrongIdiom === w.word) delete w._idiomOf.lastWrongIdiom;
-                if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
+            // 그 표현을 맞혔으면 곡선을 한 칸 앞으로
+            if (w._isIdiomTask && w._idiomOf && typeof idiomReviewAdvance === 'function') {
+                idiomReviewAdvance(w._idiomOf.id, w.word);
             }
             const shift = withGradeShift(w._idiomOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
@@ -3723,10 +3725,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
             // [냐냐 요청] 관용구는 제 망각곡선을 따로 갖는다 (단어 곡선과 별개).
-            //   어느 표현에서 틀렸는지도 단어에 적어둔다 — 다시 만났을 때 그 표현부터 낸다.
-            if (w._isIdiomTask && w._idiomOf) {
-                w._idiomOf.lastWrongIdiom = w.word;
-                if (typeof idiomReviewDemote === 'function') idiomReviewDemote(w._idiomOf.id, w.word);
+            //   '다시 만나기' 는 그 곡선이 맡으므로 따로 표시해 둘 필요가 없다.
+            if (w._isIdiomTask && w._idiomOf && typeof idiomReviewDemote === 'function') {
+                idiomReviewDemote(w._idiomOf.id, w.word);
             }
             // [냐냐 요청] 여기선 아무것도 기록하지 않는다 — 점수도, 복습 횟수도, 망각곡선도.
             //   이 단어는 아직 복습이 안 끝났다. 2·3바퀴까지 돌고 나서 3바퀴에서 한꺼번에 반영한다.
