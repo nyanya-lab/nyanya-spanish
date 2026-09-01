@@ -2780,8 +2780,8 @@ let vocabulary = [];
         // [냐냐 요청] DELE 가늠 — 내 수준을 A1~C2 로 보여준다
         //   DELE 는 시험이라 앱이 등급을 줄 수는 없다. 다만 CEFR 이 실제로 나누는 세 축은
         //   이 앱에 이미 다 쌓여 있어서, 그걸로 "지금 어디쯤인지" 는 가늠할 수 있다.
-        //     ① 어휘 — 개수가 아니라 '어떤 단어를 아느냐'. AI 가 단어를 CEFR 로 분류한다
-        //     ② 문법 노트 — 같은 방식으로 내 문법표 제목을 CEFR 로 분류한다
+        //     ① 어휘 — 개수가 아니라 '어떤 단어를 아느냐'. 마스터한 단어만 AI 가 CEFR 로 분류한다
+        //     ② 문법 노트 — 같은 방식. 맞게 써본 노트(점수 플러스)만 센다
         //     ③ 동사 시제 — 문법 중에서도 CEFR 이 가장 또렷하게 가르는 축이라 따로 뽑는다
         //     ④ 정답률 — 최근 30일 퀴즈. 평생 누적을 쓰면 실력이 늘어도 안 움직인다
         //   전체 수준은 셋 중 '가장 낮은 축'. 단어만 많고 접속법을 모르면 B1 이 아니다.
@@ -2866,26 +2866,31 @@ let vocabulary = [];
         }
 
         // ── 축 ① 어휘: AI 에게 보낼 표본 ──
-        //   아직 못 외운 단어(약점·치명적)는 뺀다. '아는 단어'의 수준을 재는 것이라서.
+        //   [냐냐 요청] 등록했다고 아는 게 아니다. 마스터한 단어만 센다.
+        //     예전엔 '약점만 아니면' 이라 사실상 단어장 전체였고, 그러면 어휘 수준이 아니라
+        //     '무엇을 적어뒀나' 를 재게 된다. 마스터는 주관식까지 통과해야 열리는 등급이라
+        //     "이 단어 안다" 의 증거로 삼을 만하다.
         function deleVocabSample(limit = 200) {
             const pool = (vocabulary || []).filter(w => {
                 if (!w || !w.word) return false;
                 const g = getWordGrade(w);
-                return g !== 'weak' && g !== 'critical';
+                return g === 'mastered' || g === 'perfect';
             });
             const picked = shuffleArray(pool.slice()).slice(0, limit);
             // 관사·재귀대명사를 떼고 사전형만 보낸다 (el libro → libro)
             const clean = (s) => String(s || '').replace(/^(el|la|los|las|un|una)\s+/i, '').trim();
-            return { words: picked.map(w => clean(w.word)).filter(Boolean), poolSize: pool.length };
+            return { words: picked.map(w => clean(w.word)).filter(Boolean), poolSize: pool.length, allSize: (vocabulary || []).length };
         }
 
-        // 문법 노트도 같은 기준으로 — 약점으로 찍힌 노트는 아직 '아는 것' 이 아니다
+        // 문법 노트도 같은 뜻으로 — 다만 기준이 다르다.
+        //   문법 마스터는 4.5점 + 번역에서 써보기까지 있어야 열려서 실제로 몇 개 안 된다
+        //   (30개 중 3개). 그걸로는 잴 수가 없어서, 점수가 플러스인 노트를 쓴다 =
+        //   첨삭·빈칸에서 맞게 쓴 적이 틀린 적보다 많은 노트. '만들어만 둔 노트' 는 빠진다.
         function deleGrammarSample(limit = 80) {
             const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
             const pool = all.filter(t => {
                 if (!t || !t.id || !String(t.title || '').trim()) return false;
-                const g = getGrammarGrade(t.id);
-                return g !== 'weak' && g !== 'critical';
+                return getGrammarScore(t.id) > 0;
             });
             const picked = pool.slice(0, limit);
             return { titles: picked.map(t => String(t.title).trim()), poolSize: pool.length, allSize: all.length };
@@ -2978,8 +2983,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         sampled: sample.words.length,
                         poolSize: sample.poolSize,
                         detail: (sample.words.length >= sample.poolSize)
-                            ? `외운 단어 ${sample.poolSize}개를 다 봤어요`
-                            : `외운 단어 ${sample.poolSize}개 중 ${sample.words.length}개를 골라 봤어요`
+                            ? `마스터한 단어 ${sample.poolSize}개로 쟀어요 (단어장 ${sample.allSize}개 중)`
+                            : `마스터한 단어 ${sample.poolSize}개 중 ${sample.words.length}개로 쟀어요`
                     };
                     if (gSample.titles.length && data.grammarCounts) {
                         const gCounts = {};
@@ -2989,9 +2994,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             level: deleVocabLevelFromCounts(gCounts),
                             counts: gCounts,
                             samples: data.grammarSamples || {},
-                            detail: (gSample.poolSize >= gSample.allSize)
-                                ? `문법 노트 ${gSample.poolSize}개를 다 봤어요`
-                                : `문법 노트 ${gSample.allSize}개 중 약점이 아닌 ${gSample.poolSize}개를 봤어요`
+                            detail: `맞게 써본 문법 노트 ${gSample.poolSize}개로 쟀어요 (노트 ${gSample.allSize}개 중)`
                         } : null;
                     }
                     if (data.comment) deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) });
@@ -3003,7 +3006,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 }
             } else if (manual) {
                 if (!canAsk) showToast("어휘 수준은 AI 키가 있어야 잴 수 있어요", "info");
-                else if (!enough) showToast("외운 단어가 20개는 있어야 어휘를 재요", "info");
+                else if (!enough) showToast("마스터한 단어가 20개는 있어야 어휘를 재요", "info");
             }
 
             deleResult = Object.assign(deleResult || {}, {
