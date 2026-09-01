@@ -3620,13 +3620,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // 같은 뜻이지만 다른 표현을 썼을 때 보여줄 안내.
         //   관용구면 '이 낱말을 써서' 로 좁혀준다 — 표현이 여럿이라 그냥 '다시'로는 못 맞힌다.
-        //   [냐냐 요청] 정답 표현에서 낱말을 골라 짚어주면 답이 그대로 새어나갈 때가 있다.
-        //   (두 낱말짜리 관용구는 하나만 알려줘도 거의 답이다)
-        //   그 관용구가 '어느 단어에 등록된 것인지' 를 알려주는 쪽이 힌트답다.
+        //   [냐냐 요청] 힌트는 오타 힌트와 같은 '앞글자' 방식으로 준다.
+        //   정답 표현에서 낱말을 골라 짚어주면 두 낱말짜리는 거의 답이고,
+        //   등록된 단어를 통째로 알려줘도 그 단어가 대개 표현 안에 그대로 들어 있다.
+        //   그래서 그 단어의 앞글자만 흘린다 (writePrefixHint 가 마지막 글자는 남겨둔다).
         function writeSynonymHint(userAnswer, w, fallback) {
             if (w && w._isIdiomTask) {
                 const base = (w._idiomOf || {}).word;
-                if (base) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(base)}</b> 의 표현으로 말해볼까요?`;
+                const p = base ? writePrefixHint(userAnswer, base) : '';
+                if (p) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(p)}</b> 로 시작하는 단어를 써서 말해볼까요?`;
                 return `💡 그것도 통하는 말이에요! 이번엔 외우려던 그 표현으로 써볼까요?`;
             }
             return fallback || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`;
