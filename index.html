@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260901ag">
+    <link rel="stylesheet" href="css/style.css?v=20260901ai">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -654,18 +654,22 @@
                                 <!-- [냐냐 요청] 관용구 섞기 — 기본 0% (지금까지처럼 단어 뜻만) -->
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold text-slate-500">문제 유형</label>
-                                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <button onclick="setWriteMixMode('word')" data-write-mix="word" class="write-mix-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-violet-300 transition-all">✏️ 단어만</button>
+                                        <button onclick="setWriteMixMode('idiom')" data-write-mix="idiom" class="write-mix-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-violet-300 transition-all">📘 관용구만</button>
+                                        <button onclick="setWriteMixMode('mix')" data-write-mix="mix" class="write-mix-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-violet-300 transition-all">🔀 섞어서</button>
+                                    </div>
+                                    <!-- 섞을 때만 비율을 고른다 -->
+                                    <div id="write-mix-ratio" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
                                         <div class="flex items-center gap-3">
                                             <span class="text-xs font-bold text-slate-600 w-24 shrink-0">📘 관용구</span>
-                                            <input type="range" id="write-mix-idiom" min="0" max="100" step="10" value="0"
+                                            <input type="range" id="write-mix-idiom" min="10" max="90" step="5" value="50"
                                                    oninput="setWriteMix(this.value)" class="flex-1 accent-violet-600">
-                                            <button type="button" id="write-mix-idiom-label" onclick="cycleWriteMix()" title="눌러서 0% → 50% → 100%" class="text-xs font-black text-violet-600 w-12 text-right px-1.5 py-0.5 rounded-lg hover:bg-violet-100 transition-colors">0%</button>
+                                            <button type="button" id="write-mix-idiom-label" onclick="cycleWriteMix()" title="눌러서 25% → 50% → 75%" class="text-xs font-black text-violet-600 w-12 text-right px-1.5 py-0.5 rounded-lg hover:bg-violet-100 transition-colors">50%</button>
                                         </div>
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-[11px] font-bold text-slate-400">✏️ 단어 뜻 <span id="write-mix-word-label" class="text-slate-600">100%</span></span>
-                                            <span id="write-mix-hint" class="text-[10px] text-slate-400">단어 뜻만 나와요</span>
-                                        </div>
+                                        <span class="text-[11px] font-bold text-slate-400">✏️ 단어 뜻 <span id="write-mix-word-label" class="text-slate-600">50%</span></span>
                                     </div>
+                                    <p id="write-mix-hint" class="text-[10px] text-slate-400">단어 뜻만 나와요</p>
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold text-slate-500">범위</label>
@@ -2242,13 +2246,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260901ag"></script>
-    <script src="js/creatures.js?v=20260901ag"></script>
-    <script src="js/core.js?v=20260901ag"></script>
-    <script src="js/vocab.js?v=20260901ag"></script>
-    <script src="js/flashcards.js?v=20260901ag"></script>
-    <script src="js/quiz.js?v=20260901ag"></script>
-    <script src="js/games.js?v=20260901ag"></script>
-    <script src="js/ai-feedback.js?v=20260901ag"></script>
+    <script src="js/dictionary-data.js?v=20260901ai"></script>
+    <script src="js/creatures.js?v=20260901ai"></script>
+    <script src="js/core.js?v=20260901ai"></script>
+    <script src="js/vocab.js?v=20260901ai"></script>
+    <script src="js/flashcards.js?v=20260901ai"></script>
+    <script src="js/quiz.js?v=20260901ai"></script>
+    <script src="js/games.js?v=20260901ai"></script>
+    <script src="js/ai-feedback.js?v=20260901ai"></script>
 </body>
 </html>
