@@ -1802,10 +1802,14 @@ let vocabulary = [];
 
             const wordStats = getReviewCurveStats();
             const grammarStats = (typeof getGrammarCurveStats === 'function') ? getGrammarCurveStats() : null;
+            // [냐냐 요청] 관용구도 제 곡선을 가지므로 현황에 같이 보여준다 (셋으로 나눈다)
+            const idiomStats = (typeof getIdiomCurveStats === 'function') ? getIdiomCurveStats() : null;
+            const col = (inner) => `<div class="md:pl-6 pt-5 md:pt-0 border-t md:border-t-0 border-slate-100">${inner}</div>`;
             box.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 md:divide-x md:divide-slate-100">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 md:divide-x md:divide-slate-100">
                     <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로')}</div>
-                    ${grammarStats ? `<div class="md:pl-6 pt-5 md:pt-0 border-t md:border-t-0 border-slate-100">${half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')}</div>` : ''}
+                    ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')) : ''}
+                    ${idiomStats ? col(half('관용구', '📘', idiomStats, '표현', 'bg-violet-400', '쓰기 복습으로')) : ''}
                 </div>`;
         }
 
@@ -1845,6 +1849,36 @@ let vocabulary = [];
             if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length && typeof showToast === 'function') {
                 showToast(`"${idiomText}" 망각곡선 졸업! 🎓`, "success");
             }
+        }
+
+        // 곡선 현황용 통계 (문법 쪽과 같은 모양). '전체'는 단어장에 적힌 관용구 총 개수다.
+        function getIdiomCurveStats() {
+            const today = getLocalDateString();
+            const stats = {
+                total: 0, due: 0, overdue: 0, waiting: 0, inCurve: 0,
+                graduated: 0, never: 0, byStage: REVIEW_INTERVALS.map(() => 0)
+            };
+            (vocabulary || []).forEach(w => {
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                list.forEach(it => {
+                    stats.total++;
+                    const rec = idiomReview[idiomKey(w.id, it.idiom)];
+                    if (!rec || !rec.lastWrongDate) { stats.never++; return; }
+                    const stage = rec.stage || 0;
+                    if (stage >= REVIEW_INTERVALS.length) { stats.graduated++; return; }
+                    stats.inCurve++;
+                    stats.byStage[stage]++;
+                    if (rec.lastReviewDate === today) { stats.waiting++; return; }
+                    const gap = daysSince(rec.lastReviewDate || rec.lastWrongDate);
+                    if (gap >= REVIEW_INTERVALS[stage]) {
+                        stats.due++;
+                        if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                    } else {
+                        stats.waiting++;
+                    }
+                });
+            });
+            return stats;
         }
 
         // 오늘 복습할 관용구 — [{ word, idiom, key, stage }]

@@ -3177,18 +3177,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const el = document.getElementById('write-scope-count');
             if (el) {
                 const n = getWriteScopePool().length;
-                el.innerText = (writeScope === 'idiom-due')
-                    ? (n > 0 ? `오늘 복습할 관용구 ${n}개 있어요` : '오늘 복습할 관용구가 없어요')
-                    : (n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요');
+                el.innerText = n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요';
             }
         }
 
         function getWriteScopePool() {
-            // [냐냐 요청] 관용구 복습 범위는 단어가 아니라 '오늘 볼 표현' 이 세는 단위다.
-            //   개수 안내와 '이어서' 버튼이 그 개수를 따라가도록 여기서도 같은 목록을 쓴다.
-            if (writeScope === 'idiom-due') {
-                return (typeof getIdiomDueList === 'function') ? getIdiomDueList().map(e => e.word) : [];
-            }
+            //   [냐냐 요청] 관용구 복습은 여기 끼우지 않는다 — 헤더 복습 배지의 '관용구' 로 들어간다.
+            //   (범위는 '어떤 단어를 쓸까' 를 고르는 자리라, 표현 단위인 관용구와 결이 다르다)
+            if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice();
@@ -3211,10 +3207,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
             const input = document.getElementById('write-count-input');
             if (input && !parseInt(input.value, 10)) selectWriteCount(20);
-            // [냐냐 요청] 관용구 복습 범위는 이미 '관용구 문제' 라 비율을 섞지 않는다
-            const picked = (writeScope === 'idiom-due')
-                ? shuffleArray(getIdiomDueList().map(e => makeWriteIdiomTask(e.word, e.idiom))).slice(0, writeCount)
-                : buildWriteTasks(pool, writeCount);
+            const picked = buildWriteTasks(pool, writeCount);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
             beginWritePractice(picked, {

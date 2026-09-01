@@ -990,6 +990,14 @@ let quizSession = null;
         //   - 유의어  → 점수 없이 재입력 1회 (앞글자 힌트 공개)
         //   - 오타    → 점수 없이 재입력 1회 (단, 3글자 초과로 틀리면 바로 오답)
         //   - AI 키 없거나 실패 → 기존 로컬 채점(analyzeSubjectiveAnswer)으로 폴백
+        // [냐냐 요청] 관용구 문제에서 '어느 표현인지' 를 꺼낸다 (곡선 키에 쓴다).
+        //   객관식은 정답 보기가 곧 표현이고, 주관식은 idiomData 에 들어 있다.
+        function quizIdiomText(q) {
+            if (!q) return '';
+            if (q.idiomData && q.idiomData.idiom) return String(q.idiomData.idiom).trim();
+            return String(q.answer || '').trim();
+        }
+
         async function aiGradeSubjective(userAnswer, q) {
             if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return null;
             try {
@@ -1245,6 +1253,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     if (q._retryReason === 'typo') gain = 1;
                     else if (q._retryReason === 'synonym') gain = 2;
                     addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
+                    // [냐냐 요청] 점수는 통합(단어), 곡선은 분리. 관용구 문제를 맞혔으면 그 표현을 한 칸 앞으로
+                    if ((q.type === 'idiom-mc' || q.type === 'idiom-subjective') && typeof idiomReviewAdvance === 'function') {
+                        idiomReviewAdvance(vocabItemC.id, quizIdiomText(q));
+                    }
                     if (!wasMasteredC && vocabItemC.mastered) {
                         if (!quizSession.autoMasteredIds) quizSession.autoMasteredIds = [];
                         quizSession.autoMasteredIds.push(vocabItemC.id);
@@ -1263,7 +1275,13 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     const wasWeak = vocabItem.weak;
                     // [냐냐 요청] 틀려서 마스터가 풀리는 경우도 있는데 아무 표시가 없었다
                     const wasMastered = vocabItem.mastered;
-                    addWordScore(vocabItem, -2, { correct: false });
+                    // [냐냐 요청] 점수는 통합(단어), 곡선은 분리.
+                    //   관용구를 틀렸으면 단어를 다시 보라고 할 게 아니라 그 표현을 다시 봐야 한다.
+                    const idiomQ = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
+                    if (idiomQ && typeof idiomReviewDemote === 'function') {
+                        idiomReviewDemote(vocabItem.id, quizIdiomText(q));
+                    }
+                    addWordScore(vocabItem, -2, { correct: false, skipReviewDate: idiomQ });
                     if (!wasWeak && vocabItem.weak) {
                         if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
                         if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);
