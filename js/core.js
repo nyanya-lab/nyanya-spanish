@@ -91,6 +91,11 @@ let vocabulary = [];
             }
 
             document.addEventListener('keydown', function(e) {
+                // [냐냐 요청] 문법 들춰보기 팝업은 어느 탭에서든 ESC 로 닫힌다
+                if (e.key === 'Escape') {
+                    const peek = document.getElementById('grammar-peek-modal');
+                    if (peek && !peek.classList.contains('hidden')) { closeGrammarPeek(); return; }
+                }
                 if (activeTab === 'cards') {
                     if (e.key === 'ArrowRight') nextFlashcard();
                     if (e.key === 'ArrowLeft') prevFlashcard();
@@ -3442,6 +3447,40 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 요청] 첨삭 노트의 '약한 문법' 에서 그 문법 노트로 바로 건너뛴다
+        // [냐냐 요청] 문법 노트를 팝업으로 들춰본다.
+        //   탭을 옮기면 첨삭 노트에서 보던 자리·필터를 잃는다. 확인만 하려던 건데 손해가 크다.
+        //   그래서 기본은 팝업, 정말 문법 탭으로 가고 싶으면 아래 버튼으로 간다.
+        let _grammarPeekId = null;
+        function openGrammarPeek(id) {
+            const t = getAllGrammarTables().find(x => x.id === id);
+            if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }
+            _grammarPeekId = id;
+
+            const gi = GRADE_INFO[getGrammarGrade(id)] || GRADE_INFO.normal;
+            const titleEl = document.getElementById('grammar-peek-title');
+            if (titleEl) {
+                titleEl.innerHTML = `${t.icon ? `<span>${escapeHtml(t.icon)}</span>` : ''}
+                    <span class="min-w-0 break-words">${escapeHtml(t.title || '문법 노트')}</span>
+                    <span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} shrink-0" title="${gi.label}">${formatGrammarScore(id)}</span>`;
+            }
+            const body = document.getElementById('grammar-peek-body');
+            if (body) {
+                const blocks = getNoteBlocks(t)
+                    .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
+                    .filter(Boolean).join('');
+                body.innerHTML = blocks || '<p class="text-xs text-slate-400 py-4 text-center">이 노트에는 아직 내용이 없어요.</p>';
+            }
+            const goto = document.getElementById('grammar-peek-goto');
+            if (goto) goto.onclick = () => { closeGrammarPeek(); goToGrammarNote(id); };
+
+            document.getElementById('grammar-peek-modal').classList.remove('hidden');
+        }
+        function closeGrammarPeek() {
+            _grammarPeekId = null;
+            const m = document.getElementById('grammar-peek-modal');
+            if (m) m.classList.add('hidden');
+        }
+
         function goToGrammarNote(id) {
             const t = getAllGrammarTables().find(x => x.id === id);
             if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }

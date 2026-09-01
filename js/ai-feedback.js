@@ -2423,8 +2423,8 @@ ${refGrammar}${refWords}
                 const gid = aiNoteFilter.slice(5);
                 const st = aiNoteGrammarStats().find(e => e.id === gid);
                 if (st) {
-                    jump = `<button onclick="goToGrammarNote('${escapeAttr(gid)}')" class="w-full text-left px-3 py-2 mb-1 rounded-2xl bg-teal-50 border border-teal-100 text-[11px] font-bold text-teal-700 hover:bg-teal-100 transition-all">
-                        <i class="fa-solid fa-book-open mr-1"></i>${escapeHtml(st.name)} 노트 열어보기 <i class="fa-solid fa-arrow-right text-[9px] opacity-60"></i>
+                    jump = `<button onclick="openGrammarPeek('${escapeAttr(gid)}')" class="w-full text-left px-3 py-2 mb-1 rounded-2xl bg-teal-50 border border-teal-100 text-[11px] font-bold text-teal-700 hover:bg-teal-100 transition-all">
+                        <i class="fa-solid fa-book-open mr-1"></i>${escapeHtml(st.name)} 노트 들춰보기 <i class="fa-solid fa-up-right-from-square text-[9px] opacity-60"></i>
                     </button>`;
                 }
             }
