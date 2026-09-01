@@ -3177,11 +3177,18 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const el = document.getElementById('write-scope-count');
             if (el) {
                 const n = getWriteScopePool().length;
-                el.innerText = n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요';
+                el.innerText = (writeScope === 'idiom-due')
+                    ? (n > 0 ? `오늘 복습할 관용구 ${n}개 있어요` : '오늘 복습할 관용구가 없어요')
+                    : (n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요');
             }
         }
 
         function getWriteScopePool() {
+            // [냐냐 요청] 관용구 복습 범위는 단어가 아니라 '오늘 볼 표현' 이 세는 단위다.
+            //   개수 안내와 '이어서' 버튼이 그 개수를 따라가도록 여기서도 같은 목록을 쓴다.
+            if (writeScope === 'idiom-due') {
+                return (typeof getIdiomDueList === 'function') ? getIdiomDueList().map(e => e.word) : [];
+            }
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice();
@@ -3204,7 +3211,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
             const input = document.getElementById('write-count-input');
             if (input && !parseInt(input.value, 10)) selectWriteCount(20);
-            const picked = buildWriteTasks(pool, writeCount);
+            // [냐냐 요청] 관용구 복습 범위는 이미 '관용구 문제' 라 비율을 섞지 않는다
+            const picked = (writeScope === 'idiom-due')
+                ? shuffleArray(getIdiomDueList().map(e => makeWriteIdiomTask(e.word, e.idiom))).slice(0, writeCount)
+                : buildWriteTasks(pool, writeCount);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
             beginWritePractice(picked, {
@@ -3698,9 +3708,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
-            // 그 표현을 맞혔으면 '틀린 표현' 표시를 지운다
-            if (w._isIdiomTask && w._idiomOf && w._idiomOf.lastWrongIdiom === w.word) {
-                delete w._idiomOf.lastWrongIdiom;
+            // 그 표현을 맞혔으면 '틀린 표현' 표시를 지우고 곡선을 한 칸 앞으로
+            if (w._isIdiomTask && w._idiomOf) {
+                if (w._idiomOf.lastWrongIdiom === w.word) delete w._idiomOf.lastWrongIdiom;
+                if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
             }
             const shift = withGradeShift(w._idiomOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
@@ -3718,11 +3729,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
-            // [냐냐 요청] 망각곡선은 '단어' 단위라, 관용구를 틀려도 곡선에 오르는 건 그 단어다.
-            //   그러면 다시 만났을 때 엉뚱한 관용구가 나올 수 있다. 어느 표현에서 틀렸는지
-            //   단어에 적어두고, 다음에 그 단어가 관용구 문제로 뽑히면 이걸 먼저 낸다.
+            // [냐냐 요청] 관용구는 제 망각곡선을 따로 갖는다 (단어 곡선과 별개).
+            //   어느 표현에서 틀렸는지도 단어에 적어둔다 — 다시 만났을 때 그 표현부터 낸다.
             if (w._isIdiomTask && w._idiomOf) {
                 w._idiomOf.lastWrongIdiom = w.word;
+                if (typeof idiomReviewDemote === 'function') idiomReviewDemote(w._idiomOf.id, w.word);
             }
             // [냐냐 요청] 여기선 아무것도 기록하지 않는다 — 점수도, 복습 횟수도, 망각곡선도.
             //   이 단어는 아직 복습이 안 끝났다. 2·3바퀴까지 돌고 나서 3바퀴에서 한꺼번에 반영한다.

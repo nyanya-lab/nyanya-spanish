@@ -10,6 +10,12 @@ let vocabulary = [];
         // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
+        // [냐냐 요청] 관용구 망각곡선 — 단어와 따로 돈다.
+        //   점수는 단어에 붙지만(그게 맞다), '언제 다시 볼지' 는 표현마다 달라야 한다.
+        //   한 단어에 관용구가 여럿이면 각각 제 주기를 갖는다.
+        //   키: "<단어id>::<관용구 원문>" — 단어를 지워도 남지만 뽑을 때 단어가 없으면 걸러진다.
+        let idiomReview = {};
+
         // [냐냐 요청] 첨삭 노트 — 첨삭받은 문장을 통째로 남긴다.
         //   '내 학습 수준' 카드는 "어순 3회"처럼 세어놓기만 해서, 정작 내가 뭘 어떻게 틀렸는지는
         //   화면을 떠나는 순간 사라졌다. 그 숫자 뒤의 문장을 여기에 쌓아두고 다시 꺼내 본다.
@@ -265,6 +271,7 @@ let vocabulary = [];
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
+                idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
                 deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
             };
@@ -394,6 +401,7 @@ let vocabulary = [];
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
+                idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
@@ -424,6 +432,7 @@ let vocabulary = [];
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 aiNotes = [];
+                idiomReview = {};
                 deleResult = null;
                 customQuestions = [];
                 selectedQuestionTopics = [];
@@ -1801,6 +1810,71 @@ let vocabulary = [];
         }
 
         // ============================================================
+        // ============================================================
+        // [냐냐 요청] 관용구 망각곡선 — 단어·문법과 같은 주기(1·3·7·14·30일)
+        //   복습 방법은 쓰기 복습의 관용구 문제. 틀리면 진입/한 칸 뒤로, 맞히면 한 칸 앞으로.
+        // ============================================================
+        function idiomKey(wordId, idiomText) { return `${wordId}::${String(idiomText || '').trim()}`; }
+
+        function getIdiomReviewRec(key) {
+            if (!idiomReview[key]) idiomReview[key] = { stage: 0, lastWrongDate: null, lastReviewDate: null };
+            return idiomReview[key];
+        }
+
+        // 진입(곡선 밖이었으면) 또는 한 칸 뒤로
+        function idiomReviewDemote(wordId, idiomText) {
+            const key = idiomKey(wordId, idiomText);
+            const rec = getIdiomReviewRec(key);
+            const today = getLocalDateString();
+            if (rec.lastDemoteDate === today) return;   // 하루에 한 번만 (단어·문법과 같은 규칙)
+            rec.lastDemoteDate = today;
+            const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
+            rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;
+            rec.lastWrongDate = today;
+            rec.lastReviewDate = null;
+        }
+
+        // 한 칸 앞으로 (곡선 안에 있을 때만)
+        function idiomReviewAdvance(wordId, idiomText) {
+            const key = idiomKey(wordId, idiomText);
+            const rec = idiomReview[key];
+            if (!rec || !rec.lastWrongDate) return;     // 곡선 밖이면 할 일 없음
+            const before = rec.stage || 0;
+            rec.stage = before + 1;
+            rec.lastReviewDate = getLocalDateString();
+            if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length && typeof showToast === 'function') {
+                showToast(`"${idiomText}" 망각곡선 졸업! 🎓`, "success");
+            }
+        }
+
+        // 오늘 복습할 관용구 — [{ word, idiom, key, stage }]
+        function getIdiomDueList() {
+            const today = getLocalDateString();
+            const out = [];
+            Object.keys(idiomReview || {}).forEach(key => {
+                const rec = idiomReview[key];
+                if (!rec || !rec.lastWrongDate) return;
+                if (rec.lastReviewDate === today) return;
+                const stage = rec.stage || 0;
+                if (stage >= REVIEW_INTERVALS.length) return;            // 졸업
+                const base = rec.lastReviewDate || rec.lastWrongDate;
+                if (daysSince(base) < REVIEW_INTERVALS[stage]) return;
+                const sep = key.indexOf('::');
+                if (sep < 0) return;
+                const wid = key.slice(0, sep), text = key.slice(sep + 2);
+                const w = vocabulary.find(v => String(v.id) === wid);
+                if (!w) return;                                          // 단어가 지워졌으면 뺀다
+                // 그 표현이 아직 단어에 남아 있는지 (수정·삭제됐을 수 있다)
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                const found = list.find(x => x.idiom === text);
+                if (!found) return;
+                out.push({ word: w, idiom: found, key, stage });
+            });
+            // 오래 밀린 것부터
+            return out.sort((a, b) => daysSince(idiomReview[b.key].lastReviewDate || idiomReview[b.key].lastWrongDate)
+                                    - daysSince(idiomReview[a.key].lastReviewDate || idiomReview[a.key].lastWrongDate));
+        }
+
         // [냐냐 요청] 문법 망각곡선 — 단어와 같은 주기(1·3·7·14·30일)를 쓴다.
         //   복습 방법은 빈칸이 아니라 'AI가 만든 문장을 내가 번역하기' 다.
         //   그래서 칸을 앞으로 밀어주는 건 한→스 미션에서 그 문법을 제대로 썼을 때뿐이다.
@@ -1882,6 +1956,42 @@ let vocabulary = [];
                     ${btn(nW, '📖 단어', '쓰기 복습', 'startTodayReviewShortcut()')}
                     ${btn(nG, '📋 문법', 'AI 문장 번역', 'startGrammarReview()')}
                 </div>`;
+        }
+
+        // 헤더 '복습 · 관용구' 버튼 갱신
+        function renderIdiomReviewBtn() {
+            const btn = document.getElementById('idiom-review-btn');
+            const badge = document.getElementById('idiom-review-count-badge');
+            if (!btn || !badge) return;
+            const n = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
+            const label = btn.querySelector('span');
+            if (n === 0) {
+                badge.innerText = '완료 ✓';
+                btn.disabled = true;
+                btn.classList.remove('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.add('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.remove('text-amber-700'); badge.classList.add('text-slate-400');
+                if (label) { label.classList.remove('text-amber-600'); label.classList.add('text-slate-400'); }
+            } else {
+                badge.innerText = n + '개';
+                btn.disabled = false;
+                btn.classList.add('bg-white/70', 'hover:bg-white', 'border-amber-200', 'cursor-pointer', 'active:scale-95');
+                btn.classList.remove('bg-slate-100', 'border-slate-200', 'cursor-not-allowed', 'opacity-70');
+                badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
+                if (label) { label.classList.add('text-amber-600'); label.classList.remove('text-slate-400'); }
+            }
+        }
+
+        // [냐냐 요청] 오늘 복습할 관용구로 바로 쓰기 복습을 시작한다.
+        //   단어 복습과 같은 묶음 크기를 쓴다 (한 번에 너무 많이 나오면 지친다).
+        function startIdiomReview() {
+            const due = (typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
+            if (!due.length) { showToast("오늘 복습할 관용구가 없어요! 🎉", "info"); return; }
+            if (typeof makeWriteIdiomTask !== 'function' || typeof beginWritePractice !== 'function') return;
+            const batch = due.slice(0, TODAY_REVIEW_BATCH);
+            const tasks = batch.map(e => makeWriteIdiomTask(e.word, e.idiom));
+            beginWritePractice(tasks, { isTodayReview: false, batchSize: TODAY_REVIEW_BATCH, idiomReview: true });
+            showToast(`오늘 복습할 관용구 ${due.length}개 중 ${batch.length}개예요`, "info");
         }
 
         // 헤더 '복습 · 문법' 버튼 갱신 (단어 쪽은 renderTodayReview 가 한다)
@@ -2029,6 +2139,7 @@ let vocabulary = [];
         function renderTodayReview() {
             renderTodayWrongBtn(); // 버튼이 헤더에 있을 때만 동작 (지금은 내려가 있어 그냥 통과)
             renderGrammarReviewBtn(); // [냐냐 요청] 헤더 복습의 문법 쪽도 같이 갱신
+            renderIdiomReviewBtn();   // [냐냐 요청] 관용구 쪽도
             renderReviewDueBar();     // [냐냐 요청] 복습 탭 위 줄 (폰 입구)
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
