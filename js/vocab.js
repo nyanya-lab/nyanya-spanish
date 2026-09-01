@@ -3137,7 +3137,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return picked.map(w => {
                 if (!targets.has(w.id)) return w;
                 const list = wordIdiomList(w);
-                return makeWriteIdiomTask(w, list[Math.floor(Math.random() * list.length)]);
+                // 지난번에 틀린 표현이 있으면 그것부터 다시 낸다
+                const again = w.lastWrongIdiom && list.find(x => x.idiom === w.lastWrongIdiom);
+                return makeWriteIdiomTask(w, again || list[Math.floor(Math.random() * list.length)]);
             });
         }
         const WRITE_COUNT_MIN = 1;
@@ -3598,10 +3600,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // 같은 뜻이지만 다른 표현을 썼을 때 보여줄 안내.
         //   관용구면 '이 낱말을 써서' 로 좁혀준다 — 표현이 여럿이라 그냥 '다시'로는 못 맞힌다.
+        //   [냐냐 요청] 정답 표현에서 낱말을 골라 짚어주면 답이 그대로 새어나갈 때가 있다.
+        //   (두 낱말짜리 관용구는 하나만 알려줘도 거의 답이다)
+        //   그 관용구가 '어느 단어에 등록된 것인지' 를 알려주는 쪽이 힌트답다.
         function writeSynonymHint(userAnswer, w, fallback) {
             if (w && w._isIdiomTask) {
-                const key = writeIdiomHintWord(userAnswer, w.word);
-                if (key) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(key)}</b> 를 써서 말해볼까요?`;
+                const base = (w._idiomOf || {}).word;
+                if (base) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(base)}</b> 의 표현으로 말해볼까요?`;
                 return `💡 그것도 통하는 말이에요! 이번엔 외우려던 그 표현으로 써볼까요?`;
             }
             return fallback || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`;
@@ -3693,6 +3698,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
+            // 그 표현을 맞혔으면 '틀린 표현' 표시를 지운다
+            if (w._isIdiomTask && w._idiomOf && w._idiomOf.lastWrongIdiom === w.word) {
+                delete w._idiomOf.lastWrongIdiom;
+            }
             const shift = withGradeShift(w._idiomOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
             });
@@ -3709,6 +3718,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
+            // [냐냐 요청] 망각곡선은 '단어' 단위라, 관용구를 틀려도 곡선에 오르는 건 그 단어다.
+            //   그러면 다시 만났을 때 엉뚱한 관용구가 나올 수 있다. 어느 표현에서 틀렸는지
+            //   단어에 적어두고, 다음에 그 단어가 관용구 문제로 뽑히면 이걸 먼저 낸다.
+            if (w._isIdiomTask && w._idiomOf) {
+                w._idiomOf.lastWrongIdiom = w.word;
+            }
             // [냐냐 요청] 여기선 아무것도 기록하지 않는다 — 점수도, 복습 횟수도, 망각곡선도.
             //   이 단어는 아직 복습이 안 끝났다. 2·3바퀴까지 돌고 나서 3바퀴에서 한꺼번에 반영한다.
             //   (1바퀴에서 맞힌 단어는 거기서 복습이 끝나므로 그 자리에서 반영)

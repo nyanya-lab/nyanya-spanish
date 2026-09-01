@@ -1067,7 +1067,8 @@
                     <b class="text-slate-800">${escapeHtml(w.word || '')}</b>
                     <span class="text-slate-400">${escapeHtml(w.meaning || '')}</span>
                 </span>`).join('');
-            box.innerHTML = `
+            box.innerHTML = `<div data-mission-refs>
+
                 <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이번 미션이 참고한 내용</span>
                 </div>
@@ -1084,7 +1085,8 @@
                     })() : ''}
                     <div class="text-[10px] text-slate-400 mt-0.5">눌러서 문법·개념 노트에서 보기 →</div>
                 </button>` : ''}
-                ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}`;
+                ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}
+                </div>`;
             box.classList.remove('hidden');
         }
 
@@ -1470,6 +1472,7 @@ ${extraWords.length ? `
             AudioFX.playPunch();
 
             // [냐냐 요청] 이 미션이 어떤 문법 노트를 보고 나왔는지 첨삭 AI에게도 알려준다
+            const koEsScoreNotes = aiScoringNoteList().filter(t => !aiCurrentGrammarForMission || t.id !== aiCurrentGrammarForMission.id);
             const refGrammar = aiCurrentGrammarForMission
                 ? `\n            Grammar note this mission was built from (the student's own notes — judge against THIS):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
                 : '';
@@ -1500,10 +1503,10 @@ ${refGrammar}${refWords}
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'. But if your correctedText changed the very part that this note governs, it is 'wrong', never 'correct'."${AI_ISSUE_JSON_FIELD}${AI_NATURAL_JSON_FIELDS}
+               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'. But if your correctedText changed the very part that this note governs, it is 'wrong', never 'correct'."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
-            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.${AI_SCORING_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1541,9 +1544,10 @@ ${refGrammar}${refWords}
                     // [냐냐 요청] 참조 문법을 제대로 썼는지 — 문장 전체 정오(isCorrect)와 별개로 판정
                     grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" },
                     ...aiIssueSchemaProp(),
+                    ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", "issueType", ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1583,7 +1587,12 @@ ${refGrammar}${refWords}
                     aiLastGrammarDelta = { usage, delta: gDelta };
                 }
 
+                // [냐냐 요청] 한→스만 옛 방식으로 남아 있었다 — 지정된 문법 하나에만 점수를 주고
+                //   단어 스펠링도, 문장이 쓴 다른 문법도 전혀 반영하지 않았다.
+                //   나머지 세 모드와 같은 대접을 해준다. 미션 문법은 위에서 이미 처리했으므로
+                //   목록에서 빼뒀다 (두 번 붙으면 안 된다).
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
+                applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
                 resultBox.classList.remove('hidden');
 
                 if (feedback.isCorrect) {
@@ -1947,6 +1956,21 @@ ${refGrammar}${refWords}
         }
 
         //   okDelta 를 안 주면 +2. 스→한 자유 작문만 +1 을 넘긴다 (문법과 같은 규칙).
+        // [냐냐 요청] 엉뚱한 단어에 점수가 붙는 일이 있었다.
+        //   AI 가 "se"(재귀대명사)나 "nada"(아무것도) 같은 기능어를 보내면, 역추적이 그걸
+        //   동사 활용형으로 알아들었다 — se → saber(sé), nada → nadar(3인칭 단수).
+        //   지시문에 '기능어는 빼라'고 적어뒀지만 가끔 섞여 온다.
+        //   단어장에 그 낱말이 그대로 등록돼 있으면 그건 진짜니까 그대로 두고,
+        //   등록돼 있지 않을 때만 '활용형이겠지' 하는 추측을 막는다.
+        const AI_FUNCTION_WORDS = new Set([
+            'el','la','los','las','un','una','unos','unas','al','del','lo',
+            'a','de','en','con','por','para','sin','sobre','entre','hasta','desde','hacia','tras',
+            'me','te','se','nos','os','le','les','mi','tu','su','mis','tus','sus',
+            'yo','ti','ella','ello','ellos','ellas','usted','ustedes','nosotros','vosotros',
+            'y','e','o','u','ni','que','si','no','pero','como','cuando','donde',
+            'nada','nadie','nunca','algo','alguien','muy','ya','tan','solo'
+        ]);
+
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
@@ -1982,8 +2006,10 @@ ${refGrammar}${refWords}
             list.forEach(item => {
                 const key = norm(item.name);
                 // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
-                const w = pickByPos(byWord.get(key), item.pos)
-                    || ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null);
+                const exact = pickByPos(byWord.get(key), item.pos);
+                // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지)
+                const w = exact || (AI_FUNCTION_WORDS.has(key) ? null
+                    : ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null));
                 if (!w || done.has(w.id)) return;
                 done.add(w.id);
                 const ok = item.ok;
@@ -2657,7 +2683,15 @@ ${refGrammar}${refWords}
         function renderEsKoGrammarRefs() {
             const box = document.getElementById('ai-mission-refs');
             if (!box) return;
-            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            // [냐냐 요청] 한→스는 같은 칸에 '이번 미션이 참고한 내용' 을 먼저 그린다.
+            //   점수 카드가 그걸 덮어써서 단어 점수와 해제·찾아봄 버튼이 안 보였다. 위에 남겨둔다.
+            const keep = box.querySelector('[data-mission-refs]');
+            const keepHtml = keep ? keep.outerHTML : '';
+            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length) {
+                box.innerHTML = keepHtml;
+                box.classList.toggle('hidden', !keepHtml);
+                return;
+            }
 
             // [냐냐 요청] 각 항목에 '해제' 버튼 — AI 가 의도와 다르게 알아들었을 때 그 점수만 되돌린다.
             const grammarHtml = aiLastEsKoGrammar.map((g, i) => {
@@ -2696,7 +2730,8 @@ ${refGrammar}${refWords}
             const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
             const shiftHtml = shiftInner ? `<div class="mt-3 pt-3 border-t border-slate-200">${shiftInner}</div>` : '';
 
-            box.innerHTML = `
+            box.innerHTML = keepHtml + `
+                ${keepHtml ? '<div class="border-t border-slate-200 my-3"></div>' : ''}
                 ${grammarHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
                 </div>
