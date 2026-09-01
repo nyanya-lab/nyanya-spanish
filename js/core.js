@@ -4707,7 +4707,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         </div>
                         <div class="flex items-baseline gap-2">
                             <span class="text-[10px] font-bold text-slate-400 shrink-0 w-11">정답</span>
-                            <span class="font-black text-slate-800 break-words">${renderAiNoteDiff(ops, 'correct')}</span>
+                            <span class="font-black text-slate-800 break-words">${renderCharDiff(ops, 'correct')}</span>
                         </div>
                     </div>`;
             }
