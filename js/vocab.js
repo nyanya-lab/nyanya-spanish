@@ -3067,13 +3067,93 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // ============================================================
         // [냐냐 요청] 복습 탭 '쓰기' 설정 — 개수 / 범위 (단어만, 가볍게)
         // ============================================================
-        let writeCount = 10;
+        //   [냐냐 요청] 기본 10 → 20. 1바퀴가 주관식이라 예전 개수로는 너무 짧다.
+        let writeCount = 20;
+
+        // [냐냐 요청] 쓰기 복습에 관용구를 섞는다.
+        //   단어 빈칸이 무거워서 잘 안 쓰게 되고, 그러면 관용구를 틀려도 다시 만날 일이 없었다.
+        //   퀴즈처럼 비율로 섞되 기본은 0 — 지금까지처럼 단어 뜻만 나온다.
+        const WRITE_MIX_DEFAULT = { idiom: 0 };
+        let writeMix = { ...WRITE_MIX_DEFAULT };
+        function loadWriteMix() {
+            try { const r = localStorage.getItem('nyanya_write_mix'); if (r) writeMix = { ...WRITE_MIX_DEFAULT, ...JSON.parse(r) }; } catch (e) {}
+        }
+        function saveWriteMix() {
+            try { localStorage.setItem('nyanya_write_mix', JSON.stringify(writeMix)); } catch (e) {}
+        }
+        function setWriteMix(v) {
+            writeMix.idiom = Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+            saveWriteMix();
+            renderWriteMix();
+        }
+        function renderWriteMix() {
+            const val = document.getElementById('write-mix-idiom');
+            const lab = document.getElementById('write-mix-idiom-label');
+            const wordLab = document.getElementById('write-mix-word-label');
+            if (val && val.value !== String(writeMix.idiom)) val.value = writeMix.idiom;
+            if (lab) lab.innerText = writeMix.idiom + '%';
+            if (wordLab) wordLab.innerText = (100 - writeMix.idiom) + '%';
+            const hint = document.getElementById('write-mix-hint');
+            if (hint) {
+                const n = countIdiomEntries();
+                hint.innerText = writeMix.idiom === 0
+                    ? '단어 뜻만 나와요'
+                    : (n > 0 ? `등록된 관용구 ${n}개 중에서 섞여 나와요` : '등록된 관용구가 없어서 단어만 나와요');
+            }
+        }
+        function countIdiomEntries() {
+            return (vocabulary || []).reduce((a, w) => a + wordIdiomList(w).length, 0);
+        }
+        // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
+        function wordIdiomList(w) {
+            if (!w) return [];
+            const arr = Array.isArray(w.idioms) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+            return arr.filter(x => x && String(x.idiom || '').trim() && String(x.idiomMeaning || '').trim());
+        }
+
+        // [냐냐 요청] 관용구 문제는 '단어의 복제본'으로 만든다.
+        //   word/meaning 만 관용구 것으로 갈아끼우면 채점·점수·결과 표시가 지금 코드 그대로 돈다.
+        //   id 가 원래 단어와 같으므로 점수는 그 단어에 붙는다 (요청대로 단어와 똑같이 반영).
+        function makeWriteIdiomTask(w, idiom) {
+            return Object.assign({}, w, {
+                word: String(idiom.idiom).trim(),
+                meaning: String(idiom.idiomMeaning || '').trim() || w.meaning,
+                pos: 'phrase',
+                _idiomOf: w,          // 등급 변화는 원래 단어 기준으로 봐야 한다
+                _isIdiomTask: true
+            });
+        }
+
+        // 고른 단어들에서 비율만큼 관용구 문제로 바꿔 넣는다
+        function buildWriteTasks(pool, count) {
+            const picked = shuffleArray(pool.slice()).slice(0, count);
+            const pct = writeMix.idiom || 0;
+            if (pct <= 0) return picked;
+            const want = Math.round(picked.length * pct / 100);
+            if (want <= 0) return picked;
+            // 관용구가 있는 단어만 바꿀 수 있다. 모자라면 있는 만큼만.
+            const swappable = shuffleArray(picked.filter(w => wordIdiomList(w).length > 0));
+            const targets = new Set(swappable.slice(0, want).map(w => w.id));
+            return picked.map(w => {
+                if (!targets.has(w.id)) return w;
+                const list = wordIdiomList(w);
+                return makeWriteIdiomTask(w, list[Math.floor(Math.random() * list.length)]);
+            });
+        }
+        const WRITE_COUNT_MIN = 1;
+        const WRITE_COUNT_MAX = 200;
         let writeScope = 'not-mastered';
 
-        function selectWriteCount(n) {
-            writeCount = n;
+        // fromInput = 직접 적는 칸에서 부른 것 (그 칸의 값은 건드리지 않는다 — 타이핑 중이라)
+        function selectWriteCount(n, fromInput) {
+            const raw = parseInt(n, 10);
+            // 지우는 중이면 아직 확정하지 않는다. 칸을 비운 채로 시작하면 그때 기본값으로 되돌린다
+            if (fromInput && (!Number.isFinite(raw) || raw < WRITE_COUNT_MIN)) return;
+            writeCount = Math.max(WRITE_COUNT_MIN, Math.min(WRITE_COUNT_MAX, Number.isFinite(raw) ? raw : 20));
+            const input = document.getElementById('write-count-input');
+            if (input && !fromInput) input.value = writeCount;
             document.querySelectorAll('.write-count-btn').forEach(b => {
-                const on = Number(b.dataset.writeCount) === n;
+                const on = Number(b.dataset.writeCount) === writeCount;
                 b.classList.toggle('border-indigo-500', on);
                 b.classList.toggle('bg-indigo-50', on);
                 b.classList.toggle('text-indigo-700', on);
@@ -3106,7 +3186,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function resetWriteSetup() {
-            selectWriteCount(writeCount || 10);
+            selectWriteCount(writeCount || 20);
             selectWriteScope(writeScope || 'not-mastered');
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.remove('hidden');
@@ -3119,7 +3199,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function startWriteReview() {
             const pool = getWriteScopePool().filter(w => w && w.word);
             if (!pool.length) { showToast("이 범위엔 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
-            const picked = shuffleArray(pool.slice()).slice(0, writeCount);
+            // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
+            const input = document.getElementById('write-count-input');
+            if (input && !parseInt(input.value, 10)) selectWriteCount(20);
+            const picked = buildWriteTasks(pool, writeCount);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
             beginWritePractice(picked, {
@@ -3272,7 +3355,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 // [냐냐 요청] 맞은 단어 / 틀린 단어 목록 (단어 + 뜻)
                 const res = s.results || [];
-                const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
+                const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
                 const okList = res.filter(r => r.correct);
                 const noList = res.filter(r => !r.correct);
                 // [냐냐 요청] 실제로 붙은 점수대로 묶어서 보여준다 (오타 고친 +1을 +2로 뭉뚱그리지 않게)
@@ -3289,7 +3372,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <div class="-m-0.5">${arr.map(r => chip(r, ok)).join('')}</div>
                     </div>` : '';
                 // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어들 (core.js 의 공용 표시를 쓴다)
-                const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(res) : '';
+                //   관용구 문제였어도 점수는 그 단어에 붙으므로, 여기선 단어 이름으로 보여준다
+                const shiftRows = res.map(r => ({ ...r, word: r.baseWord || r.word, meaning: r.baseMeaning || r.meaning }));
+                const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
                 const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
 
                 const resultLists = (okList.length || noList.length) ? `
@@ -3321,9 +3406,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // [냐냐 요청] 품사 뱃지
             const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
-            const posHtml = posLabel
-                ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
-                : '';
+            // [냐냐 요청] 관용구 문제는 한눈에 알아보게. 단어 하나가 아니라 표현을 쓰는 자리다
+            const posHtml = w._isIdiomTask
+                ? `<span class="inline-block text-[10px] font-black text-violet-600 bg-violet-100 border border-violet-200 rounded-lg px-2 py-0.5">📘 관용구 · ${escapeHtml((w._idiomOf || {}).word || '')}</span>`
+                : (posLabel
+                    ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
+                    : '');
 
             // [냐냐 요청] 익히기 바퀴 카드는 "퀴즈 정답 화면"과 같은 양식으로 정보를 전부 펼쳐서 보여줌
             //   (펴기/접기 없음. 관용구·예문·유의어·반의어·노트는 buildNotesHtml, 동사변형은 renderQuizConjugation이 담당)
@@ -3477,8 +3565,46 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function stripAccentMarks(s) {
             return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
         }
+        // [냐냐 요청] 관용구는 같은 뜻을 내는 표현이 단어보다 훨씬 많다.
+        //   다른 표현으로 맞게 말했어도 지금 외우려는 건 이 표현이니, 어느 낱말을 써야 하는지
+        //   짚어주고 한 번 더 쓰게 한다. ("querer 말고 tener 를 써서 말해볼까요?")
+        //   고르는 법: 정답 표현의 낱말 중 내가 안 쓴 것, 그중 기능어가 아닌 첫 낱말.
+        const WRITE_HINT_STOPWORDS = new Set([
+            'el','la','los','las','un','una','unos','unas','de','del','a','al','en','con','por','para',
+            'que','se','y','o','u','lo','le','me','te','nos','os','su','mi','tu','es','ser','estar'
+        ]);
+        function writeIdiomHintWord(userRaw, targetRaw) {
+            const bare = (t) => String(t || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9\s]/g, ' ').trim();
+            const mine = new Set(bare(userRaw).split(/\s+/).filter(Boolean));
+            const raw = String(targetRaw || '').trim().split(/\s+/).filter(Boolean);
+            const pick = (test) => {
+                for (let i = 0; i < raw.length; i++) {
+                    const k = bare(raw[i]);
+                    if (k && test(k)) return raw[i].replace(/^[^\wÁÉÍÓÚÜÑáéíóúüñ]+|[^\wÁÉÍÓÚÜÑáéíóúüñ]+$/g, '');
+                }
+                return '';
+            };
+            // ① 내가 안 쓴 알맹이 낱말 → ② 안 쓴 아무 낱말 → ③ 알맹이 낱말 아무거나
+            return pick(k => !mine.has(k) && !WRITE_HINT_STOPWORDS.has(k) && k.length > 2)
+                || pick(k => !mine.has(k) && k.length > 1)
+                || pick(k => !WRITE_HINT_STOPWORDS.has(k) && k.length > 2);
+        }
+
         function writeAnswerMatches(userRaw, correctRaw) {
             return normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw);
+        }
+
+        // 같은 뜻이지만 다른 표현을 썼을 때 보여줄 안내.
+        //   관용구면 '이 낱말을 써서' 로 좁혀준다 — 표현이 여럿이라 그냥 '다시'로는 못 맞힌다.
+        function writeSynonymHint(userAnswer, w, fallback) {
+            if (w && w._isIdiomTask) {
+                const key = writeIdiomHintWord(userAnswer, w.word);
+                if (key) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(key)}</b> 를 써서 말해볼까요?`;
+                return `💡 그것도 통하는 말이에요! 이번엔 외우려던 그 표현으로 써볼까요?`;
+            }
+            return fallback || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`;
         }
         // 악센트만 틀린 경우 — 봐주지는 않고 '한 번 더' 기회를 준다
         function writeAccentOnlyMiss(userRaw, correctRaw) {
@@ -3530,24 +3656,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   두 번 베껴 쓴 뒤에 맞힌 것이라 기억했다는 증거가 아니다.
             //   그래도 다시 붙잡긴 했으니 끝내 틀린 −2 와는 구분해 준다.
             if (isMatch) {
-                const shift = withGradeShift(w, () => {
+                const shift = withGradeShift(w._idiomOf || w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false });
                 });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: false, gain: -1, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
                 s.index++;
                 s.done = 0;
             } else {
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                const shift = withGradeShift(w, () => {
+                const shift = withGradeShift(w._idiomOf || w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
                 });
                 if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', correct: false, firstTry: false, gain: -2, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
             }
             writePracticeSave();
             renderWritePractice();
@@ -3567,12 +3693,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
-            const shift = withGradeShift(w, () => {
+            const shift = withGradeShift(w._idiomOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
             });
             if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') logAction('review');
-            s.results.push({ word: w.word, meaning: w.meaning || '', correct: true, firstTry: true, gain, ...shift });
+            s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '' };
             writePracticeSave();
             renderWritePractice();
@@ -3672,7 +3798,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!ai) {
                 const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
-                if (a.isSynonym && !used.synonym) { writeAskRetry('synonym', a.hint || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`); return; }
+                if (a.isSynonym && !used.synonym) { writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint)); return; }
                 if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`); return; }
                 writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
@@ -3692,7 +3818,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used.synonym) {
-                writeAskRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`);
+                writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
+                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`));
                 return;
             }
             if (verdict === 'typo' && !used.typo) {

@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260901x">
+    <link rel="stylesheet" href="css/style.css?v=20260901y">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -631,13 +631,37 @@
                                 <h3 class="text-lg font-bold text-slate-900">몇 개나 써볼까요?</h3>
                                 <p class="text-xs text-slate-400 mt-1"><b>가리고 1번</b> 먼저 → 틀린 것만 <b>보면서 2번</b> → <b>다시 가리고 1번</b>.</p>
                             </div>
-                            <div class="flex justify-center gap-3 flex-wrap">
-                                <button onclick="selectWriteCount(5)" data-write-count="5" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">5개</button>
-                                <button onclick="selectWriteCount(10)" data-write-count="10" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">10개</button>
-                                <button onclick="selectWriteCount(20)" data-write-count="20" class="write-count-btn px-6 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">20개</button>
+                            <!-- [냐냐 요청] 1바퀴가 주관식이 되면서 5·10·20 은 너무 적어졌다.
+                                 자주 쓰는 값은 버튼으로, 그 밖은 직접 적는다 -->
+                            <div class="flex justify-center items-center gap-2 flex-wrap">
+                                <button onclick="selectWriteCount(10)" data-write-count="10" class="write-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">10개</button>
+                                <button onclick="selectWriteCount(20)" data-write-count="20" class="write-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">20개</button>
+                                <button onclick="selectWriteCount(30)" data-write-count="30" class="write-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">30개</button>
+                                <div class="flex items-center gap-1.5 pl-2 ml-1 border-l border-slate-200">
+                                    <input type="number" id="write-count-input" min="1" max="200" value="20"
+                                           oninput="selectWriteCount(this.value, true)"
+                                           class="w-20 text-center bg-slate-50 px-2 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-700 focus:outline-none focus:border-indigo-400">
+                                    <span class="text-xs font-bold text-slate-400">개</span>
+                                </div>
                             </div>
 
                             <div class="max-w-sm mx-auto text-left space-y-3">
+                                <!-- [냐냐 요청] 관용구 섞기 — 기본 0% (지금까지처럼 단어 뜻만) -->
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-bold text-slate-500">문제 유형</label>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-bold text-slate-600 w-24 shrink-0">📘 관용구</span>
+                                            <input type="range" id="write-mix-idiom" min="0" max="100" step="10" value="0"
+                                                   oninput="setWriteMix(this.value)" class="flex-1 accent-violet-600">
+                                            <span id="write-mix-idiom-label" class="text-xs font-black text-violet-600 w-10 text-right">0%</span>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-bold text-slate-400">✏️ 단어 뜻 <span id="write-mix-word-label" class="text-slate-600">100%</span></span>
+                                            <span id="write-mix-hint" class="text-[10px] text-slate-400">단어 뜻만 나와요</span>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold text-slate-500">범위</label>
                                     <div class="grid grid-cols-3 gap-2">
@@ -2212,13 +2236,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260901x"></script>
-    <script src="js/creatures.js?v=20260901x"></script>
-    <script src="js/core.js?v=20260901x"></script>
-    <script src="js/vocab.js?v=20260901x"></script>
-    <script src="js/flashcards.js?v=20260901x"></script>
-    <script src="js/quiz.js?v=20260901x"></script>
-    <script src="js/games.js?v=20260901x"></script>
-    <script src="js/ai-feedback.js?v=20260901x"></script>
+    <script src="js/dictionary-data.js?v=20260901y"></script>
+    <script src="js/creatures.js?v=20260901y"></script>
+    <script src="js/core.js?v=20260901y"></script>
+    <script src="js/vocab.js?v=20260901y"></script>
+    <script src="js/flashcards.js?v=20260901y"></script>
+    <script src="js/quiz.js?v=20260901y"></script>
+    <script src="js/games.js?v=20260901y"></script>
+    <script src="js/ai-feedback.js?v=20260901y"></script>
 </body>
 </html>

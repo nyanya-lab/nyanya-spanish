@@ -43,6 +43,7 @@ let vocabulary = [];
             if (typeof loadFilterPrefs === 'function') loadFilterPrefs(); // [냐냐 PATCH] 저장된 필터/정렬 복원
             if (typeof loadDisplayPrefs === 'function') loadDisplayPrefs(); // [냐냐 PATCH-6배치] 카드 표시 설정 복원
             if (typeof loadQuizMix === 'function') { loadQuizMix(); if (typeof renderQuizMix === 'function') renderQuizMix(); } // [냐냐 PATCH] 퀴즈 비율 슬라이더
+            if (typeof loadWriteMix === 'function') { loadWriteMix(); if (typeof renderWriteMix === 'function') renderWriteMix(); } // [냐냐 요청] 쓰기 복습 관용구 비율
             if (typeof loadGrammarEditorWidth === 'function') loadGrammarEditorWidth(); // [냐냐 PATCH] 문법 편집창 너비 복원
             if (typeof loadAiGrammarScope === 'function') loadAiGrammarScope(); // [냐냐 요청] AI 미션 출제 문법 범위 복원
             if (typeof renderNotesSymbolBar === 'function') renderNotesSymbolBar(); // [냐냐 요청] 메모칸 기호 버튼
