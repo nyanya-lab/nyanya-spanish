@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260901c">
+    <link rel="stylesheet" href="css/style.css?v=20260901d">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -760,7 +760,7 @@
                          그래서 sm(640px) 미만에서는 고정을 풀고 페이지와 같이 스크롤시킨다. -->
                     <div id="ai-input-sticky" class="static sm:sticky sm:top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-4">
                         <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
                             </button>
@@ -772,6 +772,10 @@
                             </button>
                             <button id="ai-mode-btn-example" onclick="switchAiMode('example')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 📖 내 예문으로 연습
+                            </button>
+                            <!-- [냐냐 요청] 연습이 아니라 되돌아보기. 첨삭받은 문장이 여기 쌓인다 -->
+                            <button id="ai-mode-btn-note" onclick="switchAiMode('note')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
+                                📝 첨삭 노트
                             </button>
                         </div>
 
@@ -972,6 +976,18 @@
                         </div>
                     </div>
                     </div><!-- /sticky 입력 영역 (폰에서는 고정 안 됨) -->
+
+                    <!-- MODE E: 첨삭 노트 — 입력이 없는 화면이라 위 sticky 밖에 둔다 (목록이 길다) -->
+                    <div id="ai-pane-note" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+                        <div class="flex items-center justify-between gap-3 flex-wrap">
+                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                <span>📝</span><span>첨삭 노트</span>
+                            </h3>
+                            <p class="text-[11px] text-slate-400">첨삭받은 문장이 그대로 남아요. 눌러서 총평까지 다시 봐요</p>
+                        </div>
+                        <div id="ai-note-filters" class="flex flex-wrap gap-1.5"></div>
+                        <div id="ai-note-list" class="space-y-2"></div>
+                    </div>
 
                     <!-- 아래: 첨삭 결과 (페이지 스크롤 따라 자연스럽게) -->
                     <!-- AI Feedback Result Panel -->
@@ -1255,21 +1271,6 @@
                             <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
                         </button>
                         <div id="learner-profile-display" class="hidden text-sm text-slate-600"></div>
-                    </div>
-
-                    <!-- [냐냐 요청] 첨삭 노트 — 위 카드의 숫자 뒤에 있는 실제 문장들 -->
-                    <div id="ai-note-card" class="bg-gradient-to-br from-rose-50 to-orange-50 p-5 rounded-3xl border border-rose-100 shadow-sm">
-                        <button id="ai-note-toggle" onclick="toggleChartCard('ai-note-body', this)" class="w-full flex items-center justify-between gap-2 mb-3">
-                            <span class="flex items-center gap-2 text-left">
-                                <span class="text-sm">📝</span>
-                                <span class="text-xs font-bold text-slate-700">첨삭 노트 <span class="font-normal text-slate-400">(첨삭받은 문장이 그대로 남아요. 눌러서 다시 봐요)</span></span>
-                            </span>
-                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0" style="transform: rotate(180deg);"></i>
-                        </button>
-                        <div id="ai-note-body" class="hidden">
-                            <div id="ai-note-filters" class="flex flex-wrap gap-1.5 mb-3"></div>
-                            <div id="ai-note-list" class="space-y-2"></div>
-                        </div>
                     </div>
 
                     <!-- [냐냐 PATCH] 생물 도감 (맨 아래, 접힘) -->
@@ -2185,13 +2186,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260901c"></script>
-    <script src="js/creatures.js?v=20260901c"></script>
-    <script src="js/core.js?v=20260901c"></script>
-    <script src="js/vocab.js?v=20260901c"></script>
-    <script src="js/flashcards.js?v=20260901c"></script>
-    <script src="js/quiz.js?v=20260901c"></script>
-    <script src="js/games.js?v=20260901c"></script>
-    <script src="js/ai-feedback.js?v=20260901c"></script>
+    <script src="js/dictionary-data.js?v=20260901d"></script>
+    <script src="js/creatures.js?v=20260901d"></script>
+    <script src="js/core.js?v=20260901d"></script>
+    <script src="js/vocab.js?v=20260901d"></script>
+    <script src="js/flashcards.js?v=20260901d"></script>
+    <script src="js/quiz.js?v=20260901d"></script>
+    <script src="js/games.js?v=20260901d"></script>
+    <script src="js/ai-feedback.js?v=20260901d"></script>
 </body>
 </html>
