@@ -10,6 +10,13 @@ let vocabulary = [];
         // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
         let learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
 
+        // [냐냐 요청] 첨삭 노트 — 첨삭받은 문장을 통째로 남긴다.
+        //   '내 학습 수준' 카드는 "어순 3회"처럼 세어놓기만 해서, 정작 내가 뭘 어떻게 틀렸는지는
+        //   화면을 떠나는 순간 사라졌다. 그 숫자 뒤의 문장을 여기에 쌓아두고 다시 꺼내 본다.
+        //   새 것이 앞. 오래된 것부터 버려서 AI_NOTE_LIMIT 개를 넘지 않는다 (동기화 용량 때문).
+        let aiNotes = [];
+        const AI_NOTE_LIMIT = 300;
+
         // [냐냐 PATCH] 질문에 답하기 코너용 - 내가 등록한 질문 목록
         let customQuestions = [];
         let currentQuestionForAnswer = null;
@@ -251,6 +258,7 @@ let vocabulary = [];
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
+                aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
             };
         }
@@ -378,6 +386,7 @@ let vocabulary = [];
                 nyanyaDiary = payload.nyanyaDiary || {};
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
+                aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
@@ -406,6 +415,7 @@ let vocabulary = [];
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
+                aiNotes = [];
                 customQuestions = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
@@ -2783,6 +2793,7 @@ let vocabulary = [];
             const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
             const weakPos = Object.entries(wrongByPos || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
             const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            _profileIssueVals = weakGrammar.map(([t]) => t);   // 칩은 값 대신 '몇 번째'로 부른다
 
             let html = `
                 <div class="grid grid-cols-2 gap-3 mb-3">
@@ -2810,7 +2821,7 @@ let vocabulary = [];
                 <span class="text-[11px] font-bold text-slate-500">자주 틀리는 문법 <span class="font-normal text-slate-400">(자유 작문·질문답하기 기준)</span></span>
                 <div class="flex flex-wrap gap-1.5 mt-1">
                     ${weakGrammar.length > 0
-                        ? weakGrammar.map(([t, cnt]) => `<span class="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">${t} ${cnt}회</span>`).join('')
+                        ? weakGrammar.map(([t, cnt], i) => `<button onclick="openAiNotesByIssueAt(${i})" title="이 유형으로 틀린 문장 보기" class="text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100 transition-all">${escapeHtml(t)} ${cnt}회 <i class="fa-solid fa-arrow-right text-[8px] opacity-50"></i></button>`).join('')
                         : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요 (자유 작문/질문답하기를 해보세요!)</span>'}
                 </div>
             </div>`;
@@ -3080,6 +3091,207 @@ let vocabulary = [];
             renderActivityChart(series); // [냐냐 PATCH] 퀴즈·AI·복습·게임 통합 그래프 (기존 퀴즈/AI 대체)
             renderGrammarGrowthChart(series); // [냐냐 PATCH] 문법표 성장 그래프
             renderLearnerProfileDisplay();
+            renderAiNoteList();          // [냐냐 요청] 첨삭 노트
+        }
+
+        // ============================================================
+        // [냐냐 요청] 첨삭 노트 — '내 학습 수준'의 숫자 뒤에 있는 실제 문장들
+        //   위 카드가 "어순 3회" 라고만 알려주던 걸, 그 세 문장을 직접 펼쳐 보게 한다.
+        //   내가 쓴 문장과 교정본은 맨 글자로만 저장해 두고, 어디가 달라졌는지는
+        //   볼 때마다 낱말 단위로 맞대본다 (저장은 가볍게, 표시는 자세히).
+        // ============================================================
+        let aiNoteFilter = 'wrong';   // 'all' | 'wrong' | 실수 유형 이름
+        let aiNoteOpen = {};          // 펼쳐 둔 항목 (기록 시각 t 를 키로)
+        const AI_NOTE_PAGE = 20;      // 한 번에 보여줄 개수
+        let aiNoteShown = AI_NOTE_PAGE;
+
+        const AI_NOTE_MODES = {
+            'ko-es':    { label: '한→스 미션', cls: 'bg-violet-100 text-violet-600' },
+            'es-ko':    { label: '자유 작문',   cls: 'bg-sky-100 text-sky-600' },
+            'question': { label: '질문 답하기', cls: 'bg-emerald-100 text-emerald-600' },
+            'example':  { label: '예문 연습',   cls: 'bg-amber-100 text-amber-600' }
+        };
+
+        // [냐냐 요청] 실수 유형은 AI가 준 글자라 따옴표가 섞일 수 있다. onclick 에 글자를 그대로
+        //   적으면 (escape 를 해도) 브라우저가 &#39; 를 ' 로 되돌린 뒤에 JS 를 읽어서 호출이 깨진다.
+        //   그래서 어디서든 '몇 번째'만 넘기고 값은 여기 배열에서 찾는다 — 단어 빠른찾기와 같은 방식.
+        let _aiNoteFilterVals = [];   // 노트 필터 줄의 칩 값
+        let _profileIssueVals = [];   // '내 학습 수준' 카드의 유형 칩 값
+
+        function setAiNoteFilterAt(i) {
+            const v = _aiNoteFilterVals[i];
+            if (v !== undefined) setAiNoteFilter(v);
+        }
+        function openAiNotesByIssueAt(i) {
+            const v = _profileIssueVals[i];
+            if (v !== undefined) openAiNotesByIssue(v);
+        }
+
+        // [냐냐 요청] 문장은 '낱말' 단위로 맞대본다.
+        //   퀴즈 오답이 쓰는 charDiffOps 는 낱말 하나를 볼 때 만든 것이라, 문장에 그대로 쓰면
+        //   어순이 바뀐 자리에서 글자가 조각조각 붉어져 오히려 안 읽힌다.
+        //   같은 최장공통부분수열이되 낱말을 한 덩어리로 놓고 센다.
+        function aiNoteWordDiff(aRaw, bRaw) {
+            const cut = (t) => String(t || '').trim().split(/\s+/).filter(Boolean);
+            const a = cut(aRaw), b = cut(bRaw);
+            // 대소문자·문장부호는 같은 낱말로 친다 ("Voy" 와 "voy," 가 서로 다르게 잡히면 안 된다)
+            const key = (w) => w.toLowerCase().replace(/[.,;:!?¡¿"']/g, '');
+            const ka = a.map(key), kb = b.map(key);
+            const n = a.length, m = b.length;
+            if (!n || !m || n * m > 40000) return [['del', aRaw], ['ins', bRaw]];
+            const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+            for (let i = n - 1; i >= 0; i--) {
+                for (let j = m - 1; j >= 0; j--) {
+                    dp[i][j] = (ka[i] === kb[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+                }
+            }
+            const ops = [];
+            let i = 0, j = 0;
+            while (i < n && j < m) {
+                if (ka[i] === kb[j]) { ops.push(['same', a[i]]); i++; j++; }
+                else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push(['del', a[i]]); i++; }
+                else { ops.push(['ins', b[j]]); j++; }
+            }
+            while (i < n) ops.push(['del', a[i++]]);
+            while (j < m) ops.push(['ins', b[j++]]);
+            return ops;
+        }
+
+        // side 'user' = 내가 쓴 문장(빠진 낱말 빨강) / 'correct' = 교정본(새로 들어온 낱말 빨강)
+        function renderAiNoteDiff(ops, side) {
+            const mark = (side === 'user') ? 'del' : 'ins';
+            return ops.filter(([t]) => t === 'same' || t === mark)
+                .map(([t, w]) => t === 'same'
+                    ? escapeHtml(w)
+                    : `<span class="bg-rose-200 text-rose-700 rounded px-[3px]">${escapeHtml(w)}</span>`)
+                .join(' ');
+        }
+
+        function aiNoteMatches(n) {
+            if (aiNoteFilter === 'all') return true;
+            if (aiNoteFilter === 'wrong') return !n.ok;
+            return n.issue === aiNoteFilter;
+        }
+
+        function setAiNoteFilter(v) {
+            aiNoteFilter = v;
+            aiNoteShown = AI_NOTE_PAGE;
+            renderAiNoteList();
+        }
+
+        function toggleAiNote(key) {
+            aiNoteOpen[key] = !aiNoteOpen[key];
+            renderAiNoteList();
+        }
+
+        function showMoreAiNotes() {
+            aiNoteShown += AI_NOTE_PAGE;
+            renderAiNoteList();
+        }
+
+        // 위 '내 학습 수준' 카드의 유형 칩에서 눌러 들어온다 — 그 유형만 걸러 놓고 카드를 펼친다
+        function openAiNotesByIssue(issue) {
+            const body = document.getElementById('ai-note-body');
+            if (body && body.classList.contains('hidden')) {
+                toggleChartCard('ai-note-body', document.getElementById('ai-note-toggle'));
+            }
+            setAiNoteFilter(issue);
+            const card = document.getElementById('ai-note-card');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // 날짜만 짧게 (오늘이면 시각까지)
+        function aiNoteWhen(iso) {
+            const d = new Date(iso);
+            if (isNaN(d)) return '';
+            const ds = getLocalDateString(d);
+            if (ds === getLocalDateString()) {
+                return `오늘 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            }
+            return fmtDateShort(ds);
+        }
+
+        function renderAiNoteList() {
+            const box = document.getElementById('ai-note-list');
+            const filterBox = document.getElementById('ai-note-filters');
+            if (!box) return;
+
+            const notes = Array.isArray(aiNotes) ? aiNotes : [];
+            const wrongCount = notes.filter(n => !n.ok).length;
+
+            // 필터 줄 — 유형 버튼은 실제로 쌓인 유형만, 많이 틀린 순으로
+            if (filterBox) {
+                const byIssue = {};
+                notes.forEach(n => { if (n.issue) byIssue[n.issue] = (byIssue[n.issue] || 0) + 1; });
+                const issues = Object.entries(byIssue).sort((a, b) => b[1] - a[1]);
+                _aiNoteFilterVals = [];
+                const chip = (val, label, cnt, tone) => {
+                    const on = aiNoteFilter === val;
+                    const idx = _aiNoteFilterVals.push(val) - 1;
+                    return `<button onclick="setAiNoteFilterAt(${idx})" class="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${on ? tone.on : tone.off}">${label}${cnt != null ? ` <span class="font-normal opacity-70">${cnt}</span>` : ''}</button>`;
+                };
+                const slate = { on: 'bg-slate-700 text-white border-slate-700', off: 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50' };
+                const rose  = { on: 'bg-rose-500 text-white border-rose-500',   off: 'bg-white text-rose-500 border-rose-200 hover:bg-rose-50' };
+                const amber = { on: 'bg-amber-500 text-white border-amber-500', off: 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50' };
+                filterBox.innerHTML =
+                    chip('wrong', '틀린 것만', wrongCount, rose) +
+                    chip('all', '전체', notes.length, slate) +
+                    issues.map(([t, c]) => chip(t, escapeHtml(t), c, amber)).join('');
+            }
+
+            if (notes.length === 0) {
+                box.innerHTML = `<p class="text-slate-400 text-xs leading-relaxed py-2">아직 첨삭받은 문장이 없어요. AI 1:1 번역 첨삭에서 문장을 써서 제출하면 여기에 차곡차곡 쌓여요.</p>`;
+                return;
+            }
+
+            const matched = notes.filter(aiNoteMatches);
+            if (matched.length === 0) {
+                box.innerHTML = `<p class="text-slate-400 text-xs py-2">이 조건에 맞는 문장이 없어요.</p>`;
+                return;
+            }
+
+            const page = matched.slice(0, aiNoteShown);
+            box.innerHTML = page.map(n => {
+                const key = escapeAttr(n.t || '');
+                const open = !!aiNoteOpen[n.t];
+                const m = AI_NOTE_MODES[n.mode] || { label: '첨삭', cls: 'bg-slate-100 text-slate-500' };
+                // 맞은 문장은 대조할 게 없다. 틀렸는데 교정본이 실제로 다를 때만 글자를 맞대본다.
+                const changed = !n.ok && n.fixed && n.fixed !== n.mine;
+                const ops = changed ? aiNoteWordDiff(n.mine, n.fixed) : null;
+
+                const head = `
+                    <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${m.cls}">${m.label}</span>
+                        ${n.issue ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-500 border border-rose-100">${escapeHtml(n.issue)}</span>` : ''}
+                        ${n.ok ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100">정답</span>' : ''}
+                        <span class="text-[10px] text-slate-400 ml-auto">${aiNoteWhen(n.t)}</span>
+                    </div>`;
+
+                const ask = n.ask ? `<p class="text-[11px] text-slate-400 mb-1">${escapeHtml(n.ask)}</p>` : '';
+                const mineLine = `<p class="text-xs leading-relaxed ${n.ok ? 'text-slate-700' : 'text-slate-500'}">${ops ? renderAiNoteDiff(ops, 'user') : escapeHtml(n.mine)}</p>`;
+                const fixedLine = changed
+                    ? `<p class="text-xs leading-relaxed text-slate-800 font-semibold mt-1"><span class="text-slate-300 mr-1">→</span>${renderAiNoteDiff(ops, 'correct')}</p>`
+                    : '';
+
+                const detail = open ? `
+                    <div class="mt-2 pt-2 border-t border-slate-100 space-y-1.5">
+                        ${n.msg ? `<p class="text-[11px] text-slate-600 leading-relaxed">${escapeHtml(n.msg)}</p>` : ''}
+                        ${n.tip ? `<p class="text-[11px] text-slate-500 leading-relaxed whitespace-pre-line bg-slate-50 rounded-xl p-2">${escapeHtml(n.tip)}</p>` : ''}
+                        ${n.natural ? `<p class="text-[11px] text-sky-700 leading-relaxed bg-sky-50 rounded-xl p-2"><span class="font-bold">더 자연스럽게 </span>${escapeHtml(n.natural)}</p>` : ''}
+                    </div>` : '';
+
+                const hasDetail = !!(n.msg || n.tip || n.natural);
+
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 p-3">
+                        ${head}${ask}${mineLine}${fixedLine}${detail}
+                        ${hasDetail ? `<button onclick="toggleAiNote('${key}')" class="mt-1.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">${open ? '접기' : '선생님 총평 보기'}</button>` : ''}
+                    </div>`;
+            }).join('');
+
+            if (matched.length > page.length) {
+                box.innerHTML += `<button onclick="showMoreAiNotes()" class="w-full py-2 text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all">${matched.length - page.length}개 더 보기</button>`;
+            }
         }
 
         // [냐냐 PATCH] 날짜 표시 형식: 2026-07-09 → 2026/07/09, 축 라벨은 07/09
@@ -4239,7 +4451,7 @@ let vocabulary = [];
                         </div>
                         <div class="flex items-baseline gap-2">
                             <span class="text-[10px] font-bold text-slate-400 shrink-0 w-11">정답</span>
-                            <span class="font-black text-slate-800 break-words">${renderCharDiff(ops, 'correct')}</span>
+                            <span class="font-black text-slate-800 break-words">${renderAiNoteDiff(ops, 'correct')}</span>
                         </div>
                     </div>`;
             }
@@ -7280,6 +7492,14 @@ let vocabulary = [];
                 if (profileBody) profileBody.classList.add('hidden');
                 const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
                 if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
+                // '첨삭 노트'도 접힌 채로. 필터는 항상 '틀린 것만' 부터 다시 시작한다
+                const noteBody = document.getElementById('ai-note-body');
+                if (noteBody) noteBody.classList.add('hidden');
+                const noteChevron = document.querySelector('#ai-note-toggle i');
+                if (noteChevron) noteChevron.style.transform = 'rotate(180deg)';
+                aiNoteFilter = 'wrong';
+                aiNoteShown = AI_NOTE_PAGE;
+                aiNoteOpen = {};
                 setRecordRange('7d');
                 renderStreakBadge();
                 if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯

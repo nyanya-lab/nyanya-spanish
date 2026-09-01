@@ -973,6 +973,7 @@
                 ];
                 renderChatThread();
 
+                recordAiNote('question', currentQuestionForAnswer.question, userAnswer, feedback);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -1487,7 +1488,7 @@ ${refGrammar}${refWords}
                   { "from": "the original wrong part (word or phrase, e.g. 'el muy famoso restaurante')", "to": "the corrected part (e.g. 'un restaurante muy famoso')", "why": "왜 고쳤는지 한국어로. 규칙 이름과 이유를 함께 쓸 것. 예: '어순 — 스페인어는 형용사가 명사 뒤라 muy famoso 가 restaurante 뒤로', '관사 — 처음 언급하는 대상이라 el 대신 un'. 1~2문장." }
                ],
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",
-               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."${AI_NATURAL_JSON_FIELDS}
+               "grammarPointUsage": "About the grammar note above ONLY. One word: 'correct' (used it, correctly) / 'wrong' (used it, incorrectly) / 'unused' (didn't use it, or no note given). Independent of isCorrect — a vocabulary slip still leaves the grammar 'correct'."${AI_ISSUE_JSON_FIELD}${AI_NATURAL_JSON_FIELDS}
             }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
             IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.
@@ -1527,9 +1528,10 @@ ${refGrammar}${refWords}
                     tip: { type: "STRING" },
                     // [냐냐 요청] 참조 문법을 제대로 썼는지 — 문장 전체 정오(isCorrect)와 별개로 판정
                     grammarPointUsage: { type: "STRING", description: "correct | wrong | unused" },
+                    ...aiIssueSchemaProp(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "grammarPointUsage", "issueType", ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1616,6 +1618,7 @@ ${refGrammar}${refWords}
                 ];
                 renderChatThread();
 
+                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -1761,7 +1764,7 @@ ${refGrammar}${refWords}
                "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
                "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
                "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것.",${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
+               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }
             IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}${AI_NATURAL_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
@@ -1786,10 +1789,11 @@ ${refGrammar}${refWords}
                         }
                     },
                     tip: { type: "STRING" },
+                    ...aiIssueSchemaProp(),
                     ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1855,6 +1859,7 @@ ${refGrammar}${refWords}
                 ];
                 renderChatThread();
 
+                recordAiNote('example', aiCurrentKoreanSentence, userText, feedback);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -2080,6 +2085,15 @@ ${refGrammar}${refWords}
             });
             return `\n            My grammar notes. Each line is "TITLE :: what the note is about | example words from the note".\n            Use the hint to decide whether the sentence REALLY exercises that note — do not guess from the title alone:\n            ${lines.join('\n            ')}\n`;
         }
+        // [냐냐 요청] 실수 유형. 예전엔 자유 작문·질문답하기에만 있어서, 한→스 미션과
+        //   예문 연습으로 틀린 것은 첨삭 노트에서 유형 없이 떠돌았다. 네 곳이 같은 표를 쓴다.
+        const AI_ISSUE_TYPES = ["어순", "성수일치", "동사변형", "시제", "전치사", "어휘선택", "기타", "없음"];
+        const AI_ISSUE_JSON_FIELD = `,
+               "issueType": "If isCorrect is false, classify the main mistake as exactly one of: '어순', '성수일치', '동사변형', '시제', '전치사', '어휘선택', '기타'. If isCorrect is true, use '없음'."`;
+        function aiIssueSchemaProp() {
+            return { issueType: { type: "STRING", enum: AI_ISSUE_TYPES, description: "주된 실수 유형. 정답이면 '없음'" } };
+        }
+
         // 응답 JSON 예시에 끼워 넣을 항목.
         //   [냐냐 요청] 예전엔 [{word, spelling}] 꼴이라 단어 하나에 39자를 썼다. 응답이 길어지면
         //   maxOutputTokens 에 걸려 잘리므로, 맞음/틀림을 배열로 갈라 이름만 담는다 (10자).
@@ -2141,6 +2155,31 @@ ${refGrammar}${refWords}
             box.classList.remove('hidden');
             if (textEl) textEl.innerHTML = escapeHtml(sentence);
             if (whyEl) whyEl.innerHTML = why ? escapeHtml(why) : '';
+        }
+
+        // [냐냐 요청] 첨삭 노트에 한 줄 남긴다. 스페인어를 직접 쓰는 네 곳이 모두 여기를 지난다.
+        //   숫자만 세던 '내 학습 수준' 과 달리, 실제로 내가 쓴 문장과 교정본을 통째로 남긴다.
+        //   화면에 그릴 때 core.js 의 charDiffOps 로 두 문장을 대조하므로, 여기서는 표시용
+        //   태그를 다 벗겨 맨 글자만 저장한다 (용량도 줄고, 나중에 검색하기도 쉽다).
+        function recordAiNote(mode, ask, mine, feedback) {
+            if (typeof aiNotes === 'undefined' || !feedback) return;
+            const plain = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            const mineText = plain(mine);
+            if (!mineText) return;   // 빈 제출은 남길 게 없다
+            const issue = plain(feedback.issueType);
+            aiNotes.unshift({
+                t: new Date().toISOString(),
+                mode: mode,                                   // 'question' | 'ko-es' | 'example' | 'es-ko'
+                ask: plain(ask),                              // 질문·미션 (자유 작문은 빈 값)
+                mine: mineText,                               // 내가 쓴 문장
+                fixed: plain(feedback.correctedText),         // 교정본
+                msg: plain(feedback.message),                 // 총평
+                tip: plain(feedback.tip),
+                natural: plain(feedback.moreNatural),         // 더 자연스러운 표현 (있을 때만)
+                issue: (issue && issue !== '없음') ? issue : '',
+                ok: !!feedback.isCorrect
+            });
+            if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;
         }
 
         // 채점 결과를 반영하고 결과 카드에 표시한다 (해제 버튼 포함)
@@ -2397,6 +2436,7 @@ ${noteListText}
                 ];
                 renderChatThread();
 
+                recordAiNote('es-ko', '', userEsText, feedback);
                 logAction('ai');
                 saveToStorage();
                 updateStats();
