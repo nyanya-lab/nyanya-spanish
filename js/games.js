@@ -1617,9 +1617,11 @@ Return JSON only, no markdown.`;
                 const rate = detail.filter(d => d.correct).length / detail.length;
                 gDelta = grammarFillDelta(rate);
                 addGrammarScore(t.id, gDelta);
-                // [냐냐 요청] 빈칸은 못했을 때만 곡선을 움직인다 (70% 미만 = 진입/한 칸 뒤로).
+                // [냐냐 요청] 빈칸은 못했을 때만 곡선을 건드린다 (70% 미만).
                 //   잘 봤다고 앞으로 밀어주진 않는다 — 문법 복습은 번역으로 하는 거라서.
-                if (rate < 0.7 && typeof grammarReviewDemote === 'function') grammarReviewDemote(t.id);
+                // [냐냐 기준] 여기서는 '들여놓기' 까지만 한다. 이미 곡선 안에 있는 표의 칸은
+                //   복습 배너로 시작한 번역 미션에서만 움직인다.
+                if (rate < 0.7 && typeof grammarReviewEnter === 'function') grammarReviewEnter(t.id);
             }
             const unmastered = wasMastered && !masteredGrammar[t.id];
             if (unmastered) showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");

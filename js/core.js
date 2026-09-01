@@ -1917,17 +1917,29 @@ let vocabulary = [];
 
         // [냐냐 요청] 문법 망각곡선 — 단어와 같은 주기(1·3·7·14·30일)를 쓴다.
         //   복습 방법은 빈칸이 아니라 'AI가 만든 문장을 내가 번역하기' 다.
-        //   그래서 칸을 앞으로 밀어주는 건 한→스 미션에서 그 문법을 제대로 썼을 때뿐이다.
-        //   (스→한·질문·예문은 아는 문법을 골라 쓰는 거라 '복습했다'의 증거로 약하다)
-        //   반대로 뒤로 미는 건 어디서든 한다 — 틀린 건 어디서 틀렸든 틀린 거니까.
-        //   빈칸은 70% 미만일 때만 뒤로 민다. 잘 봤다고 앞으로 밀어주진 않는다.
+        // [냐냐 기준 2026-09-02] 들어오는 것과 칸이 움직이는 것을 갈랐다.
+        //   진입(grammarReviewEnter) — 어디서 틀리든 곡선에 들여놓는다. 첨삭 네 모드, 빈칸 70% 미만.
+        //   전진·후퇴 — **복습 배너로 시작한 그 미션에서만.** 한 번 잘 썼다고 곡선이 나가면
+        //     아무 데서나 칸이 움직여서 너무 빨리 졸업한다. 단어도 '오늘의 복습' 을 해냈을 때만 나간다.
+        //   그 밖에서 제대로 쓴 것은 점수(+2)로만 쳐준다 — 단어의 wordsOk 와 같은 대접이다.
         // ============================================================
         function getGrammarReviewRec(id) {
             if (!grammarReview[id]) grammarReview[id] = { stage: 0, lastWrongDate: null, lastReviewDate: null };
             return grammarReview[id];
         }
 
-        // 진입(곡선 밖이었으면) 또는 한 칸 뒤로
+        // 진입 — 곡선 밖이었으면 들여놓는다. 이미 안에 있으면 칸을 건드리지 않는다
+        //   (칸을 움직이는 건 복습에서만 하기로 했다)
+        function grammarReviewEnter(id) {
+            if (!id) return;
+            const rec = getGrammarReviewRec(id);
+            if (rec.lastWrongDate) return;
+            rec.stage = 0;
+            rec.lastWrongDate = getLocalDateString();
+            rec.lastReviewDate = null;
+        }
+
+        // 한 칸 뒤로 (복습에서 틀렸을 때만)
         function grammarReviewDemote(id) {
             if (!id) return;
             const rec = getGrammarReviewRec(id);
@@ -1974,7 +1986,7 @@ let vocabulary = [];
         function startGrammarReview() {
             const due = getGrammarDueList();
             if (!due.length) { showToast("오늘 복습할 문법이 없어요! 🎉", "info"); return; }
-            if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id);
+            if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id, true);
         }
 
         // [냐냐 요청] 복습 탭 맨 위 '오늘의 망각곡선' 줄 — 폰에서는 여기가 유일한 입구다

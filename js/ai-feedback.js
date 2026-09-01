@@ -7,10 +7,17 @@
         let aiCurrentExtraWordsForMission = [];
         let aiLastCorrectedText = '';   // 미션 참고 칩을 '실제로 쓴 것' 으로 추리는 데 쓴다
         let aiForcedGrammarId = null;    // [냐냐 요청] 노트에서 '이 문법으로 번역 연습'을 눌렀을 때 딱 한 번 쓰임
+        let aiForcedFromReview = false;  // 그 진입이 '오늘의 문법 복습' 이었나
+        //   [냐냐 기준] 곡선의 칸이 움직이는 건 '복습 배너로 시작한 그 미션' 에서뿐이다.
+        //   들어오는 것만 어디서든 한다. 이번 미션이 그 복습이면 여기에 그 문법 id 가 담긴다.
+        let aiMissionReviewGrammarId = null;
 
         // [냐냐 요청] 문법 노트 → AI 첨삭으로 바로 가서 그 문법으로 미션 생성
-        function startTranslationWithGrammar(id) {
+        //   fromReview = '오늘의 문법 복습' 으로 들어온 것. 단어와 같은 규칙을 쓰려고 표시해 둔다 —
+        //   단어 곡선도 배너(오늘의 복습)로 시작한 복습에서만 앞으로 간다 (fillState.isTodayReview).
+        function startTranslationWithGrammar(id, fromReview) {
             aiForcedGrammarId = id;
+            aiForcedFromReview = !!fromReview;
             if (typeof changeTab === 'function') changeTab('ai-feedback');
             if (typeof switchAiMode === 'function') switchAiMode('ko-es');
             setTimeout(() => { generateAiMission(); }, 80);
@@ -1371,6 +1378,8 @@
                 ? (typeof getAllGrammarTables === 'function' ? getAllGrammarTables().find(t => t.id === aiForcedGrammarId) : null)
                 : null;
             aiForcedGrammarId = null;
+            aiMissionReviewGrammarId = (forced && aiForcedFromReview) ? forced.id : null;
+            aiForcedFromReview = false;
             const grammarNote = forced || pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
             //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
@@ -1574,6 +1583,7 @@ ${refGrammar}${refWords}
                 aiLastCorrectedText = String(feedback.correctedText || '').replace(/<[^>]*>/g, '');
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
+                aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
 
 
 
@@ -2162,6 +2172,16 @@ ${refGrammar}${refWords}
         //     한→스 랜덤 미션 / 질문에 답하기 / 내 예문 연습 = +2
         //     스→한 자유 작문 = +1 (아는 문법을 골라 쓰는 거라 절반)
         //     틀리게 쓴 경우는 어디서든 −2.
+        //   ok = 제대로 썼나 / canMove = 복습 배너로 시작한 그 미션인가
+        function applyGrammarCurve(id, ok, canMove) {
+            if (ok) {
+                if (canMove && typeof grammarReviewAdvance === 'function') grammarReviewAdvance(id);
+                return;                                   // 복습 밖에서 잘 쓴 건 점수만
+            }
+            if (canMove && typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
+            else if (typeof grammarReviewEnter === 'function') grammarReviewEnter(id);
+        }
+
         function applyEsKoGrammarScores(feedback, notes, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
@@ -2190,13 +2210,12 @@ ${refGrammar}${refWords}
                         ? JSON.parse(JSON.stringify(grammarReview[note.id])) : undefined
                 };
                 addGrammarScore(note.id, delta, { transUsed: usage === 'correct' });
-                // [냐냐 요청] 틀리게 쓴 문법은 어느 모드에서든 곡선에 들어온다.
-                //   (앞으로 미는 건 한→스 미션에서만 — 여기선 고른 문법이라 증거가 약하다)
-                // [냐냐 요청] 곡선은 네 모드 어디서든 돈다. 예전엔 '전진' 이 한→스의 지정 문법
-                //   판정에만 붙어 있어서, 그 길을 없애면 문법이 곡선에서 영영 못 나왔다.
-                if (item.ok) { if (typeof grammarReviewAdvance === 'function') grammarReviewAdvance(note.id); }
-                else if (typeof grammarReviewDemote === 'function') grammarReviewDemote(note.id);
-                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, state: 'normal', undone: false });
+                // [냐냐 기준] 곡선에 들어오는 건 어디서든, 칸이 움직이는 건 복습 배너로 시작한 미션에서만.
+                //   그래야 아무 데서나 한 칸씩 나가서 너무 빨리 졸업하는 일이 없다.
+                //   여기 밖에서 제대로 쓴 것은 점수(+2)로만 쳐준다 — 단어의 wordsOk 와 같은 대접.
+                const canMove = (note.id === aiMissionReviewGrammarId);
+                applyGrammarCurve(note.id, item.ok, canMove);
+                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, state: 'normal', undone: false });
             });
         }
 
@@ -2745,14 +2764,13 @@ ${refGrammar}${refWords}
             if (state === 'normal') {
                 e.delta = e.baseDelta;
                 addGrammarScore(id, e.delta, { transUsed: e.usage === 'correct' });
-                if (e.usage === 'correct') { if (typeof grammarReviewAdvance === 'function') grammarReviewAdvance(id); }
-                else if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
+                applyGrammarCurve(id, e.usage === 'correct', e.canMove);   // 처음 반영과 같은 자격으로
             } else if (state === 'looked') {
                 e.delta = LOOKUP_PENALTY;
                 // [냐냐 요청] 찾아봐도 번역에서 쓴 건 쓴 거라 마스터 자격은 그대로 둔다.
                 //   어차피 점수가 −2 로 깎여서 마스터 기준(4.5)에 한참 못 미친다.
                 addGrammarScore(id, e.delta, { transUsed: e.usage === 'correct' });
-                if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
+                applyGrammarCurve(id, false, e.canMove);   // 찾아보고 쓴 건 틀린 것과 같이 친다
             } else {
                 e.delta = 0;
             }
