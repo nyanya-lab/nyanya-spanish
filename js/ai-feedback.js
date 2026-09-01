@@ -2179,14 +2179,18 @@ ${refGrammar}${refWords}
         //   태그를 다 벗겨 맨 글자만 저장한다 (용량도 줄고, 나중에 검색하기도 쉽다).
         //   gramHits 를 안 주면 방금 채점이 남긴 aiLastEsKoGrammar 를 그대로 쓴다. AI 가 지어낸
         //   제목은 채점 단계에서 이미 걸러진 뒤라, 여기 오는 건 전부 실제로 있는 노트다.
+        let _lastAiNoteKey = null;   // 방금 남긴 노트 (점수를 해제하면 이 노트에서 빼야 한다)
+
         function recordAiNote(mode, ask, mine, feedback, gramHits) {
             if (typeof aiNotes === 'undefined' || !feedback) return;
             const plain = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
             const mineText = plain(mine);
             if (!mineText) return;   // 빈 제출은 남길 게 없다
             const issue = plain(feedback.issueType);
+            const stamp = new Date().toISOString();
+            _lastAiNoteKey = stamp;
             aiNotes.unshift({
-                t: new Date().toISOString(),
+                t: stamp,
                 mode: mode,                                   // 'question' | 'ko-es' | 'example' | 'es-ko'
                 ask: plain(ask),                              // 질문·미션 (자유 작문은 빈 값)
                 mine: mineText,                               // 내가 쓴 문장
@@ -2450,7 +2454,10 @@ ${refGrammar}${refWords}
                 return `
                     <div class="bg-white rounded-2xl border border-slate-200 p-3">
                         ${head}${ask}${mineLine}${fixedLine}${detail}
-                        ${hasDetail ? `<button onclick="toggleAiNote('${key}')" class="mt-1.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">${open ? '접기' : '선생님 총평 보기'}</button>` : ''}
+                        <div class="flex items-center gap-2 mt-1.5">
+                            ${hasDetail ? `<button onclick="toggleAiNote('${key}')" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">${open ? '접기' : '선생님 총평 보기'}</button>` : ''}
+                            <button onclick="deleteAiNote('${key}')" title="AI 가 잘못 봤으면 이 기록을 빼세요" class="ml-auto text-[10px] text-slate-300 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
                     </div>`;
             }).join('');
             box.innerHTML = jump + box.innerHTML;
@@ -2458,6 +2465,29 @@ ${refGrammar}${refWords}
             if (matched.length > page.length) {
                 box.innerHTML += `<button onclick="showMoreAiNotes()" class="w-full py-2 text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all">${matched.length - page.length}개 더 보기</button>`;
             }
+        }
+
+        // [냐냐 요청] AI 가 잘못 짚어서 점수를 해제하면, 첨삭 노트에서도 그 문법을 빼준다.
+        //   점수만 되돌리고 노트에 남겨두면 '약한 문법' 집계에는 계속 틀린 걸로 잡힌다.
+        //   해제한 사람 입장에서는 없던 일이 되어야 맞다.
+        function removeAiNoteGram(noteKey, gramId) {
+            if (!noteKey || !gramId || typeof aiNotes === 'undefined') return false;
+            const n = aiNotes.find(x => x && x.t === noteKey);      // 상한에 밀려 사라졌으면 그냥 넘어간다
+            if (!n || !Array.isArray(n.gram)) return false;
+            const before = n.gram.length;
+            n.gram = n.gram.filter(g => g.id !== gramId);
+            return n.gram.length !== before;
+        }
+
+        // 이 기록 자체를 없앤다 — AI 가 문장을 통째로 잘못 봤을 때
+        function deleteAiNote(key) {
+            if (typeof aiNotes === 'undefined') return;
+            const i = aiNotes.findIndex(x => x && x.t === key);
+            if (i < 0) return;
+            aiNotes.splice(i, 1);
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderAiNoteList();
+            showToast("첨삭 노트에서 뺐어요", "info");
         }
 
         // 이 문장이 건드린 문법 노트를 { id, n, ok } 로 간추린다.
@@ -2509,10 +2539,13 @@ ${refGrammar}${refWords}
                 if (e.prev.mastered === undefined) delete masteredGrammar[id]; else masteredGrammar[id] = e.prev.mastered;
             }
             e.undone = true;
+            // [냐냐 요청] 첨삭 노트의 '약한 문법' 집계에서도 빼준다
+            const dropped = removeAiNoteGram(_lastAiNoteKey, id);
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
             if (typeof renderGrammarTables === 'function') renderGrammarTables();
-            showToast(`"${e.note.title}" 점수를 되돌렸어요`, "info");
+            if (typeof renderAiNoteList === 'function') renderAiNoteList();
+            showToast(`"${e.note.title}" 점수를 되돌렸어요${dropped ? ' · 첨삭 노트에서도 뺐어요' : ''}`, "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
