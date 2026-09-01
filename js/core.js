@@ -259,6 +259,7 @@ let vocabulary = [];
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
+                deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
             };
         }
@@ -387,6 +388,7 @@ let vocabulary = [];
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
+                deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
@@ -416,6 +418,7 @@ let vocabulary = [];
                 nyanyaDiary = {};
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 aiNotes = [];
+                deleResult = null;
                 customQuestions = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
@@ -2773,8 +2776,285 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 학습기록 그래프 카드 접기/펼치기
+        // ============================================================
+        // [냐냐 요청] DELE 가늠 — 내 수준을 A1~C2 로 보여준다
+        //   DELE 는 시험이라 앱이 등급을 줄 수는 없다. 다만 CEFR 이 실제로 나누는 세 축은
+        //   이 앱에 이미 다 쌓여 있어서, 그걸로 "지금 어디쯤인지" 는 가늠할 수 있다.
+        //     ① 어휘 — 개수가 아니라 '어떤 단어를 아느냐'. AI 가 단어를 CEFR 로 분류한다
+        //     ② 동사 시제 — CEFR 이 가장 또렷하게 가르는 축 (접속법을 알면 B1)
+        //     ③ 정답률 — 최근 30일 퀴즈. 평생 누적을 쓰면 실력이 늘어도 안 움직인다
+        //   전체 수준은 셋 중 '가장 낮은 축'. 단어만 많고 접속법을 모르면 B1 이 아니다.
+        //   AI 를 부르므로 하루 한 번만 자동으로 돌고, 나머지는 새로고침 버튼으로 돌린다.
+        // ============================================================
+        const DELE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+        const DELE_LEVEL_COLOR = {
+            A1: 'text-slate-500',  A2: 'text-sky-600',   B1: 'text-violet-600',
+            B2: 'text-indigo-600', C1: 'text-emerald-600', C2: 'text-amber-600'
+        };
+
+        // 시제 단계 — 이 단계의 시제를 절반 넘게 갖추면 그 레벨을 통과한 것으로 본다
+        const DELE_TENSE_STEPS = [
+            { level: 'A1', keys: ['presente'] },
+            { level: 'A2', keys: ['indefinido', 'imperfecto', 'futuro', 'imperativo'] },
+            { level: 'B1', keys: ['condicional', 'subjPresente'] },
+            { level: 'B2', keys: ['subjImperfecto'] }
+        ];
+        const DELE_TENSE_LABEL = {
+            presente: '직설법 현재', indefinido: '부정과거', imperfecto: '불완료과거',
+            futuro: '미래', imperativo: '명령법', condicional: '조건법',
+            subjPresente: '접속법 현재', subjImperfecto: '접속법 불완료과거'
+        };
+        const DELE_TENSE_MIN_VERBS = 3;   // 동사 3개 이상에 넣어뒀으면 '쓸 줄 안다'고 본다
+
+        // 정답률 구간
+        const DELE_ACC_STEPS = [[92, 'C2'], [85, 'C1'], [78, 'B2'], [70, 'B1'], [60, 'A2'], [0, 'A1']];
+
+        let deleResult = null;   // { date, overall, vocab, tense, acc, comment }
+        let deleBusy = false;
+        let deleAutoTried = false;   // 자동 갱신은 이 페이지에서 한 번만 (기간 버튼마다 AI를 부르면 안 된다)
+
+        function deleIndex(lv) { const i = DELE_LEVELS.indexOf(lv); return i < 0 ? 0 : i; }
+
+        // ── 축 ② 동사 시제 (로컬 계산) ──
+        function deleTenseAxis() {
+            const verbs = (vocabulary || []).filter(w => w && w.pos === 'verb');
+            const count = {};
+            verbs.forEach(w => {
+                const keys = (typeof listTenseKeys === 'function') ? listTenseKeys(w) : [];
+                keys.forEach(k => { count[k] = (count[k] || 0) + 1; });
+            });
+            const known = (k) => (count[k] || 0) >= DELE_TENSE_MIN_VERBS;
+
+            // 현재시제조차 없으면 잰 게 아니다 — A1 이라고 단정하지 않고 비워 둔다
+            if (!known('presente')) {
+                return { level: null, detail: `동사 ${DELE_TENSE_MIN_VERBS}개에 현재시제를 넣으면 재기 시작해요`, counts: count };
+            }
+            let level = 'A1';
+            let missing = [];
+            for (const step of DELE_TENSE_STEPS) {
+                const got = step.keys.filter(known);
+                if (got.length * 2 >= step.keys.length) {      // 절반 이상이면 통과
+                    level = step.level;
+                } else {
+                    missing = step.keys.filter(k => !known(k)).map(k => DELE_TENSE_LABEL[k] || k);
+                    break;
+                }
+            }
+            const detail = missing.length
+                ? `${missing.slice(0, 2).join(' · ')} — 동사 ${DELE_TENSE_MIN_VERBS}개에 넣으면 올라가요`
+                : '쓸 수 있는 시제를 다 갖췄어요';
+            return { level, detail, counts: count };
+        }
+
+        // ── 축 ③ 정답률 (최근 30일 퀴즈) ──
+        function deleAccuracyAxis() {
+            let total = 0, correct = 0;
+            const from = addDaysToDateString(getLocalDateString(), -29);
+            Object.keys(nyanyaDiary || {}).forEach(ds => {
+                if (ds < from) return;
+                const d = nyanyaDiary[ds] || {};
+                total += (d.quizTotal || 0);
+                correct += (d.quizCorrect || 0);
+            });
+            if (total < 20) {
+                return { level: null, detail: `최근 30일 퀴즈가 ${total}문제라 아직 못 재요 (20문제부터)`, pct: null, total };
+            }
+            const pct = Math.round((correct / total) * 100);
+            const level = (DELE_ACC_STEPS.find(([min]) => pct >= min) || [0, 'A1'])[1];
+            return { level, detail: `최근 30일 ${correct}/${total}문제`, pct, total };
+        }
+
+        // ── 축 ① 어휘: AI 에게 보낼 표본 ──
+        //   아직 못 외운 단어(약점·치명적)는 뺀다. '아는 단어'의 수준을 재는 것이라서.
+        function deleVocabSample(limit = 200) {
+            const pool = (vocabulary || []).filter(w => {
+                if (!w || !w.word) return false;
+                const g = getWordGrade(w);
+                return g !== 'weak' && g !== 'critical';
+            });
+            const picked = shuffleArray(pool.slice()).slice(0, limit);
+            // 관사·재귀대명사를 떼고 사전형만 보낸다 (el libro → libro)
+            const clean = (s) => String(s || '').replace(/^(el|la|los|las|un|una)\s+/i, '').trim();
+            return { words: picked.map(w => clean(w.word)).filter(Boolean), poolSize: pool.length };
+        }
+
+        // 분포에서 '위에서 25% 지점' 의 레벨 — 네 단어 중 하나는 이 수준이라는 뜻
+        function deleVocabLevelFromCounts(counts) {
+            const total = DELE_LEVELS.reduce((a, lv) => a + (counts[lv] || 0), 0);
+            if (!total) return null;
+            let acc = 0;
+            for (let i = DELE_LEVELS.length - 1; i >= 0; i--) {
+                acc += (counts[DELE_LEVELS[i]] || 0);
+                if (acc / total >= 0.25) return DELE_LEVELS[i];
+            }
+            return 'A1';
+        }
+
+        // ── 전체 = 가장 낮은 축 ──
+        function deleOverall(axes) {
+            const have = axes.filter(a => a && a.level);
+            if (!have.length) return null;
+            return have.reduce((lo, a) => deleIndex(a.level) < deleIndex(lo.level) ? a : lo, have[0]).level;
+        }
+
+        async function refreshDeleLevel(manual) {
+            if (deleBusy) return;
+            const tense = deleTenseAxis();
+            const acc = deleAccuracyAxis();
+            let vocab = deleResult && deleResult.vocab ? deleResult.vocab : null;
+
+            const sample = deleVocabSample();
+            const canAsk = (typeof getGeminiApiKey === 'function') && !!getGeminiApiKey();
+            const enough = sample.words.length >= 20;
+
+            if (canAsk && enough) {
+                deleBusy = true;
+                renderDeleCard();
+                try {
+                    const schema = {
+                        type: "OBJECT",
+                        properties: {
+                            counts: {
+                                type: "OBJECT",
+                                properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "INTEGER" }])),
+                                required: DELE_LEVELS
+                            },
+                            samples: {
+                                type: "OBJECT",
+                                properties: Object.fromEntries(DELE_LEVELS.map(l => [l, { type: "ARRAY", items: { type: "STRING" } }])),
+                                required: DELE_LEVELS
+                            },
+                            comment: { type: "STRING", description: "이 어휘 구성에 대한 한국어 한 문장 총평" }
+                        },
+                        required: ["counts", "samples", "comment"]
+                    };
+                    const prompt = `Here are ${sample.words.length} Spanish words a Korean learner has studied.
+Classify EVERY word into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common/basic it is in Spanish.
+Return "counts" = how many words fell into each level (the six numbers MUST add up to ${sample.words.length}).
+Return "samples" = up to 3 example words from the list for each level (use [] if none).
+Return "comment" = ONE short sentence IN KOREAN about this vocabulary profile, addressed to 냐냐님 (e.g. "일상 어휘는 탄탄한데 추상적인 단어가 아직 적어요"). Never answer in English.
+
+Words: ${sample.words.join(', ')}`;
+                    // callGemini 는 글자를 돌려준다 — 다른 곳과 같이 extractAndParseJson 으로 푼다
+                    const data = extractAndParseJson(await callGemini(prompt, "당신은 스페인어 어휘를 CEFR 기준으로 분류하는 평가자입니다.", schema, 'low'));
+                    if (!data || !data.counts) throw new Error('BAD_JSON');
+                    const counts = {};
+                    DELE_LEVELS.forEach(l => { counts[l] = Math.max(0, parseInt(data.counts[l], 10) || 0); });
+                    vocab = {
+                        level: deleVocabLevelFromCounts(counts),
+                        counts,
+                        samples: data.samples || {},
+                        sampled: sample.words.length,
+                        poolSize: sample.poolSize,
+                        detail: (sample.words.length >= sample.poolSize)
+                            ? `외운 단어 ${sample.poolSize}개를 다 봤어요`
+                            : `외운 단어 ${sample.poolSize}개 중 ${sample.words.length}개를 골라 봤어요`
+                    };
+                    if (data.comment) deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) });
+                } catch (e) {
+                    console.warn('DELE 어휘 판정 실패', e);
+                    if (manual) showToast(describeGeminiError(e), "error");
+                } finally {
+                    deleBusy = false;
+                }
+            } else if (manual) {
+                if (!canAsk) showToast("어휘 수준은 AI 키가 있어야 잴 수 있어요", "info");
+                else if (!enough) showToast("외운 단어가 20개는 있어야 어휘를 재요", "info");
+            }
+
+            deleResult = Object.assign(deleResult || {}, {
+                date: getLocalDateString(),
+                tense, acc, vocab,
+                overall: deleOverall([vocab, tense, acc])
+            });
+            renderDeleCard();
+            saveToStorage();
+        }
+
+        // 어느 축이 발목을 잡는지
+        function deleBottleneck(r) {
+            const named = [
+                { name: '어휘', a: r.vocab }, { name: '시제', a: r.tense }, { name: '정답률', a: r.acc }
+            ].filter(x => x.a && x.a.level);
+            if (named.length < 2) return null;
+            const lo = Math.min(...named.map(x => deleIndex(x.a.level)));
+            const at = named.filter(x => deleIndex(x.a.level) === lo);
+            if (at.length === named.length) return null;   // 다 같으면 발목이랄 게 없다
+            return at.map(x => x.name).join(' · ');
+        }
+
+        function renderDeleCard() {
+            const box = document.getElementById('dele-level-box');
+            if (!box) return;
+            const r = deleResult;
+            const btn = `<button onclick="refreshDeleLevel(true)" ${deleBusy ? 'disabled' : ''} class="text-[10px] font-bold px-2 py-1 rounded-lg border transition-all ${deleBusy ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}">
+                <i class="fa-solid fa-arrows-rotate ${deleBusy ? 'fa-spin' : ''} mr-1"></i>${deleBusy ? '재는 중' : '다시 재기'}</button>`;
+
+            if (!r || !r.overall) {
+                box.innerHTML = `<div class="flex items-center justify-between gap-2">
+                    <p class="text-[11px] text-slate-400">아직 가늠할 자료가 모자라요. 단어를 외우고 퀴즈를 풀면 나와요.</p>${btn}</div>`;
+                return;
+            }
+
+            const axis = (name, a, extra) => {
+                if (!a) return '';
+                const lv = a.level
+                    ? `<span class="text-xs font-black ${DELE_LEVEL_COLOR[a.level] || 'text-slate-500'}">${a.level}</span>`
+                    : `<span class="text-xs font-black text-slate-300">—</span>`;
+                return `<div class="flex items-baseline gap-2 py-1">
+                    <span class="text-[11px] font-bold text-slate-500 w-12 shrink-0">${name}</span>
+                    ${lv}
+                    <span class="text-[10px] text-slate-400 leading-snug">${escapeHtml(a.detail || '')}${extra || ''}</span>
+                </div>`;
+            };
+
+            // 어휘 분포 막대 (있을 때만)
+            let dist = '';
+            if (r.vocab && r.vocab.counts) {
+                const total = DELE_LEVELS.reduce((s, l) => s + (r.vocab.counts[l] || 0), 0) || 1;
+                const bar = { A1: 'bg-slate-400', A2: 'bg-sky-400', B1: 'bg-violet-400', B2: 'bg-indigo-500', C1: 'bg-emerald-500', C2: 'bg-amber-500' };
+                dist = `<div class="mt-2">
+                    <div class="flex h-2.5 rounded-full overflow-hidden bg-slate-100">
+                        ${DELE_LEVELS.map(l => {
+                            const c = r.vocab.counts[l] || 0;
+                            if (!c) return '';
+                            const ex = (r.vocab.samples && r.vocab.samples[l] || []).slice(0, 3).join(', ');
+                            return `<div class="${bar[l]}" style="width:${(c / total * 100).toFixed(1)}%" title="${l} ${c}개${ex ? ' — ' + escapeAttr(ex) : ''}"></div>`;
+                        }).join('')}
+                    </div>
+                    <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                        ${DELE_LEVELS.filter(l => r.vocab.counts[l]).map(l =>
+                            `<span class="text-[10px] text-slate-400"><b class="${DELE_LEVEL_COLOR[l]}">${l}</b> ${r.vocab.counts[l]}</span>`).join('')}
+                    </div>
+                </div>`;
+            }
+
+            const neck = deleBottleneck(r);
+
+            box.innerHTML = `
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[10px] text-slate-400 font-bold">DELE 가늠</span>
+                        <span class="text-3xl font-black ${DELE_LEVEL_COLOR[r.overall] || 'text-slate-600'}">${r.overall}</span>
+                    </div>
+                    ${btn}
+                </div>
+                ${axis('어휘', r.vocab)}${dist}
+                ${axis('시제', r.tense)}
+                ${axis('정답률', r.acc)}
+                ${neck ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-2.5 py-1.5 mt-2">👉 지금 발목을 잡는 건 <b>${neck}</b> — 전체 수준은 가장 낮은 축을 따라가요</p>` : ''}
+                ${r.comment ? `<p class="text-[11px] text-slate-500 leading-relaxed mt-2">${escapeHtml(r.comment)}</p>` : ''}
+                <p class="text-[10px] text-slate-300 mt-2">${r.date ? fmtDateSlash(r.date) + ' 기준 · ' : ''}시험 결과가 아니라 단어장·문법표에 쌓인 걸로 가늠한 값이에요</p>`;
+        }
+
         // [냐냐 PATCH] 학습 수준 데이터를 사용자가 직접 볼 수 있게 보기 좋게 렌더링
         function renderLearnerProfileDisplay() {
+            renderDeleCard();
+            // 하루에 한 번만 자동으로. 나머지는 '다시 재기' 버튼으로 돌린다 (AI 를 부르니까)
+            if (!deleAutoTried && (!deleResult || deleResult.date !== getLocalDateString())) {
+                deleAutoTried = true;
+                setTimeout(() => refreshDeleLevel(false), 300);
+            }
             const box = document.getElementById('learner-profile-display');
             if (!box) return;
             const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
