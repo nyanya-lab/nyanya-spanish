@@ -3840,15 +3840,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         // 한 번 더 쓰게 하기 (점수 반영 없음, 단어당 한 번만)
         // 다시 쓰기 안내에 붙일 '내가 쓴 답'.
-        //   오타로 되물을 땐 어디가 틀렸는지 칠해준다 — 그게 이 되묻기의 목적이다.
-        //   유의어로 되물을 땐 칠하지 않는다. 아예 다른 낱말이라 정답과 대조하면
-        //   글자 수·겹치는 자리가 드러나서 답을 흘리게 된다.
+        //   [냐냐 지적] 예전엔 오타로 되물을 때 틀린 글자를 빨갛게 칠했다. 그런데 앞글자 힌트와
+        //   같이 뜨다 보니 답을 거의 알려주는 꼴이었다 — 'cassa' 라고 쓰면 'cas 로 시작해요' 옆에
+        //   'cas[s]a' 가 뜨니 빼야 할 글자까지 보인다. 되묻기는 시험이지 교정이 아니다.
+        //   그래서 되물을 땐 칠하지 않는다 (유의어 되묻기와 같다). 방금 뭐라고 썼는지만 보여준다.
+        //   틀린 자리 표시는 '최종 오답' 화면에만 남는다 — 거긴 정답을 이미 보여주는 자리다.
         function writeRetryMineHtml(s, w) {
-            const mine = s.hintMine || '';
-            if (s.hintReason === 'typo' && typeof charDiffOps === 'function') {
-                return renderCharDiff(charDiffOps(mine, w.word), 'user');
-            }
-            return escapeHtml(mine);
+            return escapeHtml(s.hintMine || '');
         }
 
         //   [냐냐 요청] 힌트만 띄우면 방금 뭐라고 썼는지 잊는다. 내가 쓴 답도 같이 남긴다.
