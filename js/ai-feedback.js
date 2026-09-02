@@ -1559,7 +1559,10 @@ ${extraWords.length ? `
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
             Student's Spanish Answer: "${userText}"
 ${koEsNoteListText}${refGrammar}${refWords}
-            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
+            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally.
+            For (a): the target word above is CONTEXT ONLY — it is the word the mission was built around, not a requirement. NEVER mark the answer wrong, and never ask for that word, just because the student expressed the same meaning with a different word. Judge only whether the Spanish is grammatical and conveys the Korean sentence accurately. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error, not as "you must use the target word".)
+            For (b): the target word must actually appear and be used naturally, since the mission asked for it.
+            Either way, check the grammar is correct.
             CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
@@ -1648,6 +1651,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
                 renderGrammarReviewBar('graded');
+                resultBox.classList.remove('hidden');   // ⚠️ 847d5ce 에서 이 줄이 지워져 결과 카드가 안 보였다
 
 
 
