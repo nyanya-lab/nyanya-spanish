@@ -115,8 +115,10 @@ ${REFLEXIVE_RULE}
 Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map(t => `"${t}"`).join(', ')} ("none" = fully regular).`;
         }
         // AI가 준 불규칙 갈래를 블록 콤보박스에 반영 (사용자가 이미 불규칙으로 지정해 뒀으면 건드리지 않음)
-        function applyGerundioIrregular(block, type) {
-            if (!type || !GERUNDIO_IRREGULAR_ENUM.includes(type) || type === 'none') return;
+        // [냐냐 지적] 1칸짜리 시제가 둘(현재분사·과거분사)이 되면서 시제별 갈래를 봐야 한다.
+        //   예전엔 현재분사 목록으로만 검사해서 과거분사의 '불규칙' 이 걸러졌다.
+        function applySingleTenseIrregular(block, tense, type) {
+            if (!type || !irregularTypesFor(tense).includes(type) || type === 'none') return;
             const cls = block.querySelector('.conj-block-class');
             const irr = block.querySelector('.conj-block-irr');
             if (!cls || !irr || cls.value === 'irregular') return;
@@ -371,12 +373,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i>';
             try {
                 if (isSingleTense(tense)) {
-                    // [냐냐 요청] 현재분사는 형태와 함께 불규칙 갈래도 같이 받아 콤보박스에 채운다
-                    const schema = { type: "OBJECT", properties: { form: { type: "STRING" }, irregular: { type: "STRING", enum: GERUNDIO_IRREGULAR_ENUM } }, required: ["form", "irregular"] };
-                    const resp = await callGemini(`${GERUNDIO_RULE_PROMPT}\n\nVerb: "${infinitive}". JSON: {"form":"...","irregular":"..."}`, `Return ONLY JSON.`, schema, 'minimal');
+                    // [냐냐 요청] 1칸짜리 시제는 형태와 함께 불규칙 갈래도 같이 받아 콤보박스에 채운다
+                    // [냐냐 지적] 여기가 현재분사 규칙으로 고정돼 있었다 — 과거분사 블록에서 눌러도
+                    //   현재분사 규칙으로 물어보고 갈래도 현재분사 목록으로 받았다. 시제를 따라간다.
+                    const schema = { type: "OBJECT", properties: { form: { type: "STRING" }, irregular: { type: "STRING", enum: irregularTypesFor(tense) } }, required: ["form", "irregular"] };
+                    const resp = await callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${infinitive}". JSON: {"form":"...","irregular":"..."}`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
                     const el = block.querySelector('[data-person="form"]'); if (el && !el.value.trim()) el.value = (data.form || '').trim();
-                    applyGerundioIrregular(block, data.irregular);
+                    applySingleTenseIrregular(block, tense, data.irregular);
                 } else {
                     const schema = { type: "OBJECT", properties: { yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" }, nos: { type: "STRING" }, vos: { type: "STRING" }, ellos: { type: "STRING" } }, required: ["yo", "tu", "el", "nos", "vos", "ellos"] };
                     const resp = await callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${infinitive}". Return JSON: {"yo","tu","el","nos","vos","ellos"}`, `Return ONLY JSON.`, schema, 'minimal');
@@ -513,7 +517,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         async function bulkConjAsk(tense, words, candidates) {
             const single = isSingleTense(tense);
             const props = { verb: { type: "STRING", description: "the infinitive exactly as given in the input list" } };
-            if (single) props.form = { type: "STRING", description: "the gerundio with correct accents, no estar" };
+            if (single) props.form = { type: "STRING", description: tense === 'participio'
+                ? "the participio (masculine singular) with correct accents, no haber, no reflexive pronoun"
+                : "the gerundio with correct accents, no estar" };
             else CONJ_PERSON_KEYS.forEach(p => { props[p] = { type: "STRING" }; });
             props.irregular = { type: "STRING", enum: irregularTypesFor(tense) };
             const required = ['verb', 'irregular'].concat(single ? ['form'] : CONJ_PERSON_KEYS);
@@ -1933,7 +1939,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     } else {
                         const cell = gerBlock.querySelector('[data-person="form"]');
                         if (cell && (forceOverwrite || !cell.value.trim())) cell.value = gerForm;
-                        applyGerundioIrregular(gerBlock, ger.irregular);
+                        applySingleTenseIrregular(gerBlock, 'gerundio', ger.irregular);
                     }
                 }
             }
