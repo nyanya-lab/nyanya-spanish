@@ -1042,7 +1042,18 @@
 
                         <!-- [냐냐 요청] AI 코멘트 흰 박스를 없애고 추정 해석만 한 줄로 (자리를 너무 많이 먹었음).
                              수정 필요한 부분보다는 위에 둔다 -->
-                        <p id="ai-coach-message" class="text-sm leading-relaxed text-slate-700"></p>
+                        <!-- [냐냐 요청] 학습 팁을 총평과 한 덩어리로 묶는다 (2026-09-02).
+                             박스가 셋(총평·자연스러움·팁)이라 다 눈에 안 들어왔다. 팁은 총평이 못 짚은
+                             '규칙' 을 알려주는 자리라 내용은 그대로 두고 자리만 여기로 옮겼다. -->
+                        <div>
+                            <p id="ai-coach-message" class="text-sm leading-relaxed text-slate-700"></p>
+                            <div id="ai-coach-tip-wrap" class="hidden mt-2 pt-2 border-t border-slate-200">
+                                <div class="flex items-center gap-1.5 text-slate-400 text-[11px] font-bold mb-1">
+                                    <i class="fa-solid fa-lightbulb text-amber-400"></i><span>이 규칙만 기억해요</span>
+                                </div>
+                                <div id="ai-coach-tip" class="text-sm text-slate-800 leading-6 font-medium space-y-1"></div>
+                            </div>
+                        </div>
 
                         <!-- Correction Zone -->
                         <div id="ai-coach-correction-box" class="hidden bg-red-50 border border-red-100 p-4 rounded-2xl space-y-3">
@@ -1083,19 +1094,6 @@
                             </div>
                             <div id="ai-natural-text" class="text-sm font-bold text-slate-800 leading-6"></div>
                             <div id="ai-natural-why" class="text-[13px] text-slate-600 leading-6 mt-1"></div>
-                        </div>
-
-                        <!-- [냐냐 요청] 팁이 AI 코멘트 역할까지 하므로 길어졌다.
-                             글씨가 흐려서(amber-900/80) 잘 안 읽혔던 것도 진하게 바꿈 -->
-                        <!-- [냐냐 요청] 주황·갈색이 너무 세서 연노랑 바탕 + 검은 글씨로.
-                             색은 전구 아이콘에만 남긴다 -->
-                        <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl">
-                            <div class="flex items-center gap-2 text-slate-500 text-xs font-bold mb-2">
-                                <i class="fa-solid fa-lightbulb text-amber-400"></i>
-                                <span>냐냐를 위한 오늘의 학습 팁</span>
-                            </div>
-                            <!-- 줄 단위로 나눠 그린다 (renderAiTip). 제목보다 크지 않게 14px -->
-                            <div id="ai-coach-tip" class="text-sm text-slate-800 leading-6 font-medium space-y-1.5"></div>
                         </div>
 
                         <!-- [냐냐 요청] '단어 하나하나 쪼개서 핵심 분석' 은 없앴다 (2026-09-02).

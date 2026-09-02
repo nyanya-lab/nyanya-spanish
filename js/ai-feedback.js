@@ -123,18 +123,21 @@
         //   문장 끝에서 끊어 최소한의 줄나눔은 만들어 준다.
         function renderAiTip(text) {
             const el = document.getElementById('ai-coach-tip');
+            const wrap = document.getElementById('ai-coach-tip-wrap');   // 총평 아래 붙는 칸 — 팁이 없으면 통째로 숨긴다
+            const show = (on) => { if (wrap) wrap.classList.toggle('hidden', !on); };
             if (!el) return;
             let lines = String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
             // 줄바꿈 없이 길게 왔으면 문장 단위로 쪼갠다 (예시 줄은 붙여둔 채)
             if (lines.length === 1 && lines[0].length > 60) {
                 lines = lines[0].split(/(?<=[.!?])\s+(?=[^\s])/).map(s => s.trim()).filter(Boolean);
             }
-            if (!lines.length) { el.innerHTML = ''; return; }
+            if (!lines.length) { el.innerHTML = ''; show(false); return; }
+            show(true);
             el.innerHTML = lines.map(l => {
                 const m = l.match(/^예시\s*[:：]\s*(.*)$/);
                 if (m) {
                     // [냐냐 요청] 예시 문장은 굵게 말고 기울임으로
-                    return `<div class="mt-2 pt-2 border-t border-yellow-200">
+                    return `<div class="mt-2 pt-2 border-t border-slate-200">
                         <span class="text-[11px] font-bold text-slate-500">예시</span>
                         <span class="italic text-slate-700">${m[1]}</span>
                     </div>`;
