@@ -1341,20 +1341,27 @@ let vocabulary = [];
             if (due) {
                 // 기준 설명('밀린 것 포함' / '오늘 걸 다 하면')은 여기 안 쓴다.
                 //   좁은 사이드바에서 개수와 한 줄에 못 들어가고, 어차피 '단어 보기' 팝업 머리에 적혀 있다.
+                // [냐냐 요청] 예전엔 '단어 보기' 버튼 하나뿐이라 관용구·문법은 개수만 보이고
+                //   그 안을 들여다볼 길이 없었다. 세 줄을 그대로 누르게 만들고 버튼은 없앤다.
+                const planRow = (icon, label, n, kind) => n
+                    ? `<button onclick="openReviewPlanModal('${ds}', '${kind}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-amber-100 transition-all active:scale-95">
+                            <span class="text-slate-600">${icon} ${label}</span>
+                            <span class="font-bold text-amber-700">${n}개 <i class="fa-solid fa-chevron-right text-[9px] text-amber-400"></i></span>
+                       </button>`
+                    : `<div class="w-full flex items-center justify-between gap-2 px-2 py-1 opacity-50">
+                            <span class="text-slate-500">${icon} ${label}</span><span class="font-bold text-slate-400">0개</span>
+                       </div>`;
                 planHtml = `
                     <div class="mt-2 pt-2 border-t border-violet-100">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
                             <span class="font-black text-amber-700">복습 예정</span>
                             <span class="font-black text-amber-600">${plan3.total}개</span>
                         </div>
-                        ${plan3.total ? `<div class="space-y-0.5 mb-1.5">
-                            <div class="flex items-center justify-between"><span class="text-slate-500">📖 단어</span><span class="font-bold text-slate-700">${due.length}개</span></div>
-                            <div class="flex items-center justify-between"><span class="text-slate-500">📘 관용구</span><span class="font-bold text-slate-700">${plan3.idiom.length}개</span></div>
-                            <div class="flex items-center justify-between"><span class="text-slate-500">📋 문법</span><span class="font-bold text-slate-700">${plan3.grammar.length}개</span></div>
-                        </div>` : ''}
-                        ${due.length
-                            ? `<button onclick="openReviewPlanModal('${ds}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"><i class="fa-solid fa-list-ul"></i> 단어 보기 (${due.length}개)</button>`
-                            : (plan3.total ? '' : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>')}
+                        ${plan3.total ? `<div class="space-y-0.5">
+                            ${planRow('📖', '단어', due.length, 'word')}
+                            ${planRow('📘', '관용구', plan3.idiom.length, 'idiom')}
+                            ${planRow('📋', '문법', plan3.grammar.length, 'grammar')}
+                        </div>` : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>'}
                     </div>`;
             }
 
@@ -1375,49 +1382,89 @@ let vocabulary = [];
         //   단계를 보여주는 이유: 같은 '61개'라도 처음 틀린 40개인지 30일차 5개인지에 따라
         //   그날 복습의 성격이 완전히 다르다.
         //   단어를 누르면 팝업 위에 팝업을 또 띄우지 않고 그 자리에서 아래로 펼친다 (폰 배려).
-        function openReviewPlanModal(ds) {
-            const due = (typeof getReviewScheduledOn === 'function') ? getReviewScheduledOn(ds) : null;
+        function openReviewPlanModal(ds, kind) {
+            const plan = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
             const modal = document.getElementById('review-plan-modal');
-            if (!due || !modal) return;
+            if (!plan || !modal) return;
+
+            // [냐냐 요청] 셋 다 여기서 본다. 곡선이 셋인데 단어만 열리면 나머지는 개수만 보고 끝이었다.
+            const KINDS = [
+                { key: 'word',    icon: '📖', label: '단어',   unit: '단어', list: plan.word || [] },
+                { key: 'idiom',   icon: '📘', label: '관용구', unit: '표현', list: plan.idiom || [] },
+                { key: 'grammar', icon: '📋', label: '문법',   unit: '문법', list: plan.grammar || [] }
+            ];
+            const cur = KINDS.find(k => k.key === kind) || KINDS[0];
 
             const titleEl = document.getElementById('review-plan-title');
             const subEl = document.getElementById('review-plan-sub');
             const bodyEl = document.getElementById('review-plan-body');
             const isToday = ds === getLocalDateString();
 
-            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} 복습 예정 ${due.length}개`;
+            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} 복습 예정 · ${cur.icon} ${cur.label} ${cur.list.length}개`;
             if (subEl) subEl.innerText = isToday
-                ? '밀린 복습까지 포함한 숫자예요. 약한 단어부터 보여드려요.'
+                ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
                 : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.';
 
-            const groups = REVIEW_INTERVALS.map((days, stage) => ({
-                days,
-                stage,
-                words: due.filter(w => (w.reviewStage || 0) === stage)
-            })).filter(g => g.words.length);
+            // 셋을 오가는 줄. 0개인 것은 눌러도 볼 게 없으니 흐리게 둔다.
+            const tabs = `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+                ${KINDS.map(k => k.list.length
+                    ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
+                    : `<div class="py-2 rounded-xl text-[11px] font-black text-slate-300 text-center">${k.icon} ${k.label} 0</div>`).join('')}
+            </div>`;
 
-            // [냐냐 요청] 단계 묶음도 접었다 폈다. 처음엔 다 접어두면 '어느 단계가 몇 개'가
-            //   한눈에 들어오고, 보고 싶은 단계만 펼치면 된다.
-            bodyEl.innerHTML = groups.map(g => `
+            // 단계는 셋 다 같은 자리에 들어 있지만 꺼내는 길이 다르다
+            const stageOf = (it) => cur.key === 'word' ? (it.reviewStage || 0)
+                : cur.key === 'idiom' ? (it.stage || 0)
+                : (((typeof grammarReview !== 'undefined' && grammarReview[it.id]) || {}).stage || 0);
+
+            const groups = REVIEW_INTERVALS.map((days, stage) => ({
+                days, stage,
+                items: cur.list.filter(it => stageOf(it) === stage)
+            })).filter(g => g.items.length);
+
+            // 단어만 펼쳐서 더 볼 게 있다 (뱃지·메모). 표현·문법은 한 줄로 충분하다.
+            const itemHtml = (it) => {
+                if (cur.key === 'word') {
+                    return `<div class="border border-slate-200 rounded-xl overflow-hidden">
+                        <button onclick="toggleReviewPlanWord('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                            <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.word)}</span>
+                            <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(it.meaning || '')}</span>
+                            <i id="rpw-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
+                        </button>
+                        <div id="rpw-${it.id}" class="hidden px-3 pb-3"></div>
+                    </div>`;
+                }
+                if (cur.key === 'idiom') {
+                    const text = (it.idiom && it.idiom.idiom) || '';
+                    const mean = (it.idiom && it.idiom.idiomMeaning) || '';
+                    return `<div class="border border-slate-200 rounded-xl px-3 py-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(text)}</span>
+                            <span class="ml-auto shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5">${escapeHtml((it.word && it.word.word) || '')}</span>
+                        </div>
+                        ${mean ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(mean)}</p>` : ''}
+                    </div>`;
+                }
+                return `<div class="border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
+                    <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
+                </div>`;
+            };
+
+            const label = (stage) => stage === 0 ? '처음 틀린 뒤 첫 복습' : `${stage}번 복습한 ${cur.unit}`;
+
+            bodyEl.innerHTML = tabs + (groups.length ? groups.map(g => `
                 <div class="space-y-1.5">
-                    <button onclick="toggleReviewPlanGroup(${g.stage})" class="w-full flex items-center gap-2 sticky top-0 bg-white py-1.5 hover:bg-slate-50 rounded-lg transition-colors">
+                    <button onclick="toggleReviewPlanGroup(${g.stage})" class="w-full flex items-center gap-2 bg-white py-1.5 hover:bg-slate-50 rounded-lg transition-colors">
                         <i id="rpg-icon-${g.stage}" class="fa-solid fa-chevron-right text-[10px] text-slate-300 w-2.5"></i>
                         <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black">${g.days}일차</span>
-                        <span class="text-[10px] font-bold text-slate-400">${g.stage === 0 ? '처음 틀린 뒤 첫 복습' : `${g.stage}번 복습한 단어`}</span>
-                        <span class="ml-auto text-[10px] font-black text-slate-500">${g.words.length}개</span>
+                        <span class="text-[10px] font-bold text-slate-400">${label(g.stage)}</span>
+                        <span class="ml-auto text-[10px] font-black text-slate-500">${g.items.length}개</span>
                     </button>
                     <div id="rpg-${g.stage}" class="hidden space-y-1.5">
-                    ${g.words.map(w => `
-                        <div class="border border-slate-200 rounded-xl overflow-hidden">
-                            <button onclick="toggleReviewPlanWord('${w.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
-                                <span class="font-bold text-slate-800 text-sm">${escapeHtml(w.word)}</span>
-                                <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
-                                <i id="rpw-icon-${w.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
-                            </button>
-                            <div id="rpw-${w.id}" class="hidden px-3 pb-3"></div>
-                        </div>`).join('')}
+                    ${g.items.map(itemHtml).join('')}
                     </div>
-                </div>`).join('');
+                </div>`).join('') : '<p class="text-slate-400 text-center text-xs py-4">이 날 예정된 게 없어요 ✨</p>');
 
             modal.classList.remove('hidden');
         }
