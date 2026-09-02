@@ -463,11 +463,12 @@
                 <div id="tab-quiz" class="hidden space-y-6">
                     <div class="sticky top-14 z-30 bg-[#f8fafc] pt-6 pb-3 -mt-6 space-y-3">
                     <!-- [냐냐 PATCH-4배치] 복습/퀴즈 통합 서브메뉴 (복습 탭과 동일) -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                         <button onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">✍️ 쓰기</button>
                         <button onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📝 단어 빈칸</button>
                         <button class="py-3.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-sm">🎯 퀴즈</button>
                         <button onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📋 문법표 빈칸</button>
+                        <button onclick="selectReviewMode('vconj')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🔀 동사 변형</button>
                     </div>
                     <!-- [냐냐 PATCH] 제목 카드 제거 (서브탭이 이미 어딘지 알려줌). 진행 표시만 남김 -->
                     <div id="quiz-combo-box" class="hidden items-center justify-center gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
@@ -620,12 +621,47 @@
 
                     <!-- [냐냐 PATCH] 복습 방식 서브메뉴 -->
                     <!-- [냐냐 요청] 쓰기 연습을 맨 앞으로, 깜빡이는 맨 뒤로 -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                         <button id="review-mode-write-btn" onclick="selectReviewMode('write')" class="py-3.5 rounded-xl text-sm font-bold transition-all">✍️ 쓰기</button>
                         <button id="review-mode-fill-btn" onclick="selectReviewMode('fill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📝 단어 빈칸</button>
                         <button id="review-mode-quiz-btn" onclick="selectReviewMode('quiz')" class="py-3.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🎯 퀴즈</button>
                         <button id="review-mode-gfill-btn" onclick="selectReviewMode('gfill')" class="py-3.5 rounded-xl text-sm font-bold transition-all">📋 문법표 빈칸</button>
+                        <!-- [냐냐 요청] 동사 변형만 따로 연습하는 자리 (2026-09-02) -->
+                        <button id="review-mode-vconj-btn" onclick="selectReviewMode('vconj')" class="py-3.5 rounded-xl text-sm font-bold transition-all">🔀 동사 변형</button>
                     </div>
+                    </div>
+
+                    <!-- ===== 동사 변형 연습 ([냐냐 요청] 2026-09-02) =====
+                         뜻만 보고 내가 고른 시제를 전부 한 화면에 채운다. 원형은 숨긴다. -->
+                    <div id="review-mode-vconj" class="hidden">
+                        <div id="vconj-setup" class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                            <div class="text-center space-y-1">
+                                <div class="text-5xl">🔀</div>
+                                <h3 class="text-lg font-bold text-slate-900">어떤 시제를 연습할까요?</h3>
+                                <p class="text-xs text-slate-400">뜻만 보고 <b>고른 시제를 한 화면에 전부</b> 채워요. 원형은 안 보여줘요.</p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-bold text-slate-500">시제 <span class="text-slate-400 font-semibold">(여러 개 고를 수 있어요)</span></span>
+                                    <div class="flex gap-1.5">
+                                        <button onclick="vconjPickAllTenses(true)" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800">전체</button>
+                                        <button onclick="vconjPickAllTenses(false)" class="text-[11px] font-bold text-slate-400 hover:text-slate-600">해제</button>
+                                    </div>
+                                </div>
+                                <div id="vconj-tense-list" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-bold text-slate-500 mb-2">범위</span>
+                                <div id="vconj-scope-btns" class="grid grid-cols-3 gap-1.5"></div>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-bold text-slate-500 mb-2">몇 개나 풀까요?</span>
+                                <div id="vconj-count-btns" class="grid grid-cols-4 gap-1.5"></div>
+                            </div>
+                            <p id="vconj-pool-info" class="text-xs text-center font-bold text-slate-400"></p>
+                            <button onclick="startVconjReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-95">시작하기</button>
+                        </div>
+                        <div id="vconj-play-area" class="hidden"></div>
                     </div>
 
                     <!-- ===== 쓰기 연습 모드 ([냐냐 요청]) ===== -->

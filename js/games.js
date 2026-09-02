@@ -741,17 +741,279 @@
                 changeTab('review');
             }
             reviewMode = mode;
-            const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write' };
+            const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write', vconj: 'review-mode-vconj' };
             Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
             // [냐냐 PATCH] 퀴즈 버튼도 목록에 포함 (빠져 있어서 혼자 글씨색이 달랐음)
-            const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn' };
+            const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn', vconj: 'review-mode-vconj-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
+            if (mode === 'vconj' && !vconjState) renderVconjSetup();   // 설정 화면을 그려 둔다
             Object.entries(btns).forEach(([m, id]) => {
                 const b = document.getElementById(id); if (!b) return;
                 b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
                 b.className += ' ' + (m === mode ? on : off);
             });
+        }
+
+        // ============================================================
+        // [냐냐 요청] 동사 변형 연습 (2026-09-02)
+        //   뜻만 보고 내가 고른 시제를 한 화면에 전부 채운다. 원형은 숨긴다 —
+        //   원형이 보이면 규칙만 대입하게 되고, 그건 이미 문법표 빈칸이 하는 일이다.
+        //   채점은 로컬로 끝낸다. 활용형은 정답이 하나라 AI 를 부를 이유가 없다
+        //   (악센트는 엄격 — 퀴즈·단어 빈칸과 같은 잣대).
+        //   점수는 그 동사에 한 번, 정답률로. 곡선은 새로 만들지 않는다 —
+        //   틀리면 단어 곡선에 들여놓기만 하고 칸은 '오늘의 복습' 에서만 움직인다.
+        // ============================================================
+        let vconjState = null;
+        let vconjTenses = ['presente'];     // 고른 시제
+        let vconjScope = 'all';             // all | weak | notMastered
+        let vconjCount = 20;
+
+        const VCONJ_PERSONS = [
+            { key: 'yo', label: 'yo' }, { key: 'tu', label: 'tú' }, { key: 'el', label: 'él/ella' },
+            { key: 'nos', label: 'nosotros' }, { key: 'vos', label: 'vosotros' }, { key: 'ellos', label: 'ellos/ellas' }
+        ];
+        const VCONJ_SCOPES = [{ key: 'all', label: '전체' }, { key: 'weak', label: '약점만' }, { key: 'notMastered', label: '미마스터' }];
+        const VCONJ_COUNTS = [10, 20, 30, 0];   // 0 = 전부
+
+        function vconjTenseOptions() {
+            return (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
+        }
+        // 그 시제가 채워져 있는 동사만 — 없는 시제를 물어볼 수는 없다
+        function vconjVerbsFor(tense) {
+            return (vocabulary || []).filter(w => w.pos === 'verb'
+                && typeof getTenseConj === 'function' && hasConjValues(getTenseConj(w, tense)));
+        }
+        function vconjScopeOk(w) {
+            if (vconjScope === 'weak') return !!w.weak;
+            if (vconjScope === 'notMastered') return !w.mastered;
+            return true;
+        }
+        function getVconjPool() {
+            const picked = vconjTenses.filter(Boolean);
+            if (!picked.length) return [];
+            return (vocabulary || []).filter(w => w.pos === 'verb' && vconjScopeOk(w)
+                && picked.some(t => hasConjValues(getTenseConj(w, t))));
+        }
+
+        function renderVconjSetup() {
+            const list = document.getElementById('vconj-tense-list');
+            if (list) {
+                list.innerHTML = vconjTenseOptions().map(o => {
+                    const n = vconjVerbsFor(o.key).length;
+                    const on = vconjTenses.includes(o.key);
+                    const dim = n === 0;
+                    return `<button type="button" onclick="toggleVconjTense('${o.key}')" ${dim ? 'disabled' : ''}
+                        class="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${dim ? 'border-slate-100 text-slate-300 cursor-default' : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}">
+                        <span class="truncate">${on ? '✓ ' : ''}${escapeHtml(o.label)}</span>
+                        <span class="shrink-0 ${dim ? 'text-slate-300' : 'text-slate-400'}">${n}개</span>
+                    </button>`;
+                }).join('');
+            }
+            const scopeBox = document.getElementById('vconj-scope-btns');
+            if (scopeBox) {
+                scopeBox.innerHTML = VCONJ_SCOPES.map(sc => `<button type="button" onclick="setVconjScope('${sc.key}')"
+                    class="py-2.5 rounded-xl border text-xs font-bold transition-all ${vconjScope === sc.key ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">${sc.label}</button>`).join('');
+            }
+            const cntBox = document.getElementById('vconj-count-btns');
+            if (cntBox) {
+                cntBox.innerHTML = VCONJ_COUNTS.map(n => `<button type="button" onclick="setVconjCount(${n})"
+                    class="py-2.5 rounded-xl border text-xs font-bold transition-all ${vconjCount === n ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">${n === 0 ? '전부' : n + '개'}</button>`).join('');
+            }
+            const info = document.getElementById('vconj-pool-info');
+            if (info) {
+                const n = getVconjPool().length;
+                const cells = vconjTenses.reduce((sum, t) => sum + (isSingleTense(t) ? 1 : 6), 0);
+                info.innerHTML = vconjTenses.length
+                    ? `고른 시제 <b class="text-slate-600">${vconjTenses.length}개</b> · 한 문제에 최대 <b class="text-slate-600">${cells}칸</b> · 낼 수 있는 동사 <b class="text-slate-600">${n}개</b>`
+                    : '시제를 하나 이상 골라주세요';
+            }
+        }
+        function toggleVconjTense(key) {
+            vconjTenses = vconjTenses.includes(key) ? vconjTenses.filter(k => k !== key) : vconjTenses.concat([key]);
+            renderVconjSetup();
+        }
+        function vconjPickAllTenses(on) {
+            vconjTenses = on ? vconjTenseOptions().map(o => o.key).filter(k => vconjVerbsFor(k).length) : [];
+            renderVconjSetup();
+        }
+        function setVconjScope(k) { vconjScope = k; renderVconjSetup(); }
+        function setVconjCount(n) { vconjCount = n; renderVconjSetup(); }
+
+        function resetVconjSetup() {
+            vconjState = null;
+            const setup = document.getElementById('vconj-setup');
+            const play = document.getElementById('vconj-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            renderVconjSetup();
+        }
+
+        function startVconjReview() {
+            if (!vconjTenses.length) { showToast("시제를 하나 이상 골라주세요", "error"); return; }
+            const pool = shuffleArray(getVconjPool().slice());
+            if (!pool.length) { showToast("고른 시제가 채워진 동사가 없어요", "error"); return; }
+            const picked = vconjCount ? pool.slice(0, vconjCount) : pool;
+            vconjState = { pool: picked, index: 0, total: picked.length, results: [], current: null, phase: 'input' };
+            const setup = document.getElementById('vconj-setup');
+            const play = document.getElementById('vconj-play-area');
+            if (setup) setup.classList.add('hidden');
+            if (play) play.classList.remove('hidden');
+            renderVconjProblem();
+        }
+
+        // 고른 시제 중 이 동사에 채워진 것만, 등록 폼 순서대로
+        function buildVconjProblem(w) {
+            const order = vconjTenseOptions().map(o => o.key);
+            const blanks = [];
+            const blocks = [];
+            order.filter(t => vconjTenses.includes(t)).forEach(t => {
+                const c = getTenseConj(w, t);
+                if (!hasConjValues(c)) return;
+                const label = (vconjTenseOptions().find(o => o.key === t) || {}).label || t;
+                const cells = isSingleTense(t)
+                    ? [{ person: 'form', personLabel: '', expected: String(c.form || '').trim() }]
+                    : VCONJ_PERSONS.map(p => ({ person: p.key, personLabel: p.label, expected: String(c[p.key] || '').trim() }));
+                const rows = cells.filter(x => x.expected).map(x => {
+                    const idx = blanks.length;
+                    blanks.push({ tense: t, person: x.person, expected: x.expected });
+                    return Object.assign({ idx: idx }, x);
+                });
+                if (rows.length) blocks.push({ tense: t, label: label, single: isSingleTense(t), rows: rows });
+            });
+            return { word: w, blocks: blocks, blanks: blanks };
+        }
+
+        function renderVconjProblem() {
+            if (!vconjState) return;
+            if (vconjState.index >= vconjState.pool.length) { endVconjReview(); return; }
+            const play = document.getElementById('vconj-play-area');
+            if (!play) return;
+            vconjState.phase = 'input';
+            const w = vconjState.pool[vconjState.index];
+            const problem = buildVconjProblem(w);
+            vconjState.current = problem;
+
+            const blocksHtml = problem.blocks.map(blk => `
+                <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 px-3 py-1.5 text-[11px] font-black text-indigo-500">${escapeHtml(blk.label)}</div>
+                    <div class="p-2 ${blk.single ? '' : 'grid grid-cols-2 sm:grid-cols-3 gap-2'}">
+                        ${blk.rows.map(r => `
+                        <div class="space-y-1">
+                            ${r.personLabel ? `<span class="block text-[10px] font-bold text-slate-400 text-center">${escapeHtml(r.personLabel)}</span>` : ''}
+                            <input type="text" id="vconj-input-${r.idx}" onkeydown="vconjInputKeydown(event, ${r.idx})" autocomplete="off" autocapitalize="off" spellcheck="false"
+                                class="vconj-cell w-full bg-white px-2 py-2 rounded-lg border border-slate-200 text-sm text-center font-bold focus:outline-none focus:border-indigo-400">
+                            <div id="vconj-mark-${r.idx}" class="hidden text-[11px] text-center font-bold"></div>
+                        </div>`).join('')}
+                    </div>
+                </div>`).join('');
+
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetVconjSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${vconjState.index + 1} / ${vconjState.total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(vconjState.index / vconjState.total * 100)}%"></div>
+                    </div>
+                    <div class="text-center py-2">
+                        <span class="text-[10px] font-bold text-slate-400 tracking-wider">이 뜻의 동사를 활용해 보세요</span>
+                        <p class="text-2xl font-black text-slate-900 mt-1">${escapeHtml(w.meaning || '(뜻 없음)')}</p>
+                    </div>
+                    <div class="space-y-2.5">${blocksHtml}</div>
+                    <div id="vconj-feedback" class="hidden text-center text-sm font-bold"></div>
+                    <div class="flex justify-end">
+                        <button id="vconj-action-btn" onclick="submitVconjProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>`;
+            setTimeout(() => { const first = document.getElementById('vconj-input-0'); if (first) first.focus(); }, 60);
+        }
+
+        function vconjInputKeydown(e, idx) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (vconjState && vconjState.phase === 'graded') { nextVconjProblem(); return; }
+            const total = vconjState && vconjState.current ? vconjState.current.blanks.length : 0;
+            if (idx < total - 1) { const n = document.getElementById('vconj-input-' + (idx + 1)); if (n) n.focus(); }
+            else submitVconjProblem();
+        }
+
+        function submitVconjProblem() {
+            if (!vconjState || !vconjState.current || vconjState.phase !== 'input') return;
+            const w = vconjState.current.word;
+            const blanks = vconjState.current.blanks;
+            const answers = blanks.map((b, i) => { const el = document.getElementById('vconj-input-' + i); return el ? el.value.trim() : ''; });
+            // 활용형은 정답이 하나다 — 로컬로 끝낸다. 악센트는 엄격(퀴즈·단어 빈칸과 같은 잣대)
+            const detail = blanks.map((b, i) => ({
+                tense: b.tense, person: b.person, expected: b.expected, userAnswer: answers[i],
+                correct: fillLocalGrade({ language: 'es', expected: b.expected }, answers[i])
+            }));
+            vconjState.phase = 'graded';
+
+            detail.forEach((d, i) => {
+                const input = document.getElementById('vconj-input-' + i);
+                const mark = document.getElementById('vconj-mark-' + i);
+                if (input) input.className = input.className.replace('border-slate-200', d.correct ? 'border-emerald-300 bg-emerald-50' : 'border-rose-300 bg-rose-50');
+                if (mark) {
+                    mark.classList.remove('hidden');
+                    mark.innerHTML = d.correct ? '<span class="text-emerald-600">✓</span>'
+                        : `<span class="text-rose-500">${escapeHtml(d.expected)}</span>`;
+                }
+            });
+
+            const okCount = detail.filter(d => d.correct).length;
+            const rate = detail.length ? okCount / detail.length : 0;
+            const allCorrect = okCount === detail.length;
+            // 문법표 빈칸과 같은 잣대 — 표 하나당 한 번, 정답률 70% 가 본전
+            const delta = (typeof grammarFillDelta === 'function') ? grammarFillDelta(rate) : (allCorrect ? 2 : -2);
+            if (typeof withGradeShift === 'function') {
+                withGradeShift(w, () => { if (typeof addWordScore === 'function') addWordScore(w.id, delta, { correct: allCorrect }); });
+            } else if (typeof addWordScore === 'function') {
+                addWordScore(w.id, delta, { correct: allCorrect });
+            }
+
+            vconjState.results.push({ word: w, detail: detail, okCount: okCount, total: detail.length, delta: delta });
+            const fb = document.getElementById('vconj-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                fb.innerHTML = `<span class="${allCorrect ? 'text-emerald-600' : 'text-slate-600'}">${escapeHtml(w.word)} · ${okCount}/${detail.length} 칸</span>
+                    <span class="ml-2 ${delta > 0 ? 'text-emerald-600' : (delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${delta > 0 ? '+' : ''}${Math.round(delta * 10) / 10}점</span>`;
+            }
+            const btn = document.getElementById('vconj-action-btn');
+            if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextVconjProblem()'); }
+            if (typeof logAction === 'function') logAction('review');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        function nextVconjProblem() {
+            if (!vconjState) return;
+            vconjState.index++;
+            renderVconjProblem();
+        }
+
+        function endVconjReview() {
+            const play = document.getElementById('vconj-play-area');
+            if (!play || !vconjState) return;
+            const rs = vconjState.results;
+            const cells = rs.reduce((a, r) => a + r.total, 0);
+            const ok = rs.reduce((a, r) => a + r.okCount, 0);
+            const rows = rs.map(r => `
+                <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
+                    <span class="font-bold text-slate-800 text-sm truncate">${escapeHtml(r.word.word)}</span>
+                    <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(r.word.meaning || '')}</span>
+                    <span class="text-xs font-black shrink-0 ${r.okCount === r.total ? 'text-emerald-600' : 'text-rose-500'}">${r.okCount}/${r.total}</span>
+                </div>`).join('');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 text-center">
+                    <div class="text-5xl">${ok === cells ? '🏆' : '💪'}</div>
+                    <h3 class="text-lg font-black text-slate-900">동사 변형 연습 끝!</h3>
+                    <p class="text-sm font-bold text-slate-500">동사 ${rs.length}개 · 칸 ${ok}/${cells} 맞음</p>
+                    <div class="text-left rounded-2xl border border-slate-200 overflow-hidden max-h-72 overflow-y-auto">${rows}</div>
+                    <button onclick="resetVconjSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>
+                </div>`;
+            vconjState = null;
         }
 
         function resetFillSetup() {
