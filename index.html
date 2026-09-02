@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260902b">
+    <link rel="stylesheet" href="css/style.css?v=20260902c">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1421,6 +1421,8 @@
                     </div><!-- /sticky grammar search wrap -->
                     <!-- [냐냐 PATCH] 현재 문법표 필터/정렬 한 줄 표시 -->
                     <div id="grammar-filter-summary" class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 px-1"></div>
+                    <!-- [냐냐 요청] AI 채점 단서가 없는 노트가 있을 때만 보이는 줄 -->
+                    <div id="grammar-hint-bar" class="hidden"></div>
                     <div id="grammar-tables-container" class="space-y-3"></div>
                     <div id="grammar-empty-msg" class="hidden text-center text-sm text-slate-400 py-10">검색 결과가 없어요.</div>
                 </div>
@@ -2274,13 +2276,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260902b"></script>
-    <script src="js/creatures.js?v=20260902b"></script>
-    <script src="js/core.js?v=20260902b"></script>
-    <script src="js/vocab.js?v=20260902b"></script>
-    <script src="js/flashcards.js?v=20260902b"></script>
-    <script src="js/quiz.js?v=20260902b"></script>
-    <script src="js/games.js?v=20260902b"></script>
-    <script src="js/ai-feedback.js?v=20260902b"></script>
+    <script src="js/dictionary-data.js?v=20260902c"></script>
+    <script src="js/creatures.js?v=20260902c"></script>
+    <script src="js/core.js?v=20260902c"></script>
+    <script src="js/vocab.js?v=20260902c"></script>
+    <script src="js/flashcards.js?v=20260902c"></script>
+    <script src="js/quiz.js?v=20260902c"></script>
+    <script src="js/games.js?v=20260902c"></script>
+    <script src="js/ai-feedback.js?v=20260902c"></script>
 </body>
 </html>

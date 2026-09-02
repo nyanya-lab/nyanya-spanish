@@ -268,6 +268,7 @@ let vocabulary = [];
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
+                grammarAiHints: grammarAiHints,           // [냐냐 요청] 노트별 AI 채점 단서
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
@@ -415,6 +416,7 @@ let vocabulary = [];
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
+                grammarAiHints = payload.grammarAiHints || {};           // [냐냐 요청] 노트별 AI 채점 단서
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
                     GRAMMAR_ICONS = payload.grammarTopics
@@ -446,6 +448,7 @@ let vocabulary = [];
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 grammarCellWords = {};
+                grammarAiHints = {};
                 eggState = defaultEggState();
             }
 
@@ -2893,6 +2896,22 @@ let vocabulary = [];
                     문법 노트의 <b>'이 문법으로 번역 연습'</b> 버튼도 마찬가지 — 내가 골라서 하는 연습이라 칸을 안 움직여요.
                     문법표 빈칸은 <b>70% 미만</b>일 때 곡선에 들여놓기만 해요.
                 </p>
+            </div>
+
+            <!-- [냐냐 요청] 첨삭이 '이 문장이 어느 노트를 썼나'를 어떻게 고르는지 -->
+            <div class="bg-[#eef5fb] rounded-2xl border border-[#c3d9ec] p-4 space-y-3">
+                <h4 class="text-sm font-black text-[#2c5578] flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-[#5896cb]"></i> 어느 노트가 걸리나</h4>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    첨삭은 <b>노트 제목이 아니라 'AI 채점 단서'</b>를 읽고 판단해요. 단서는 노트 내용을 AI가 한 번 읽고 만든
+                    <b>규칙 한 줄 + 신호가 되는 스페인어</b>예요. 제목이 넓어도(예: '위치를 나타내는 표현' 인데 내용은 al/del 축약)
+                    단서가 좁으면 엉뚱한 문장에 안 걸려요. 문법 탭에서 노트를 펼치면 보이고, <b>연필로 직접 고칠 수 있어요</b>.
+                </p>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    그리고 AI는 노트를 짚을 때마다 <b>문장의 어느 조각 때문인지</b>를 같이 대야 해요. 그 조각이 내 문장에도
+                    고친 문장에도 없으면 <b>그 노트는 통째로 버려요</b> — 점수도 곡선도 안 움직여요.
+                    첨삭 결과의 문법 줄 아래 <b>'근거 · …'</b>가 그거예요. 이상한 근거가 보이면 그 판정이 틀린 거니
+                    <b>해제 버튼</b>으로 되돌리면 돼요.
+                </p>
             </div>`;
 
             // ── 다시 단어 탭 (복습·채점 규칙은 단어 이야기) ──────────
@@ -4529,6 +4548,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   ⚠️ 이 연결이 있는 칸만 빈칸 채점에서 단어 점수를 건드린다.
         //      즉 "연결이 하나라도 있는 표 = 단어 시험" 이라 따로 켜고 끄는 스위치가 필요 없다.
         let grammarCellWords = {};
+
+        // [냐냐 요청] AI 채점 단서 — 노트마다 '이 노트가 실제로 가르치는 규칙 한 줄 + 걸려야 할 신호'.
+        //   AI 가 노트 내용을 한 번 읽고 만들어 두고, 첨삭 채점 때 제목 대신 이 줄로 판단하게 한다.
+        //   {노트id: { h: 내용해시, r: '규칙 한 줄', t: ['al','del',...], m: 1(내가 손댐) }}
+        //   ⚠️ 기본 노트는 코드 상수라 노트 안에 못 넣는다. 그래서 칸 강조처럼 노트 바깥에 둔다.
+        let grammarAiHints = {};
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -4820,6 +4845,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (typeof syncGrammarExpandBtn === 'function') syncGrammarExpandBtn();
             if (typeof syncGrammarViewBtn === 'function') syncGrammarViewBtn();
             if (typeof syncGrammarLookupBtn === 'function') syncGrammarLookupBtn();
+            if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
         }
 
         // [냐냐 요청] 주제별 그룹 렌더 — 주제 헤더(접기 가능) 아래에 그 주제 노트들
@@ -4860,6 +4886,44 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         // [냐냐 요청] 노트 카드 하나 — 그룹 모드·일반 모드가 공유
         //   showTopicBadge: 그룹으로 안 묶일 때(검색·필터 중)만 카드에 주제를 적어준다
+        // [냐냐 요청] AI 채점 단서 한 줄 — 첨삭이 이 노트를 판단할 때 제목 대신 읽는 줄이다.
+        //   제목이 넓어도(예: '위치를 나타내는 표현') 이 줄이 좁으면 엉뚱한 문장에 안 걸린다.
+        //   연필로 직접 고칠 수 있다 — 노트 제목·구조는 그대로 두고 한 줄만 손보는 것.
+        function renderGrammarHintRow(t) {
+            if (typeof grammarAiHintOf !== 'function') return '';
+            const hint = grammarAiHintOf(t);
+            const editing = (typeof grammarHintEditId !== 'undefined') && grammarHintEditId === t.id;
+            if (editing) {
+                const e = (typeof grammarAiHints !== 'undefined' && grammarAiHints[t.id]) || {};
+                return `<div class="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 space-y-2">
+                    <div class="text-[10px] font-black text-violet-500">AI 채점 단서 고치기</div>
+                    <textarea id="ghint-rule-${t.id}" rows="2" placeholder="이 노트가 가르치는 규칙 한 줄" class="w-full text-xs rounded-lg border border-violet-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400">${escapeHtml(e.r || '')}</textarea>
+                    <input id="ghint-trig-${t.id}" value="${escapeHtml((e.t || []).join(', '))}" placeholder="신호가 되는 스페인어 (쉼표로 구분)" class="w-full text-xs rounded-lg border border-violet-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <div class="flex gap-2">
+                        <button type="button" onclick="editGrammarAiHint('${t.id}')" class="flex-1 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 text-[11px] font-bold">취소</button>
+                        <button type="button" onclick="saveGrammarAiHint('${t.id}')" class="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold">저장</button>
+                    </div>
+                </div>`;
+            }
+            const btns = `<button type="button" onclick="event.stopPropagation(); regenGrammarAiHint('${t.id}')" title="AI로 다시 만들기" class="shrink-0 w-6 h-6 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-100 text-[10px] transition-colors"><i class="fa-solid fa-rotate-right"></i></button>
+                <button type="button" onclick="event.stopPropagation(); editGrammarAiHint('${t.id}')" title="직접 고치기" class="shrink-0 w-6 h-6 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-100 text-[10px] transition-colors"><i class="fa-solid fa-pen"></i></button>`;
+            if (!hint) {
+                return `<div class="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2">
+                    <span class="flex-1 text-[11px] font-bold text-slate-400">AI 채점 단서가 없어요 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
+                    ${btns}
+                </div>`;
+            }
+            const tr = (hint.t || []).filter(Boolean);
+            return `<div class="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2">
+                <div class="flex-1 min-w-0 space-y-1">
+                    <div class="text-[10px] font-black text-violet-400">AI 채점 단서${hint.m ? ' · 내가 고침' : ''}</div>
+                    <div class="text-[11px] font-bold text-slate-600">${escapeHtml(hint.r || '')}</div>
+                    ${tr.length ? `<div class="text-[10px] text-slate-400 break-words">신호 · ${escapeHtml(tr.join(', '))}</div>` : ''}
+                </div>
+                ${btns}
+            </div>`;
+        }
+
         function renderGrammarNoteCard(t, query, showTopicBadge) {
                 // [냐냐 요청] 노트 = 블록 목록 — 글 블록과 표 블록을 저장된 순서 그대로 그린다
                 const blocksHtml = getNoteBlocks(t)
@@ -4930,6 +4994,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}">
+                            ${renderGrammarHintRow(t)}
                             ${blocksHtml}
                             <!-- [냐냐 요청] 읽다가 바로 연습으로 이어가기 (헤더 아이콘이 많아서 여기에 둠) -->
                             <div class="flex items-center gap-2 pt-1">

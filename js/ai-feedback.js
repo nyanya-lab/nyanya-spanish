@@ -2243,6 +2243,47 @@ ${koEsNoteListText}${refGrammar}${refWords}
             else if (typeof grammarReviewEnter === 'function') grammarReviewEnter(id);
         }
 
+        // ============================================================
+        // [냐냐 요청] 근거 확인 — AI 가 문법 노트를 짚을 때 '문장의 어느 조각 때문인지'를 같이 받는다.
+        //   그 조각이 냐냐님 문장에도, 고친 문장에도 없으면 그 노트는 버린다(점수도 곡선도 없음).
+        //   제목만 보고 아무 문장에나 갖다 붙이던 것을 코드로 막는 장치다.
+        //   ⚠️ AI 가 형식을 통째로 무시하고 제목만 보내면 확인을 끈다 — 안 그러면 문법 점수가 전부 사라진다.
+        // ============================================================
+        function aiStripTags(html) {
+            return String(html || '').replace(/<[^>]*>/g, ' ');
+        }
+        // 비교용으로 악센트·대소문자·문장부호를 지운다 (ñ 은 NFD 에서 n 으로 풀려 양쪽 다 같아진다)
+        function grammarEvidenceNorm(s) {
+            return String(s || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9 ]+/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+        }
+        //   문장을 따로따로 담는다 — 이어 붙이면 '내 문장 끝 + 고친 문장 앞'이 한 조각처럼 걸린다
+        function grammarEvidenceHaystack(feedback) {
+            const f = feedback || {};
+            return [f.originalMarked, f.correctedText, f.userText]
+                .map(x => grammarEvidenceNorm(aiStripTags(x))).filter(Boolean);
+        }
+        // 조각이 문장에 있나. '...' 은 사이가 벌어진 규칙(más ... que)이라 한 문장 안에서 순서만 맞으면 인정
+        function grammarEvidenceFound(ev, hays) {
+            const parts = String(ev || '').replace(/…/g, '...').split('...')
+                .map(x => grammarEvidenceNorm(x)).filter(Boolean);
+            const list = Array.isArray(hays) ? hays : [hays];
+            if (!parts.length || !list.length) return false;
+            return list.some(hay => {
+                if (!hay) return false;
+                let from = 0;
+                for (const part of parts) {
+                    const at = hay.indexOf(part, from);
+                    if (at < 0) return false;
+                    from = at + part.length;
+                }
+                return true;
+            });
+        }
+
         function applyEsKoGrammarScores(feedback, notes, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
@@ -2254,10 +2295,27 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const byTitle = new Map();
             notes.forEach(t => byTitle.set(norm(t.title), t));
 
-            const done = new Set();
+            // '제목 >> 근거 조각' 을 갈라서, 근거가 문장에 실제로 있는 것만 남긴다
+            const hay = grammarEvidenceHaystack(feedback);
+            const useEvidence = list.some(it => String(it.name || '').includes('>>'));
+            const parsed = [];
             list.forEach(item => {                       // AI 가 짚은 만큼 다 반영한다 (개수 제한 없음)
-                const note = byTitle.get(norm(item.name));
-                if (!note || done.has(note.id)) return;   // 지어낸 제목·중복은 버린다
+                const cut = String(item.name || '').split('>>');
+                const title = cut[0].trim();
+                const ev = cut.slice(1).join('>>').trim();
+                const note = byTitle.get(norm(title));
+                if (!note) return;                       // 지어낸 제목은 버린다
+                if (useEvidence && !grammarEvidenceFound(ev, hay)) return;   // 근거를 못 대면 점수도 없다
+                parsed.push({ note, ok: item.ok, ev });
+            });
+            // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
+            const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
+
+            const done = new Set();
+            parsed.forEach(item => {
+                const note = item.note;
+                if (done.has(note.id)) return;           // 중복은 버린다
+                if (item.ok && badIds.has(note.id)) return;
                 done.add(note.id);
                 const usage = item.ok ? 'correct' : 'wrong';
                 const delta = item.ok ? gainOk : GRAMMAR_TRANS_BAD;
@@ -2276,7 +2334,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   여기 밖에서 제대로 쓴 것은 점수(+2)로만 쳐준다 — 단어의 wordsOk 와 같은 대접.
                 const canMove = (note.id === aiMissionReviewGrammarId);
                 applyGrammarCurve(note.id, item.ok, canMove);
-                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, state: 'normal', undone: false });
+                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, ev: item.ev, state: 'normal', undone: false });
             });
         }
 
@@ -2307,10 +2365,197 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function aiScoringNoteList() {
             return (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
         }
+        // ============================================================
+        // [냐냐 요청] AI 채점 단서 — 노트 하나를 통째로 읽혀 '이 노트가 실제로 가르치는 규칙' 한 줄을 미리 받아둔다.
+        //   왜: 제목이 넓은 노트(예: '위치를 나타내는 표현' 인데 내용은 al/del 축약)는 AI 가 제목만 보고
+        //   아무 문장에나 갖다 붙였다. 프롬프트로 네 번 조여도 단서 자체가 거칠어서 한계가 있었다.
+        //   제목을 좁히는 건 냐냐님 손이 많이 가고, 규칙 줄은 노트 내용만 보면 AI 가 만들 수 있다.
+        //   ⚠️ 만들 때 제목은 일부러 안 준다 — 제목을 주면 또 제목에 끌려간 요약이 나온다.
+        // ============================================================
+        function grammarHintSource(t) {
+            return buildGrammarContextForMission(t).trim();
+        }
+        // 내용이 바뀌면 단서를 다시 만들어야 하니 짧은 지문을 남긴다
+        function grammarHintHash(src) {
+            let h = 0;
+            for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) | 0;
+            return h.toString(36) + '.' + src.length;
+        }
+        // 지금 쓸 수 있는 단서 (내용이 바뀌었으면 null). 내가 손댄 줄(m)은 내용이 바뀌어도 그대로 쓴다
+        function grammarAiHintOf(t) {
+            if (typeof grammarAiHints === 'undefined' || !t) return null;
+            const e = grammarAiHints[t.id];
+            if (!e || !String(e.r || '').trim()) return null;
+            if (e.m) return e;
+            return (e.h === grammarHintHash(grammarHintSource(t))) ? e : null;
+        }
+        function grammarAiHintText(e) {
+            if (!e) return '';
+            const tr = (e.t || []).filter(Boolean).join(', ').slice(0, 200);
+            return String(e.r || '').trim() + (tr ? ' | 신호: ' + tr : '');
+        }
+        // 단서가 없거나 낡은 노트들 (내용이 빈 노트는 애초에 채점 목록에 안 들어간다)
+        function staleGrammarHintNotes() {
+            const all = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
+            return all.filter(t => grammarHintSource(t) && !grammarAiHintOf(t));
+        }
+
+        const GRAMMAR_HINT_SYSTEM = 'You are a Spanish grammar analyst. Return ONLY JSON, no markdown fences.';
+
+        async function makeGrammarAiHint(t) {
+            const src = grammarHintSource(t);
+            if (!src) return null;
+            const prompt = `Below is ONE grammar note kept by a Korean learner of Spanish — its explanation and tables.
+            The note's TITLE is deliberately withheld: describe only what the content below actually shows.
+
+            NOTE CONTENT:
+            ${src.slice(0, 3000)}
+
+            Return two things.
+            "rule": ONE line of Korean stating the rule this note teaches AS A TESTABLE CONDITION - written so that
+            someone holding a Spanish sentence can answer yes or no. Name the actual forms, and write it as a sentence
+            with a verb: "전치사 a/de 가 관사 el 을 만나면 al/del 로 줄어든다", "비교는 más/menos ... que 로 잇는다".
+            60자 이내. Do NOT hand back a topic label - a noun phrase ending in 용법·사용법·표현·만들기 ("시간 전치사의
+            용법", "비교급 문장 만들기") is exactly what the title already says, and it is what makes the judgement go wrong.
+            "triggers": 3-12 concrete Spanish signals whose presence in a sentence means this note is in play —
+            actual words (al, del, encima de), endings (-ando, -ído), or short patterns with ... for gaps
+            (más ... que). Spanish only, no Korean, no explanation. If the note is a closed list (months,
+            weekdays, possessives), give the list words themselves.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    rule: { type: "STRING", description: "이 노트가 가르치는 규칙 한 줄 (한국어, 60자 이내)" },
+                    triggers: { type: "ARRAY", items: { type: "STRING" }, description: "이 노트가 걸려야 할 스페인어 신호" }
+                },
+                required: ["rule", "triggers"]
+            };
+            // 가끔 규칙 없이 빈 응답이 온다 — 30개를 한 번에 만드니 한 번은 더 물어본다
+            let rule = '', triggersRaw = [];
+            for (let tries = 0; tries < 2 && !rule; tries++) {
+                const data = extractAndParseJson(await callGemini(prompt, GRAMMAR_HINT_SYSTEM, schema, 'low'));
+                rule = String((data && data.rule) || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+                triggersRaw = Array.isArray(data && data.triggers) ? data.triggers : [];
+            }
+            if (!rule) return null;
+            const triggers = triggersRaw.map(x => String(x || '').trim()).filter(Boolean).slice(0, 12);
+            return { h: grammarHintHash(src), r: rule, t: triggers };
+        }
+
+        let grammarHintBusy = false;
+        // 낡은 노트만 골라 하나씩 만든다. force 면 내가 손댄 것 빼고 전부 다시.
+        async function refreshGrammarAiHints(force) {
+            if (grammarHintBusy) { showToast("단서를 만드는 중이에요", "info"); return; }
+            const all = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
+            const targets = force
+                ? all.filter(t => grammarHintSource(t) && !((grammarAiHints[t.id] || {}).m))
+                : staleGrammarHintNotes();
+            if (!targets.length) { showToast("모든 노트에 단서가 있어요", "info"); return; }
+            grammarHintBusy = true;
+            renderGrammarHintBar();
+            let done = 0, failed = 0;
+            showToast(`AI 채점 단서를 만들어요 · ${targets.length}개`, "info");
+            const nap = (ms) => new Promise(r => setTimeout(r, ms));
+            for (const t of targets) {
+                let hint = null;
+                // [냐냐 지적] 30개를 쉬지 않고 물으면 분당 한도(429)에 걸려 뒤쪽 열몇 개가 통째로 실패했다.
+                //   한도에 걸리면 기다렸다 그 노트만 다시 묻는다 — 한도가 넉넉한 키면 그냥 빨리 끝난다.
+                for (let tries = 0; tries < 3 && !hint; tries++) {
+                    try {
+                        hint = await makeGrammarAiHint(t);
+                        if (!hint) break;                 // 답은 왔는데 규칙이 없으면 그만 (안에서 이미 한 번 더 물었다)
+                    } catch (e) {
+                        const rate = e && (e.status === 429 || e.apiStatus === 'RESOURCE_EXHAUSTED');
+                        if (!rate || tries === 2) break;
+                        renderGrammarHintBar(done + failed, targets.length, true);
+                        await nap(20000);
+                    }
+                }
+                if (hint) { grammarAiHints[t.id] = hint; done++; } else failed++;
+                renderGrammarHintBar(done + failed, targets.length);
+                await nap(600);
+            }
+            grammarHintBusy = false;
+            if (done && typeof saveToStorage === 'function') saveToStorage();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            renderGrammarHintBar();
+            showToast(failed ? `단서 ${done}개 완성 · ${failed}개 실패` : `단서 ${done}개를 만들었어요`, failed ? "error" : "success");
+        }
+
+        // 노트 하나만 다시 만들기 (카드 안의 새로고침 버튼)
+        async function regenGrammarAiHint(id) {
+            if (grammarHintBusy) return;
+            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
+            if (!t) return;
+            if (!grammarHintSource(t)) { showToast("노트가 비어 있어서 단서를 못 만들어요", "error"); return; }
+            grammarHintBusy = true;
+            showToast("단서를 다시 만드는 중...", "info");
+            try {
+                const hint = await makeGrammarAiHint(t);
+                if (hint) {
+                    grammarAiHints[id] = hint;
+                    if (typeof saveToStorage === 'function') saveToStorage();
+                    showToast("단서를 새로 만들었어요", "success");
+                } else showToast("단서를 못 만들었어요", "error");
+            } catch (e) { showToast("단서를 못 만들었어요", "error"); }
+            grammarHintBusy = false;
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            renderGrammarHintBar();
+        }
+
+        // [냐냐 요청] 단서를 직접 고치기 — AI 요약이 어긋나도 노트 제목·구조는 안 건드리고 한 줄만 손본다
+        let grammarHintEditId = null;
+        function editGrammarAiHint(id) {
+            grammarHintEditId = (grammarHintEditId === id) ? null : id;
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+        }
+        function saveGrammarAiHint(id) {
+            const rule = (document.getElementById('ghint-rule-' + id) || {}).value || '';
+            const trig = (document.getElementById('ghint-trig-' + id) || {}).value || '';
+            const r = rule.replace(/\s+/g, ' ').trim().slice(0, 120);
+            if (!r) { showToast("규칙 한 줄은 비울 수 없어요", "error"); return; }
+            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
+            grammarAiHints[id] = {
+                h: t ? grammarHintHash(grammarHintSource(t)) : '',
+                r: r,
+                t: trig.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
+                m: 1                                   // 내가 손댄 줄 — 노트를 고쳐도, 전체 다시 만들기에도 안 지운다
+            };
+            grammarHintEditId = null;
+            if (typeof saveToStorage === 'function') saveToStorage();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            showToast("채점 단서를 고쳤어요", "success");
+        }
+
+        // 문법 탭 위의 한 줄 — 단서가 없는 노트가 있을 때만 보인다
+        function renderGrammarHintBar(doneN, totalN, waiting) {
+            const box = document.getElementById('grammar-hint-bar');
+            if (!box) return;
+            if (grammarHintBusy) {
+                const prog = totalN ? ` · ${doneN}/${totalN}` : '';
+                const msg = waiting ? '요청이 몰려서 20초 쉬었다 이어가요' : 'AI 채점 단서를 만드는 중이에요';
+                box.className = 'flex items-center gap-2 text-[11px] font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl px-3 py-2';
+                box.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> ${msg}${prog}`;
+                return;
+            }
+            const n = staleGrammarHintNotes().length;
+            if (!n) { box.className = 'hidden'; box.innerHTML = ''; return; }
+            box.className = 'flex items-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
+            box.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-violet-500"></i>
+                <span class="flex-1">AI 채점 단서가 없는 노트 ${n}개 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
+                <button type="button" onclick="refreshGrammarAiHints(false)" class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold transition-all active:scale-95">만들기</button>`;
+        }
+
         // [냐냐 요청] 예전엔 제목만 보냈다. AI 가 표 안에 뭐가 있는지 모른 채 제목만 보고 짐작해서,
         //   문장에 없는 문법에도 점수가 붙는 일이 있었다. 표 전체는 하나에 3천 자라 못 보내니
         //   설명 앞부분과 표 안의 스페인어 낱말 몇 개만 단서로 붙인다 (한 표당 150자 안팎).
+        //   [냐냐 요청] 이제 AI 가 미리 만들어 둔 '규칙 한 줄'이 있으면 그걸 쓴다.
+        //   단서가 없는 노트만 아래 거친 방식(설명 앞부분 + 표 낱말)으로 떨어진다.
         function aiScoringNoteHint(t) {
+            const ai = (typeof grammarAiHintOf === 'function') ? grammarAiHintOf(t) : null;
+            if (ai) return grammarAiHintText(ai);
+            return aiScoringNoteHintRaw(t);
+        }
+        function aiScoringNoteHintRaw(t) {
             const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
             // 설명이 없으면 첫 글 블록의 본문을 대신 쓴다 (표만 있고 desc 가 빈 노트가 있다)
             let desc = strip(t.desc);
@@ -2343,7 +2588,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const hint = aiScoringNoteHint(t);
                 return `- ${t.title || ''}${hint ? ` :: ${hint}` : ''}`;
             });
-            return `\n            My grammar notes. Each line is "TITLE :: what the note is about | example words from the note".\n            Use the hint to decide whether the sentence REALLY exercises that note — do not guess from the title alone:\n            ${lines.join('\n            ')}\n`;
+            return `\n            My grammar notes. Each line is "TITLE :: the rule this note actually teaches | 신호: the Spanish signals that mean this note is in play".\n            The TITLE is only a label the student typed - it is often broader than the note. JUDGE ONLY BY THE RULE after "::",\n            never by the title: a note titled "위치를 나타내는 표현" whose rule is about al/del is NOT used by a sentence with no contraction.\n            ${lines.join('\n            ')}\n`;
         }
         // [냐냐 요청] 실수 유형. 예전엔 자유 작문·질문답하기에만 있어서, 한→스 미션과
         //   예문 연습으로 틀린 것은 첨삭 노트에서 유형 없이 떠돌았다. 네 곳이 같은 표를 쓴다.
@@ -2358,8 +2603,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   [냐냐 요청] 예전엔 [{word, spelling}] 꼴이라 단어 하나에 39자를 썼다. 응답이 길어지면
         //   maxOutputTokens 에 걸려 잘리므로, 맞음/틀림을 배열로 갈라 이름만 담는다 (10자).
         const AI_SCORING_JSON_FIELDS = `
-               "grammarOk": ["EXACT note titles from the list above that this sentence uses CORRECTLY"],
-               "grammarBad": ["EXACT note titles from the list above that this sentence uses INCORRECTLY"],
+               "grammarOk": ["for each note this sentence uses CORRECTLY: \"EXACT note title >> the exact Spanish fragment that proves it\""],
+               "grammarBad": ["for each note this sentence uses INCORRECTLY: \"EXACT note title >> the exact Spanish fragment that proves it\""],
                "wordsOk": ["each content word the student spelled CORRECTLY, written as \\"dictionary form|part of speech\\""],
                "wordsForm": ["each content word spelled correctly but put in the WRONG FORM, written as \\"dictionary form|part of speech\\""],
                "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""]`;
@@ -2382,14 +2627,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
             - student wrote "el libro que es sobre el pie" and you returned "el libro que está arriba de mis pies" — now you rewrote the location phrase itself, so this note is "grammarBad".
             The same test decides "wordsOk" vs "wordsForm" for each word: survived as written, or not.
             - "grammarOk" when the student applied the note's rule correctly, even if you changed other words nearby for a DIFFERENT reason. Example: the student wrote "¿Cuál pantalones es más caros que aquel?" and you fixed the interrogative (Cuál→Qué), the verb agreement (es→son) and the demonstrative (aquel→esos) — a note about COMPARATIVES stays in "grammarOk", because "más ... que" itself was used correctly. Do not punish a note just because a word standing next to it changed.
-            A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".${AI_SPELLING_CONSISTENCY_RULE}`;
+            A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".
+            EVIDENCE IS MANDATORY. Every entry of "grammarOk"/"grammarBad" is written as "TITLE >> FRAGMENT", where FRAGMENT is 1-5 Spanish words COPIED VERBATIM from the student's sentence or from your corrected sentence - the very words this note's rule is about. Copy them letter for letter; do not paraphrase, do not translate, do not name the rule again. Use "..." for a gap when the rule spans words (e.g. "mas ... que"). A fragment that does not appear in either sentence is thrown away by the app together with its note, so the student loses the point - and a fragment you cannot find is proof the note was not really used, which is exactly when you must leave the note out.${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
         const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsForm", "wordsBad"];
         function aiScoringSchemaProps() {
             return {
-                grammarOk: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 제대로 쓴 문법 노트 제목들 (목록에 있는 제목 그대로)" },
-                grammarBad: { type: "ARRAY", items: { type: "STRING" }, description: "이 문장이 틀리게 쓴 문법 노트 제목들" },
+                grammarOk: { type: "ARRAY", items: { type: "STRING" }, description: "제대로 쓴 문법 노트 — '제목 >> 문장에서 베낀 근거 조각'" },
+                grammarBad: { type: "ARRAY", items: { type: "STRING" }, description: "틀리게 쓴 문법 노트 — '제목 >> 문장에서 베낀 근거 조각'" },
                 wordsOk: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링도 형태도 맞은 낱말의 사전형들" },
                 wordsForm: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링은 맞지만 활용·성수 형태를 틀린 낱말의 사전형들 (점수 없음)" },
                 wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" }
@@ -2933,6 +3179,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     <button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
                         <div class="text-[10px] font-bold ${g.undone ? 'text-slate-400 line-through' : cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
+                        <!-- [냐냐 요청] AI 가 이 노트를 고른 근거 — 문장의 어느 조각 때문인지 보여준다.
+                             엉뚱한 노트가 걸리면 여기가 먼저 이상해 보인다 -->
+                        ${g.ev ? `<div class="text-[10px] text-slate-400 truncate">근거 · ${escapeHtml(g.ev)}</div>` : ''}
                     </button>
                     ${g.undone ? '<span class="text-[10px] font-bold text-slate-400 shrink-0 mr-1">해제됨</span>' : ''}
                     ${`<button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-teal-100 text-slate-400 hover:text-teal-600 text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
