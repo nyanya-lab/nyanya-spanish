@@ -1678,6 +1678,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             irregular: { type: "STRING", enum: ["none", "e ➡️ i", "o ➡️ u", "-yendo", "기타 변형"], description: "현재분사의 불규칙 갈래. none=규칙(-ando/-iendo). 'e ➡️ i'=pedir→pidiendo·decir→diciendo. 'o ➡️ u'=dormir→durmiendo·poder→pudiendo. '-yendo'=어간이 모음으로 끝남(leer→leyendo·oír→oyendo·ir→yendo)" }
                         }
                     },
+                    // [냐냐 지적] 과거분사는 AI 추천에 빠져 있어서 손으로 채워야 했다 (2026-09-03).
+                    //   ⚠️ 과거분사는 재귀대명사를 붙이지 않는다 (levantarse → levantado).
+                    //      현재분사(levantándose)와 반대라서 여기 못박아 둔다.
+                    participio: {
+                        type: "OBJECT",
+                        description: "동사일 때만 채울 것. 과거분사(participio). -ar→-ado, -er/-ir→-ido. 재귀동사(-se)는 재귀대명사를 절대 붙이지 말 것 (levantarse→levantado). haber 도 붙이지 말 것. 센모음(a·e·o) 뒤에서는 -ído 로 악센트를 찍는다 (leer→leído, traer→traído, oír→oído). 약모음 뒤는 그냥 -ido (construir→construido). 동사가 아니면 빈 문자열.",
+                        properties: {
+                            form: { type: "STRING", description: "과거분사 형태 (남성 단수, 악센트 정확히)" },
+                            irregular: { type: "STRING", enum: ["none", "불규칙", "두 꼴 다 씀"], description: "none=규칙(-ado/-ido, -ído 포함). '불규칙'=abierto·escrito·puesto·dicho·hecho 처럼 어미가 다른 것. '두 꼴 다 씀'=imprimir→imprimido/impreso, freír→freído/frito 처럼 두 꼴이 다 살아 있는 것" }
+                        }
+                    },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
                     idioms: {
                         type: "ARRAY",
@@ -1940,6 +1951,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         const cell = gerBlock.querySelector('[data-person="form"]');
                         if (cell && (forceOverwrite || !cell.value.trim())) cell.value = gerForm;
                         applySingleTenseIrregular(gerBlock, 'gerundio', ger.irregular);
+                    }
+                }
+                // [냐냐 지적] 과거분사도 같이 등록 (현재분사와 같은 방식)
+                const par = result.participio || {};
+                const parForm = String(par.form || '').trim();
+                if (parForm && box) {
+                    const parBlock = [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'participio');
+                    if (!parBlock) {
+                        const irr = irregularTypesFor('participio').includes(par.irregular) ? par.irregular : 'none';
+                        addTenseBlock('participio', { form: parForm }, irr !== 'none' ? 'irregular' : 'regular', irr);
+                    } else {
+                        const cell = parBlock.querySelector('[data-person="form"]');
+                        if (cell && (forceOverwrite || !cell.value.trim())) cell.value = parForm;
+                        applySingleTenseIrregular(parBlock, 'participio', par.irregular);
                     }
                 }
             }
