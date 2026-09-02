@@ -4,6 +4,7 @@
         let aiCurrentKoreanSentence = "";
         // [냐냐 요청] 이번 미션이 참고한 문법 노트와 같이 섞은 단어들 (첨삭 때 근거로 같이 넘김)
         let aiCurrentGrammarForMission = null;
+        let aiCurrentGrammarDetailForMission = '';   // [냐냐 요청] 그 노트에서 이번에 지정한 대목
         let aiCurrentExtraWordsForMission = [];
         let aiLastCorrectedText = '';   // 미션 참고 칩을 '실제로 쓴 것' 으로 추리는 데 쓴다
         let aiForcedGrammarId = null;    // [냐냐 요청] 노트에서 '이 문법으로 번역 연습'을 눌렀을 때 딱 한 번 쓰임
@@ -1143,6 +1144,7 @@
                     <span class="text-[10px] font-bold text-violet-500">문법</span>
                     <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.icon || '📋')} ${escapeHtml(g.title || '')}</div>
                     <div class="text-[10px] text-slate-400 mt-0.5">이 문법으로 문장을 만들었어요 · 눌러서 노트 보기 →</div>
+                    ${aiCurrentGrammarDetailForMission ? `<div class="mt-1.5 pt-1.5 border-t border-slate-100 text-[10px] text-slate-500"><b class="text-violet-500">이번 대목</b> · ${escapeHtml(aiCurrentGrammarDetailForMission)}</div>` : ''}
                 </button>` : ''}
                 ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}
                 </div>`;
@@ -1178,6 +1180,51 @@
                 if (rows.length) parts.push('표 내용:\n' + rows.join('\n'));
             });
             return parts.join('\n');
+        }
+
+        // ============================================================
+        // [냐냐 요청] 노트 안에서 '이번에 연습할 대목' 하나를 뽑는다.
+        //   왜: 노트 전체를 주면 AI 가 매번 대표 패턴만 골라 쓴다 — 위치 노트면 늘 encima de 고,
+        //   표 아래쪽에 적어둔 자잘한 것들은 문장으로 안 나온다. 대목을 콕 집어주면
+        //   여러 번 하는 사이에 노트 구석까지 돌아간다. 고르는 건 코드가 하고(무작위) AI 는 따른다.
+        //   ⚠️ 대목은 '노트에 적힌 줄' 그대로다. 요약하지 않는다 — 요약하면 디테일이 날아간다.
+        // ============================================================
+        function grammarNoteDetailLines(note) {
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(note) : [];
+            const out = [];
+            const add = (line) => {
+                const t = String(line || '').replace(/\s+/g, ' ').trim();
+                if (t.length < 4 || t.length > 200) return;
+                if (!/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(t)) return;   // 스페인어가 한 글자도 없으면 연습거리가 아니다
+                if (!out.includes(t)) out.push(t);
+            };
+            // 설명 글은 한 덩어리로 길게 적혀 있는 일이 많다 (노트 하나에 500자짜리 한 줄).
+            //   통째로는 '대목'이 못 되므로 문장·예문(ej.) 단위로 쪼갠다.
+            //   ⚠️ 안 쪼개면 길이 제한에 걸려 통째로 버려진다 — al/del 축약 설명이 딱 그랬다.
+            const addText = (raw) => {
+                String(raw || '').split('\n').forEach(line => {
+                    const t = line.trim();
+                    if (!t) return;
+                    if (t.length <= 160) { add(t); return; }
+                    t.replace(/([.!?])\s+/g, '$1\u0001').replace(/\s(ej\.)/g, '\u0001$1')
+                        .split('\u0001').forEach(part => add(part.trim().slice(0, 200)));
+                });
+            };
+            blocks.forEach(b => {
+                if (b.type === 'text') {
+                    const plain = (typeof richTextToPlain === 'function') ? richTextToPlain(b.html) : '';
+                    addText(plain);
+                    return;
+                }
+                // 표는 행 하나가 곧 대목이다 (제목줄은 뺀다 — 'ej.' 같은 머리말만 있어서)
+                (b.rows || []).forEach(r => add((r || []).map(c => String(c || '').trim()).filter(Boolean).join(' | ')));
+            });
+            return out;
+        }
+        function pickGrammarNoteDetail(note) {
+            const lines = grammarNoteDetailLines(note);
+            if (!lines.length) return '';
+            return lines[Math.floor(Math.random() * lines.length)];
         }
 
         // 단어장 항목이 '단어/짧은 표현'인지 (문장 통째로 등록된 건 미션 재료로 안 씀)
@@ -1399,6 +1446,7 @@
             const refsBox = document.getElementById('ai-mission-refs');
             if (refsBox) { refsBox.classList.add('hidden'); refsBox.innerHTML = ''; }
             aiCurrentGrammarForMission = null;
+            aiCurrentGrammarDetailForMission = '';
             aiCurrentExtraWordsForMission = [];
             aiLastCorrectedText = '';
 
@@ -1432,6 +1480,8 @@
             else renderGrammarReviewBar();
             const grammarNote = forced || pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
+            // 노트 안에서 이번에 연습할 대목 하나 (매번 다른 줄이 걸리게)
+            const grammarDetail = grammarNote ? pickGrammarNoteDetail(grammarNote) : '';
             //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
             //   문장·표현 통째로 등록된 것도 있어서, 그런 걸 섞으라고 주면 억지로 우겨넣은 이상한 문장이 나온다
             const extraWords = (typeof shuffleArray === 'function' ? shuffleArray(vocabulary.slice()) : vocabulary.slice())
@@ -1450,7 +1500,13 @@ ${grammarContext ? `
 ${grammarContext}
 
 위 문법을 실제로 써야만 번역할 수 있는 문장으로 만들어 주세요. 노트의 설명까지 읽고, 그 문법이 자연스럽게 필요한 상황을 잡으세요.
-아래 표 안의 스페인어는 참고용일 뿐이며, 만들 문장에는 절대 넣지 마세요.` : ''}
+아래 표 안의 스페인어는 참고용일 뿐이며, 만들 문장에는 절대 넣지 마세요.${grammarDetail ? `
+
+[이번엔 그 노트에서 특히 이 대목]
+${grammarDetail}
+노트 전체가 아니라 이 대목이 이번 목표입니다. 이 대목을 실제로 써야만 번역되는 상황으로 문장을 잡으세요.
+같은 노트라도 매번 다른 대목을 연습하려고 지정하는 것이니, 노트의 대표 패턴으로 슬쩍 돌아가지 마세요.
+다만 이 대목으로는 도저히 자연스러운 문장이 안 나오면 노트 안의 다른 대목으로 바꿔도 됩니다 — 자연스러움이 먼저입니다.` : ''}` : ''}
 
 ⚠️ 가장 중요 — 문장이 '말이 되는지' 반드시 검토하세요. 문법을 끼워 넣는 것보다 우선입니다.
 내보내기 전에 스스로 물어보세요: "실제 사람이 이 말을 하는 상황이 존재하는가?"
@@ -1489,6 +1545,7 @@ ${extraWords.length ? `
                 aiCurrentKoreanSentence = candidateSentence;
                 // [냐냐 요청] 첨삭 때 근거로 쓰려고 이번 미션이 참고한 것들을 기억해 둔다
                 aiCurrentGrammarForMission = grammarNote || null;
+                aiCurrentGrammarDetailForMission = grammarDetail || '';
                 aiCurrentExtraWordsForMission = extraWords;
                 missionHeading.innerText = aiCurrentKoreanSentence;
                 AudioFX.playPunch();
@@ -1545,7 +1602,7 @@ ${extraWords.length ? `
             //   지금처럼 문법 하나만 보고 만든다 — 목록은 '채점' 에만 붙는다.
             const koEsNoteListText = aiScoringNoteListText(koEsScoreNotes);
             const refGrammar = aiCurrentGrammarForMission
-                ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
+                ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n${aiCurrentGrammarDetailForMission ? `            The mission was aimed at THIS line of that note: ${aiCurrentGrammarDetailForMission}\n` : ''}`
                 : '';
             const refWords = (aiCurrentExtraWordsForMission || []).length
                 ? `\n            Other words from the student's vocabulary that were offered: ${aiCurrentExtraWordsForMission.map(w => `${w.word}(${w.meaning})`).join(', ')}\n`
