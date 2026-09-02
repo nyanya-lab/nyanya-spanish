@@ -8093,6 +8093,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             await saveToStorage();
             if (typeof updateStats === 'function') updateStats(); // 헤더 문법 개수 갱신
             showToast("문법 표가 저장됐어요! ✨", "success");
+            // [냐냐 요청] 내용이 바뀌었으면 AI 채점 단서도 그 노트만 조용히 다시 만든다 (기다리지 않는다)
+            if (typeof autoMakeGrammarAiHint === 'function') autoMakeGrammarAiHint(s.id);
         }
 
         function deleteGrammarTable(id) {
@@ -8111,6 +8113,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     delete grammarScores[id];        // [냐냐 요청] 점수·마스터 자격도 같이 정리
                     delete grammarTransUsed[id];
                     delete grammarCellWords[id];     // [냐냐 요청] 단어 연결도 정리
+                    if (typeof grammarAiHints !== 'undefined') delete grammarAiHints[id];   // AI 채점 단서도
                     if (typeof logAction === 'function') logAction('undo-new-grammar');
                     renderGrammarTables();
                     await saveToStorage();

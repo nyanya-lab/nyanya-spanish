@@ -2481,6 +2481,26 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast(failed ? `단서 ${done}개 완성 · ${failed}개 실패` : `단서 ${done}개를 만들었어요`, failed ? "error" : "success");
         }
 
+        // [냐냐 요청] 노트를 저장하면 그 노트 단서만 조용히 다시 만든다 (호출 한 번).
+        //   내용을 고쳤는데 단서가 옛날 것으로 남아 있으면 채점이 어긋나므로 사람 손을 안 빌린다.
+        //   실패해도 아무 말 안 한다 — 단서가 없으면 예전 방식(설명 앞부분 + 표 낱말)으로 채점되고,
+        //   문법 탭 맨 위 줄이 '단서 없는 노트'로 알려준다.
+        //   ⚠️ 서른 개를 한꺼번에 만드는 건 여전히 '만들기' 버튼으로 둔다 — 분당 한도(429)에 걸려
+        //      첨삭까지 같이 막히므로, 그런 몰아치기는 냐냐님이 누를 때만 일어나야 한다.
+        async function autoMakeGrammarAiHint(id) {
+            if (grammarHintBusy || !id) return;
+            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
+            if (!t || !grammarHintSource(t)) return;
+            if (grammarAiHintOf(t)) return;              // 이미 최신이거나, 내가 고쳐둔 줄이면 그대로 둔다
+            try {
+                const hint = await makeGrammarAiHint(t);
+                if (!hint) return;
+                grammarAiHints[id] = hint;
+                if (typeof saveToStorage === 'function') saveToStorage();
+                refreshGrammarHintViews(id);
+            } catch (e) { /* 조용히 넘어간다 */ }
+        }
+
         // 노트 하나만 다시 만들기 (카드 안의 새로고침 버튼)
         async function regenGrammarAiHint(id) {
             if (grammarHintBusy) return;
