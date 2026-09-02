@@ -1018,7 +1018,16 @@ Prefer "typo" over "synonym" when the answer is not a real Spanish word.
 If the target is a multi-word expression, EVERY word must be there. A missing or extra word — a preposition especially (target "en diagonal a", answer "diagonal a") — is NOT "correct": use "typo" if it is clearly an attempt at the same expression, otherwise "wrong".
 Also report whether the student's answer is itself a real Spanish word, and what it means — the learner needs to know if they wrote a different real word or just gibberish.
 Return JSON only.`;
-                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).
+                // [냐냐 지적] 활용형 문제는 원형을 안 보여주고 뜻만 준다. 그래서 학생이 다른 동사를
+                //   같은 시제·인칭으로 바르게 활용해 쓸 수 있다 — 그건 유의어다.
+                //   반대로 같은 동사인데 인칭·시제를 틀린 것은 유의어가 아니라 오답이다.
+                const conjSlot = q.word && q.word._isConjTask ? q.word._conjSlot : null;
+                const conjNote = conjSlot ? `
+This is a CONJUGATION question: the student saw only the Korean meaning plus "${conjSlot.tenseLabel}${conjSlot.personLabel ? ' · ' + conjSlot.personLabel : ''}" and had to produce that exact form — the infinitive was hidden.
+- "synonym" = a DIFFERENT verb with the same meaning, correctly conjugated in that same tense and person (target "esperando", answer "aguardando"). The student knew the grammar but reached for another verb.
+- "wrong" = the RIGHT verb in the WRONG form (target "alternáis", answer "alterno" or "alternado"). That is a conjugation mistake, never "synonym" and never "typo".
+- "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".` : '';
+                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}
 Student answered: "${userAnswer}".
 Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답이 실제 스페인어 단어라면 그 한글 뜻, 아니면 빈 문자열" }`;
                 const schema = {

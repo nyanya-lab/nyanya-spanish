@@ -3981,18 +3981,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!userAnswer) { writeFirstRoundFail(w, userAnswer); return; }
             const used = (s.usedRetries = s.usedRetries || {});
 
-            // [냐냐 요청] 활용형 과제는 정답이 하나뿐이라 유의어가 있을 수 없다.
-            //   AI 를 부르지 않고 오타만 한 번 봐준다 (악센트는 아래 3)에서 따로 걸린다).
-            if (w._isConjTask && !writeAccentOnlyMiss(userAnswer, w.word)) {
-                const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
-                    ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
-                if (dist <= 2 && !used.typo) {
-                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`, userAnswer);
-                    return;
-                }
-                writeFirstRoundFail(w, userAnswer);
-                return;
-            }
+            // [냐냐 지적] 활용형 과제에도 유의어가 있다 — 원형을 안 보여주고 뜻만 주니까
+            //   다른 동사를 같은 시제·인칭으로 바르게 활용해 쓸 수 있다 (esperando ↔ aguardando).
+            //   그래서 AI 채점을 그대로 탄다. 대신 '같은 동사인데 활용을 틀린 것' 은
+            //   유의어가 아니라 오답이라고 프롬프트에서 갈라준다 (aiGradeSubjective).
 
             // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더' (철자로 이미 봐줬으면 오답)
             if (writeAccentOnlyMiss(userAnswer, w.word)) {
