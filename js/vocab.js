@@ -228,7 +228,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const box = block.querySelector('.conj-block-inputs');
             const prev = readBlockConj(block);
             if (isSingleTense(tense)) {
-                box.innerHTML = `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">현재분사 (gerundio)</span><input type="text" data-person="form" placeholder="teniendo" autocomplete="off" class="conj-cell w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-bold text-blue-600"></div>`;
+                // [냐냐 지적] 과거분사 칸에도 '현재분사 (gerundio)' 라고 떠 있었다 — 시제에 맞춰 적는다
+                const single = { gerundio: { label: '현재분사 (gerundio)', ph: 'teniendo' },
+                                 participio: { label: '과거분사 (participio)', ph: 'tenido' } }[tense]
+                            || { label: '한 칸', ph: '' };
+                box.innerHTML = `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${single.label}</span><input type="text" data-person="form" placeholder="${single.ph}" autocomplete="off" class="conj-cell w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-bold text-blue-600"></div>`;
                 const el = box.querySelector('[data-person="form"]'); if (el && prev.form) el.value = prev.form;
             } else {
                 box.innerHTML = `<div class="grid grid-cols-3 gap-2">` + CONJ_PERSON_KEYS.map((p, i) =>
@@ -2881,10 +2885,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const resolved = resolveTenseIrregularity(w, k, rawClass, rawIrr);
                 const irrType = resolved.irrType;
                 const verbClass = resolved.verbClass;
-                const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙' : `불규칙(${irrType})`;
+                // 갈래 이름이 '불규칙' 자체면 '불규칙(불규칙)' 이 되니 괄호를 뺀다
+                const clsText = (verbClass === 'regular' || !irrType || irrType === 'none') ? '규칙'
+                    : (irrType === '불규칙' ? '불규칙' : `불규칙(${irrType})`);
 
+                // [냐냐 지적] 1칸짜리 시제(현재분사·과거분사)는 불규칙이어도 파란색이 안 붙고 있었다.
+                //   6인칭 시제는 '어느 인칭이 불규칙인가' 를 가리지만, 1칸은 그 한 칸이 곧 불규칙이다.
+                const singleIrr = !(verbClass === 'regular' || !irrType || irrType === 'none');
                 const body = (c.form && !c.yo)
-                    ? `<div class="text-center py-1"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`
+                    ? `<div class="text-center py-1"><span class="text-sm font-black ${singleIrr ? 'text-blue-600' : 'text-slate-800'}">${escapeHtml(c.form)}</span></div>`
                     : `<div class="grid grid-cols-3 gap-1.5 text-center text-[10px]">
                             ${getConjugationCellMarkup('yo', c.yo, verbClass, irrType)}
                             ${getConjugationCellMarkup('tú', c.tu, verbClass, irrType)}

@@ -899,8 +899,8 @@ let quizSession = null;
 
                 let cells;
                 if (c.form && !c.yo) {
-                    // 1칸짜리 특수 시제 (현재분사·과거분사)
-                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`;
+                    // 1칸짜리 특수 시제 (현재분사·과거분사) — 그 한 칸이 곧 불규칙이라 통째로 파랗게
+                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black ${isIrr ? 'text-blue-600' : 'text-slate-800'}">${escapeHtml(c.form)}</span></div>`;
                 } else {
                     const rows = [['yo', c.yo], ['tú', c.tu], ['él/ella', c.el], ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]];
                     cells = rows.map(([label, val]) => {
@@ -918,7 +918,7 @@ let quizSession = null;
                     <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
                         <span>🔀</span> ${escapeHtml(labelOf(k))}
                         ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
-                        ${isIrr ? `<span class="text-rose-500">· 불규칙 <span class="text-blue-600">(${escapeHtml(irrType)})</span></span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
+                        ${isIrr ? `<span class="text-rose-500">· 불규칙${irrType === '불규칙' ? '' : ` <span class="text-blue-600">(${escapeHtml(irrType)})</span>`}</span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
                     </div>
                     <div class="grid grid-cols-3">${cells}</div>
                 </div>`;
