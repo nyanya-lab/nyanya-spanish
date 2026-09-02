@@ -300,13 +300,11 @@
         // ============================================================
 
         // Live Gemini API Connector Utility
-        // [PATCH-혼합모델] 단순 작업(단어 추천, 문장 생성)은 더 가볍고 빠른 Flash-Lite,
-        // 정밀한 판단이 필요한 작업(첨삭 채점, 문법 설명)은 기존 Flash를 그대로 사용
-        const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
+        // [냐냐 요청] 앱 전체가 Flash-Lite 하나만 쓴다. 예전엔 '정밀한 판단은 Flash' 라고 적어뒀는데
+        //   실제로는 그 상수를 아무 데서도 안 써서 주석만 남아 있었다 — 헷갈리니 지운다.
+        //   2026-09-02 에 Flash(gemini-3-flash-preview)로 재봤다: 미션 문장 생성이 10~31초였다
+        //   (Lite 는 5.5~6.4초). 문장 품질도 눈에 띄게 낫지 않아서 올리지 않기로 했다.
         const GEMINI_MODEL_FLASH_LITE = 'gemini-3.1-flash-lite';
-
-        // [냐냐 PATCH] 기본 모델을 Flash → Flash-Lite로 변경 (더 빠름). 원복하려면 아래 model 기본값을
-        // GEMINI_MODEL_FLASH 로 다시 바꾸면 됨.
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
