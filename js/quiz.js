@@ -352,7 +352,7 @@ let quizSession = null;
                     presente: '직설법 현재', indefinido: '직설법 부정과거', imperfecto: '직설법 불완료과거',
                     futuro: '직설법 미래', condicional: '조건법', subjPresente: '접속법 현재',
                     subjImperfecto: '접속법 불완료과거', imperativo: '명령법',
-                    gerundio: '현재분사'
+                    gerundio: '현재분사', participio: '과거분사'
                 };
                 // 사용 가능한 시제 목록 수집 (구버전 conjugations는 presente로 취급)
                 const availableTenses = [];
@@ -367,7 +367,7 @@ let quizSession = null;
                     const pickedTense = availableTenses[Math.floor(Math.random() * availableTenses.length)];
                     const conj = pickedTense.data;
                     const forms = (conj.form && !conj.yo)
-                        ? [{ key: 'form', label: '현재분사' }] // 1칸짜리 시제 (gerundio)
+                        ? [{ key: 'form', label: tenseMap[pickedTense.key] || '분사' }] // 1칸짜리 시제 (현재분사·과거분사)
                         : [
                         { key: 'yo', label: '1인칭 단수 (yo)' },
                         { key: 'tu', label: '2인칭 단수 (tú)' },
@@ -899,7 +899,7 @@ let quizSession = null;
 
                 let cells;
                 if (c.form && !c.yo) {
-                    // 1칸짜리 특수 시제 (gerundio 등)
+                    // 1칸짜리 특수 시제 (현재분사·과거분사)
                     cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black text-slate-800">${escapeHtml(c.form)}</span></div>`;
                 } else {
                     const rows = [['yo', c.yo], ['tú', c.tu], ['él/ella', c.el], ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]];

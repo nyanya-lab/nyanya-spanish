@@ -38,7 +38,7 @@
         //   각 블록 = 시제종류 select + 규칙/불규칙 select + 불규칙유형 select + AI추천 + 삭제 + 입력칸(6인칭 또는 현재분사 1칸)
         const CONJ_PERSON_KEYS = ['yo','tu','el','nos','vos','ellos'];
         const CONJ_PERSON_LABELS = ['yo (나)','tú (너)','él/ella','nosotros','vosotros','ellos/ellas'];
-        const SINGLE_TENSES = ['gerundio']; // 6인칭이 아니라 1칸만 있는 특수 시제
+        const SINGLE_TENSES = ['gerundio', 'participio']; // 6인칭이 아니라 1칸만 있는 특수 시제
         // 시제 종류 (틀 — 나중에 자유롭게 추가/수정 가능)
         const TENSE_TYPE_OPTIONS = [
             { key: 'presente', label: '직설법 현재' },
@@ -50,6 +50,7 @@
             { key: 'subjImperfecto', label: '접속법 불완료과거' },
             { key: 'imperativo', label: '명령법' },
             { key: 'gerundio', label: '현재분사 (gerundio · 1칸)' },
+            { key: 'participio', label: '과거분사 (participio · 1칸)' },
             // [냐냐 요청] 현재진행은 넣지 않는다 — estar+현재분사라 새로 볼 게 없고,
             //   조회 화면에서도 퀴즈에서도 자리만 차지했다.
         ];
@@ -59,8 +60,15 @@
         //   e➡️i: pedir→pidiendo · decir→diciendo · reír→riendo
         //   o➡️u: dormir→durmiendo · poder→pudiendo
         //   -yendo: 어간이 모음으로 끝남 (leer→leyendo · oír→oyendo · ir→yendo)
+        // [냐냐 요청] 과거분사는 현재분사처럼 '어간이 이렇게 바뀐다' 는 갈래가 없다.
+        //   외우는 수밖에 없는 닫힌 목록인데, 어미로 두 무리로 묶인다 —
+        //   -to: abrir→abierto · escribir→escrito · poner→puesto · ver→visto · volver→vuelto
+        //   -cho: decir→dicho · hacer→hecho · satisfacer→satisfecho
+        //   합성어는 앞말을 그대로 따라간다 (descubrir→descubierto, componer→compuesto)
+        //   두 꼴을 다 쓰는 것도 있다 (imprimir→imprimido/impreso, freír→freído/frito)
         const IRREGULAR_TYPES_BY_TENSE = {
             gerundio: ['none', 'e ➡️ i', 'o ➡️ u', '-yendo', '기타 변형'],
+            participio: ['none', '-to', '-cho', '합성어 (앞말 따라감)', '두 꼴 다 씀', '기타 변형'],
         };
         function irregularTypesFor(tense) { return IRREGULAR_TYPES_BY_TENSE[tense] || IRREGULAR_TYPE_OPTIONS; }
         function irrOptionsHtml(tense, cur) {
@@ -76,6 +84,19 @@
 - conjugated tenses put the pronoun before the verb (secarse → "me seco / te secas / se seca / nos secamos / os secáis / se secan", levantarse → "me levanto")
 - the gerundio attaches it to the end with the written accent (secarse → "secándose", levantarse → "levantándose", dormirse → "durmiéndose", irse → "yéndose")
 Never drop the pronoun for a reflexive verb.`;
+        // [냐냐 요청] 과거분사는 재귀대명사를 붙이지 않는다. 대명사는 haber 앞에 간다
+        //   (levantarse → "me he levantado", 분사 자체는 "levantado").
+        //   현재분사(secándose)와 반대라서 따로 못박아 둔다.
+        const PARTICIPIO_RULE_PROMPT = `You are a precise Spanish conjugation engine (standard peninsular Spanish).
+For each verb give its participio (과거분사 / past participle) with correct accents, and classify it as EXACTLY one of:
+- "none" = regular: -ar → -ado, -er/-ir → -ido (hablar→hablado, comer→comido, vivir→vivido; note the accent in leer→leído, oír→oído, traer→traído)
+- "-to" = irregular ending in -to (abrir→abierto, cubrir→cubierto, escribir→escrito, morir→muerto, poner→puesto, resolver→resuelto, romper→roto, ver→visto, volver→vuelto)
+- "-cho" = irregular ending in -cho (decir→dicho, hacer→hecho, satisfacer→satisfecho)
+- "합성어 (앞말 따라감)" = a compound that inherits its base verb's irregular participle (descubrir→descubierto, componer→compuesto, deshacer→deshecho, devolver→devuelto, prever→previsto)
+- "두 꼴 다 씀" = both a regular and an irregular participle are in use (imprimir→imprimido/impreso, freír→freído/frito, proveer→proveído/provisto); give the one used with haber first
+- "기타 변형" = none of the above fits
+⚠️ The participio NEVER carries the reflexive pronoun — levantarse → "levantado", not "levantadose" (the pronoun goes before haber: "me he levantado").
+Give the masculine singular form. Never add "haber".`;
         const GERUNDIO_IRREGULAR_ENUM = IRREGULAR_TYPES_BY_TENSE.gerundio;
         const GERUNDIO_RULE_PROMPT = `You are a precise Spanish conjugation engine (standard peninsular Spanish).
 For each verb give its gerundio (현재분사 / present participle) with correct accents, and classify the irregularity as EXACTLY one of:
@@ -89,6 +110,7 @@ Never add "estar".`;
         // 시제별 프롬프트 — 현재분사만 갈래 설명이 따로 있고, 나머지는 공통 틀을 쓴다
         function tenseRulePrompt(tense) {
             if (tense === 'gerundio') return GERUNDIO_RULE_PROMPT;
+            if (tense === 'participio') return PARTICIPIO_RULE_PROMPT;
             const o = TENSE_TYPE_OPTIONS.find(t => t.key === tense);
             const label = o ? o.label : tense;
             return `You are a precise Spanish conjugation engine (standard peninsular Spanish).
@@ -167,12 +189,30 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!REG_ENDINGS[type]) return null;
             return w.slice(0, -2) + (type === 'ar' ? 'ando' : 'iendo');
         }
+        function regularParticipioForm(infinitive) {
+            const w = conjNorm(infinitive);
+            if (w.endsWith('se')) return null;   // 재귀는 대명사를 떼야 해서 여기선 판단하지 않는다
+            // 원형에 악센트가 있으면(oír·reír·freír) 어미를 못 알아본다 — 떼고 본다
+            const bare = w.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const type = bare.slice(-2);
+            if (!REG_ENDINGS[type]) return null;
+            const stem = bare.slice(0, -2);
+            if (type === 'ar') return stem + 'ado';
+            // -er/-ir 인데 어간이 센모음(a·e·o)으로 끝나면 -ído 로 악센트가 붙는다.
+            //   leer→leído · oír→oído · traer→traído · caer→caído (이것도 규칙이다)
+            //   약모음이면 안 붙는다 — construir→construido
+            return stem + (/[aeo]$/.test(stem) ? 'ído' : 'ido');
+        }
         // 이 시제의 저장된 형태가 규칙 변화와 완전히 같은가
         function tenseLooksRegular(word, tenseKey) {
             const c = getTenseConj(word, tenseKey);
             if (!word || !c) return false;
             if (tenseKey === 'gerundio') {
                 const reg = regularGerundioForm(word.word);
+                return !!reg && conjNorm(c.form) === reg;
+            }
+            if (tenseKey === 'participio') {
+                const reg = regularParticipioForm(word.word);
                 return !!reg && conjNorm(c.form) === reg;
             }
             if (tenseKey !== 'presente') return false; // 나머지 시제는 규칙표가 없으니 판단하지 않는다
