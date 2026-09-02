@@ -2087,7 +2087,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
             'qué','quién','quiénes','cuál','cuáles','cuándo','dónde','cómo','cuánto','cuánta','cuántos','cuántas',
             'quien','quienes','cual','cuales','cuanto','cuanta','cuantos','cuantas','porqué','porque',
             // 비교·정도
-            'más','mas','menos','tanto','tanta','tantos','tantas','también','tambien','tampoco'
+            'más','mas','menos','tanto','tanta','tantos','tantas','también','tambien','tampoco',
+            // [냐냐 요청] 부정·부정칭 한정사 — ningún/ninguna 처럼 성수로 갈라지는 것들.
+            //   지시사와 같은 이유다: 꼴만 대여섯 개씩이고 문법 노트에서 표로 익힌다.
+            'ningún','ningun','ninguno','ninguna','ningunos','ningunas',
+            'algún','algun','alguno','alguna','algunos','algunas',
+            'cualquier','cualquiera','cualesquier','cualesquiera',
+            // 수량·지칭 한정사
+            'todo','toda','todos','todas','otro','otra','otros','otras','cada',
+            'mucho','mucha','muchos','muchas','poco','poca','pocos','pocas',
+            'varios','varias','demasiado','demasiada','demasiados','demasiadas','bastante','bastantes',
+            'mismo','misma','mismos','mismas'
         ]);
 
         // [냐냐 요청] 이 문장에 딸린 추천.
