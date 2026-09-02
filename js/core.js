@@ -2059,7 +2059,9 @@ let vocabulary = [];
         function startGrammarReview() {
             const due = getGrammarDueList();
             if (!due.length) { showToast("오늘 복습할 문법이 없어요! 🎉", "info"); return; }
-            if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id, true);
+            // [냐냐 요청] 오늘 복습할 문법을 전부 이어서 한다 (예전엔 가장 약한 하나만 하고 끝)
+            if (typeof startGrammarReviewQueue === 'function') startGrammarReviewQueue(due.map(t => t.id));
+            else if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id, true);
         }
 
         // [냐냐 요청] 복습 탭 맨 위 '오늘의 망각곡선' 줄 — 폰에서는 여기가 유일한 입구다
@@ -2069,7 +2071,10 @@ let vocabulary = [];
             if (!box) return;
             const nW = (typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0;
             const nG = (typeof getGrammarDueList === 'function') ? getGrammarDueList().length : 0;
-            if (!nW && !nG) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            // [냐냐 지적] 관용구가 여기 없어서 폰에서는 관용구 복습을 시작할 길이 아예 없었다
+            //   (헤더의 세 버튼은 hidden lg:flex 라 폰에서 안 보인다)
+            const nI = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
+            if (!nW && !nG && !nI) { box.classList.add('hidden'); box.innerHTML = ''; return; }
             box.classList.remove('hidden');
             const btn = (n, label, sub, fn) => n ? `
                 <button onclick="${fn}" class="flex-1 min-w-0 bg-white hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2 text-left transition-all active:scale-95">
@@ -2079,6 +2084,7 @@ let vocabulary = [];
             box.innerHTML = `
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5 flex items-stretch gap-2">
                     ${btn(nW, '📖 단어', '쓰기 복습', 'startTodayReviewShortcut()')}
+                    ${btn(nI, '📘 관용구', '쓰기 복습', 'startIdiomReview()')}
                     ${btn(nG, '📋 문법', 'AI 문장 번역', 'startGrammarReview()')}
                 </div>`;
         }

@@ -1259,10 +1259,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     if (q._retryReason === 'typo') gain = 1;
                     else if (q._retryReason === 'synonym') gain = 2;
                     addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
-                    // [냐냐 요청] 점수는 통합(단어), 곡선은 분리. 관용구 문제를 맞혔으면 그 표현을 한 칸 앞으로
-                    if ((q.type === 'idiom-mc' || q.type === 'idiom-subjective') && typeof idiomReviewAdvance === 'function') {
-                        idiomReviewAdvance(vocabItemC.id, quizIdiomText(q));
-                    }
+                    // [냐냐 기준] 퀴즈에서 맞힌 건 점수만 준다. 곡선을 앞으로 미는 건 관용구 복습에서만
+                    //   (단어·문법도 '오늘의 복습' 을 해냈을 때만 한 칸 나간다)
                     if (!wasMasteredC && vocabItemC.mastered) {
                         if (!quizSession.autoMasteredIds) quizSession.autoMasteredIds = [];
                         quizSession.autoMasteredIds.push(vocabItemC.id);

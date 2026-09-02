@@ -1120,15 +1120,15 @@ Return JSON only, no markdown.`;
                 const isIdiomOrExample = (k) => k && (k.startsWith('idiom-') || k.startsWith('ex-'));
                 const coreWrong = detail.some(d => !d.correct && !isIdiomOrExample(d.key));
                 // [냐냐 요청] 관용구 칸은 단어 곡선에서 빼두고 있었는데, 이제 갈 곳이 생겼다.
-                //   그 표현의 곡선을 돌린다 (맞히면 앞으로, 틀리면 뒤로).
+                // [냐냐 기준] 틀렸을 때만 그 표현의 곡선을 건드린다(진입·후퇴).
+                //   맞혔다고 앞으로 밀지는 않는다 — 곡선을 앞으로 미는 건 관용구 복습에서만.
                 if (typeof idiomReviewDemote === 'function') {
                     const cur = fillState.current.word;
                     detail.forEach(d => {
                         if (!d.key || !String(d.key).startsWith('idiom-')) return;
                         const text = String(d.correctAnswer || '').trim();
-                        if (!text) return;
-                        if (d.correct) { if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(cur.id, text); }
-                        else idiomReviewDemote(cur.id, text);
+                        if (!text || d.correct) return;
+                        idiomReviewDemote(cur.id, text);
                     });
                 }
                 // [냐냐 요청] 스페인어 '단어' 칸을 직접 써서 맞혔으면 = 주관식 정답 → 마스터 자격

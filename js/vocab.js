@@ -3318,6 +3318,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 batchSize: (opts && opts.batchSize) || pool.length,
                 scopeContinue: !!(opts && opts.scopeContinue),
                 isTodayReview: !!(opts && opts.isTodayReview),
+                // [냐냐 기준] 관용구 곡선을 앞으로 미는 건 '관용구 복습' 으로 시작했을 때만
+                idiomReview: !!(opts && opts.idiomReview),
                 onClose: (opts && opts.onClose) || null
             };
 
@@ -3777,8 +3779,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
-            // 그 표현을 맞혔으면 곡선을 한 칸 앞으로
-            if (w._isIdiomTask && w._idiomOf && typeof idiomReviewAdvance === 'function') {
+            // [냐냐 기준] 그 표현을 맞혔으면 곡선을 한 칸 앞으로 — 단, 관용구 복습으로 시작했을 때만.
+            //   단어 복습에 섞여 나온 관용구나 퀴즈에서 맞힌 건 점수만 준다 (단어·문법과 같은 기준).
+            if (w._isIdiomTask && w._idiomOf && s.idiomReview && typeof idiomReviewAdvance === 'function') {
                 idiomReviewAdvance(w._idiomOf.id, w.word);
             }
             const shift = withGradeShift(w._idiomOf || w, () => {

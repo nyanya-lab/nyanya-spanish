@@ -12,6 +12,58 @@
         //   들어오는 것만 어디서든 한다. 이번 미션이 그 복습이면 여기에 그 문법 id 가 담긴다.
         let aiMissionReviewGrammarId = null;
 
+        // [냐냐 요청] 오늘 복습할 문법을 전부 이어서 한다. 예전엔 배너를 눌러도 가장 약한 하나만
+        //   하고 끝이라, 네 개면 네 번 눌러야 했다.
+        let grammarReviewQueue = [];   // 아직 안 한 문법 id 들
+        let grammarReviewTotal = 0;
+        let grammarReviewDone = 0;
+
+        function startGrammarReviewQueue(ids) {
+            grammarReviewQueue = (ids || []).slice();
+            grammarReviewTotal = grammarReviewQueue.length;
+            grammarReviewDone = 0;
+            if (!grammarReviewTotal) return;
+            nextGrammarReviewMission();
+        }
+
+        function nextGrammarReviewMission() {
+            const id = grammarReviewQueue.shift();
+            if (!id) { renderGrammarReviewBar(); return; }
+            renderGrammarReviewBar();
+            startTranslationWithGrammar(id, true);
+        }
+
+        function endGrammarReviewQueue() {
+            grammarReviewQueue = [];
+            grammarReviewTotal = 0;
+            grammarReviewDone = 0;
+            renderGrammarReviewBar();
+        }
+
+        //   진행 줄 — 지금 몇 번째인지, 답을 내고 나면 '다음' 버튼.
+        function renderGrammarReviewBar(state) {
+            const box = document.getElementById('ai-grammar-review-bar');
+            if (!box) return;
+            if (!grammarReviewTotal) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            const left = grammarReviewQueue.length;
+            const at = Math.min(grammarReviewDone + (state === 'graded' ? 0 : 1), grammarReviewTotal);
+            const note = (typeof getAllGrammarTables === 'function' && aiMissionReviewGrammarId)
+                ? getAllGrammarTables().find(t => t.id === aiMissionReviewGrammarId) : null;
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+                    <span class="text-xs font-black text-amber-700 shrink-0">📋 문법 복습 ${state === 'graded' ? grammarReviewDone : at} / ${grammarReviewTotal}</span>
+                    ${note ? `<span class="text-[11px] font-bold text-amber-600 truncate min-w-0">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</span>` : ''}
+                    <div class="ml-auto shrink-0">
+                        ${state === 'graded'
+                            ? (left
+                                ? `<button onclick="nextGrammarReviewMission()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95">다음 문법 <i class="fa-solid fa-arrow-right"></i> <span class="opacity-80">${left}개 남음</span></button>`
+                                : `<button onclick="endGrammarReviewQueue()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95">오늘 문법 복습 끝! 🎉</button>`)
+                            : `<button onclick="endGrammarReviewQueue()" title="복습을 여기서 그만둡니다" class="text-[11px] font-bold text-amber-500 hover:text-amber-700 px-2 py-1">그만하기</button>`}
+                    </div>
+                </div>`;
+        }
+
         // [냐냐 요청] 문법 노트 → AI 첨삭으로 바로 가서 그 문법으로 미션 생성
         //   fromReview = '오늘의 문법 복습' 으로 들어온 것. 단어와 같은 규칙을 쓰려고 표시해 둔다 —
         //   단어 곡선도 배너(오늘의 복습)로 시작한 복습에서만 앞으로 간다 (fillState.isTodayReview).
@@ -1380,6 +1432,8 @@
             aiForcedGrammarId = null;
             aiMissionReviewGrammarId = (forced && aiForcedFromReview) ? forced.id : null;
             aiForcedFromReview = false;
+            if (!aiMissionReviewGrammarId && grammarReviewTotal) endGrammarReviewQueue();  // 랜덤 미션을 뽑으면 복습 줄은 끝난 것
+            else renderGrammarReviewBar();
             const grammarNote = forced || pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
             //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
@@ -1583,7 +1637,9 @@ ${refGrammar}${refWords}
                 aiLastCorrectedText = String(feedback.correctedText || '').replace(/<[^>]*>/g, '');
                 renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
+                if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
+                renderGrammarReviewBar('graded');
 
 
 
@@ -2093,12 +2149,13 @@ ${refGrammar}${refWords}
 
             // 정답 문장에 들어 있는 내 관용구 — 제대로 쓴 것이므로 곡선을 앞으로
             //   (점수는 단어 기준 그대로 두기로 했으니 여기서 점수는 안 건드린다)
+            // [냐냐 기준] 곡선을 앞으로 미는 건 관용구 복습에서만. 여기서는 '썼다' 고 표시만 한다.
+            //   (문장에 넣었다는 것만으로 한 칸 나가면 곡선이 너무 빨리 돈다 — 단어·문법과 같은 기준)
             const seenIdiom = new Set();
             detectIdiomsInText(feedback && feedback.correctedText).forEach(({ w, it }) => {
                 const k = `${w.id}::${it.idiom}`;
                 if (seenIdiom.has(k)) return;
                 seenIdiom.add(k);
-                if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w.id, it.idiom);
                 aiLastIdiomHits.push({ word: w, idiom: it.idiom, ok: true });
             });
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
@@ -2141,8 +2198,8 @@ ${refGrammar}${refWords}
                     const hitIdiom = findIdiomEntryByText(item.name);
                     // 형태를 틀린 낱말(ok === null)은 곡선도 안 건드린다 — 점수를 안 주기로 한 것과 같은 이유
                     if (hitIdiom && item.ok !== null && !aiLastIdiomHits.some(h => h.word.id === hitIdiom.w.id && h.idiom === hitIdiom.it.idiom)) {
-                        if (item.ok) { if (typeof idiomReviewAdvance === 'function') idiomReviewAdvance(hitIdiom.w.id, hitIdiom.it.idiom); }
-                        else idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
+                        // 틀리게 쓴 것만 곡선을 건드린다 (진입·후퇴). 잘 쓴 건 표시만.
+                        if (!item.ok) idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
                         aiLastIdiomHits.push({ word: hitIdiom.w, idiom: hitIdiom.it.idiom, ok: item.ok });
                     }
                 }
@@ -2893,11 +2950,11 @@ ${refGrammar}${refWords}
                 <div class="mt-3 pt-3 border-t border-slate-200">
                     <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
                         <i class="fa-solid fa-book-bookmark text-violet-500"></i><span>이 문장이 쓴 관용구</span>
-                        <span class="font-normal text-slate-400">점수는 단어에 붙고, 여기선 망각곡선만 움직여요</span>
+                        <span class="font-normal text-slate-400">점수는 단어에 붙어요. 곡선은 관용구 복습에서만 움직여요</span>
                     </div>
                     <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">
                         ${aiLastIdiomHits.map(h => `<span class="inline-flex items-center gap-1 border rounded-lg px-2 py-0.5 ${h.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'}">
-                            <b>${escapeHtml(h.idiom)}</b><span class="text-[10px]">${h.ok ? '곡선 한 칸 앞으로' : '곡선에 들어갔어요'}</span>
+                            <b>${escapeHtml(h.idiom)}</b><span class="text-[10px]">${h.ok ? '이 표현을 썼어요' : '곡선에 들어갔어요'}</span>
                         </span>`).join('')}
                     </div>
                 </div>` : '';
