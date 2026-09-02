@@ -3789,6 +3789,30 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return u !== c && !!u && stripAccentMarks(u) === stripAccentMarks(c);
         }
 
+        // [냐냐 지적] 채점이 오래 걸린다. 재보니 AI 한 번 왕복이 빠를 때 1초, 밀릴 땐 5~8초다.
+        //   그런데 되묻는 경우의 대부분은 '철자가 살짝 틀린 것' 이고, 그건 AI 없이도 안다 —
+        //   AI 프롬프트가 쓰는 기준("정답을 쓰려다 서너 글자 안쪽으로 틀림")과 같은 잣대를 여기서 쓴다.
+        //   그러면 오타는 기다림 없이 그 자리에서 되묻고, AI 는 '다른 낱말을 썼나(유의어)' 를
+        //   가려야 할 때만 부른다. 유의어는 대개 철자가 멀어서 여기 안 걸린다.
+        //   ⚠️ 네 글자 미만은 건드리지 않는다 — 짧은 낱말은 두 글자만 달라도 아예 다른 낱말이다.
+        //   ⚠️ 한 글자 차이(+ 붙은 두 글자가 뒤바뀐 것)까지만 오타로 본다. 두 글자가 진짜로 다르면
+        //      televisor ↔ televisión 처럼 '다른 진짜 낱말' 일 수 있어서 그건 AI 에게 넘긴다.
+        function writeLooksLikeTypo(userRaw, correctRaw) {
+            if (typeof levenshtein !== 'function') return false;
+            const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(correctRaw);
+            if (!u || !c || c.length < 4) return false;
+            const d = levenshtein(u, c);
+            if (d === 1) return true;
+            // 붙은 두 글자를 바꿔 쓴 것(porqeu)은 거리로는 2지만 흔한 오타다
+            if (d === 2 && u.length === c.length) {
+                for (let i = 0; i + 1 < u.length; i++) {
+                    if (u[i] === c[i + 1] && u[i + 1] === c[i]
+                        && u.slice(0, i) === c.slice(0, i) && u.slice(i + 2) === c.slice(i + 2)) return true;
+                }
+            }
+            return false;
+        }
+
         function writePracticeKeydown(e) {
             if (e.key !== 'Enter') return;
             e.preventDefault();
@@ -4007,6 +4031,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (writeAccentOnlyMiss(userAnswer, w.word)) {
                 if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                 writeAskRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`, userAnswer);
+                return;
+            }
+
+            // 3-2) 철자가 살짝 틀린 것 — AI 를 안 부르고 그 자리에서 되묻는다 (기다림 0초)
+            if (!used.typo && writeLooksLikeTypo(userAnswer, w.word)) {
+                writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?`, userAnswer);
                 return;
             }
 
