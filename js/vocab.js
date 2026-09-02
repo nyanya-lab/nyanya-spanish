@@ -2437,7 +2437,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             renderWordList();
             updateStats();
-            if (typeof refreshBreakdownRegisterButtons === 'function') refreshBreakdownRegisterButtons();
 
             // [냐냐 PATCH] 지금 저장한 게 '유의어 자동채우기 큐'로 열린 단어라면
             //   → 팝업 없이 조용히 다음 큐로 넘어감 (또는 큐 끝이면 마무리)

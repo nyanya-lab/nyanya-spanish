@@ -17,6 +17,7 @@
         let grammarReviewQueue = [];   // 아직 안 한 문법 id 들
         let grammarReviewTotal = 0;
         let grammarReviewDone = 0;
+        let grammarReviewLastNoteId = null;   // 방금 푼 문법 — 채점 뒤에 이름을 밝히는 데 쓴다
 
         function startGrammarReviewQueue(ids) {
             grammarReviewQueue = (ids || []).slice();
@@ -47,13 +48,16 @@
             if (!grammarReviewTotal) { box.classList.add('hidden'); box.innerHTML = ''; return; }
             const left = grammarReviewQueue.length;
             const at = Math.min(grammarReviewDone + (state === 'graded' ? 0 : 1), grammarReviewTotal);
-            const note = (typeof getAllGrammarTables === 'function' && aiMissionReviewGrammarId)
-                ? getAllGrammarTables().find(t => t.id === aiMissionReviewGrammarId) : null;
+            //   푸는 중에는 감춰야 하니 이름은 채점 뒤에만 쓴다 (그때 aiMissionReviewGrammarId 는 이미 비워져 있다)
+            const noteId = (state === 'graded') ? grammarReviewLastNoteId : aiMissionReviewGrammarId;
+            const note = (typeof getAllGrammarTables === 'function' && noteId)
+                ? getAllGrammarTables().find(t => t.id === noteId) : null;
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-3">
                     <span class="text-xs font-black text-amber-700 shrink-0">📋 문법 복습 ${state === 'graded' ? grammarReviewDone : at} / ${grammarReviewTotal}</span>
-                    ${note ? `<span class="text-[11px] font-bold text-amber-600 truncate min-w-0">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</span>` : ''}
+                    ${/* [냐냐 요청] 답을 내기 전에는 무슨 문법인지 감춘다 — 알면 짐작해서 쓰게 된다 */''}
+                    ${(note && state === 'graded') ? `<span class="text-[11px] font-bold text-amber-600 truncate min-w-0">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</span>` : ''}
                     <div class="ml-auto shrink-0">
                         ${state === 'graded'
                             ? (left
@@ -986,7 +990,6 @@
                 const correctedRender = document.getElementById('ai-corrected-render');
                 const coachVerdict = document.getElementById('ai-coach-verdict');
                 const coachMsg = document.getElementById('ai-coach-message');
-                const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
@@ -1016,16 +1019,6 @@
                 coachMsg.innerHTML = feedback.userTranslation
                     ? `<span class="text-[11px] font-bold text-sky-500">💬 쓴 문장의 실제 뜻</span> <span class="font-semibold text-slate-800">${feedback.userTranslation}</span>`
                     : `<span>${feedback.message}</span>`;
-
-                resetBreakdown(breakdownGrid);
-                const seenWordsQ = new Set();
-                feedback.breakdown.forEach(item => {
-                    const w = (item.word || '').trim();
-                    const m = (item.mean || item.meaning || '').trim();
-                    if (!w || seenWordsQ.has(w)) return;
-                    seenWordsQ.add(w);
-                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
-                });
 
                 renderAiTip(feedback.tip);
                 renderAiNatural(feedback);
@@ -1560,6 +1553,7 @@ ${extraWords.length ? `
             Student's Spanish Answer: "${userText}"
 ${koEsNoteListText}${refGrammar}${refWords}
             Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally.
+            COMPLETENESS: the Spanish must carry EVERY piece of the Korean mission — each clause, each modifier, each object. If something in the Korean is missing from the answer (a dropped noun, a dropped "~하고 있는", a dropped reason), that is a mistranslation: set isCorrect=false, add the missing part in "correctedText", and say in "message" what was left out. Do not call a shortened answer "완벽" just because the Spanish it does contain is grammatical.
             For (a): the target word above is CONTEXT ONLY — it is the word the mission was built around, not a requirement. NEVER mark the answer wrong, and never ask for that word, just because the student expressed the same meaning with a different word. Judge only whether the Spanish is grammatical and conveys the Korean sentence accurately. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error, not as "you must use the target word".)
             For (b): the target word must actually appear and be used naturally, since the mission asked for it.
             Either way, check the grammar is correct.
@@ -1637,7 +1631,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const correctedRender = document.getElementById('ai-corrected-render');
                 const coachVerdict = document.getElementById('ai-coach-verdict');
                 const coachMsg = document.getElementById('ai-coach-message');
-                const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
@@ -1646,9 +1639,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   점수는 네 모드 모두 아래 applyAiWritingScores 한 곳에서만 나온다.
     
                 aiLastCorrectedText = String(feedback.correctedText || '').replace(/<[^>]*>/g, '');
-                renderAiMissionRefs();   // [냐냐 요청] 채점 후에만 참고한 문법·단어 공개
+                // [냐냐 요청] '이번 미션이 참고한 내용' 카드는 없앴다 (2026-09-02).
+                //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
+                //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
                 if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
+                grammarReviewLastNoteId = aiMissionReviewGrammarId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
                 renderGrammarReviewBar('graded');
                 resultBox.classList.remove('hidden');   // ⚠️ 847d5ce 에서 이 줄이 지워져 결과 카드가 안 보였다
@@ -1670,16 +1666,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
                 coachVerdict.innerText = feedback.verdict;
                 coachMsg.innerHTML = feedback.message;
-                
-                resetBreakdown(breakdownGrid);
-                const seenWords = new Set();
-                feedback.breakdown.forEach(item => {
-                    const w = (item.word || '').trim();
-                    const m = (item.mean || item.meaning || '').trim();
-                    if (!w || seenWords.has(w)) return; // 중복/빈 항목 제거
-                    seenWords.add(w);
-                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
-                });
 
                 renderAiTip(feedback.tip);
                 renderAiNatural(feedback);
@@ -1887,7 +1873,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const correctedRender = document.getElementById('ai-corrected-render');
                 const coachVerdict = document.getElementById('ai-coach-verdict');
                 const coachMsg = document.getElementById('ai-coach-message');
-                const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
@@ -1911,16 +1896,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
                 coachVerdict.innerText = feedback.verdict;
                 coachMsg.innerHTML = feedback.message;
-
-                resetBreakdown(breakdownGrid);
-                const seenWords = new Set();
-                feedback.breakdown.forEach(item => {
-                    const w = (item.word || '').trim();
-                    const m = (item.mean || item.meaning || '').trim();
-                    if (!w || seenWords.has(w)) return;
-                    seenWords.add(w);
-                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
-                });
 
                 renderAiTip(feedback.tip);
                 renderAiNatural(feedback);
@@ -2371,13 +2346,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
                "wordsOk": ["each content word the student spelled CORRECTLY, written as \\"dictionary form|part of speech\\""],
                "wordsForm": ["each content word spelled correctly but put in the WRONG FORM, written as \\"dictionary form|part of speech\\""],
                "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""]`;
+        //   [냐냐 지적] 팁에는 terceira, 고친 문장에는 tercera 처럼 같은 낱말을 다르게 적어 보낸 적이 있다.
+        //   어느 쪽이 맞는지 알 수 없으니 배우는 사람만 헷갈린다. 네 모드 프롬프트가 같이 쓴다.
+        const AI_SPELLING_CONSISTENCY_RULE = `
+            SPELLING CONSISTENCY: every Spanish word you write in "tip", "message" or "changes" must be spelled EXACTLY as it appears in "correctedText" — same letters, same accents. Before output, re-read your own text and fix any word that differs. Writing "tercera" in one place and "terceira" in another teaches the student the wrong word.`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" when the student misspelled it (put the dictionary form of the word they were CLEARLY trying to write); "wordsForm" when the spelling is a real Spanish word but you had to change THAT WORD'S OWN form in correctedText — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos); "wordsOk" for everything else, that is, the word survives into correctedText in the very form the student wrote it. A correctly spelled word in the right form goes in "wordsOk" even if it was a poor word choice for the meaning, and swapping one word for a DIFFERENT word (Cuál → Qué) is a word choice, not a form, so that word still counts as "wordsOk". Never list a word the student did not write. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
-            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. Most sentences match 0-2 notes; listing many is a sign you are guessing. Do NOT list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
+            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" when the student misspelled it (put the dictionary form of the word they were CLEARLY trying to write); "wordsForm" when the spelling is a real Spanish word but you had to change THAT WORD'S OWN form in correctedText — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos); "wordsOk" for everything else, that is, the word survives into correctedText in the very form the student wrote it. A correctly spelled word in the right form goes in "wordsOk" even if it was a poor word choice for the meaning, and swapping one word for a DIFFERENT word (Cuál → Qué) is a word choice, not a form, so that word still counts as "wordsOk". Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
+            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
             DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
             - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule.
             - "grammarOk" when the student applied the note's rule correctly, even if you changed other words nearby for a DIFFERENT reason. Example: the student wrote "¿Cuál pantalones es más caros que aquel?" and you fixed the interrogative (Cuál→Qué), the verb agreement (es→son) and the demonstrative (aquel→esos) — a note about COMPARATIVES stays in "grammarOk", because "más ... que" itself was used correctly. Do not punish a note just because a word standing next to it changed.
-            A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".`;
+            A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
         const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsForm", "wordsBad"];
@@ -3100,7 +3079,6 @@ ${noteListText}
                 const correctedRender = document.getElementById('ai-corrected-render');
                 const coachVerdict = document.getElementById('ai-coach-verdict');
                 const coachMsg = document.getElementById('ai-coach-message');
-                const breakdownGrid = document.getElementById('ai-word-breakdown');
                 const coachTip = document.getElementById('ai-coach-tip');
                 const coachIcon = document.getElementById('ai-coach-icon');
 
@@ -3129,16 +3107,6 @@ ${noteListText}
                 coachMsg.innerHTML = feedback.interpretation
                     ? `<span class="text-[11px] font-bold text-sky-500">📝 추정 해석</span> <span class="font-semibold text-slate-800">${feedback.interpretation}</span>`
                     : `<span>${feedback.message}</span>`;
-                
-                resetBreakdown(breakdownGrid);
-                const seenWordsEs = new Set();
-                feedback.breakdown.forEach(item => {
-                    const w = (item.word || '').trim();
-                    const m = (item.mean || item.meaning || '').trim();
-                    if (!w || seenWordsEs.has(w)) return; // 중복/빈 항목 제거
-                    seenWordsEs.add(w);
-                    breakdownGrid.innerHTML += buildBreakdownRow(w, m);
-                });
 
                 renderAiTip(feedback.tip);
                 renderAiNatural(feedback);
@@ -3312,71 +3280,11 @@ ${noteListText}
             return best;
         }
 
-        // [냐냐 요청] 핵심 분석 접기/펼치기. open 을 주면 그 상태로, 안 주면 뒤집는다
-        function toggleAiBreakdown(open) {
-            const wrap = document.getElementById('ai-breakdown-wrap');
-            if (!wrap) return;
-            const willOpen = (open === undefined) ? wrap.classList.contains('hidden') : !!open;
-            wrap.classList.toggle('hidden', !willOpen);
-            const chev = document.getElementById('ai-breakdown-chevron');
-            if (chev) chev.style.transform = willOpen ? 'rotate(180deg)' : '';
-        }
+        // [냐냐 요청] '핵심 분석' 카드를 없애면서 그걸 그리던 함수들도 같이 뺐다 (2026-09-02).
+        //   toggleAiBreakdown / resetBreakdown / buildBreakdownRow /
+        //   refreshBreakdownRegisterButtons / registerWordFromBreakdown
+        //   AI 가 주는 낱말 쪼갠 결과(breakdown)는 '아직 단어장에 없어요' 칩을 만드는 데만 쓴다.
 
-        // [냐냐 요청] 펼친 채로 시작한다. 여기가 '내가 등록한 단어랑 아닌 것' 을 보는 자리인데
-        //   접혀 있으니 아무도 안 열어봤다. 접고 싶으면 머리를 눌러 접으면 된다.
-        function resetBreakdown(grid) {
-            if (grid) grid.innerHTML = '';
-            toggleAiBreakdown(true);
-        }
-
-        function buildBreakdownRow(word, mean) {
-            const w = (word || '').trim();
-            const m = (mean || '').trim();
-            if (!w) return '';
-            // 단어장에 이미 있는지 확인 (동사 변형·형용사 성수변화까지 고려)
-            const existing = findVocabWordByForm(w);
-            const wEsc = w.replace(/'/g, "\\'");
-            const mEsc = m.replace(/'/g, "\\'");
-            const registerBtn = existing
-                ? `<button class="breakdown-reg text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full shrink-0 transition-all" title="이 단어 수정하기" onclick="openWordModal('${existing.id}')">✓ 등록됨</button>`
-                : `<button class="breakdown-reg text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 px-2 py-0.5 rounded-full shrink-0 transition-all" onclick="registerWordFromBreakdown('${wEsc}', '${mEsc}')">+ 등록</button>`;
-            return `
-                <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm" data-breakdown-word="${w.replace(/"/g, '&quot;')}">
-                    <span class="font-bold text-slate-800 shrink-0">${w}</span>
-                    <span class="text-slate-500 text-right flex-1 truncate">${m}</span>
-                    ${registerBtn}
-                </div>
-            `;
-        }
-
-        // [냐냐 PATCH] 단어 등록 후 핵심분석의 등록 버튼을 '✓ 등록됨'(수정창으로 이동)으로 갱신 (AI item 1)
-        function refreshBreakdownRegisterButtons() {
-            document.querySelectorAll('[data-breakdown-word]').forEach(row => {
-                const w = row.getAttribute('data-breakdown-word');
-                const match = w ? findVocabWordByForm(w) : null;
-                if (match) {
-                    const regEl = row.querySelector('.breakdown-reg');
-                    // 아직 '+ 등록' 버튼 상태(=위에 아직 안 바뀐 것)면 '✓ 등록됨'(수정 링크)으로 교체
-                    if (regEl && regEl.tagName === 'BUTTON' && /\+ 등록/.test(regEl.textContent)) {
-                        regEl.outerHTML = `<button class="breakdown-reg text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full shrink-0 transition-all" title="이 단어 수정하기" onclick="openWordModal('${match.id}')">✓ 등록됨</button>`;
-                    }
-                }
-            });
-        }
-
-        // 핵심 분석에서 단어 바로 등록
-        function registerWordFromBreakdown(word, mean) {
-            // [냐냐 PATCH] 탭을 옮기지 않고 현재 화면(AI 첨삭) 위에 등록 모달만 띄움
-            openWordModal();
-            _skipContinueRegisterPrompt = true; // [냐냐 PATCH] 첨삭에서 등록하면 '계속 등록?' 팝업 안 뜨게
-            setTimeout(() => {
-                const wordInput = document.getElementById('input-word');
-                const meanInput = document.getElementById('input-meaning');
-                if (wordInput) wordInput.value = word;
-                if (meanInput) meanInput.value = mean;
-                if (wordInput) handleWordInput(word);
-            }, 100);
-        }
 
         function renderChatThread() {
             const threadEl = document.getElementById('ai-chat-thread');

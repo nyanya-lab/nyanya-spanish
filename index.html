@@ -1098,18 +1098,9 @@
                             <div id="ai-coach-tip" class="text-sm text-slate-800 leading-6 font-medium space-y-1.5"></div>
                         </div>
 
-                        <!-- [냐냐 요청] 핵심 분석은 항상 접은 채로 시작 (새 첨삭이 올 때마다 되접힘 — resetBreakdown).
-                             <details> 는 안쪽 div 의 flex 때문에 접혀도 내용이 그대로 보여서 직접 여닫는다.
-                             hidden 은 감싼 div 에만 걸어야 안쪽 flex 와 안 부딪힌다 -->
-                        <div class="border-t border-slate-200 pt-3 space-y-2">
-                            <button type="button" onclick="toggleAiBreakdown()" class="w-full flex items-center justify-between gap-2 text-[10px] font-bold text-slate-400 tracking-wider hover:text-slate-600 transition-colors">
-                                <span>단어 하나하나 쪼개서 핵심 분석 🔍</span>
-                                <i id="ai-breakdown-chevron" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
-                            </button>
-                            <div id="ai-breakdown-wrap" class="hidden">
-                                <div id="ai-word-breakdown" class="flex flex-col bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden"></div>
-                            </div>
-                        </div>
+                        <!-- [냐냐 요청] '단어 하나하나 쪼개서 핵심 분석' 은 없앴다 (2026-09-02).
+                             고친 문장·바뀐 부분·스펠링 점수로 이미 낱말별 이야기가 다 나온다.
+                             AI 가 주는 낱말 쪼갠 결과는 '아직 단어장에 없어요' 칩을 만드는 데만 쓴다. -->
 
                         <!-- AI 첨삭 Q&A -->
                         <div class="border-t border-slate-200 pt-3 space-y-3">
