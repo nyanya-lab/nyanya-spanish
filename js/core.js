@@ -278,12 +278,34 @@ let vocabulary = [];
             };
         }
 
-        async function saveToStorage() {
-            const payload = buildDataPayload();
-            const json = JSON.stringify(payload);
+        // ============================================================
+        // [냐냐 지적] 저장은 전체 데이터를 통째로 올린다 (지금 776KB). 그런데 쓰기 복습은
+        //   한 문제 풀 때마다 이걸 불러서, 20문제면 15MB 를 올리고 있었다.
+        //   그래서 '이 기기 백업' 은 부를 때마다 바로 하고, 밖으로 나가는 업로드만 1초 미룬다.
+        //   연달아 부르면 마지막 것 한 번만 올라간다 (20번 → 두세 번).
+        //   ⚠️ 창을 닫거나 탭을 가리면 미룬 것을 즉시 올린다 (아래 pagehide/visibilitychange).
+        //   ⚠️ dev-local.js 의 쓰기 차단은 saveToStorage 를 감싸므로 그대로 먹는다 —
+        //      막히면 _savePending 이 안 차서 flush 도 아무 일을 안 한다.
+        // ============================================================
+        const SAVE_DEBOUNCE_MS = 1000;
+        let _saveTimer = null;
+        let _savePending = null;
 
-            // 항상 이 기기에도 백업 저장 (모든 동기화 방법이 실패해도 최소한 이 기기에서는 안전)
+        async function saveToStorage(immediate) {
+            const json = JSON.stringify(buildDataPayload());
+            // 이 기기 백업은 미루지 않는다 (창을 갑자기 닫아도 남아야 한다)
             try { localStorage.setItem('nyanya_data_v2', json); } catch (e) {}
+            _savePending = json;
+            if (immediate) return flushSaveToStorage();
+            if (_saveTimer) clearTimeout(_saveTimer);
+            _saveTimer = setTimeout(() => { _saveTimer = null; flushSaveToStorage(); }, SAVE_DEBOUNCE_MS);
+        }
+
+        async function flushSaveToStorage() {
+            if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+            const json = _savePending;
+            if (!json) return;
+            _savePending = null;
 
             // 1순위: Firebase (어디서 열어도 동기화됨) — 비밀번호를 설정해야 사용 가능
             const firebasePath = getFirebaseDataPath();
@@ -316,6 +338,12 @@ let vocabulary = [];
 
             updateSyncBadge(false);
         }
+
+        // 나가는 순간(탭 닫기·홈으로 가기)에는 미룬 저장을 즉시 올린다
+        window.addEventListener('pagehide', () => { try { flushSaveToStorage(); } catch (e) {} });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') { try { flushSaveToStorage(); } catch (e) {} }
+        });
 
         async function loadFromStorage() {
             let payload = null;

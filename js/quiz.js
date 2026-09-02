@@ -1096,6 +1096,16 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     inputEl.focus();
                     return;
                 }
+                // [냐냐 요청] 빈칸이면 한 번 물어본다
+                if (!userAnswer && !q._blankAsked) {
+                    q._blankAsked = true;
+                    if (hintBox) {
+                        hintBox.classList.remove('hidden');
+                        hintBox.innerHTML = `✏️ 빈칸이에요. 정말 모르겠으면 <b>한 번 더</b> 눌러주세요 — 모르는 것으로 넘어가요.`;
+                    }
+                    inputEl.focus();
+                    return;
+                }
                 // 오답 — 어디가 틀렸는지 글자로 짚어준다
                 const why = (typeof buildWrongAnswerHtml === 'function')
                     ? buildWrongAnswerHtml(userAnswer, q.answer)
@@ -1153,8 +1163,22 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             //   ⚠️ 마지막 글자는 남긴다. 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
             const prefixHint = () => bareCorrect.slice(0, Math.max(1, Math.min(sharedPrefixLen(userNorm, correctNorm) + 1, bareCorrect.length - 1)));
 
-            // 0) 빈칸이면 바로 오답
-            if (!userAnswer) { gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`); return; }
+            // 0) [냐냐 요청] 빈칸이면 한 번 물어본다 (쓰기 복습과 같은 대접).
+            //    손이 미끄러져 누른 것과 정말 모르겠는 것을 가른다. 한 번 더 누르면 넘어간다.
+            if (!userAnswer) {
+                if (!q._blankAsked) {
+                    q._blankAsked = true;
+                    if (synHintBox) {
+                        synHintBox.classList.remove('hidden');
+                        synHintBox.innerHTML = `✏️ 빈칸이에요. 정말 모르겠으면 <b>한 번 더</b> 눌러주세요 — 모르는 것으로 넘어가요.`;
+                    }
+                    inputEl.focus();
+                    return;
+                }
+                gradeNow(false, `✏️ 정답은 <b>${correct}</b> 예요.`);
+                return;
+            }
+            q._blankAsked = false;   // 뭔가 쓰고 냈으면 물어본 건 없던 일로
             // 1) 악센트까지 정확히 맞으면 AI 안 부르고 바로 통과 (빠름)
             if (normalizeSpanishAnswer(userAnswer, true) === normalizeSpanishAnswer(correct, true)) { gradeNow(true, ''); return; }
             // 1-2) [냐냐 요청] 악센트만 틀렸으면 그냥 넘기지 않고 한 번 더 물어본다.
@@ -1164,6 +1188,14 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 // 철자로 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
                 if (used().typo) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
                 askRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);
+                return;
+            }
+
+            // 1-3) [냐냐 지적] 채점이 오래 걸린다. 한 글자 차이(붙은 두 글자가 뒤바뀐 것 포함)는
+            //   AI 를 안 불러도 오타인 게 분명하다 — 쓰기 복습과 같은 잣대로 그 자리에서 되묻는다.
+            //   두 글자 이상 다르면 다른 진짜 낱말(유의어)일 수 있어서 그대로 AI 가 본다.
+            if (!used().typo && typeof writeLooksLikeTypo === 'function' && writeLooksLikeTypo(userAnswer, correct)) {
+                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
                 return;
             }
 
