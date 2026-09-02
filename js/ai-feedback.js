@@ -3586,7 +3586,8 @@ ${noteListText}
         //   재귀형과 아닌 형이 같이 등록된 동사가 28개라 이게 자주 어긋났고,
         //   냐냐 입장에서는 "분명히 쓴 단어에 점수가 안 붙는" 걸로 보였다.
         //   (그 단어에 점수가 안 붙는 데서 끝나지 않는다 — 엉뚱한 단어가 대신 받는다.)
-        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REFLEXIVE: 3, ENCLITIC: 4, ENCLITIC_SE: 5, ADJ_STEM: 6 };
+        //   REG_FORM = 등록은 안 됐지만 '규칙형이면 이 꼴이 나온다' 고 계산해서 맞춘 것 (등록된 꼴보다 아래)
+        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REG_FORM: 3, REFLEXIVE: 4, ENCLITIC: 5, ENCLITIC_SE: 6, ADJ_STEM: 7 };
 
         // [냐냐 요청] 동사 뒤에 붙여 쓰는 대명사를 뗀 형태도 만들어 둔다.
         //   "presentarles" → "presentar", "dármelo" → "dar", "hablándome" → "hablando"
@@ -3662,6 +3663,29 @@ ${noteListText}
                             if (encliticBases.length && encliticBases.indexOf(formN) >= 0) {
                                 offer(v, FVBF_RANK.ENCLITIC);
                             }
+                        }
+                    }
+                    // [냐냐 지적] 등록 안 된 시제라도 '규칙형' 이면 계산해서 알아본다 (2026-09-03).
+                    //   decorar 에 과거분사를 안 채워두면 'decorado' 라고 써도 그 동사에 점수가 안 붙었다.
+                    //   불규칙(escrito·hecho·puesto)은 계산으로 못 만드니 그건 여전히 등록돼 있어야 한다.
+                    //   과거분사는 형용사처럼 성·수가 붙기도 한다 — decorada/decorados 도 같이 본다.
+                    if (bestRank > FVBF_RANK.REG_FORM) {
+                        const bareInf = String(v.word || '').trim().replace(/se$/i, '');   // 과거분사는 대명사를 뗀다
+                        const cands = [];
+                        if (typeof regularGerundioForm === 'function') {
+                            const g = regularGerundioForm(v.word);
+                            if (g) cands.push(g);
+                        }
+                        if (typeof regularParticipioForm === 'function') {
+                            const pa = regularParticipioForm(bareInf);
+                            if (pa) {
+                                cands.push(pa);
+                                if (/o$/.test(pa)) cands.push(pa.slice(0, -1) + 'a', pa + 's', pa.slice(0, -1) + 'as');
+                            }
+                        }
+                        for (const f of cands) {
+                            const fN = normalizeSpanishAnswer(f);
+                            if (fN && (fN === target || fN === targetNoReflexive)) { offer(v, FVBF_RANK.REG_FORM); break; }
                         }
                     }
                 }
