@@ -1083,9 +1083,29 @@
         let todayReviewPlan = null;   // { counts: [21,21,21,20], index: 0 }
         let todayReviewParts = 1;     // 팝업에서 고르는 중인 횟수
 
+        // ============================================================
+        // [냐냐 요청] 오늘의 복습은 단어와 관용구를 한 묶음으로 낸다 (2026-09-02).
+        //   둘 다 똑같은 '쓰기 복습' 인데 입구가 둘이라 세션을 두 번 열어야 했다.
+        //   게다가 관용구는 틀렸을 때만 곡선에 들어와서 대개 한두 개뿐이다 —
+        //   그것 하나 때문에 따로 여느니 단어 사이에 섞여 나오는 게 낫다.
+        //   ⚠️ 곡선은 그대로 각자 민다. 쓰기 엔진이 과제마다 _isIdiomTask 를 보고 갈라놨고,
+        //      여기서 idiomReview:true 를 같이 넘겨야 관용구 칸도 앞으로 간다.
+        // ============================================================
+        function getTodayReviewTasks() {
+            const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            const idioms = (typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
+            // [냐냐 지적] 동사는 원형이 아니라 활용형으로 묻는다. 활용형 변환이 쓰기연습 탭
+            //   경로(buildWriteTasks)에만 걸려 있어서, 배너로 시작한 복습만 원형으로 나왔다.
+            const wordTasks = (typeof toWriteVerbTask === 'function') ? words.map(toWriteVerbTask) : words;
+            const idiomTasks = (typeof makeWriteIdiomTask === 'function')
+                ? idioms.map(e => makeWriteIdiomTask(e.word, e.idiom))
+                : [];
+            return wordTasks.concat(idiomTasks);
+        }
+
         function startTodayReviewShortcut() {
-            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
-            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            const due = getTodayReviewTasks();
+            if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             todayReviewPlan = null;
             // 한 번에 다 할 만큼 적으면 굳이 안 물어본다
             if (due.length <= TODAY_REVIEW_BATCH) { beginTodayReview(1); return; }
@@ -1100,13 +1120,16 @@
         }
 
         function renderReviewSplitModal() {
-            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            const due = getTodayReviewTasks();
             const counts = splitReviewCounts(due.length, todayReviewParts);
             const numEl = document.getElementById('review-split-num');
             const perEl = document.getElementById('review-split-per');
             const listEl = document.getElementById('review-split-list');
             const totalEl = document.getElementById('review-split-total');
-            if (totalEl) totalEl.innerText = `오늘 복습할 단어 ${due.length}개`;
+            const nIdiom = due.filter(t => t && t._isIdiomTask).length;
+            if (totalEl) totalEl.innerText = nIdiom
+                ? `오늘 복습할 단어 ${due.length - nIdiom}개 · 관용구 ${nIdiom}개`
+                : `오늘 복습할 단어 ${due.length}개`;
             if (numEl) numEl.innerText = `${todayReviewParts}번`;
             // counts 는 앞쪽이 크므로 그대로 쓰면 '18~17개'처럼 거꾸로 적힌다. 작은 쪽을 앞에 둔다.
             if (perEl) perEl.innerText = counts.every(c => c === counts[0])
@@ -1132,16 +1155,16 @@
 
         // parts 로 나눠 첫 회차를 시작한다. 이후 회차는 continueTodayReview() 가 이어받는다.
         function beginTodayReview(parts) {
-            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
-            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            const due = getTodayReviewTasks();
+            if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             todayReviewPlan = { counts: splitReviewCounts(due.length, parts), index: 0 };
             runTodayReviewChunk(due);
         }
 
         // '다음 N개 이어서' — 고른 나눔의 다음 회차만큼 가져온다.
         function continueTodayReview() {
-            const due = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
-            if (due.length < 1) { showToast("오늘 복습할 단어가 없어요! 🎉", "info"); return; }
+            const due = getTodayReviewTasks();
+            if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             if (!todayReviewPlan) { startTodayReviewShortcut(); return; }
             todayReviewPlan.index++;
             runTodayReviewChunk(due);
@@ -1160,7 +1183,8 @@
             const n = (plan && plan.counts[plan.index]) || Math.min(due.length, TODAY_REVIEW_BATCH);
             const picked = shuffleArray(due.slice()).slice(0, n);
             if (typeof beginWritePractice === 'function') {
-                beginWritePractice(picked, { isTodayReview: true, batchSize: n });
+                // idiomReview 를 같이 켠다 — 섞여 나온 관용구도 '관용구 복습' 으로 친다
+                beginWritePractice(picked, { isTodayReview: true, idiomReview: true, batchSize: n });
             }
         }
 

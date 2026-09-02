@@ -2141,15 +2141,18 @@ let vocabulary = [];
                     <p class="text-[10px] font-bold text-amber-600">${label} <span class="text-amber-400 font-semibold">${sub}</span></p>
                     <p class="text-sm font-black text-amber-700">${n}개 <i class="fa-solid fa-arrow-right text-[10px]"></i></p>
                 </button>` : '';
+            // [냐냐 요청] 단어·관용구는 한 버튼 — 같은 쓰기 복습이라 세션을 나눌 이유가 없다
+            const writeLabel = nI ? `📖 단어 ${nW} · 📘 관용구 ${nI}` : '📖 단어';
             box.innerHTML = `
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5 flex items-stretch gap-2">
-                    ${btn(nW, '📖 단어', '쓰기 복습', 'startTodayReviewShortcut()')}
-                    ${btn(nI, '📘 관용구', '쓰기 복습', 'startIdiomReview()')}
+                    ${btn(nW + nI, writeLabel, '쓰기 복습', 'startTodayReviewShortcut()')}
                     ${btn(nG, '📋 문법', 'AI 문장 번역', 'startGrammarReview()')}
                 </div>`;
         }
 
         // 헤더 '복습 · 관용구' 버튼 갱신
+        //   [냐냐 요청] 단어와 한 묶음이 되면서 그 버튼은 헤더에서 뺐다 (단어 버튼이 둘 다 센다).
+        //   버튼이 없으면 아래에서 그냥 빠져나간다 — 옛 화면이 캐시에 남아 있을 때를 위해 함수는 둔다.
         function renderIdiomReviewBtn() {
             const btn = document.getElementById('idiom-review-btn');
             const badge = document.getElementById('idiom-review-count-badge');
@@ -2175,14 +2178,10 @@ let vocabulary = [];
 
         // [냐냐 요청] 오늘 복습할 관용구로 바로 쓰기 복습을 시작한다.
         //   단어 복습과 같은 묶음 크기를 쓴다 (한 번에 너무 많이 나오면 지친다).
+        //   [냐냐 요청] 이제 단어와 한 묶음이라 그냥 오늘의 복습을 연다.
+        //   (옛 화면·다른 곳에서 이 이름으로 부르는 데가 있어 함수는 남긴다)
         function startIdiomReview() {
-            const due = (typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
-            if (!due.length) { showToast("오늘 복습할 관용구가 없어요! 🎉", "info"); return; }
-            if (typeof makeWriteIdiomTask !== 'function' || typeof beginWritePractice !== 'function') return;
-            const batch = due.slice(0, TODAY_REVIEW_BATCH);
-            const tasks = batch.map(e => makeWriteIdiomTask(e.word, e.idiom));
-            beginWritePractice(tasks, { isTodayReview: false, batchSize: TODAY_REVIEW_BATCH, idiomReview: true });
-            showToast(`오늘 복습할 관용구 ${due.length}개 중 ${batch.length}개예요`, "info");
+            if (typeof startTodayReviewShortcut === 'function') startTodayReviewShortcut();
         }
 
         // 헤더 '복습 · 문법' 버튼 갱신 (단어 쪽은 renderTodayReview 가 한다)
@@ -2382,7 +2381,10 @@ let vocabulary = [];
             renderReviewDueBar();     // [냐냐 요청] 복습 탭 위 줄 (폰 입구)
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
-            const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            // [냐냐 요청] 단어와 관용구를 한 묶음으로 하므로 개수도 합쳐서 센다
+            const words = (typeof getTodayReviewTasks === 'function')
+                ? getTodayReviewTasks()
+                : ((typeof getReviewDueWords === 'function') ? getReviewDueWords() : []);
             const btn = document.getElementById('today-review-btn');
             const badge = document.getElementById('today-review-count-badge');
             if (!btn || !badge) return;

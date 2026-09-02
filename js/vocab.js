@@ -3496,11 +3496,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
                 const batch = s.batchSize || total;
-                if (s.isTodayReview && typeof getReviewDueWords === 'function') {
+                if (s.isTodayReview && typeof getTodayReviewTasks === 'function') {
                     // 헤더 복습 배너 → 망각곡선 대상에서 이어서.
                     //   [냐냐 요청] 처음에 '몇 번에 나눠 할지' 골랐으면 그 계획의 다음 회차 개수를 따라간다.
                     //   그래서 나눔 팝업을 다시 띄우는 startTodayReviewShortcut 이 아니라 continueTodayReview 를 부른다.
-                    const remain = getReviewDueWords().length;
+                    const remain = getTodayReviewTasks().length;   // 단어 + 관용구
                     if (remain > 0) {
                         const nextN = (typeof peekNextTodayReviewCount === 'function')
                             ? peekNextTodayReviewCount(remain, batch) : Math.min(remain, batch);

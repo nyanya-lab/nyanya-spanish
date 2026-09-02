@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260902f">
+    <link rel="stylesheet" href="css/style.css?v=20260902g">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -104,14 +104,11 @@
                         <div class="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-2xl border border-amber-200">
                             <span class="text-sm">📖</span>
                             <span class="text-[10px] font-black text-amber-600 tracking-widest">복습</span>
-                            <button id="today-review-btn" onclick="startTodayReviewShortcut()" title="오늘 복습할 단어 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
-                                <span class="text-[10px] font-bold text-amber-600">단어</span>
+                            <!-- [냐냐 요청] 단어와 관용구는 한 묶음 — 같은 쓰기 복습이라 버튼을 나눌 이유가 없다.
+                                 관용구는 틀렸을 때만 곡선에 들어와서 대개 한두 개뿐이라 더 그렇다 -->
+                            <button id="today-review-btn" onclick="startTodayReviewShortcut()" title="오늘 복습할 단어·관용구 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
+                                <span class="text-[10px] font-bold text-amber-600">단어·관용구</span>
                                 <span id="today-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
-                            </button>
-                            <!-- [냐냐 요청] 관용구도 제 망각곡선을 따로 갖는다 -->
-                            <button id="idiom-review-btn" onclick="startIdiomReview()" title="오늘 복습할 관용구 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
-                                <span class="text-[10px] font-bold text-amber-600">관용구</span>
-                                <span id="idiom-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
                             </button>
                             <button id="grammar-review-btn" onclick="startGrammarReview()" title="오늘 복습할 문법 — AI가 만든 문장을 번역해서" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
                                 <span class="text-[10px] font-bold text-amber-600">문법</span>
@@ -2276,13 +2273,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260902f"></script>
-    <script src="js/creatures.js?v=20260902f"></script>
-    <script src="js/core.js?v=20260902f"></script>
-    <script src="js/vocab.js?v=20260902f"></script>
-    <script src="js/flashcards.js?v=20260902f"></script>
-    <script src="js/quiz.js?v=20260902f"></script>
-    <script src="js/games.js?v=20260902f"></script>
-    <script src="js/ai-feedback.js?v=20260902f"></script>
+    <script src="js/dictionary-data.js?v=20260902g"></script>
+    <script src="js/creatures.js?v=20260902g"></script>
+    <script src="js/core.js?v=20260902g"></script>
+    <script src="js/vocab.js?v=20260902g"></script>
+    <script src="js/flashcards.js?v=20260902g"></script>
+    <script src="js/quiz.js?v=20260902g"></script>
+    <script src="js/games.js?v=20260902g"></script>
+    <script src="js/ai-feedback.js?v=20260902g"></script>
 </body>
 </html>
