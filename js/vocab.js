@@ -61,14 +61,12 @@
         //   o➡️u: dormir→durmiendo · poder→pudiendo
         //   -yendo: 어간이 모음으로 끝남 (leer→leyendo · oír→oyendo · ir→yendo)
         // [냐냐 요청] 과거분사는 현재분사처럼 '어간이 이렇게 바뀐다' 는 갈래가 없다.
-        //   외우는 수밖에 없는 닫힌 목록인데, 어미로 두 무리로 묶인다 —
-        //   -to: abrir→abierto · escribir→escrito · poner→puesto · ver→visto · volver→vuelto
-        //   -cho: decir→dicho · hacer→hecho · satisfacer→satisfecho
-        //   합성어는 앞말을 그대로 따라간다 (descubrir→descubierto, componer→compuesto)
-        //   두 꼴을 다 쓰는 것도 있다 (imprimir→imprimido/impreso, freír→freído/frito)
+        //   -to(abierto·escrito·puesto) 와 -cho(dicho·hecho) 로 나눠봤지만 외울 때 도움이 안 돼서
+        //   갈래를 둘로 줄였다 — 그냥 '불규칙' 과, 규칙형·불규칙형을 둘 다 쓰는 것.
+        //   (imprimir→imprimido/impreso, freír→freído/frito 처럼 두 꼴이 다 살아 있는 동사)
         const IRREGULAR_TYPES_BY_TENSE = {
             gerundio: ['none', 'e ➡️ i', 'o ➡️ u', '-yendo', '기타 변형'],
-            participio: ['none', '-to', '-cho', '합성어 (앞말 따라감)', '두 꼴 다 씀', '기타 변형'],
+            participio: ['none', '불규칙', '두 꼴 다 씀'],
         };
         function irregularTypesFor(tense) { return IRREGULAR_TYPES_BY_TENSE[tense] || IRREGULAR_TYPE_OPTIONS; }
         function irrOptionsHtml(tense, cur) {
@@ -89,12 +87,9 @@ Never drop the pronoun for a reflexive verb.`;
         //   현재분사(secándose)와 반대라서 따로 못박아 둔다.
         const PARTICIPIO_RULE_PROMPT = `You are a precise Spanish conjugation engine (standard peninsular Spanish).
 For each verb give its participio (과거분사 / past participle) with correct accents, and classify it as EXACTLY one of:
-- "none" = regular: -ar → -ado, -er/-ir → -ido (hablar→hablado, comer→comido, vivir→vivido; note the accent in leer→leído, oír→oído, traer→traído)
-- "-to" = irregular ending in -to (abrir→abierto, cubrir→cubierto, escribir→escrito, morir→muerto, poner→puesto, resolver→resuelto, romper→roto, ver→visto, volver→vuelto)
-- "-cho" = irregular ending in -cho (decir→dicho, hacer→hecho, satisfacer→satisfecho)
-- "합성어 (앞말 따라감)" = a compound that inherits its base verb's irregular participle (descubrir→descubierto, componer→compuesto, deshacer→deshecho, devolver→devuelto, prever→previsto)
-- "두 꼴 다 씀" = both a regular and an irregular participle are in use (imprimir→imprimido/impreso, freír→freído/frito, proveer→proveído/provisto); give the one used with haber first
-- "기타 변형" = none of the above fits
+- "none" = regular: -ar → -ado, -er/-ir → -ido (hablar→hablado, comer→comido, vivir→vivido; note the accent in leer→leído, oír→oído, traer→traído — those still count as regular)
+- "불규칙" = any irregular participle, including a compound that inherits one (abrir→abierto, escribir→escrito, poner→puesto, ver→visto, volver→vuelto, romper→roto, morir→muerto, decir→dicho, hacer→hecho, descubrir→descubierto, componer→compuesto, devolver→devuelto)
+- "두 꼴 다 씀" = a regular AND an irregular participle are both in use (imprimir→imprimido/impreso, freír→freído/frito, proveer→proveído/provisto); give the one used with haber first
 ⚠️ The participio NEVER carries the reflexive pronoun — levantarse → "levantado", not "levantadose" (the pronoun goes before haber: "me he levantado").
 Give the masculine singular form. Never add "haber".`;
         const GERUNDIO_IRREGULAR_ENUM = IRREGULAR_TYPES_BY_TENSE.gerundio;
