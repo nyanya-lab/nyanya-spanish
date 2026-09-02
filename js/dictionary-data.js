@@ -124,12 +124,25 @@
         });
 
         // JSON 추출 및 파싱 안전 처리 (불필요한 텍스트 우회용)
+        // [냐냐 지적] 첨삭 결과가 문장 중간에서 뚝 끊긴 적이 있다. 원인은 AI 가 JSON 문자열 안에
+        //   HTML 을 큰따옴표로 적어 보낸 것 — "correctedText": "... <span class="text-red-600">..."
+        //   저 class=" 에서 문자열이 끝나버려 뒤가 통째로 날아간다. 프롬프트에도 홑따옴표로
+        //   쓰라고 적어뒀지만, 그걸 잊어도 화면이 깨지지 않게 여기서 한 번 더 고친다.
+        function repairHtmlQuotesInJson(s) {
+            return String(s || '').replace(/<([a-zA-Z][^>]*?)>/g, (tag) =>
+                tag.replace(/=\s*"([^"]*)"/g, "='$1'"));
+        }
+
         function extractAndParseJson(text) {
             const firstBrace = text.indexOf('{');
             const lastBrace = text.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
                 const jsonString = text.substring(firstBrace, lastBrace + 1);
-                return JSON.parse(jsonString);
+                try {
+                    return JSON.parse(jsonString);
+                } catch (e) {
+                    return JSON.parse(repairHtmlQuotesInJson(jsonString));   // 태그 안 따옴표만 바꿔 다시
+                }
             }
             throw new Error("No valid JSON object found in response");
         }
