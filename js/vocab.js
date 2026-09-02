@@ -3228,6 +3228,46 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
 
+        // [냐냐 요청] 동사는 원형이 아니라 활용형으로 묻는다 (2026-09-02).
+        //   원형은 활용형을 쓰려면 어차피 알아야 하니, 활용형으로 물으면 둘 다 시험된다.
+        //   ⚠️ 시제를 먼저 고르고 그 안에서 인칭을 고른다. 칸을 통째로 섞으면 현재시제가
+        //      6칸이라 1칸짜리 분사보다 여섯 배 자주 나온다.
+        function pickConjSlot(w) {
+            const opts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [];
+            const tenses = opts.map(o => o.key).filter(t => {
+                const c = (typeof getTenseConj === 'function') ? getTenseConj(w, t) : null;
+                return c && (typeof hasConjValues === 'function' ? hasConjValues(c) : false);
+            });
+            if (!tenses.length) return null;
+            const tense = tenses[Math.floor(Math.random() * tenses.length)];
+            const c = getTenseConj(w, tense);
+            // 화면에 뜨는 이름이라 짧게 — '현재분사 (gerundio · 1칸)' 은 문제 앞에 붙이기엔 길다
+            const SHORT = { gerundio: '현재분사', participio: '과거분사' };
+            const label = SHORT[tense] || (opts.find(o => o.key === tense) || {}).label || tense;
+            if (typeof isSingleTense === 'function' && isSingleTense(tense)) {
+                const form = String(c.form || '').trim();
+                return form ? { tense, tenseLabel: label, person: 'form', personLabel: '', form } : null;
+            }
+            const persons = [['yo', 'yo'], ['tu', 'tú'], ['el', 'él/ella'], ['nos', 'nosotros'], ['vos', 'vosotros'], ['ellos', 'ellos/ellas']]
+                .filter(([k]) => String(c[k] || '').trim());
+            if (!persons.length) return null;
+            const [pk, plabel] = persons[Math.floor(Math.random() * persons.length)];
+            return { tense, tenseLabel: label, person: pk, personLabel: plabel, form: String(c[pk] || '').trim() };
+        }
+
+        // 활용형 과제도 '단어의 복제본' 으로 만든다 (관용구 과제와 같은 방식).
+        //   id 가 같아서 점수는 그 동사에 붙고, 채점·결과 화면이 지금 코드 그대로 돈다.
+        function makeWriteConjTask(w, slot) {
+            const cue = slot.personLabel ? `${slot.tenseLabel} · ${slot.personLabel}` : slot.tenseLabel;
+            return Object.assign({}, w, {
+                word: slot.form,
+                meaning: `${w.meaning || ''} → ${cue}`,
+                _conjOf: w,
+                _conjSlot: slot,
+                _isConjTask: true
+            });
+        }
+
         // 비율만큼 관용구 문제를 섞어서 낸다.
         //   [냐냐 요청] 예전엔 단어를 먼저 뽑고 그중 몇 개를 관용구로 바꿨다. 그러면 한 단어에
         //   표현이 여럿이어도 한 번에 하나밖에 못 나왔고, 표현이 많은 단어가 오히려 손해였다.
@@ -3235,7 +3275,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   같은 단어가 단어 문제와 관용구 문제로 겹쳐 나오지는 않게 한다.
         function buildWriteTasks(pool, count) {
             const pct = writeIdiomPct();
-            if (pct <= 0) return shuffleArray(pool.slice()).slice(0, count);
+            if (pct <= 0) return shuffleArray(pool.slice()).slice(0, count).map(toWriteVerbTask);
 
             const wantIdiom = Math.round(count * pct / 100);
             const entries = [];
@@ -3247,7 +3287,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const used = new Set(idiomTasks.map(t => t._idiomOf.id));
             const rest = shuffleArray(pool.filter(w => !used.has(w.id)))
                 .slice(0, Math.max(0, count - idiomTasks.length));
-            return shuffleArray(idiomTasks.concat(rest));
+            return shuffleArray(idiomTasks.concat(rest.map(toWriteVerbTask)));
+        }
+        // 동사이고 활용이 채워져 있으면 활용형으로 묻는다. 없으면 예전처럼 원형.
+        function toWriteVerbTask(w) {
+            if (!w || w.pos !== 'verb') return w;
+            const slot = pickConjSlot(w);
+            return slot ? makeWriteConjTask(w, slot) : w;
         }
         const WRITE_COUNT_MIN = 1;
         const WRITE_COUNT_MAX = 200;
@@ -3791,24 +3837,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   퀴즈와 단어 빈칸은 skipReviewDate 로 빼고 있었는데 여기만 빠져 있었다.
             const idiomTask = !!w._isIdiomTask;
             if (isMatch) {
-                const shift = withGradeShift(w._idiomOf || w, () => {
+                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
                 });
                 if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
                 s.index++;
                 s.done = 0;
             } else {
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                const shift = withGradeShift(w._idiomOf || w, () => {
+                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
                     if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
                 });
                 if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
             }
             writePracticeSave();
             renderWritePractice();
@@ -3833,13 +3879,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (w._isIdiomTask && w._idiomOf && s.idiomReview && typeof idiomReviewAdvance === 'function') {
                 idiomReviewAdvance(w._idiomOf.id, w.word);
             }
-            const shift = withGradeShift(w._idiomOf || w, () => {
+            const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
             });
             // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
             if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') logAction('review');
-            s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
+            s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '' };
             writePracticeSave();
             renderWritePractice();
@@ -3934,6 +3980,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 2) 빈칸이면 오답
             if (!userAnswer) { writeFirstRoundFail(w, userAnswer); return; }
             const used = (s.usedRetries = s.usedRetries || {});
+
+            // [냐냐 요청] 활용형 과제는 정답이 하나뿐이라 유의어가 있을 수 없다.
+            //   AI 를 부르지 않고 오타만 한 번 봐준다 (악센트는 아래 3)에서 따로 걸린다).
+            if (w._isConjTask && !writeAccentOnlyMiss(userAnswer, w.word)) {
+                const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
+                    ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
+                if (dist <= 2 && !used.typo) {
+                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`, userAnswer);
+                    return;
+                }
+                writeFirstRoundFail(w, userAnswer);
+                return;
+            }
 
             // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더' (철자로 이미 봐줬으면 오답)
             if (writeAccentOnlyMiss(userAnswer, w.word)) {

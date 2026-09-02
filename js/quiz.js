@@ -363,7 +363,9 @@ let quizSession = null;
                         if (c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form)) availableTenses.push({ key: t, data: c });
                     });
                 }
-                if (availableTenses.length > 0 && selectedQuizFormat !== 'mc' && Math.random() < 0.3) {
+                // [냐냐 요청] 동사는 활용형으로 묻는다 (예전엔 30% 확률이었다).
+                //   객관식은 활용형을 낼 수 없어서 그때만 뜻 문제로 간다.
+                if (availableTenses.length > 0 && selectedQuizFormat !== 'mc') {
                     const pickedTense = availableTenses[Math.floor(Math.random() * availableTenses.length)];
                     const conj = pickedTense.data;
                     const forms = (conj.form && !conj.yo)
