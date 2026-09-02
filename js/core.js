@@ -2904,7 +2904,8 @@ let vocabulary = [];
                 <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
                     첨삭은 <b>노트 제목이 아니라 'AI 채점 단서'</b>를 읽고 판단해요. 단서는 노트 내용을 AI가 한 번 읽고 만든
                     <b>규칙 한 줄 + 신호가 되는 스페인어</b>예요. 제목이 넓어도(예: '위치를 나타내는 표현' 인데 내용은 al/del 축약)
-                    단서가 좁으면 엉뚱한 문장에 안 걸려요. 문법 탭에서 노트를 펼치면 보이고, <b>연필로 직접 고칠 수 있어요</b>.
+                    단서가 좁으면 엉뚱한 문장에 안 걸려요. 첨삭 결과에서 <b>노트 들춰보기(🔍)</b>를 열면 맨 위에 보이고,
+                    거기서 <b>연필로 직접 고칠 수 있어요</b>. 아직 단서가 없는 노트는 문법 탭 위에 줄로 알려줘요.
                 </p>
                 <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
                     그리고 AI는 노트를 짚을 때마다 <b>문장의 어느 조각 때문인지</b>를 같이 대야 해요. 그 조각이 내 문장에도
@@ -3911,7 +3912,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const blocks = getNoteBlocks(t)
                     .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
                     .filter(Boolean).join('');
-                body.innerHTML = blocks || '<p class="text-xs text-slate-400 py-4 text-center">이 노트에는 아직 내용이 없어요.</p>';
+                // [냐냐 요청] AI 채점 단서는 여기 맨 위에만 둔다 — 노트 목록에 줄줄이 붙으면 지저분하고,
+                //   정작 궁금할 때는 첨삭에서 '왜 이 노트가 걸렸지' 하고 이 팝업을 여니까.
+                const hintRow = (typeof renderGrammarHintRow === 'function') ? renderGrammarHintRow(t) : '';
+                body.innerHTML = (hintRow ? `<div class="mb-3">${hintRow}</div>` : '')
+                    + (blocks || '<p class="text-xs text-slate-400 py-4 text-center">이 노트에는 아직 내용이 없어요.</p>');
             }
             const goto = document.getElementById('grammar-peek-goto');
             if (goto) goto.onclick = () => { closeGrammarPeek(); goToGrammarNote(id); };
@@ -4994,7 +4999,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
                         <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}">
-                            ${renderGrammarHintRow(t)}
                             ${blocksHtml}
                             <!-- [냐냐 요청] 읽다가 바로 연습으로 이어가기 (헤더 아이콘이 많아서 여기에 둠) -->
                             <div class="flex items-center gap-2 pt-1">

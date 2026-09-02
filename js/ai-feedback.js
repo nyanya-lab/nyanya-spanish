@@ -2498,15 +2498,24 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 } else showToast("단서를 못 만들었어요", "error");
             } catch (e) { showToast("단서를 못 만들었어요", "error"); }
             grammarHintBusy = false;
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshGrammarHintViews(id);
             renderGrammarHintBar();
+        }
+
+        // 단서 줄은 들춰보기 팝업 안에 있다 — 고치고 나면 그 팝업을 다시 그려야 바뀐 게 보인다
+        function refreshGrammarHintViews(id) {
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            if (typeof _grammarPeekId !== 'undefined' && _grammarPeekId
+                && (!id || _grammarPeekId === id) && typeof openGrammarPeek === 'function') {
+                openGrammarPeek(_grammarPeekId);
+            }
         }
 
         // [냐냐 요청] 단서를 직접 고치기 — AI 요약이 어긋나도 노트 제목·구조는 안 건드리고 한 줄만 손본다
         let grammarHintEditId = null;
         function editGrammarAiHint(id) {
             grammarHintEditId = (grammarHintEditId === id) ? null : id;
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshGrammarHintViews(id);
         }
         function saveGrammarAiHint(id) {
             const rule = (document.getElementById('ghint-rule-' + id) || {}).value || '';
@@ -2522,7 +2531,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             };
             grammarHintEditId = null;
             if (typeof saveToStorage === 'function') saveToStorage();
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshGrammarHintViews(id);
             showToast("채점 단서를 고쳤어요", "success");
         }
 
