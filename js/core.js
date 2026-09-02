@@ -1445,9 +1445,14 @@ let vocabulary = [];
                         ${mean ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(mean)}</p>` : ''}
                     </div>`;
                 }
-                return `<div class="border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-2">
-                    <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
-                    <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
+                // 문법도 단어처럼 그 자리에서 펼친다 (팝업 위에 팝업을 또 띄우지 않는다)
+                return `<div class="border border-slate-200 rounded-xl overflow-hidden">
+                    <button onclick="toggleReviewPlanGrammar('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                        <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
+                        <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
+                        <i id="rpgm-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300 shrink-0"></i>
+                    </button>
+                    <div id="rpgm-${it.id}" class="hidden px-3 pb-3"></div>
                 </div>`;
             };
 
@@ -1501,6 +1506,27 @@ let vocabulary = [];
                         ? `<div class="space-y-2 pt-1">${parts.join('')}</div>`
                         : '<p class="text-[11px] text-slate-400 pt-1">적어둔 정보가 없어요.</p>';
                 }
+                box.dataset.filled = '1';
+            }
+        }
+
+        // [냐냐 요청] 복습 예정 팝업에서 문법 노트를 그 자리에서 펼쳐 본다.
+        //   그리는 방법은 '문법 노트 들춰보기'(openGrammarPeek)와 같은 블록 렌더러를 쓴다.
+        function toggleReviewPlanGrammar(id) {
+            const box = document.getElementById('rpgm-' + id);
+            const icon = document.getElementById('rpgm-icon-' + id);
+            if (!box) return;
+            const opening = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            if (icon) icon.className = `fa-solid fa-chevron-${opening ? 'up' : 'down'} text-[10px] text-slate-300 shrink-0`;
+            if (opening && !box.dataset.filled) {
+                const t = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables().find(x => x.id === id) : null;
+                const blocks = (t && typeof getNoteBlocks === 'function')
+                    ? getNoteBlocks(t).map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b)).filter(Boolean).join('')
+                    : '';
+                box.innerHTML = blocks
+                    ? `<div class="space-y-2 pt-1">${blocks}</div>`
+                    : '<p class="text-[11px] text-slate-400 pt-1">이 노트에는 아직 내용이 없어요.</p>';
                 box.dataset.filled = '1';
             }
         }
