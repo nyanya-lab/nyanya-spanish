@@ -1482,10 +1482,11 @@
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
             // 노트 안에서 이번에 연습할 대목 하나 (매번 다른 줄이 걸리게)
             const grammarDetail = grammarNote ? pickGrammarNoteDetail(grammarNote) : '';
-            //   섞을 단어는 '단어'다운 항목만 고른다 — 단어장에는 "¿Quién es [지시사+사람]?" 처럼
-            //   문장·표현 통째로 등록된 것도 있어서, 그런 걸 섞으라고 주면 억지로 우겨넣은 이상한 문장이 나온다
-            const extraWords = (typeof shuffleArray === 'function' ? shuffleArray(vocabulary.slice()) : vocabulary.slice())
-                .filter(w => w !== targetWord && isSimpleWordEntry(w)).slice(0, 2);
+            // [냐냐 요청] 덧붙임 단어(단어장에서 두 개 더 섞기)는 뺐다 (2026-09-02).
+            //   한 문장에 목표 단어 + 문법 노트 + 대목까지 넣으라는 마당에 단어를 둘 더 얹으니
+            //   "저 식당 앞에 있는 그 프로젝트의 성공은…" 처럼 소재가 엉키는 문장이 나왔다.
+            //   '어울릴 때만 쓰라' 고 열어뒀지만 값에 비해 어색함에 기여하는 쪽이 컸다.
+            //   목표 단어는 남긴다 — 모르는 단어를 만나게 하는 게 이 미션의 목적이다.
 
             const originalBtnHtml = genBtn.innerHTML;
             genBtn.disabled = true;
@@ -1517,11 +1518,8 @@ ${grammarDetail}
 - 서로 관계없는 소재를 한 문장에 억지로 몰아넣기
 주어·소유자·시점·인과관계가 앞뒤로 맞아떨어지는지 확인하고, 조금이라도 어색하면 상황 자체를 다시 잡으세요.
 문법을 넣으려다 어색해질 바에는, 그 문법이 자연스럽게 쓰이는 다른 상황을 고르는 게 낫습니다.
-${extraWords.length ? `
-[참고: 내 단어장에 있는 다른 단어] ${extraWords.map(w => `${w.word}(${w.meaning})`).join(', ')}
-이 중 하나가 위 문법과 정말 자연스럽게 어울릴 때만 그 '뜻'을 슬쩍 녹여 주세요.
-어울리지 않으면 하나도 안 쓰는 게 낫습니다. 여러 단어를 억지로 한 문장에 몰아넣지 마세요 —
-문장이 어색해지면 실패입니다. 문장은 짧고 자연스러운 게 최우선입니다.` : ''}
+
+문장은 짧고 자연스러운 게 최우선입니다.
             ${buildLearnerProfileSummary()}`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
             const schema = {
@@ -1547,7 +1545,7 @@ ${extraWords.length ? `
                 // [냐냐 요청] 첨삭 때 근거로 쓰려고 이번 미션이 참고한 것들을 기억해 둔다
                 aiCurrentGrammarForMission = grammarNote || null;
                 aiCurrentGrammarDetailForMission = grammarDetail || '';
-                aiCurrentExtraWordsForMission = extraWords;
+                aiCurrentExtraWordsForMission = [];   // 덧붙임 단어는 이제 안 준다
                 missionHeading.innerText = aiCurrentKoreanSentence;
                 AudioFX.playPunch();
             } catch (e) {
@@ -1605,9 +1603,7 @@ ${extraWords.length ? `
             const refGrammar = aiCurrentGrammarForMission
                 ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n${aiCurrentGrammarDetailForMission ? `            The mission was aimed at THIS line of that note: ${aiCurrentGrammarDetailForMission}\n` : ''}`
                 : '';
-            const refWords = (aiCurrentExtraWordsForMission || []).length
-                ? `\n            Other words from the student's vocabulary that were offered: ${aiCurrentExtraWordsForMission.map(w => `${w.word}(${w.meaning})`).join(', ')}\n`
-                : '';
+            const refWords = '';   // [냐냐 요청] 덧붙임 단어를 안 주므로 채점에도 알릴 게 없다
 
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
