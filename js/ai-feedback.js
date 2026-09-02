@@ -1557,7 +1557,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             For (a): the target word above is CONTEXT ONLY — it is the word the mission was built around, not a requirement. NEVER mark the answer wrong, and never ask for that word, just because the student expressed the same meaning with a different word. Judge only whether the Spanish is grammatical and conveys the Korean sentence accurately. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error, not as "you must use the target word".)
             For (b): the target word must actually appear and be used naturally, since the mission asked for it.
             Either way, check the grammar is correct.
-            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an encouraging and extremely precise professional Spanish tutor tutoring a passionate student named "냐냐".
@@ -1818,7 +1818,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             Reference example sentence (for context): "${refExample}"
             Student's Spanish Answer: "${userText}"
 
-            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${aiScoringNoteListText(exScoreNotes)}
             ${buildLearnerProfileSummary()}`;
 
@@ -2024,26 +2024,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const flat = ' ' + norm(text) + ' ';
             if (!flat.trim()) return out;
 
-            // ① 문장에 나온 내 단어들의 관용구 (이번에 쓴 표현은 뺀다)
-            const usedIdioms = new Set((aiLastIdiomHits || []).map(h => norm(h.idiom)));
-            const seen = new Set();
-            (vocabulary || []).forEach(w => {
-                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
-                if (!list.length) return;
-                const key = norm(w.word);
-                if (!key || key.length < 3) return;
-                if (!flat.includes(' ' + key + ' ')) return;        // 그 단어가 문장에 있어야
-                list.forEach(it => {
-                    const k = norm(it.idiom);
-                    if (!k || usedIdioms.has(k) || seen.has(k)) return;
-                    seen.add(k);
-                    const rec = (typeof idiomReview !== 'undefined') ? idiomReview[idiomKey(w.id, it.idiom)] : null;
-                    out.idioms.push({ word: w, idiom: it.idiom, meaning: it.idiomMeaning || '', stage: rec ? (rec.stage || 0) : null });
-                });
-            });
-            // 곡선에 들어와 있는 것(= 약한 것)을 먼저
-            out.idioms.sort((a, b) => (a.stage === null ? 9 : a.stage) - (b.stage === null ? 9 : b.stage));
-            out.idioms = out.idioms.slice(0, 4);
+            // [냐냐 요청] '이 문장에 쓸 수 있었던 내 관용구' 는 없앴다 (2026-09-02).
+            //   문장에 든 낱말 하나만 겹쳐도 그 낱말에 달린 표현이 전부 딸려나왔다 —
+            //   'el pie' 때문에 'a pie', 'porque' 때문에 'por qué' 가 뜨는 식이라 맞는 게 없었다.
+            //   실제로 쓴 표현은 '이 문장이 쓴 관용구' 가 이미 보여준다.
 
             // ② 문장에 나왔는데 단어장에 없는 낱말 — 분석(breakdown) 이 이미 낱말을 갈라놨으니 그걸 쓴다
             const words = new Set();
@@ -2062,19 +2046,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
         function aiSuggestHtml() {
             const s = aiLastSuggest || { idioms: [], newWords: [] };
-            if (!s.idioms.length && !s.newWords.length) return '';
-            const idiomPart = s.idioms.length ? `
-                <div class="mb-2">
-                    <p class="text-[11px] font-bold text-slate-500 mb-1">📘 이 문장에 쓸 수 있었던 내 관용구</p>
-                    <div class="flex flex-wrap gap-1.5">
-                        ${s.idioms.map(x => `<span class="inline-flex items-center gap-1 border border-violet-200 bg-violet-50 text-violet-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold">
-                            <b>${escapeHtml(x.idiom)}</b>
-                            <span class="text-[10px] text-slate-400">${escapeHtml(x.meaning)}</span>
-                            ${x.stage !== null ? `<span class="text-[9px] font-black text-amber-600">복습중</span>` : ''}
-                            ${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(x.idiom) : ''}
-                        </span>`).join('')}
-                    </div>
-                </div>` : '';
+            if (!s.newWords.length) return '';
             const wordPart = s.newWords.length ? `
                 <div>
                     <p class="text-[11px] font-bold text-slate-500 mb-1">➕ 아직 단어장에 없어요</p>
@@ -2085,7 +2057,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         </button>`).join('')}
                     </div>
                 </div>` : '';
-            return `<div class="mt-3 pt-3 border-t border-slate-200">${idiomPart}${wordPart}</div>`;
+            return `<div class="mt-3 pt-3 border-t border-slate-200">${wordPart}</div>`;
         }
 
         // 첨삭이 짚은 표현이 내 관용구 목록에 있나 (관사·자리표시자·악센트를 무시하고 맞춰본다)
@@ -2096,13 +2068,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return !!k && (k.split(' ').length >= 2 || k.length >= 6);
         }
 
+        // [냐냐 지적] 악센트를 떼고 맞추다 보니 'porque'(왜냐하면) 를 쓴 문장이 'el porqué'(까닭) 를
+        //   썼다고 잡혔다. si/sí, que/qué 도 같은 짝이다. 앱은 어디서나 악센트를 보므로 여기서도 본다.
         function findIdiomEntryByText(raw) {
-            const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, false) : String(raw || '').toLowerCase();
+            const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, true) : String(raw || '').toLowerCase();
             if (!idiomKeyUsable(key)) return null;
             for (const w of vocabulary) {
                 const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
                 for (const it of list) {
-                    const k2 = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(it.idiom, false) : String(it.idiom).toLowerCase();
+                    const k2 = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(it.idiom, true) : String(it.idiom).toLowerCase();
                     if (k2 && k2 === key) return { w, it };
                 }
             }
@@ -2113,7 +2087,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   'tener ganas de' 를 써도 AI 는 tener·ganar 로 쪼개 보내서 표현이 통째로 안 잡혔다.
         //   내 관용구 목록을 정답 문장에 대조하면 확실하다 (자리표시자·관사·악센트는 무시).
         function detectIdiomsInText(rawText) {
-            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, false) : String(t || '').toLowerCase();
+            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, true) : String(t || '').toLowerCase();
             const hay = ' ' + norm(String(rawText || '').replace(/<[^>]*>/g, '')) + ' ';
             if (hay.trim().length < 3) return [];
             const out = [];
@@ -2173,6 +2147,25 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return cands.find(w => String(w.pos || '').toLowerCase() === pos) || cands[0];
             };
 
+            // [냐냐 지적] 내가 쓰지도 않은 낱말에 점수가 붙었다 — es 라고 썼는데 AI 가 está 로 고쳐놓고
+            //   estar 에 +2 를 줬다. 프롬프트로 여러 번 못박아도 흔들려서 여기서 직접 거른다.
+            //   내 원문(originalMarked)의 낱말을 단어장과 맞춰 '내가 쓴 단어' 집합을 만들고,
+            //   그 밖의 것은 점수를 안 붙인다. 원문을 못 받았을 때만 예전처럼 다 받아준다.
+            const mineText = String((feedback && feedback.originalMarked) || '').replace(/<[^>]*>/g, ' ');
+            const mineIds = new Set();
+            if (mineText.trim()) {
+                const flat = ' ' + norm(mineText.replace(/[^\p{L}\p{N}\s]/gu, ' ')) + ' ';
+                mineText.split(/[^\p{L}\p{N}]+/u).forEach(tok => {
+                    if (!tok) return;
+                    const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(tok) : null;
+                    if (hit) mineIds.add(hit.id);
+                });
+                // 여러 낱말짜리 표현은 토막으로는 안 잡힌다 — 통째로 들어 있는지 한 번 더 본다
+                vocabulary.forEach(w => {
+                    const k = norm(w.word);
+                    if (k && k.includes(' ') && flat.includes(' ' + k + ' ')) mineIds.add(w.id);
+                });
+            }
             const done = new Set();
             list.forEach(item => {
                 const key = norm(item.name);
@@ -2195,6 +2188,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const w = exact || (AI_FUNCTION_WORDS.has(key) ? null
                     : ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null));
                 if (!w || done.has(w.id)) return;
+                if (mineIds.size && !mineIds.has(w.id)) return;   // 내가 안 쓴 낱말이면 점수를 안 붙인다
                 done.add(w.id);
                 // [냐냐 요청] 철자는 맞는데 활용·성수를 틀린 낱말은 점수를 안 준다 (0점, 곡선도 그대로).
                 const noScore = (item.ok === null);
@@ -2351,10 +2345,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
         const AI_SPELLING_CONSISTENCY_RULE = `
             SPELLING CONSISTENCY: every Spanish word you write in "tip", "message" or "changes" must be spelled EXACTLY as it appears in "correctedText" — same letters, same accents. Before output, re-read your own text and fix any word that differs. Writing "tercera" in one place and "terceira" in another teaches the student the wrong word.`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" when the student misspelled it (put the dictionary form of the word they were CLEARLY trying to write); "wordsForm" when the spelling is a real Spanish word but you had to change THAT WORD'S OWN form in correctedText — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos); "wordsOk" for everything else, that is, the word survives into correctedText in the very form the student wrote it. A correctly spelled word in the right form goes in "wordsOk" even if it was a poor word choice for the meaning, and swapping one word for a DIFFERENT word (Cuál → Qué) is a word choice, not a form, so that word still counts as "wordsOk". Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
-            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
+            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" ONLY when the student misspelled it — the letters they typed are not a real Spanish word (put the dictionary form of the word they were CLEARLY trying to write). A correctly spelled real word can NEVER go in "wordsBad", however wrong it was for this sentence; if you replaced it, it belongs in "wordsForm"; "wordsForm" when the word is spelled correctly but you did NOT leave it as it was — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos), or a word you had to swap for a different one (es → está, Cuál → Qué, el pie → mis pies). The student knew the word but did not place it right here, so it earns nothing either way; "wordsOk" only for words that survive into correctedText exactly as the student wrote them. Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
+            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. Concretely: a note titled "위치를 나타내는 표현" whose hint is about "del / al" and "encima de, cerca de, al lado de" is NOT used by a sentence that just says "sobre el pie" — no contraction, none of its phrases — so that note belongs in NEITHER list, not in "grammarOk" and not in "grammarBad". Read the hint, not the title: the title is a topic, the hint is the rule. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
             DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
-            - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule.
+            - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule. Another: the student wrote "el libro que es sobre el pie" and you corrected it to "el libro que está arriba de mis pies" — you rewrote the location phrase itself, so a location note is "grammarBad", never "grammarOk". Ask yourself: did I have to touch the very structure this note teaches? If yes it is "grammarBad", no matter how much of the rest of the sentence was fine. Decide in this order, never the other way round: (1) does the sentence actually exercise this note's rule, judged from its hint? If no, the note goes in NEITHER list and you are done with it. (2) Only for a note that passed (1), read the reason you wrote in "changes": if that reason is about this note's rule, the note is "grammarBad", never "grammarOk" — you just said you had to fix it. A change explained by a rule the note does not teach (ser vs estar, a possessive) never drags that note into either list.
             - "grammarOk" when the student applied the note's rule correctly, even if you changed other words nearby for a DIFFERENT reason. Example: the student wrote "¿Cuál pantalones es más caros que aquel?" and you fixed the interrogative (Cuál→Qué), the verb agreement (es→son) and the demonstrative (aquel→esos) — a note about COMPARATIVES stays in "grammarOk", because "más ... que" itself was used correctly. Do not punish a note just because a word standing next to it changed.
             A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
@@ -2921,7 +2915,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                           : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
                           : (w.noScore ? 'border-slate-300 bg-slate-50 text-slate-500'
                           : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600')));
-                const mark = w.undone ? '해제됨' : (w.noScore && !w.lookedUp ? '형태 틀림 · 0' : (w.delta > 0 ? '+' : '') + w.delta);
+                const mark = w.undone ? '해제됨' : (w.noScore && !w.lookedUp ? '고쳐졌어요 · 0' : (w.delta > 0 ? '+' : '') + w.delta);
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
                     <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${mark}</span>
                     <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
@@ -3003,7 +2997,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   그냥 '문장에 실제로 쓴 단어'를 사전형으로 돌려받아 단어장과 대조한다.
             const prompt = `Student's Free Spanish Sentence: "${userEsText}"
 
-            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
+            Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
 ${noteListText}
             ${buildLearnerProfileSummary()}`;
             
