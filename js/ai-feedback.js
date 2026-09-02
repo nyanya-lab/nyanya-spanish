@@ -1544,6 +1544,10 @@ ${extraWords.length ? `
             //   제대로 써도 +2 가 안 붙고, 복습으로 시작한 미션이어도 곡선이 영영 안 나갔다.
             //   ('날씨' 미션에서 hace mal tiempo 를 맞게 써도 문법 판정이 0건이었다)
             const koEsScoreNotes = aiScoringNoteList();
+            // [냐냐 요청] 네 모드가 같은 잣대로 채점한다. 여기만 노트 목록을 안 주고 있어서,
+            //   미션 답안에 다른 문법을 잘 써도 그건 점수를 못 받았다. 문장을 '만들' 때는
+            //   지금처럼 문법 하나만 보고 만든다 — 목록은 '채점' 에만 붙는다.
+            const koEsNoteListText = aiScoringNoteListText(koEsScoreNotes);
             const refGrammar = aiCurrentGrammarForMission
                 ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
                 : '';
@@ -1554,7 +1558,7 @@ ${extraWords.length ? `
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
             Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
             Student's Spanish Answer: "${userText}"
-${refGrammar}${refWords}
+${koEsNoteListText}${refGrammar}${refWords}
             Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally. Evaluate accordingly: for (a) check translation accuracy; for (b) check that the target word is used correctly and the sentence is natural. Either way, check grammar is correct and the target word is used appropriately.
             CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class="text-red-600 font-extrabold underline">...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class="line-through text-slate-400">...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
