@@ -730,6 +730,9 @@
         let fillCount = 5; // [냐냐 요청] 단어빈칸 기본 5개
         let fillState = null;
 
+        // [냐냐 요청] '빈칸'을 다시 누르면 마지막에 보던 갈래로 돌아간다
+        let lastFillMode = 'fill';
+
         function selectReviewMode(mode) {
             // [냐냐 PATCH-4배치] '퀴즈'는 별도 탭 → 탭 전환만 하고 끝
             if (mode === 'quiz') {
@@ -741,9 +744,15 @@
                 changeTab('review');
             }
             reviewMode = mode;
+            const isFill = (mode === 'fill' || mode === 'gfill');
+            if (isFill) lastFillMode = mode;
             const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write', vconj: 'review-mode-vconj' };
             Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
+            // 빈칸 갈래 줄은 빈칸을 고른 동안에만
+            const sub = document.getElementById('review-fill-sub');
+            if (sub) sub.classList.toggle('hidden', !isFill);
             // [냐냐 PATCH] 퀴즈 버튼도 목록에 포함 (빠져 있어서 혼자 글씨색이 달랐음)
+            //   [냐냐 요청] 윗줄의 '빈칸'은 단어·문법표 어느 쪽이든 켜진 것으로 본다
             const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn', vconj: 'review-mode-vconj-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
@@ -753,6 +762,11 @@
                 b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
                 b.className += ' ' + (m === mode ? on : off);
             });
+            const blankBtn = document.getElementById('review-mode-blank-btn');
+            if (blankBtn) {
+                blankBtn.className = blankBtn.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
+                blankBtn.className += ' ' + (isFill ? on : off);
+            }
         }
 
         // ============================================================

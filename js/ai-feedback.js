@@ -2000,7 +2000,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // ============================================================
         let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
         let aiLastEsKoWords = [];     // [{ word, ok, delta }] — 스펠링 판정 결과
-        let aiLastIdiomHits = [];     // [{ word, idiom, ok }] — 이 문장이 쓴 관용구 (곡선만 돌린다)
 
         // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 의 스펠링 점수 — 맞으면 +2 / 틀리면 −2.
         //   AI 가 돌려준 단어를 실제 단어장과 이름으로 맞춰본다. 없는 단어는 버린다.
@@ -2150,65 +2149,16 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return `<div class="mt-3 pt-3 border-t border-slate-200">${wordPart}</div>`;
         }
 
-        // 첨삭이 짚은 표현이 내 관용구 목록에 있나 (관사·자리표시자·악센트를 무시하고 맞춰본다)
-        // 자리표시자를 떼면 낱말 하나만 남는 표현이 1113개 중 84개 있다 ("ser [시간/날짜]" → "ser").
-        //   그 조각은 아무 문장에나 걸린다 — es 한 번 썼다고 'ser [색깔형용사]' 곡선이 앞으로 가면 안 된다.
-        //   두 낱말 이상이거나 6글자가 넘는 것만 표현으로 인정한다 (pintarse·desayunar 같은 건 그대로 잡힌다).
-        function idiomKeyUsable(k) {
-            return !!k && (k.split(' ').length >= 2 || k.length >= 6);
-        }
-
-        // [냐냐 지적] 악센트를 떼고 맞추다 보니 'porque'(왜냐하면) 를 쓴 문장이 'el porqué'(까닭) 를
-        //   썼다고 잡혔다. si/sí, que/qué 도 같은 짝이다. 앱은 어디서나 악센트를 보므로 여기서도 본다.
-        function findIdiomEntryByText(raw) {
-            const key = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw, true) : String(raw || '').toLowerCase();
-            if (!idiomKeyUsable(key)) return null;
-            for (const w of vocabulary) {
-                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
-                for (const it of list) {
-                    const k2 = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(it.idiom, true) : String(it.idiom).toLowerCase();
-                    if (k2 && k2 === key) return { w, it };
-                }
-            }
-            return null;
-        }
-
-        // [냐냐 요청] 관용구는 AI 보고에 기대지 않고 문장을 직접 훑는다.
-        //   'tener ganas de' 를 써도 AI 는 tener·ganar 로 쪼개 보내서 표현이 통째로 안 잡혔다.
-        //   내 관용구 목록을 정답 문장에 대조하면 확실하다 (자리표시자·관사·악센트는 무시).
-        function detectIdiomsInText(rawText) {
-            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, true) : String(t || '').toLowerCase();
-            const hay = ' ' + norm(String(rawText || '').replace(/<[^>]*>/g, '')) + ' ';
-            if (hay.trim().length < 3) return [];
-            const out = [];
-            (vocabulary || []).forEach(w => {
-                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
-                list.forEach(it => {
-                    const k = norm(it.idiom);
-                    // 너무 짧은 조각은 우연히 걸린다 (두 낱말 이상이거나 6글자 넘는 것만)
-                    if (!idiomKeyUsable(k)) return;
-                    if (hay.includes(' ' + k + ' ')) out.push({ w, it });
-                });
-            });
-            return out;
-        }
+        // [냐냐 지적] '이 문장이 쓴 관용구' 는 뺐다 (2026-09-02).
+        //   내 관용구 목록을 문장에 대조해 짚어줬는데, 자리표시자를 뗀 표현이 낱말 하나로 줄어드는 게 문제였다 —
+        //   "llevar [시간] + [현재분사]" 가 'llevar' 가 되니, llevo 를 쓴 문장마다 "이 표현을 썼어요" 가 떴다.
+        //   현재분사를 쓰지도 않았는데 말이다. 제대로 못 짚을 바에는 없는 게 낫다는 판단.
+        //   관용구가 곡선에 드는 길은 단어 빈칸의 관용구 칸·퀴즈·관용구 복습으로 남는다.
+        //   ('아직 단어장에 없어요' 추천은 그대로 둔다 — 그건 낱말 단위라 헛짚지 않는다)
 
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
-            aiLastIdiomHits = [];
-
-            // 정답 문장에 들어 있는 내 관용구 — 제대로 쓴 것이므로 곡선을 앞으로
-            //   (점수는 단어 기준 그대로 두기로 했으니 여기서 점수는 안 건드린다)
-            // [냐냐 기준] 곡선을 앞으로 미는 건 관용구 복습에서만. 여기서는 '썼다' 고 표시만 한다.
-            //   (문장에 넣었다는 것만으로 한 칸 나가면 곡선이 너무 빨리 돈다 — 단어·문법과 같은 기준)
-            const seenIdiom = new Set();
-            detectIdiomsInText(feedback && feedback.correctedText).forEach(({ w, it }) => {
-                const k = `${w.id}::${it.idiom}`;
-                if (seenIdiom.has(k)) return;
-                seenIdiom.add(k);
-                aiLastIdiomHits.push({ word: w, idiom: it.idiom, ok: true });
-            });
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
             if (!list.length || typeof vocabulary === 'undefined') return;
 
@@ -2264,15 +2214,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   점수는 손대지 않는다 — 점수는 단어 기준 그대로 두기로 했다.
                 //   (그래야 단어와 관용구가 같이 잡혀도 같은 단어에 두 번 붙지 않는다)
                 //   AI 가 표현을 통째로 짚어 준 경우 — 위 훑기가 못 잡은 것만 (틀리게 쓴 것이 여기 걸린다)
-                if (typeof idiomReviewDemote === 'function') {
-                    const hitIdiom = findIdiomEntryByText(item.name);
-                    // 형태를 틀린 낱말(ok === null)은 곡선도 안 건드린다 — 점수를 안 주기로 한 것과 같은 이유
-                    if (hitIdiom && item.ok !== null && !aiLastIdiomHits.some(h => h.word.id === hitIdiom.w.id && h.idiom === hitIdiom.it.idiom)) {
-                        // 틀리게 쓴 것만 곡선을 건드린다 (진입·후퇴). 잘 쓴 건 표시만.
-                        if (!item.ok) idiomReviewDemote(hitIdiom.w.id, hitIdiom.it.idiom);
-                        aiLastIdiomHits.push({ word: hitIdiom.w, idiom: hitIdiom.it.idiom, ok: item.ok });
-                    }
-                }
                 const exact = pickByPos(byWord.get(key), item.pos);
                 // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지)
                 const w = exact || (AI_FUNCTION_WORDS.has(key) ? null
@@ -3138,7 +3079,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
             renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'이 남아 있으면 안 된다
             aiLastEsKoGrammar = [];
             aiLastEsKoWords = [];
-            aiLastIdiomHits = [];
             aiLastSuggest = { idioms: [], newWords: [] };
             const box = document.getElementById('ai-mission-refs');
             if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
@@ -3260,7 +3200,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const keep = box.querySelector('[data-mission-refs]');
             const keepHtml = keep ? keep.outerHTML : '';
             const hasSuggest = !!((aiLastSuggest || {}).idioms || []).length || !!((aiLastSuggest || {}).newWords || []).length;
-            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length && !(aiLastIdiomHits || []).length && !hasSuggest) {
+            if (!aiLastEsKoGrammar.length && !aiLastEsKoWords.length && !hasSuggest) {
                 box.innerHTML = keepHtml;
                 box.classList.toggle('hidden', !keepHtml);
                 return;
@@ -3307,19 +3247,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 gradeBefore: e.gradeBefore, gradeAfter: (typeof getWordGrade === 'function') ? getWordGrade(e.word) : e.gradeBefore
             }));
             const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
-            // [냐냐 요청] 이 문장이 쓴 관용구 — 점수는 안 붙고 곡선만 돈다는 걸 분명히 적는다
-            const idiomHtml = (aiLastIdiomHits || []).length ? `
-                <div class="mt-3 pt-3 border-t border-slate-200">
-                    <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
-                        <i class="fa-solid fa-book-bookmark text-violet-500"></i><span>이 문장이 쓴 관용구</span>
-                        <span class="font-normal text-slate-400">점수는 단어에 붙어요. 곡선은 관용구 복습에서만 움직여요</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                        ${aiLastIdiomHits.map(h => `<span class="inline-flex items-center gap-1 border rounded-lg px-2 py-0.5 ${h.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600'}">
-                            <b>${escapeHtml(h.idiom)}</b><span class="text-[10px]">${h.ok ? '이 표현을 썼어요' : '곡선에 들어갔어요'}</span>
-                        </span>`).join('')}
-                    </div>
-                </div>` : '';
             const shiftHtml = shiftInner ? `<div class="mt-3 pt-3 border-t border-slate-200">${shiftInner}</div>` : '';
 
             box.innerHTML = keepHtml + `
@@ -3332,7 +3259,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}
-                ${idiomHtml}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
                 ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 자세히 보기 · ↺ 눌러서 점수 바꾸기 (그대로 → 찾아보고 씀 ${LOOKUP_PENALTY} → 해제)</p>` : ''}`;
