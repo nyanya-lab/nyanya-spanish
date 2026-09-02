@@ -1700,6 +1700,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
+                applyMissionTargetWordScore(feedback);            // 목표 단어를 안 쓰고 문장도 틀렸으면 −2
                 if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
                 grammarReviewLastNoteId = aiMissionReviewGrammarId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
@@ -2008,8 +2009,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   두 번 등록된 단어(solo 부사/형용사, joven 명사/형용사 등 11개)를 가려내려고 쓴다.
         //   ⚠️ 문법 노트 제목에도 이 함수를 쓴다. 제목에 | 가 들어 있어도 잘리면 안 되므로
         //      뒤 조각이 진짜 품사 이름일 때만 가른다.
+        //   [냐냐 지적] 목록에 없는 품사가 오면 '|' 를 못 떼서 이름이 'la|article' 로 남고,
+        //   그 꼴 그대로 '아직 단어장에 없어요' 에 떴다. AI 가 쓰는 품사 이름을 넉넉히 담아둔다.
         const AI_POS_WORDS = new Set(['noun', 'verb', 'adjective', 'adverb', 'preposition',
-            'pronoun', 'conjunction', 'interrogative', 'phrase']);
+            'pronoun', 'conjunction', 'interrogative', 'phrase',
+            'article', 'determiner', 'numeral', 'number', 'interjection', 'expression', 'idiom', 'other']);
         //   [냐냐 요청] neutralKey 는 '점수를 안 주는' 칸이다 (ok === null).
         //     철자는 맞는데 활용·성수를 틀린 낱말 — 맞다고 +2 를 주면 성수일치 지적 바로 밑에
         //     그 동사가 +2 로 붙어 앞뒤가 안 맞는다. 틀렸다고 −2 를 주기엔 낱말을 아는 건 맞다.
@@ -2105,26 +2109,44 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
         function buildAiSuggestions(feedback) {
             const out = { idioms: [], newWords: [] };
-            const text = String(feedback && feedback.correctedText || '').replace(/<[^>]*>/g, '');
-            const norm = (t) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(t, false) : String(t || '').toLowerCase();
-            const flat = ' ' + norm(text) + ' ';
-            if (!flat.trim()) return out;
-
             // [냐냐 요청] '이 문장에 쓸 수 있었던 내 관용구' 는 없앴다 (2026-09-02).
-            //   문장에 든 낱말 하나만 겹쳐도 그 낱말에 달린 표현이 전부 딸려나왔다 —
-            //   'el pie' 때문에 'a pie', 'porque' 때문에 'por qué' 가 뜨는 식이라 맞는 게 없었다.
-            //   실제로 쓴 표현은 '이 문장이 쓴 관용구' 가 이미 보여준다.
+            //   문장에 든 낱말 하나만 겹쳐도 그 낱말에 달린 표현이 전부 딸려나왔다.
 
-            // ② 문장에 나왔는데 단어장에 없는 낱말 — 분석(breakdown) 이 이미 낱말을 갈라놨으니 그걸 쓴다
-            const words = new Set();
-            (feedback && Array.isArray(feedback.breakdown) ? feedback.breakdown : []).forEach(it => {
-                const raw = String((it && it.word) || '').trim();
-                if (!raw || raw.length < 2) return;
-                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;   // 이미 있음
-                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(norm(raw))) return;
-                if (words.has(raw.toLowerCase())) return;
-                words.add(raw.toLowerCase());
-                out.newWords.push({ word: raw, mean: String((it && it.mean) || '').trim() });
+            // [냐냐 지적] 추천은 '사전형' 으로만 낸다 (2026-09-03).
+            //   예전엔 문장에 나온 꼴 그대로 냈다 — decoraron 을 추천해서, 이미 등록해 둔
+            //   decorar 를 또 등록하라고 했다. 채점 목록(wordsOk/Bad/Form)은 사전형이라 그 걱정이 없다.
+            const norm = (t) => String(t || '').toLowerCase().trim().normalize('NFC')
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
+                .replace(/\s+/g, ' ').trim();
+            // 단수/복수·성 변형까지 '이미 있음' 으로 친다 (medicamento ↔ los medicamentos)
+            const have = new Set();
+            (vocabulary || []).forEach(w => {
+                const k = norm(w.word);
+                if (!k) return;
+                have.add(k);
+                if (typeof spanishFormVariants === 'function') spanishFormVariants(k).forEach(v => have.add(v));
+            });
+            // 뜻은 낱말 분석에서 어간이 겹치는 것을 빌린다 (decorar ← decoraron '꾸며주셨다')
+            const meanOf = (dict) => {
+                const d = norm(dict);
+                const head = d.slice(0, Math.min(4, d.length));
+                const hit = (feedback && Array.isArray(feedback.breakdown) ? feedback.breakdown : [])
+                    .find(b => head && norm(b && b.word).startsWith(head));
+                return hit ? String(hit.mean || '').trim() : '';
+            };
+
+            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
+            const seen = new Set();
+            list.forEach(item => {
+                const raw = String((item && item.name) || '').trim();
+                const key = norm(raw);
+                if (!key || key.length < 2 || seen.has(key)) return;
+                if (have.has(key)) return;                                     // 이미 단어장에 있음
+                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
+                seen.add(key);
+                out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
             out.newWords = out.newWords.slice(0, 5);
             return out;
@@ -2153,23 +2175,45 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   관용구가 곡선에 드는 길은 단어 빈칸의 관용구 칸·퀴즈·관용구 복습으로 남는다.
         //   ('아직 단어장에 없어요' 추천은 그대로 둔다 — 그건 낱말 단위라 헛짚지 않는다)
 
+        // ============================================================
+        // [냐냐 요청] 단어 점수는 '내가 쓴 낱말' 을 하나하나 다 훑어서 매긴다 (2026-09-03).
+        //   예전엔 AI 가 보내준 목록만 봤다. 그래서 두 가지가 샜다:
+        //   ① AI 가 빠뜨린 낱말은 점수가 아예 안 붙었다 ("Mis padres…" 를 썼는데 padre 가 조용히 빠짐)
+        //   ② AI 가 고쳐놓고도 '잘 썼다' 고 보내면 +2 가 붙었다 (muchas → muchísimo 인데 mucho +2)
+        //   이제 기준은 하나다 — 내가 쓴 그 낱말이 '고친 문장에 그대로 살아남았나'.
+        //     살아남음 → 제대로 쓴 것 (+2)   /   고쳐짐 → 점수 없음 (0)
+        //     단, AI 가 '철자를 틀렸다'(wordsBad) 고 짚은 것만 −2
+        //   AI 목록은 이제 '철자 오류인가' 를 가리는 데만 쓴다. 어느 낱말을 봤는지는 코드가 정한다.
+        // ============================================================
+
+        //   성·수 변형까지 본다 — 단어장에 'el padre' 로 있는데 문장엔 'padres' 로 나오는 식이라
+        //   토막을 그대로 찾으면 못 맞춘다. (동사 활용형은 findVocabWordByForm 이 맡는다)
+        function spanishFormVariants(k) {
+            const out = new Set();
+            const add = (x) => { if (x && x.length > 1) out.add(x); };
+            add(k);
+            if (k.endsWith('es')) add(k.slice(0, -2));
+            if (k.endsWith('s')) add(k.slice(0, -1));
+            add(k + 's'); add(k + 'es');
+            const base = k.replace(/s$/, '');
+            if (base.endsWith('a')) { add(base.slice(0, -1) + 'o'); add(base.slice(0, -1) + 'os'); }
+            if (base.endsWith('o')) { add(base.slice(0, -1) + 'a'); add(base.slice(0, -1) + 'as'); }
+            return Array.from(out);
+        }
+
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
-            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
-            if (!list.length || typeof vocabulary === 'undefined') return;
+            if (typeof vocabulary === 'undefined') return;
 
             // 관사를 떼고 악센트까지 그대로 비교한다 (carne ≠ carné 와 같은 이유)
             //   [냐냐 요청] 대괄호 자리표시자도 뗀다. 단어장에 "antes de [명사/동사원형]" 처럼
             //   적힌 항목이 26개 있는데, 냐냐가 문장에 쓰는 건 "antes de" 라서 예전엔 영영 안 맞았다.
-            //   (빈칸·퀴즈 채점은 이미 대괄호를 떼고 있었는데 첨삭만 빠져 있었다)
             const norm = (s) => String(s || '').toLowerCase().trim().normalize('NFC')
                 .replace(/\[[^\]]*\]/g, ' ')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
                 .replace(/\s+/g, ' ').trim();
             // 같은 철자가 품사만 다르게 등록된 단어가 11개 있다 (solo 부사/형용사, joven 명사/형용사 …).
-            //   예전엔 먼저 등록된 쪽만 map 에 남아서, 나머지 하나는 첨삭 점수를 영영 못 받았다.
-            //   이제 후보를 모두 들고 있다가 첨삭이 알려준 품사로 고른다.
             const byWord = new Map();
             vocabulary.forEach(w => {
                 const k = norm(w.word);
@@ -2177,61 +2221,136 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!byWord.has(k)) byWord.set(k, []);
                 byWord.get(k).push(w);
             });
-            // 품사를 못 받았거나 맞는 게 없으면 예전처럼 먼저 등록된 것을 쓴다
             const pickByPos = (cands, pos) => {
                 if (!cands || !cands.length) return null;
                 if (cands.length === 1 || !pos) return cands[0];
                 return cands.find(w => String(w.pos || '').toLowerCase() === pos) || cands[0];
             };
+            // 낱말 하나를 단어장 항목으로 (표기 그대로 → 성·수 변형 → 활용형 역추적)
+            const resolve = (raw, pos) => {
+                const k = norm(raw);
+                if (!k) return null;
+                const hit = pickByPos(byWord.get(k), pos);
+                if (hit) return hit;
+                for (const v of spanishFormVariants(k)) {
+                    const h = pickByPos(byWord.get(v), pos);
+                    if (h) return h;
+                }
+                // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지 — se → saber 같은 사고)
+                if (AI_FUNCTION_WORDS.has(k)) return null;
+                return (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(k) : null;
+            };
 
-            // [냐냐 지적] 내가 쓰지도 않은 낱말에 점수가 붙었다 — es 라고 썼는데 AI 가 está 로 고쳐놓고
-            //   estar 에 +2 를 줬다. 프롬프트로 여러 번 못박아도 흔들려서 여기서 직접 거른다.
-            //   내 원문(originalMarked)의 낱말을 단어장과 맞춰 '내가 쓴 단어' 집합을 만들고,
-            //   그 밖의 것은 점수를 안 붙인다. 원문을 못 받았을 때만 예전처럼 다 받아준다.
-            const mineText = String((feedback && feedback.originalMarked) || '').replace(/<[^>]*>/g, ' ');
-            const mineIds = new Set();
-            if (mineText.trim()) {
-                const flat = ' ' + norm(mineText.replace(/[^\p{L}\p{N}\s]/gu, ' ')) + ' ';
-                mineText.split(/[^\p{L}\p{N}]+/u).forEach(tok => {
-                    if (!tok) return;
-                    const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(tok) : null;
-                    if (hit) mineIds.add(hit.id);
-                });
-                // 여러 낱말짜리 표현은 토막으로는 안 잡힌다 — 통째로 들어 있는지 한 번 더 본다
-                vocabulary.forEach(w => {
-                    const k = norm(w.word);
-                    if (k && k.includes(' ') && flat.includes(' ' + k + ' ')) mineIds.add(w.id);
-                });
-            }
+            const tokensOf = (html) => String(html || '').replace(/<[^>]*>/g, ' ')
+                .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+            const mineToks = tokensOf(feedback && feedback.originalMarked);
+            const fixedToks = tokensOf(feedback && feedback.correctedText);
+            const fixedSet = new Set(fixedToks.map(t => norm(t)));
+            const fixedFlat = ' ' + fixedToks.map(t => norm(t)).join(' ') + ' ';
+            const mineFlat = ' ' + mineToks.map(t => norm(t)).join(' ') + ' ';
+
+            // 원문을 못 받았으면 예전처럼 AI 목록만 보고 매긴다 (안전망)
+            const aiList = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
+            // AI 가 '철자를 틀렸다' 고 짚은 낱말 — 이것만 −2 의 근거로 쓴다
+            const badIds = new Set();
+            aiList.forEach(item => {
+                if (item.ok !== false) return;
+                const w = resolve(item.name, item.pos);
+                if (w) badIds.add(w.id);
+            });
+
             const done = new Set();
-            list.forEach(item => {
-                const key = norm(item.name);
-                // 사전형이 단어장 표기와 조금 달라도(활용형·복수형) 역추적으로 한 번 더 찾아본다
-                // [냐냐 요청] 관용구를 문장에 썼으면 그 표현의 곡선을 돌린다.
-                //   점수는 손대지 않는다 — 점수는 단어 기준 그대로 두기로 했다.
-                //   (그래야 단어와 관용구가 같이 잡혀도 같은 단어에 두 번 붙지 않는다)
-                //   AI 가 표현을 통째로 짚어 준 경우 — 위 훑기가 못 잡은 것만 (틀리게 쓴 것이 여기 걸린다)
-                const exact = pickByPos(byWord.get(key), item.pos);
-                // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지)
-                const w = exact || (AI_FUNCTION_WORDS.has(key) ? null
-                    : ((typeof findVocabWordByForm === 'function' && key) ? findVocabWordByForm(key) : null));
+            const push = (w, survived) => {
                 if (!w || done.has(w.id)) return;
-                if (mineIds.size && !mineIds.has(w.id)) return;   // 내가 안 쓴 낱말이면 점수를 안 붙인다
                 done.add(w.id);
-                // [냐냐 요청] 철자는 맞는데 활용·성수를 틀린 낱말은 점수를 안 준다 (0점, 곡선도 그대로).
-                const noScore = (item.ok === null);
-                const ok = (item.ok === true);
-                const delta = noScore ? 0 : (ok ? gainOk : WORD_SPELL_BAD);
+                // [냐냐 기준] 고쳐진 낱말은 점수를 안 준다(0). 철자를 틀린 것만 −2.
+                const isBad = badIds.has(w.id);
+                const ok = survived && !isBad;
+                const noScore = !survived && !isBad;
+                const delta = ok ? gainOk : (isBad ? WORD_SPELL_BAD : 0);
                 // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
-                //   AI 가 의도와 다른 단어로 알아듣는 경우가 있어서 한 건씩 해제할 수 있어야 한다.
-                //   델타만 빼면 안 된다 — 오답이면 lastWrongDate·reviewStage 까지 바뀌기 때문.
                 const prev = snapshotWordScoreState(w);
-                // [냐냐 요청] 등급이 바뀌면 결과 카드에서 알려준다 (안 바뀌면 아무 말 안 한다)
                 const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-                // 정답률·망각곡선까지 같이 반영되도록 단어 점수는 addWordScore 로 (퀴즈·복습과 같은 경로)
                 if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
                 aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+            };
+
+            if (!mineToks.length) {
+                // 원문이 없으면 예전 방식 (AI 목록 그대로)
+                aiList.forEach(item => {
+                    const w = resolve(item.name, item.pos);
+                    if (!w || done.has(w.id)) return;
+                    done.add(w.id);
+                    const noScore = (item.ok === null);
+                    const ok = (item.ok === true);
+                    const delta = noScore ? 0 : (ok ? gainOk : WORD_SPELL_BAD);
+                    const prev = snapshotWordScoreState(w);
+                    const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+                    if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
+                    aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+                });
+                return;
+            }
+
+            // ① 여러 낱말짜리 항목 먼저 (토막으로는 안 잡힌다)
+            vocabulary.forEach(w => {
+                const k = norm(w.word);
+                if (!k || !k.includes(' ')) return;
+                if (!mineFlat.includes(' ' + k + ' ')) return;
+                push(w, fixedFlat.includes(' ' + k + ' '));
             });
+            // ② 내가 쓴 낱말을 하나씩
+            mineToks.forEach(tok => push(resolve(tok, ''), fixedSet.has(norm(tok))));
+            // ③ [냐냐 지적] 철자를 크게 틀리면 토막으로는 단어장을 못 찾는다 —
+            //    'medicin' 이라고 쓰면 el medicamento 에 안 걸려서 −2 가 조용히 빠졌다.
+            //    그래서 AI 가 '틀리게 썼다'(wordsBad)·'형태를 틀렸다'(wordsForm) 고 짚은 것은
+            //    토막에서 못 찾았더라도 여기서 한 번 더 받는다.
+            //    ⚠️ 잘 썼다(wordsOk)는 여기서 안 받는다 — 그건 위 훑기가 이미 다 했고,
+            //       예전에 'es' 를 'está' 로 고쳐놓고 estar 에 +2 를 주던 사고가 그쪽에서 났다.
+            //    ⚠️ 그렇다고 다 받으면 반대쪽 사고가 난다 — AI 가 '고친 문장의 낱말' 을 오답으로
+            //       올려서, 쓰지도 않은 buscar·porque 에 −2 가 붙었다. 그래서 '내가 쓴 토막과
+            //       어간이 겹치는 것' 만 받는다 (medicin ↔ medicamento 는 medic 를 공유한다).
+            const bare = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const mineBare = mineToks.map(t => bare(norm(t)));
+            const sharesStem = (dict) => {
+                const d = bare(norm(dict));
+                if (d.length < 4) return false;
+                return mineBare.some(t => t.length >= 4 && (t.startsWith(d.slice(0, 4)) || d.startsWith(t.slice(0, 4))));
+            };
+            aiList.forEach(item => {
+                if (item.ok === true) return;
+                if (!sharesStem(item.name)) return;
+                const w = resolve(item.name, item.pos);
+                if (!w || done.has(w.id)) return;
+                done.add(w.id);
+                const isBad = (item.ok === false);
+                const delta = isBad ? WORD_SPELL_BAD : 0;
+                const prev = snapshotWordScoreState(w);
+                const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+                if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: false });
+                aiLastEsKoWords.push({ word: w, ok: false, noScore: !isBad, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+            });
+        }
+
+        // ============================================================
+        // [냐냐 요청] 미션이 내준 목표 단어 (2026-09-03). 문법 규칙 표와 같은 모양으로 간다:
+        //     제대로 씀            → +2  (단어 훑기가 이미 준다)
+        //     썼는데 틀림          → −2  (단어 훑기가 이미 준다)
+        //     안 쓰고 우회, 문장 맞음 → 0   (패스 — 다른 말로 뜻을 살렸으면 그건 실력이다)
+        //     안 쓰고 우회, 문장 틀림 → −2  ← 여기만 새로 붙인다
+        //   ⚠️ 문장 자체를 오답 처리하지는 않는다. 예전에 '지정 단어를 안 썼다' 는 이유로
+        //      맞은 문장을 틀렸다고 하던 걸 고친 적이 있다 — 그 규칙은 그대로다.
+        // ============================================================
+        function applyMissionTargetWordScore(feedback) {
+            const w = (typeof aiCurrentWordForMission !== 'undefined') ? aiCurrentWordForMission : null;
+            if (!w || typeof addWordScore !== 'function') return;
+            if ((aiLastEsKoWords || []).some(e => e.word && e.word.id === w.id)) return;   // 썼으면 이미 매겼다
+            if (feedback && feedback.isCorrect !== false) return;                          // 우회했지만 문장은 맞음 → 패스
+            const prev = snapshotWordScoreState(w);
+            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+            addWordScore(w, WORD_SPELL_BAD, { correct: false });
+            aiLastEsKoWords.push({ word: w, ok: false, noScore: false, delta: WORD_SPELL_BAD,
+                baseDelta: WORD_SPELL_BAD, prev, gradeBefore, missed: true, state: 'normal', undone: false });
         }
 
         //   [냐냐 요청] 문법을 제대로 썼을 때 주는 점수는 모드마다 다르다.
@@ -2654,7 +2773,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             Concretely, this is the failure to avoid: message says "반복되는 단어를 대명사로 바꾸면 더 자연스러워집니다", naturalWhy says "지시대명사를 활용해 자연스럽게 표현했어요", and tip says "'esa ropa' 대신 'esta'처럼 지시대명사를 사용해보세요" — three sentences, one idea, and the student's eye slides off all of them. When "moreNatural" is filled, ONLY "naturalWhy" may discuss that rephrasing; "message" and "tip" must then talk about something else — the grammar the student actually used, or the rule behind the correction you made.`;
         const AI_SCORING_RULES_TEXT = `
             IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" ONLY when the student misspelled it — the letters they typed are not a real Spanish word (put the dictionary form of the word they were CLEARLY trying to write). A correctly spelled real word can NEVER go in "wordsBad", however wrong it was for this sentence; if you replaced it, it belongs in "wordsForm"; "wordsForm" when the word is spelled correctly but you did NOT leave it as it was — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos), or a word you had to swap for a different one (es → está, Cuál → Qué, el pie → mis pies). The student knew the word but did not place it right here, so it earns nothing either way; "wordsOk" only for words that survive into correctedText exactly as the student wrote them. Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
-            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. Concretely: a note titled "위치를 나타내는 표현" whose hint is about "del / al" and "encima de, cerca de, al lado de" is NOT used by a sentence that just says "sobre el pie" — no contraction, none of its phrases — so that note belongs in NEITHER list, not in "grammarOk" and not in "grammarBad". Read the hint, not the title: the title is a topic, the hint is the rule. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
+            IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. A single structure often belongs to TWO notes at once — "Estoy buscando" is BOTH the gerundio note (the -ando ending itself) AND the present-progressive note (estar + gerundio); list both, never just the one that feels most specific. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. Concretely: a note titled "위치를 나타내는 표현" whose hint is about "del / al" and "encima de, cerca de, al lado de" is NOT used by a sentence that just says "sobre el pie" — no contraction, none of its phrases — so that note belongs in NEITHER list, not in "grammarOk" and not in "grammarBad". Read the hint, not the title: the title is a topic, the hint is the rule. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
             DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
             - "grammarBad" only when the note's own rule is what you had to fix. Example: the student wrote "a frente mi casa" and you corrected it to "frente a mi casa" — a note about location expressions goes in "grammarBad", because the fixed phrase IS that note's rule. Another: the student wrote "el libro que es sobre el pie" and you corrected it to "el libro que está arriba de mis pies" — you rewrote the location phrase itself, so a location note is "grammarBad", never "grammarOk". Ask yourself: did I have to touch the very structure this note teaches? If yes it is "grammarBad", no matter how much of the rest of the sentence was fine. Decide in this order, never the other way round: (1) does the sentence actually exercise this note's rule, judged from its hint? If no, the note goes in NEITHER list and you are done with it. (2) For a note that passed (1), ask whether the part of the sentence that note covers came through your correction UNTOUCHED. Untouched → "grammarOk". Touched for ANY reason → "grammarBad". "The part that note covers" means the words its own rule is about, not the whole sentence. Two versions of one example, for a note about location phrases (del/al, encima de, arriba de):
             - student wrote "el libro que es sobre el pie" and you returned "el libro que está sobre el pie" — you only swapped the verb, which is a ser/estar rule, NOT this note's rule; the location phrase "sobre el pie" survived exactly as written, so this note is "grammarOk".
@@ -3229,7 +3348,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                           : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
                           : (w.noScore ? 'border-slate-300 bg-slate-50 text-slate-500'
                           : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600')));
-                const mark = w.undone ? '해제됨' : (w.noScore && !w.lookedUp ? '고쳐졌어요 · 0' : (w.delta > 0 ? '+' : '') + w.delta);
+                const mark = w.undone ? '해제됨'
+                    : (w.missed ? '이 단어를 못 썼어요 · ' + w.delta
+                    : (w.noScore && !w.lookedUp ? '고쳐졌어요 · 0' : (w.delta > 0 ? '+' : '') + w.delta));
                 return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
                     <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${mark}</span>
                     <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
