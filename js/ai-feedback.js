@@ -2004,13 +2004,33 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   지시문에 '기능어는 빼라'고 적어뒀지만 가끔 섞여 온다.
         //   단어장에 그 낱말이 그대로 등록돼 있으면 그건 진짜니까 그대로 두고,
         //   등록돼 있지 않을 때만 '활용형이겠지' 하는 추측을 막는다.
+        // [냐냐 요청] 여기 있는 낱말은 '아직 단어장에 없어요' 추천에서 뺀다.
+        //   지시사만 해도 este/esta/esto/estos/estas … 열다섯 개라 다 등록하자면 끝이 없다.
+        //   문법 노트에서 표로 익히는 것들이라 낱말 카드로 외울 것도 아니다.
+        //   ⚠️ 점수는 그대로 붙는다 — 단어장에 직접 등록해 둔 것은 여기 있어도 그대로 채점된다
+        //      (이 목록은 '활용형을 추측해서 억지로 맞추지 마라' 는 뜻으로도 쓰인다).
+        //   악센트를 뗀 꼴과 붙인 꼴을 같이 넣어 둔다 — 두 자리에서 각각 다르게 다듬어 오기 때문.
         const AI_FUNCTION_WORDS = new Set([
             'el','la','los','las','un','una','unos','unas','al','del','lo',
             'a','de','en','con','por','para','sin','sobre','entre','hasta','desde','hacia','tras',
             'me','te','se','nos','os','le','les','mi','tu','su','mis','tus','sus',
             'yo','ti','ella','ello','ellos','ellas','usted','ustedes','nosotros','vosotros',
+            'el','tu','tú','él',
             'y','e','o','u','ni','que','si','no','pero','como','cuando','donde',
-            'nada','nadie','nunca','algo','alguien','muy','ya','tan','solo'
+            'nada','nadie','nunca','algo','alguien','muy','ya','tan','solo',
+            // 지시형용사·지시대명사
+            'este','esta','esto','estos','estas',
+            'ese','esa','eso','esos','esas',
+            'aquel','aquella','aquello','aquellos','aquellas',
+            // 소유대명사 (~의 것)
+            'mio','mía','mio','mía','mios','mias','mío','míos','mías',
+            'tuyo','tuya','tuyos','tuyas','suyo','suya','suyos','suyas',
+            'nuestro','nuestra','nuestros','nuestras','vuestro','vuestra','vuestros','vuestras',
+            // 의문사
+            'qué','quién','quiénes','cuál','cuáles','cuándo','dónde','cómo','cuánto','cuánta','cuántos','cuántas',
+            'quien','quienes','cual','cuales','cuanto','cuanta','cuantos','cuantas','porqué','porque',
+            // 비교·정도
+            'más','mas','menos','tanto','tanta','tantos','tantas','también','tambien','tampoco'
         ]);
 
         // [냐냐 요청] 이 문장에 딸린 추천.
