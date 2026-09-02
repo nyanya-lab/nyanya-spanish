@@ -1538,10 +1538,14 @@ ${extraWords.length ? `
             showToast("Gemini AI가 냐냐님의 답변을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
-            // [냐냐 요청] 이 미션이 어떤 문법 노트를 보고 나왔는지 첨삭 AI에게도 알려준다
-            const koEsScoreNotes = aiScoringNoteList().filter(t => !aiCurrentGrammarForMission || t.id !== aiCurrentGrammarForMission.id);
+            // [냐냐 지적] 이 미션의 지정 문법을 채점 목록에서 빼고 있었다. 예전엔 grammarPointUsage 가
+            //   그 문법을 따로 판정했으니 겹치지 말라고 뺀 것인데, 그 판정을 없앤 뒤(89c0a7e)에도
+            //   빼는 것만 남았다. 그래서 미션이 연습하라고 내준 바로 그 문법만 아무도 채점하지 않았다 —
+            //   제대로 써도 +2 가 안 붙고, 복습으로 시작한 미션이어도 곡선이 영영 안 나갔다.
+            //   ('날씨' 미션에서 hace mal tiempo 를 맞게 써도 문법 판정이 0건이었다)
+            const koEsScoreNotes = aiScoringNoteList();
             const refGrammar = aiCurrentGrammarForMission
-                ? `\n            Grammar note this mission was built from (the student's own notes — judge against THIS):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
+                ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n`
                 : '';
             const refWords = (aiCurrentExtraWordsForMission || []).length
                 ? `\n            Other words from the student's vocabulary that were offered: ${aiCurrentExtraWordsForMission.map(w => `${w.word}(${w.meaning})`).join(', ')}\n`

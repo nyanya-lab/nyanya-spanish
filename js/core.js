@@ -452,6 +452,11 @@ let vocabulary = [];
             // [냐냐 PATCH-0배치] 통합 점수(score)로 1회 마이그레이션 (기존 약점/마스터 점수 합산)
             //   백업 가져오기로 예전 형식이 들어와도 여기서 같이 걸리게 안쪽에 둔다.
             if (typeof migrateWordScores === 'function') migrateWordScores();
+            // [냐냐 요청] 관용구마다 고유 id — 표현 글자를 고쳐도 망각곡선이 따라오게.
+            //   ⚠️ 붙였으면 바로 저장한다. 저장을 안 하면 다음에 열 때 다른 id 가 새로 붙어서,
+            //      그 사이에 쌓인 곡선 기록이 짝을 잃는다.
+            if (typeof migrateIdiomIds === 'function' && migrateIdiomIds()
+                && typeof saveToStorage === 'function') saveToStorage();
         }
 
         // [냐냐 요청] 설정 드롭다운 안의 '동기화' 행을 갱신.
@@ -1897,7 +1902,60 @@ let vocabulary = [];
         // [냐냐 요청] 관용구 망각곡선 — 단어·문법과 같은 주기(1·3·7·14·30일)
         //   복습 방법은 쓰기 복습의 관용구 문제. 틀리면 진입/한 칸 뒤로, 맞히면 한 칸 앞으로.
         // ============================================================
-        function idiomKey(wordId, idiomText) { return `${wordId}::${String(idiomText || '').trim()}`; }
+        // [냐냐 지적] 곡선 키가 '표현 글자' 였다. 표현을 한 글자만 고쳐도 그 기록이 고아가 돼
+        //   조용히 사라진다 (단어·문법은 id 라서 이름을 바꿔도 멀쩡하다).
+        //   그래서 관용구마다 고유 id(iid)를 붙이고 키를 `단어id::iid` 로 쓴다.
+        //   못 찾으면 예전처럼 글자를 쓴다 — 옛 기록도 계속 읽힌다.
+        function newIdiomId() {
+            return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        }
+        // 그 단어의 관용구들에 id 를 채운다 (없는 것만). 새로 추가한 표현도 여기서 붙는다.
+        function ensureIdiomIds(w) {
+            if (!w || !Array.isArray(w.idioms)) return false;
+            let changed = false;
+            w.idioms.forEach(it => {
+                if (it && String(it.idiom || '').trim() && !it.iid) { it.iid = newIdiomId(); changed = true; }
+            });
+            return changed;
+        }
+        // 표현 글자로 불러도, id 로 불러도 같은 키가 나오게 한다
+        function idiomIdOf(wordId, idiomTextOrId) {
+            const key = String(idiomTextOrId || '').trim();
+            const w = (typeof vocabulary !== 'undefined') ? vocabulary.find(v => String(v.id) === String(wordId)) : null;
+            if (!w) return key;
+            ensureIdiomIds(w);
+            const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+            const hit = list.find(x => x.iid === key) || list.find(x => String(x.idiom || '').trim() === key);
+            return (hit && hit.iid) ? hit.iid : key;
+        }
+        // 키의 뒷조각(iid 또는 옛 글자)으로 그 표현을 찾는다
+        function findIdiomByKeyPart(w, part) {
+            const list = (w && typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+            return list.find(x => x.iid === part) || list.find(x => String(x.idiom || '').trim() === part) || null;
+        }
+        function idiomKey(wordId, idiomTextOrId) { return `${wordId}::${idiomIdOf(wordId, idiomTextOrId)}`; }
+
+        // 불러온 직후 한 번 — 모든 표현에 id 를 붙이고, 글자로 저장돼 있던 곡선 기록을 id 키로 옮긴다.
+        function migrateIdiomIds() {
+            if (typeof vocabulary === 'undefined' || !Array.isArray(vocabulary)) return;
+            let changed = false;
+            vocabulary.forEach(w => { if (ensureIdiomIds(w)) changed = true; });
+            if (typeof idiomReview === 'undefined' || !idiomReview) return changed;
+            Object.keys(idiomReview).forEach(key => {
+                const sep = key.indexOf('::');
+                if (sep < 0) return;
+                const wid = key.slice(0, sep), part = key.slice(sep + 2);
+                const w = vocabulary.find(v => String(v.id) === wid);
+                if (!w) return;
+                const hit = findIdiomByKeyPart(w, part);
+                if (!hit || !hit.iid || hit.iid === part) return;   // 이미 id 키거나 짝을 못 찾음
+                const next = `${wid}::${hit.iid}`;
+                if (!idiomReview[next]) idiomReview[next] = idiomReview[key];
+                delete idiomReview[key];
+                changed = true;
+            });
+            return changed;
+        }
 
         function getIdiomReviewRec(key) {
             if (!idiomReview[key]) idiomReview[key] = { stage: 0, lastWrongDate: null, lastReviewDate: null };
@@ -1974,12 +2032,11 @@ let vocabulary = [];
                 if (daysSince(base) < REVIEW_INTERVALS[stage]) return;
                 const sep = key.indexOf('::');
                 if (sep < 0) return;
-                const wid = key.slice(0, sep), text = key.slice(sep + 2);
+                const wid = key.slice(0, sep), part = key.slice(sep + 2);
                 const w = vocabulary.find(v => String(v.id) === wid);
                 if (!w) return;                                          // 단어가 지워졌으면 뺀다
-                // 그 표현이 아직 단어에 남아 있는지 (수정·삭제됐을 수 있다)
-                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
-                const found = list.find(x => x.idiom === text);
+                // 그 표현이 아직 단어에 남아 있는지 (삭제됐을 수 있다 — 글자만 고친 건 id 로 따라온다)
+                const found = findIdiomByKeyPart(w, part);
                 if (!found) return;
                 out.push({ word: w, idiom: found, key, stage });
             });
@@ -2235,8 +2292,7 @@ let vocabulary = [];
                 if (sep < 0) return;
                 const w = vocabulary.find(v => String(v.id) === key.slice(0, sep));
                 if (!w) return;
-                const text = key.slice(sep + 2);
-                const found = ((typeof wordIdiomList === 'function') ? wordIdiomList(w) : []).find(x => x.idiom === text);
+                const found = findIdiomByKeyPart(w, key.slice(sep + 2));
                 if (found) out.push({ word: w, idiom: found, key, stage });
             });
             return out;
