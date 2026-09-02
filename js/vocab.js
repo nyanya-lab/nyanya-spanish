@@ -3735,11 +3735,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   1바퀴에서 못 떠올린 단어라 '아는 단어'로 볼 수 없다. 2바퀴에서 답을 보고
             //   두 번 베껴 쓴 뒤에 맞힌 것이라 기억했다는 증거가 아니다.
             //   그래도 다시 붙잡긴 했으니 끝내 틀린 −2 와는 구분해 준다.
+            // [냐냐 지적] 관용구 과제는 단어 곡선을 건드리면 안 된다 — 그 표현은 제 곡선을 따로 갖는다.
+            //   (1바퀴에서 이미 idiomReviewDemote 로 그 표현의 곡선을 뒤로 밀어뒀다)
+            //   퀴즈와 단어 빈칸은 skipReviewDate 로 빼고 있었는데 여기만 빠져 있었다.
+            const idiomTask = !!w._isIdiomTask;
             if (isMatch) {
                 const shift = withGradeShift(w._idiomOf || w, () => {
-                    if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false });
+                    if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
                 });
-                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
                 s.index++;
@@ -3749,9 +3753,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 const shift = withGradeShift(w._idiomOf || w, () => {
-                    if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false });
+                    if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
                 });
-                if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
             }
@@ -3780,7 +3784,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const shift = withGradeShift(w._idiomOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
             });
-            if (typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+            // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
+            if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') logAction('review');
             s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w).word, baseMeaning: (w._idiomOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '' };

@@ -2722,7 +2722,41 @@ let vocabulary = [];
                 </p>
                 <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
                     번역에서 <b>단어를 틀려도 문법표 점수는 안 깎여요.</b> 문법이 맞았으면 문법은 맞은 거예요.
-                    단어 점수는 <b>단어대로 따로</b> 붙어요 — 철자를 제대로 쓴 단어는 +2(스→한은 +1), 틀리게 쓴 단어는 −2.
+                    단어 점수는 <b>단어대로 따로</b> 붙어요 — 철자를 제대로 쓴 단어는 +2, 틀리게 쓴 단어는 −2,
+                    <b>철자는 맞는데 활용·성수를 틀린 낱말은 0점</b>이에요.
+                </p>
+            </div>
+
+            <!-- [냐냐 요청] 문법 곡선이 언제 움직이나 — 단어와 다른 데가 있어서 따로 적는다 -->
+            <div class="bg-[#eef5fb] rounded-2xl border border-[#c3d9ec] p-4 space-y-3">
+                <h4 class="text-sm font-black text-[#2c5578] flex items-center gap-2"><i class="fa-solid fa-rotate text-[#5896cb]"></i> 문법 망각곡선</h4>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    문법도 <b>단어와 같은 주기</b>(1·3·7·14·30일)로 다시 만나요. 다만 복습 방법이 빈칸이 아니라
+                    <b>AI가 만든 한국어 문장을 내가 번역하기</b>예요. 복습 탭의 <b>📋 문법</b> 버튼으로 시작해요.
+                </p>
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
+                    <thead>
+                        <tr class="border-b-2 border-slate-200 text-[11px] text-slate-400 font-black uppercase">
+                            <th class="py-2 px-3 text-left">언제</th>
+                            <th class="py-2 px-3 text-left">단어</th>
+                            <th class="py-2 px-3 text-left">문법</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">곡선에 <b>들어오기</b></td><td class="py-2 px-3 font-bold text-slate-600">어디서 틀리든</td><td class="py-2 px-3 font-bold text-slate-600">어디서 틀리든</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>앞으로</b></td><td class="py-2 px-3 font-bold text-emerald-600">복습에서만</td><td class="py-2 px-3 font-bold text-emerald-600">복습에서만</td></tr>
+                        <tr><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>뒤로</b></td><td class="py-2 px-3 font-bold text-rose-500">어디서 틀리든</td><td class="py-2 px-3 font-bold text-[#5896cb]">복습에서만</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
+                    <b>뒤로 가는 것만 단어와 달라요.</b> 문법 노트는 서른 개 남짓이라 문장 하나 쓸 때마다 한두 개씩 걸려요 —
+                    그때마다 칸이 움직이면 곡선이 너무 요동쳐서, <b>칸은 복습에서만</b> 움직이게 뒀어요.
+                    단어는 천 개가 넘어서 한 단어를 만나는 일 자체가 드물거든요.
+                </p>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    첨삭에서 그 문법을 제대로 썼으면 <b>점수(+2)만</b> 올라가고 칸은 그대로예요.
+                    문법 노트의 <b>'이 문법으로 번역 연습'</b> 버튼도 마찬가지 — 내가 골라서 하는 연습이라 칸을 안 움직여요.
+                    문법표 빈칸은 <b>70% 미만</b>일 때 곡선에 들여놓기만 해요.
                 </p>
             </div>`;
 
@@ -2758,9 +2792,15 @@ let vocabulary = [];
                     <li>• <b>틀린 당일</b>은 뜨지 않아요. 다음 날부터 시작해요.</li>
                     <li>• <b>놓쳐도 사라지지 않아요.</b> 복습일이 지나면 할 때까지 계속 떠요.</li>
                     <li>• 밀린 단어도 <b>하루에 한 번만</b> 떠요. (한 번 하면 그날은 빠짐)</li>
-                    <li>• <b>어디서 틀리든</b>(퀴즈·게임·복습·첨삭) 단계가 <b>한 칸만 뒤로</b> 가요. 4단계에서 틀리면 3단계(7일 뒤)로요. 처음부터 다시 하진 않아요.</li>
-                    <li>• 같은 단어를 하루에 여러 번 틀려도 <b>한 칸만</b> 내려가요.</li>
+                    <li>• <b>곡선에 들어오는 건 어디서 틀리든</b>이에요 — 퀴즈·게임·복습·첨삭 어디든요.</li>
+                    <li>• <b>한 칸 뒤로</b>도 어디서 틀리든 가요. 4단계에서 틀리면 3단계(7일 뒤)로, 처음부터 다시 하진 않아요.
+                        같은 단어를 하루에 여러 번 틀려도 <b>한 칸만</b> 내려가요.</li>
+                    <li>• <b>한 칸 앞으로 가는 건 '오늘의 복습'을 해냈을 때뿐이에요.</b>
+                        퀴즈나 첨삭에서 잘 썼다고 나가지 않아요 — 그건 <b>점수만</b> 올려줘요.
+                        <span class="text-slate-500">복습하라고 뜬 그 단어를 실제로 해냈을 때만 다음 칸으로 갑니다.</span></li>
                     <li>• 단어 빈칸에서 <b>관용구·예문 칸만</b> 틀린 건 복습 대상이 안 돼요. (뜻·철자·동사변형만 해당)</li>
+                    <li>• <b>관용구를 틀리면 관용구 곡선만</b> 움직여요. 단어 곡선은 그대로고, <b>점수만</b> 그 단어에 −2 로 붙어요.
+                        <span class="text-slate-500">점수는 단어 하나로 모으고, '언제 다시 볼지'만 표현마다 따로 셈해요.</span></li>
                     <li>• 그날 복습을 다 끝내면 버튼이 <b>회색 '완료 ✓'</b>로 바뀌어요.</li>
                 </ul>
             </div>
