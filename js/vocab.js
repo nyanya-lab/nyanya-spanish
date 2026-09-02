@@ -3820,6 +3820,23 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return;
             }
 
+            // [냐냐 요청] 빈칸으로 엔터를 치면 바로 넘기지 않고 한 번 물어본다 (가리고 쓰는 바퀴만).
+            //   손이 미끄러져 엔터를 친 것과 정말 모르겠는 것을 가른다. 한 번 더 치면 그때 넘어간다.
+            //   ⚠️ 물어본 자리를 '몇 번째 문제의 몇 바퀴' 로 기억한다 — 그래야 다음 단어에서 다시 묻는다.
+            if (!el.value.trim()) {
+                const askKey = s.index + ':' + s.phase;
+                if (s.blankAskKey !== askKey) {
+                    s.blankAskKey = askKey;
+                    s.hint = '✏️ 빈칸이에요. 정말 모르겠으면 <b>한 번 더 엔터</b>를 치세요 — 모르는 것으로 넘어가요.';
+                    s.hintMine = '';
+                    renderWritePractice();
+                    return;
+                }
+            } else if (s.blankAskKey === s.index + ':' + s.phase) {
+                s.blankAskKey = null;      // 뭔가 쓰고 냈으면 빈칸 안내는 걷는다 (채점 중에 남아 있으면 헷갈린다)
+                s.hint = '';
+            }
+
             // ── 1바퀴: 가리고 쓰기 (테스트) — 퀴즈 주관식과 같은 채점 경로 ──
             if (s.phase === 1) { gradeWriteFirstRound(el.value); return; }
 
