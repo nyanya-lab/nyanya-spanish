@@ -2447,12 +2447,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
             // ============================================================
             if (typeof grammarAiHintOf === 'function') {
                 // 노트 → { 정규화한 신호 : 원래 신호 } (너무 짧은 신호는 우연히 겹치니 뺀다)
+                //   ⚠️ 신호가 '한 낱말 네 글자' 면 우연히 겹친다 — 동서남북 노트에 'este'(동쪽) 가 들어가면
+                //      지시형용사 노트의 'este'(이것) 와 형제가 되어 아무 문장에나 같이 걸린다.
+                //      그래서 형제 판정에는 두 낱말 이상이거나 다섯 글자 이상인 신호만 쓴다.
                 const sigMap = (t) => {
                     const out = new Map();
                     (((grammarAiHintOf(t) || {}).t) || []).forEach(x => {
                         const raw = String(x || '').trim();
                         const k = grammarEvidenceNorm(raw.replace(/\.\.\./g, ' '));
-                        if (k.length >= 4) out.set(k, raw);
+                        if (k.includes(' ') || k.length >= 5) out.set(k, raw);
                     });
                     return out;
                 };
@@ -2722,6 +2725,185 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast("채점 단서를 고쳤어요", "success");
         }
 
+        // ============================================================
+        // [냐냐 요청] 노트 보강 (2026-09-03) — 노트에 빠진 용법을 AI 가 찾아 제안한다.
+        //   왜: 채점은 '노트에 적힌 규칙' 으로만 판단한다. 그래서 노트가 좁으면 안 걸린다 —
+        //   '동서남북' 노트가 Corea del Sur 용법만 담고 있어서 'viajar al norte' 가 안 걸렸다.
+        //   노트를 넓히는 게 답인데 서른 개를 손으로 채우는 건 할 일이 아니다. AI 가 뽑고 사람은 고른다.
+        //   ⚠️ 고른 것만 들어간다. 노트에 이미 있는 것과 주제를 벗어난 것은 프롬프트에서 막는다.
+        // ============================================================
+        let grammarBoost = null;   // { items: [{noteId, title, es, ko, ex, on}], running, done, total }
+
+        async function askGrammarBoost(t) {
+            const src = grammarHintSource(t);
+            if (!src) return [];
+            const prompt = `Below is one grammar note kept by a Korean learner of Spanish.
+
+            NOTE CONTENT:
+            ${src.slice(0, 3000)}
+
+            List 3-6 items this note is MISSING — usages, forms or set phrases that belong to the very same
+            topic but are not written anywhere above. Stay strictly inside this note's topic: if the note is
+            about "de + el = del" with compass points, "al norte" (direction) belongs, but "por la tarde" does not.
+            Skip anything already present, even in a different wording. If the note is already complete, return [].
+            For each item: "es" the Spanish (a word, form or short pattern), "ko" its short Korean meaning,
+            "ex" one short natural Spanish example sentence using it.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    items: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                es: { type: "STRING", description: "스페인어 (낱말·형태·짧은 패턴)" },
+                                ko: { type: "STRING", description: "짧은 한국어 뜻" },
+                                ex: { type: "STRING", description: "짧은 예문 하나" }
+                            },
+                            required: ["es", "ko"]
+                        }
+                    }
+                },
+                required: ["items"]
+            };
+            const data = extractAndParseJson(await callGemini(prompt, GRAMMAR_HINT_SYSTEM, schema, 'low'));
+            return (data && Array.isArray(data.items) ? data.items : [])
+                .map(x => ({ es: String((x && x.es) || '').trim(), ko: String((x && x.ko) || '').trim(), ex: String((x && x.ex) || '').trim() }))
+                .filter(x => x.es && x.ko).slice(0, 6);
+        }
+
+        function openGrammarBoost(noteId) {
+            const all = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
+            const targets = noteId ? all.filter(t => t.id === noteId) : all.filter(t => grammarHintSource(t));
+            if (!targets.length) { showToast("보강할 노트가 없어요", "info"); return; }
+            grammarBoost = { items: [], running: true, done: 0, total: targets.length, failed: 0 };
+            const modal = document.getElementById('grammar-boost-modal');
+            if (modal) modal.classList.remove('hidden');
+            renderGrammarBoost();
+            runGrammarBoost(targets);
+        }
+        function closeGrammarBoost() {
+            const modal = document.getElementById('grammar-boost-modal');
+            if (modal) modal.classList.add('hidden');
+            if (grammarBoost) grammarBoost.running = false;
+        }
+
+        async function runGrammarBoost(targets) {
+            const nap = (ms) => new Promise(r => setTimeout(r, ms));
+            for (const t of targets) {
+                if (!grammarBoost || !grammarBoost.running) return;   // 창을 닫으면 멈춘다
+                let got = null;
+                //   분당 한도(429)에 걸리면 쉬었다 그 노트만 다시 (단서 만들기와 같은 방식)
+                for (let tries = 0; tries < 3 && !got; tries++) {
+                    try { got = await askGrammarBoost(t); }
+                    catch (e) {
+                        const rate = e && (e.status === 429 || e.apiStatus === 'RESOURCE_EXHAUSTED');
+                        if (!rate || tries === 2) break;
+                        await nap(20000);
+                    }
+                }
+                if (got) got.forEach(x => grammarBoost.items.push({ noteId: t.id, title: t.title || '', es: x.es, ko: x.ko, ex: x.ex, on: true }));
+                else grammarBoost.failed++;
+                grammarBoost.done++;
+                renderGrammarBoost();
+                await nap(500);
+            }
+            if (grammarBoost) grammarBoost.running = false;
+            renderGrammarBoost();
+        }
+
+        function toggleGrammarBoostItem(i) {
+            if (!grammarBoost || !grammarBoost.items[i]) return;
+            grammarBoost.items[i].on = !grammarBoost.items[i].on;
+            renderGrammarBoost();
+        }
+        function toggleGrammarBoostNote(noteId) {
+            if (!grammarBoost) return;
+            const mine = grammarBoost.items.filter(x => x.noteId === noteId);
+            const allOn = mine.every(x => x.on);
+            mine.forEach(x => { x.on = !allOn; });
+            renderGrammarBoost();
+        }
+
+        function renderGrammarBoost() {
+            const body = document.getElementById('grammar-boost-body');
+            const foot = document.getElementById('grammar-boost-foot');
+            if (!body || !grammarBoost) return;
+            const b = grammarBoost;
+            const bar = b.running
+                ? `<div class="mb-3">
+                    <p class="text-xs font-bold text-violet-600 mb-1"><i class="fa-solid fa-spinner animate-spin"></i> 노트를 읽는 중… ${b.done}/${b.total}</p>
+                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${Math.round(b.done / b.total * 100)}%"></div></div>
+                   </div>`
+                : `<p class="text-xs font-bold text-slate-500 mb-3">${b.items.length}개를 찾았어요${b.failed ? ` · ${b.failed}개 노트는 실패` : ''} — 넣을 것만 체크하세요</p>`;
+            if (!b.items.length) {
+                body.innerHTML = bar + (b.running ? '' : '<p class="py-10 text-center text-sm text-slate-400 font-bold">보탤 게 없어요 🎉</p>');
+            } else {
+                const byNote = new Map();
+                b.items.forEach((x, i) => {
+                    if (!byNote.has(x.noteId)) byNote.set(x.noteId, { title: x.title, rows: [] });
+                    byNote.get(x.noteId).rows.push({ x, i });
+                });
+                body.innerHTML = bar + Array.from(byNote.values()).map(g => `
+                    <div class="mb-3">
+                        <button type="button" onclick="toggleGrammarBoostNote('${escapeAttr(g.rows[0].x.noteId)}')" class="text-[11px] font-black text-slate-600 mb-1 hover:text-violet-600">📋 ${escapeHtml(g.title)}</button>
+                        <div class="space-y-1">
+                            ${g.rows.map(({ x, i }) => `
+                                <label class="flex items-start gap-2 bg-white border ${x.on ? 'border-violet-200' : 'border-slate-200'} rounded-xl px-3 py-2 cursor-pointer">
+                                    <input type="checkbox" ${x.on ? 'checked' : ''} onchange="toggleGrammarBoostItem(${i})" class="mt-0.5 w-4 h-4 accent-violet-600">
+                                    <span class="min-w-0">
+                                        <span class="text-xs font-extrabold text-slate-800">${escapeHtml(x.es)}</span>
+                                        <span class="text-xs font-bold text-slate-500"> — ${escapeHtml(x.ko)}</span>
+                                        ${x.ex ? `<span class="block text-[11px] text-slate-400">${escapeHtml(x.ex)}</span>` : ''}
+                                    </span>
+                                </label>`).join('')}
+                        </div>
+                    </div>`).join('');
+            }
+            if (foot) {
+                const n = b.items.filter(x => x.on).length;
+                foot.innerHTML = b.running
+                    ? `<button type="button" onclick="closeGrammarBoost()" class="w-full py-3 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">그만두기</button>`
+                    : `<div class="flex gap-2">
+                        <button type="button" onclick="closeGrammarBoost()" class="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold">닫기</button>
+                        <button type="button" onclick="applyGrammarBoost()" ${n ? '' : 'disabled'} class="flex-1 py-3 rounded-xl ${n ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-100 text-slate-400'} text-sm font-bold">${n}개 노트에 넣기</button>
+                       </div>`;
+            }
+        }
+
+        // 고른 항목을 노트에 글 블록으로 붙인다 (표 구조는 노트마다 달라서 건드리지 않는다)
+        function applyGrammarBoost() {
+            if (!grammarBoost) return;
+            const picked = grammarBoost.items.filter(x => x.on);
+            if (!picked.length) return;
+            const all = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const byNote = new Map();
+            picked.forEach(x => { if (!byNote.has(x.noteId)) byNote.set(x.noteId, []); byNote.get(x.noteId).push(x); });
+
+            let touched = 0;
+            byNote.forEach((rows, noteId) => {
+                const t = all.find(x => x.id === noteId);
+                if (!t) return;
+                const lines = rows.map(r => `${escapeHtml(r.es)} — ${escapeHtml(r.ko)}${r.ex ? ` <span style="color:#94a3b8">${escapeHtml(r.ex)}</span>` : ''}`);
+                const html = `<b>✨ 더 알아두기</b><br>${lines.join('<br>')}`;
+                const blocks = ((typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : []).slice();
+                blocks.push({ id: (typeof newBlockId === 'function') ? newBlockId() : ('b' + Date.now()), type: 'text', html, style: 'tip' });
+                const next = Object.assign({}, t, { blocks, _edited: true });
+                const i = customGrammarTables.findIndex(c => c.id === noteId);
+                if (i >= 0) customGrammarTables[i] = next; else customGrammarTables.push(next);
+                touched++;
+                // 내용이 바뀌었으니 채점 단서도 그 노트만 다시 만든다
+                if (typeof autoMakeGrammarAiHint === 'function') {
+                    if (grammarAiHints[noteId]) delete grammarAiHints[noteId];
+                    autoMakeGrammarAiHint(noteId);
+                }
+            });
+            if (typeof saveToStorage === 'function') saveToStorage();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            closeGrammarBoost();
+            showToast(`${picked.length}개를 노트 ${touched}곳에 넣었어요 ✨`, "success");
+        }
+
         // 문법 탭 위의 한 줄 — 단서가 없는 노트가 있을 때만 보인다
         function renderGrammarHintBar(doneN, totalN, waiting) {
             const box = document.getElementById('grammar-hint-bar');
@@ -2734,10 +2916,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return;
             }
             const n = staleGrammarHintNotes().length;
-            if (!n) { box.className = 'hidden'; box.innerHTML = ''; return; }
+            const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
             box.className = 'flex items-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
+            if (!n) {
+                box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${boost}`;
+                return;
+            }
             box.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-violet-500"></i>
                 <span class="flex-1">AI 채점 단서가 없는 노트 ${n}개 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
+                ${boost}
                 <button type="button" onclick="refreshGrammarAiHints(false)" class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold transition-all active:scale-95">만들기</button>`;
         }
 

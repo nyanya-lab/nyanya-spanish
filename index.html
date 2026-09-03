@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260903p">
+    <link rel="stylesheet" href="css/style.css?v=20260903r">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1430,6 +1430,18 @@
                     <div id="grammar-filter-summary" class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 px-1"></div>
                     <!-- [냐냐 요청] AI 채점 단서가 없는 노트가 있을 때만 보이는 줄 -->
                     <div id="grammar-hint-bar" class="hidden"></div>
+
+                    <!-- [냐냐 요청] 노트 보강 — AI 가 빠진 용법을 찾아 제안하고, 고른 것만 노트에 들어간다 -->
+                    <div id="grammar-boost-modal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onclick="if(event.target===this) closeGrammarBoost()">
+                        <div class="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl">
+                            <div class="px-5 pt-5 pb-3 border-b border-slate-100">
+                                <p class="text-base font-black text-slate-800">✨ 노트 보강</p>
+                                <p class="text-[11px] font-semibold text-slate-400 mt-0.5">노트에 빠진 용법을 찾아요. 넣을 것만 체크하세요</p>
+                            </div>
+                            <div id="grammar-boost-body" class="flex-1 overflow-y-auto px-5 py-4"></div>
+                            <div id="grammar-boost-foot" class="px-5 pb-5 pt-2 border-t border-slate-100"></div>
+                        </div>
+                    </div>
                     <div id="grammar-tables-container" class="space-y-3"></div>
                     <div id="grammar-empty-msg" class="hidden text-center text-sm text-slate-400 py-10">검색 결과가 없어요.</div>
                 </div>
@@ -2283,13 +2295,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260903p"></script>
-    <script src="js/creatures.js?v=20260903p"></script>
-    <script src="js/core.js?v=20260903p"></script>
-    <script src="js/vocab.js?v=20260903p"></script>
-    <script src="js/flashcards.js?v=20260903p"></script>
-    <script src="js/quiz.js?v=20260903p"></script>
-    <script src="js/games.js?v=20260903p"></script>
-    <script src="js/ai-feedback.js?v=20260903p"></script>
+    <script src="js/dictionary-data.js?v=20260903r"></script>
+    <script src="js/creatures.js?v=20260903r"></script>
+    <script src="js/core.js?v=20260903r"></script>
+    <script src="js/vocab.js?v=20260903r"></script>
+    <script src="js/flashcards.js?v=20260903r"></script>
+    <script src="js/quiz.js?v=20260903r"></script>
+    <script src="js/games.js?v=20260903r"></script>
+    <script src="js/ai-feedback.js?v=20260903r"></script>
 </body>
 </html>
