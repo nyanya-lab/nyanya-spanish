@@ -3221,7 +3221,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         ? (wordN ? `단어 ${wordN}개에서 나와요` : '이 범위엔 단어가 없어요')
                     : (n === 0 ? '등록된 관용구가 없어서 단어만 나와요'
                     : (writeMix.mode === 'idiom' ? `관용구 ${n}개에서 나와요`
-                                                 : `단어 ${wordN}개 · 관용구 ${n}개를 섞어서 내요`));
+                    //   [냐냐 요청] 섞어서는 총 개수를 먼저 적고 내역은 괄호로 묶는다
+                                                 : `${wordN + n}개를 섞어서 내요 (단어 ${wordN} · 관용구 ${n})`));
             }
         }
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
