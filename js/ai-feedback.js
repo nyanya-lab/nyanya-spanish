@@ -2232,12 +2232,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!k) return null;
                 const hit = pickByPos(byWord.get(k), pos);
                 if (hit) return hit;
-                for (const v of spanishFormVariants(k)) {
-                    const h = pickByPos(byWord.get(v), pos);
-                    if (h) return h;
-                }
-                // 기능어는 정확히 등록돼 있을 때만 인정한다 (활용형 추측 금지 — se → saber 같은 사고)
+                // [냐냐 지적] 기능어는 '정확히 등록돼 있을 때' 만 인정한다 — 변형도 역추적도 안 한다.
+                //   'me' 에 s 를 붙이면 'mes'(달) 가 되어, Me diverte… 를 쓴 문장에 el mes 가 잡혔다.
+                //   (se → saber 같은 옛 사고도 같은 자리다)
                 if (AI_FUNCTION_WORDS.has(k)) return null;
+                // 짧은 낱말은 한 글자만 붙여도 다른 낱말이 된다 — 네 글자부터 변형을 본다
+                if (k.length >= 4) {
+                    for (const v of spanishFormVariants(k)) {
+                        const h = pickByPos(byWord.get(v), pos);
+                        if (h) return h;
+                    }
+                }
                 return (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(k) : null;
             };
 
@@ -2818,6 +2823,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
             - student wrote "el libro que es sobre el pie" and you returned "el libro que está arriba de mis pies" — now you rewrote the location phrase itself, so this note is "grammarBad".
             The same test decides "wordsOk" vs "wordsForm" for each word: survived as written, or not.
             - "grammarOk" when the student applied the note's rule correctly, even if you changed other words nearby for a DIFFERENT reason. Example: the student wrote "¿Cuál pantalones es más caros que aquel?" and you fixed the interrogative (Cuál→Qué), the verb agreement (es→son) and the demonstrative (aquel→esos) — a note about COMPARATIVES stays in "grammarOk", because "más ... que" itself was used correctly. Do not punish a note just because a word standing next to it changed.
+            NEVER blame the student for a structure YOU introduced. "grammarBad" means the student REACHED FOR that note's rule and got it wrong. If the structure appears only in your correction and nowhere in the student's own sentence, that note goes in NEITHER list. Example: the student wrote "Me diverte viajar al norte" (a perfectly good sentence needing only diverte→divierte); if you rewrite it as "Será muy divertido viajar al norte", the SER+ADJ+INF note is YOUR structure, not theirs — do not mark it wrong.
+            And prefer the smallest correction that makes the sentence right: fix the spelling or the conjugation and stop there. Do not swap a working structure for one you like better — the student is graded on what they wrote.
             A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".
             EVIDENCE IS MANDATORY. Every entry of "grammarOk"/"grammarBad" is written as "TITLE >> FRAGMENT", where FRAGMENT is 1-5 Spanish words COPIED VERBATIM from the student's sentence or from your corrected sentence - the very words this note's rule is about. Copy them letter for letter; do not paraphrase, do not translate, do not name the rule again. Use "..." for a gap when the rule spans words (e.g. "mas ... que"). A fragment that does not appear in either sentence is thrown away by the app together with its note, so the student loses the point - and a fragment you cannot find is proof the note was not really used, which is exactly when you must leave the note out.${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
