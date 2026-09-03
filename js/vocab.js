@@ -3223,8 +3223,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
         //   지금 고른 범위 안에서 실제로 나올 수 있는 표현만 센다.
         function countIdiomEntries() {
-            const pool = (typeof getWriteScopePool === 'function') ? getWriteScopePool() : (vocabulary || []);
             const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
+            const pool = onlyNew ? (vocabulary || [])
+                : ((typeof getWriteScopePool === 'function') ? getWriteScopePool() : (vocabulary || []));
             return pool.reduce((a, w) => a + wordIdiomList(w).filter(it => !onlyNew || isUntouchedIdiom(w.id, it.idiom)).length, 0);
         }
         // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
@@ -3308,9 +3309,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             const wantIdiom = Math.round(count * pct / 100);
             const entries = [];
-            // [냐냐 지적] 범위를 '안 만난' 으로 골라도 관용구는 전체에서 나왔다 — 범위가 관용구엔 안 걸렸다
+            // [냐냐 지적] 범위를 '안 만난' 으로 골라도 관용구는 전체에서 나왔다 — 범위가 관용구엔 안 걸렸다.
+            //   ⚠️ 그렇다고 '안 만난 단어' 안에서만 찾으면 안 된다. 관용구는 표현 단위라
+            //   이미 만난 단어에 달린 표현도 처음일 수 있다 (실제로 1117개 중 541개가 그랬다).
+            //   그래서 이 범위에서만 관용구는 단어장 전체를 보고, '안 만난 표현' 으로 거른다.
             const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
-            pool.forEach(w => wordIdiomList(w).forEach(it => {
+            (onlyNew ? (vocabulary || []) : pool).forEach(w => wordIdiomList(w).forEach(it => {
                 if (onlyNew && !isUntouchedIdiom(w.id, it.idiom)) return;
                 entries.push({ w, it });
             }));
