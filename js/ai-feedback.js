@@ -1176,6 +1176,12 @@
                 }
                 const head = (b.headerRows || []).map(hr => (hr || []).join(' | ')).filter(h => h.replace(/[|\s]/g, ''));
                 const rows = (b.rows || []).map(r => (r || []).join(' | ')).filter(r => r.replace(/[|\s]/g, ''));
+                // [냐냐 요청] 표 제목. 열 제목줄('인칭 | 단수 | 복수')은 축 이름이라 주제를 말해주지 않는다 —
+                //   노트에 표가 여럿이면 AI 는 이름표 없는 격자 여러 개를 받는 셈이었다.
+                //   ⚠️ 라벨을 '표 제목줄' 과 다르게 둔 건 일부러다. 기존 라벨을 고치면 지문이 통째로 바뀌어
+                //   노트 서른 개의 채점 단서가 한꺼번에 낡은 것이 된다 (단서는 지문 해시로 최신 여부를 본다).
+                const cap = String(b.caption || '').trim();
+                if (cap) parts.push('표 이름: ' + cap);
                 if (head.length) parts.push('표 제목줄: ' + head.join(' / '));
                 if (rows.length) parts.push('표 내용:\n' + rows.join('\n'));
             });
@@ -2981,7 +2987,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
             (t.blocks || []).forEach(b => (b.rows || []).forEach(r => (r || []).forEach(push)));
             (t.rows || []).forEach(r => (r || []).forEach(push));
             const ex = words.slice(0, 12).join(', ').slice(0, 240);
-            return [desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
+            // 표 제목이 달려 있으면 그게 제일 짧고 정확한 단서다
+            const caps = (t.blocks || []).map(b => String((b && b.caption) || '').trim()).filter(Boolean);
+            const capTxt = caps.join(' / ').slice(0, 120);
+            return [capTxt && `표: ${capTxt}`, desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
         }
         function aiScoringNoteListText(notes) {
             if (!notes || !notes.length) return '';

@@ -4872,7 +4872,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const parts = [t.title];
                     getNoteBlocks(t).forEach(b => {
                         if (b.type === 'text') parts.push(richTextToPlain(b.html));
-                        else parts.push(...(b.headerRows || []).flat(), ...((b.rows || []).flat()));
+                        else parts.push(b.caption || '', ...(b.headerRows || []).flat(), ...((b.rows || []).flat()));
                     });
                     const haystack = parts.join(' ').toLowerCase();
                     return haystack.includes(query);
@@ -5140,7 +5140,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 }).join('');
                 return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
             }).join('');
-            return `<div class="overflow-x-auto rounded-xl border border-[#c3d9ec]">
+            const cap = (b.caption || '').trim();
+            return `${cap ? `<p class="text-xs font-black text-[#2c5578] mb-1 px-0.5">📋 ${escapeHtml(cap)}</p>` : ''}
+            <div class="overflow-x-auto rounded-xl border border-[#c3d9ec]">
                 <table class="w-full ny-gtable">
                     ${headerRow ? `<thead>${headerRow}</thead>` : ''}
                     <tbody>${bodyRows}</tbody>
@@ -5870,6 +5872,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         <button type="button" onclick="addGeColumn(${bi})" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button type="button" onclick="removeGeColumn(${bi})" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
                     </div>
+                    <input value="${escapeAttr(b.caption || '')}" oninput="updateGeTableCaption(${bi}, this.value)"
+                        placeholder="표 제목 — 이 표가 뭘 다루는지 한 줄 (예: 직설법 현재 불규칙)" title="AI 채점·문장 만들기에 이 제목이 같이 넘어가요"
+                        class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-300 placeholder:font-normal focus:outline-none focus:ring-1 focus:ring-violet-400">
                     <div id="ge-grid-${bi}" class="overflow-x-auto"></div>
                     <button type="button" onclick="addGeRow(${bi})" class="w-full py-2 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 hover:border-violet-300 transition-all"><i class="fa-solid fa-plus mr-1"></i> 행 추가</button>`;
                 return `
@@ -5903,7 +5908,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         function geBlockPreview(b) {
             if (b.type === 'text') return (richTextToPlain(b.html) || '(비어 있음)').slice(0, 40);
-            const head = ((b.headerRows || []).slice(-1)[0] || []).filter(h => (h || '').trim()).join(' · ');
+            const head = (b.caption || '').trim()
+                || ((b.headerRows || []).slice(-1)[0] || []).filter(h => (h || '').trim()).join(' · ');
             return `${head || '(제목 없음)'} — ${(b.rows || []).length}줄`;
         }
 
@@ -6061,6 +6067,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function updateGeHeader(bi, hi, ci, val) {
             const b = geBlock(bi);
             if (b && b.headerRows[hi]) b.headerRows[hi][ci] = val;
+        }
+        function updateGeTableCaption(bi, val) {
+            const b = geBlock(bi);
+            if (b) b.caption = val;
         }
         function updateGeCell(bi, ri, ci, val) {
             const b = geBlock(bi);
@@ -7442,6 +7452,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function emptyTableBlock() {
             return {
                 id: newBlockId(), type: 'table',
+                caption: '',
                 headerRows: [['뜻', '스페인어']], rows: [['', ''], ['', '']],
                 merges: {}, headerMerges: {}, highlightCols: [0]
             };
@@ -7454,6 +7465,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return {
                 id: b.id || newBlockId(),
                 type: 'table',
+                // [냐냐 요청] 표 제목 — 노트에 표가 여럿이면 어느 게 뭘 다루는 표인지 이것 말고는 알 길이 없다.
+                //   열 제목줄(headerRows)은 '인칭·단수·복수' 같은 축 이름이라 주제를 말해주지 않는다.
+                caption: String((b && b.caption) || ''),
                 headerRows: hr.map(r => { const a = r.slice(); while (a.length < width) a.push(''); return a; }),
                 rows: (b.rows || []).map(r => (r || []).slice()),
                 merges: b.merges || {},
