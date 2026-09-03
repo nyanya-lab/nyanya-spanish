@@ -3622,17 +3622,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
                 const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
                 const parts = [badges, notes].filter(x => x && x.trim());
+                //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
+                const learnWord = writeRoundTarget(w, 2);
+                const learnMean = (w._isConjTask && w._conjOf) ? (w._conjOf.meaning || '') : (w.meaning || '');
+                const conjBack = (w._isConjTask && w._conjSlot)
+                    ? `<p class="text-[11px] font-bold text-indigo-500">🔀 원형부터 익히고, 다음 바퀴에서 <b>${escapeHtml(w._conjSlot.personLabel ? w._conjSlot.tenseLabel + ' · ' + w._conjSlot.personLabel : w._conjSlot.tenseLabel)}</b> 로 다시 물어봐요</p>`
+                    : '';
                 cardHtml = `
                     <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
                         <div class="text-left space-y-1">
-                            <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(w.word)}</p>
-                            <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
+                            <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
+                            <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(learnMean)}</p>
+                            ${conjBack}
                         </div>
                         ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
                         <div id="write-conj-box" class="hidden"></div>
                     </div>`;
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
-                placeholder = w.word;
+                placeholder = learnWord;
             } else if (!s.retry) {
                 cardHtml = `
                     <div class="bg-violet-50 rounded-2xl border border-violet-200 p-5 text-center space-y-1">
@@ -3861,6 +3868,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return null;
         }
 
+        // [냐냐 요청] 활용형 문제를 틀리면 2바퀴(익히기)는 '원형' 으로 익힌다 (2026-09-03).
+        //   활용을 틀렸다는 건 대개 원형부터 흔들린다는 뜻이라, 익히기 바퀴에서 뿌리를 잡는다.
+        //   3바퀴는 1바퀴에 냈던 그 시제로 다시 묻는다 — 과제 객체를 그대로 쓰므로 저절로 같다.
+        function writeRoundTarget(w, phase) {
+            if (phase === 2 && w && w._isConjTask && w._conjOf && w._conjOf.word) return w._conjOf.word;
+            return (w && w.word) || '';
+        }
+
         function writePracticeKeydown(e) {
             if (e.key !== 'Enter') return;
             e.preventDefault();
@@ -3870,7 +3885,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (s.feedback) { writeFirstRoundNext(); return; }  // 채점 결과를 보고 있으면 엔터로 다음
             if (!el) return;
             const w = s.pool[s.index];
-            const isMatch = writeAnswerMatches(el.value, w.word);
+            //   2바퀴에서 활용형 문제는 원형을 쓴다 (writeRoundTarget)
+            const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase));
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
