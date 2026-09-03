@@ -3220,8 +3220,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                                  : `단어와 관용구 ${n}개를 섞어서 내요`));
             }
         }
+        //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
+        //   지금 고른 범위 안에서 실제로 나올 수 있는 표현만 센다.
         function countIdiomEntries() {
-            return (vocabulary || []).reduce((a, w) => a + wordIdiomList(w).length, 0);
+            const pool = (typeof getWriteScopePool === 'function') ? getWriteScopePool() : (vocabulary || []);
+            const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
+            return pool.reduce((a, w) => a + wordIdiomList(w).filter(it => !onlyNew || isUntouchedIdiom(w.id, it.idiom)).length, 0);
         }
         // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
         // [냐냐 요청] 관용구도 소리내 들어본다. 표현은 통으로 들어야 입에 붙는다.
@@ -3304,7 +3308,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             const wantIdiom = Math.round(count * pct / 100);
             const entries = [];
-            pool.forEach(w => wordIdiomList(w).forEach(it => entries.push({ w, it })));
+            // [냐냐 지적] 범위를 '안 만난' 으로 골라도 관용구는 전체에서 나왔다 — 범위가 관용구엔 안 걸렸다
+            const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
+            pool.forEach(w => wordIdiomList(w).forEach(it => {
+                if (onlyNew && !isUntouchedIdiom(w.id, it.idiom)) return;
+                entries.push({ w, it });
+            }));
             const idiomTasks = shuffleArray(entries).slice(0, wantIdiom)
                 .map(e => makeWriteIdiomTask(e.w, e.it));
 
@@ -3357,6 +3366,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const n = getWriteScopePool().length;
                 el.innerText = n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요';
             }
+            if (typeof renderWriteMix === 'function') renderWriteMix();   // 관용구 개수 안내도 범위 따라 바뀐다
         }
 
         function getWriteScopePool() {
@@ -3988,8 +3998,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const s = writePracticeState;
             // [냐냐 기준] 그 표현을 맞혔으면 곡선을 한 칸 앞으로 — 단, 관용구 복습으로 시작했을 때만.
             //   단어 복습에 섞여 나온 관용구나 퀴즈에서 맞힌 건 점수만 준다 (단어·문법과 같은 기준).
-            if (w._isIdiomTask && w._idiomOf && s.idiomReview && typeof idiomReviewAdvance === 'function') {
-                idiomReviewAdvance(w._idiomOf.id, w.word);
+            if (w._isIdiomTask && w._idiomOf) {
+                if (typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
+                if (s.idiomReview && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
             }
             const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
@@ -4010,8 +4021,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const s = writePracticeState;
             // [냐냐 요청] 관용구는 제 망각곡선을 따로 갖는다 (단어 곡선과 별개).
             //   '다시 만나기' 는 그 곡선이 맡으므로 따로 표시해 둘 필요가 없다.
-            if (w._isIdiomTask && w._idiomOf && typeof idiomReviewDemote === 'function') {
-                idiomReviewDemote(w._idiomOf.id, w.word);
+            if (w._isIdiomTask && w._idiomOf) {
+                if (typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
+                if (typeof idiomReviewDemote === 'function') idiomReviewDemote(w._idiomOf.id, w.word);
             }
             // [냐냐 지적] 틀리는 '그 순간' 에 적는다 (2026-09-03). 예전엔 3바퀴까지 다 돌아야
             //   점수·곡선이 붙어서, 중간에 그만두면 틀린 기록이 통째로 사라졌다.

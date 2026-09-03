@@ -2034,6 +2034,22 @@ let vocabulary = [];
             }
         }
 
+        // ============================================================
+        // [냐냐 요청] 관용구도 '아직 안 만난 것' 을 가른다 (2026-09-03).
+        //   ⚠️ 단어와 달리 관용구엔 맞힌 기록이 안 남는다 — 점수는 단어에 붙고, 곡선은 틀려야 생긴다.
+        //   그래서 '만난 날' 을 곡선 기록에 같이 남긴다. 안 그러면 맞힌 표현이 영영 '안 만난 것' 으로 남는다.
+        // ============================================================
+        function markIdiomSeen(wordId, idiomText) {
+            if (!wordId || !idiomText || typeof idiomKey !== 'function') return;
+            const rec = getIdiomReviewRec(idiomKey(wordId, idiomText));
+            if (rec) rec.lastSeenDate = getLocalDateString();
+        }
+        function isUntouchedIdiom(wordId, idiomText) {
+            const key = (typeof idiomKey === 'function') ? idiomKey(wordId, idiomText) : null;
+            const rec = key ? (idiomReview || {})[key] : null;
+            return !rec || (!rec.lastWrongDate && !rec.lastSeenDate && !(rec.stage || 0));
+        }
+
         // 곡선 현황용 통계 (문법 쪽과 같은 모양). '전체'는 단어장에 적힌 관용구 총 개수다.
         function getIdiomCurveStats() {
             const today = getLocalDateString();

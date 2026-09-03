@@ -1330,6 +1330,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     // [냐냐 요청] 점수는 통합(단어), 곡선은 분리.
                     //   관용구를 틀렸으면 단어를 다시 보라고 할 게 아니라 그 표현을 다시 봐야 한다.
                     const idiomQ = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
+                    if (idiomQ && typeof markIdiomSeen === 'function') markIdiomSeen(vocabItem.id, quizIdiomText(q));
                     if (idiomQ && typeof idiomReviewDemote === 'function') {
                         idiomReviewDemote(vocabItem.id, quizIdiomText(q));
                     }
