@@ -3915,12 +3915,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   (1바퀴에서 이미 idiomReviewDemote 로 그 표현의 곡선을 뒤로 밀어뒀다)
             //   퀴즈와 단어 빈칸은 skipReviewDate 로 빼고 있었는데 여기만 빠져 있었다.
             const idiomTask = !!w._isIdiomTask;
+            // [냐냐 지적] 1바퀴에서 틀린 순간 −2 와 곡선을 이미 적었다. 여기서는 차액만 반영한다:
+            //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
+            const already = !!w._firstFailScored;
             if (isMatch) {
                 const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
-                    if (typeof addWordScore === 'function') addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
+                    if (typeof addWordScore !== 'function') return;
+                    // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
+                    //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
+                    if (already) addWordScore(w.id, 1, { correctCount: 0, wrongCount: 0, skipReviewDate: true });
+                    else addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
                 });
-                if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                if (typeof logAction === 'function') logAction('review');
+                if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (!already && typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
                 s.index++;
                 s.done = 0;
@@ -3929,10 +3936,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
-                    if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
+                    if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
                 });
-                if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                if (typeof logAction === 'function') logAction('review');
+                if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (!already && typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
             }
             writePracticeSave();
@@ -3980,9 +3987,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (w._isIdiomTask && w._idiomOf && typeof idiomReviewDemote === 'function') {
                 idiomReviewDemote(w._idiomOf.id, w.word);
             }
-            // [냐냐 요청] 여기선 아무것도 기록하지 않는다 — 점수도, 복습 횟수도, 망각곡선도.
-            //   이 단어는 아직 복습이 안 끝났다. 2·3바퀴까지 돌고 나서 3바퀴에서 한꺼번에 반영한다.
-            //   (1바퀴에서 맞힌 단어는 거기서 복습이 끝나므로 그 자리에서 반영)
+            // [냐냐 지적] 틀리는 '그 순간' 에 적는다 (2026-09-03). 예전엔 3바퀴까지 다 돌아야
+            //   점수·곡선이 붙어서, 중간에 그만두면 틀린 기록이 통째로 사라졌다.
+            //   ⚠️ 최종 점수는 그대로다 — 여기서 −2 를 먼저 적고, 3바퀴에서 맞히면 +1 을 돌려줘
+            //   합이 −1 이 된다 (끝내 틀리면 −2 그대로). 곡선과 복습 횟수는 여기서 한 번만 민다.
+            const idiomTask = !!w._isIdiomTask;
+            if (!w._firstFailScored) {
+                w._firstFailScored = true;
+                if (typeof addWordScore === 'function') {
+                    addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
+                }
+                // 관용구 과제는 단어 곡선을 건드리지 않는다 (그 표현의 곡선은 위에서 이미 밀었다)
+                if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                if (typeof logAction === 'function') logAction('review');
+            }
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
