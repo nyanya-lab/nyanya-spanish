@@ -232,8 +232,10 @@ let quizSession = null;
                 const wantMastered = document.getElementById('scope-mastered')?.checked;
                 const wantWeak = document.getElementById('scope-weak')?.checked;
                 const wantPromotion = document.getElementById('scope-promotion')?.checked;
+                // [냐냐 요청] 아직 한 번도 안 만난 단어만 골라 볼 수 있게
+                const wantUntouched = document.getElementById('scope-untouched')?.checked;
 
-                if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion) {
+                if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion && !wantUntouched) {
                     showToast("출제 범위를 최소 하나는 선택해 주세요!", "error");
                     return;
                 }
@@ -256,6 +258,9 @@ let quizSession = null;
                 if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
                 if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
                 if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
+                if (wantUntouched && typeof isUntouchedWord === 'function') {
+                    vocabulary.filter(isUntouchedWord).forEach(w => poolSet.set(w.id, w));
+                }
                 reviewablePool = [...poolSet.values()];
                 prioritizePromotion = !!wantPromotion;   // 체크했을 때만 앞으로 당긴다
             }

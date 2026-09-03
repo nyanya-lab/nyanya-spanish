@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260903i">
+    <link rel="stylesheet" href="css/style.css?v=20260903j">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -513,6 +513,11 @@
                                         <input type="checkbox" id="scope-promotion" class="w-4 h-4 accent-emerald-600">
                                         <span class="text-sm font-medium text-slate-700">🏆 승급 대기 단어 (마스터 직전)</span>
                                     </label>
+                                    <!-- [냐냐 요청] 무작위로 뽑다 보니 절반이 넘는 단어를 아직 한 번도 안 만났다 -->
+                                    <label class="flex items-center gap-2.5 cursor-pointer">
+                                        <input type="checkbox" id="scope-untouched" class="w-4 h-4 accent-sky-500">
+                                        <span class="text-sm font-medium text-slate-700">🆕 아직 안 만난 단어 (한 번도 안 나온)</span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -712,6 +717,7 @@
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold text-slate-500">범위</label>
                                     <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="selectWriteScope('untouched')" data-write-scope="untouched" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🆕 안 만난</button>
                                         <button onclick="selectWriteScope('weak')" data-write-scope="weak" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점</button>
                                         <button onclick="selectWriteScope('not-mastered')" data-write-scope="not-mastered" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">📖 안 외운</button>
                                         <button onclick="selectWriteScope('all')" data-write-scope="all" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🗂️ 전체</button>
@@ -2278,13 +2284,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260903i"></script>
-    <script src="js/creatures.js?v=20260903i"></script>
-    <script src="js/core.js?v=20260903i"></script>
-    <script src="js/vocab.js?v=20260903i"></script>
-    <script src="js/flashcards.js?v=20260903i"></script>
-    <script src="js/quiz.js?v=20260903i"></script>
-    <script src="js/games.js?v=20260903i"></script>
-    <script src="js/ai-feedback.js?v=20260903i"></script>
+    <script src="js/dictionary-data.js?v=20260903j"></script>
+    <script src="js/creatures.js?v=20260903j"></script>
+    <script src="js/core.js?v=20260903j"></script>
+    <script src="js/vocab.js?v=20260903j"></script>
+    <script src="js/flashcards.js?v=20260903j"></script>
+    <script src="js/quiz.js?v=20260903j"></script>
+    <script src="js/games.js?v=20260903j"></script>
+    <script src="js/ai-feedback.js?v=20260903j"></script>
 </body>
 </html>

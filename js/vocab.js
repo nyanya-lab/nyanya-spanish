@@ -3362,6 +3362,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function getWriteScopePool() {
             //   [냐냐 요청] 관용구 복습은 여기 끼우지 않는다 — 헤더 복습 배지의 '관용구' 로 들어간다.
             //   (범위는 '어떤 단어를 쓸까' 를 고르는 자리라, 표현 단위인 관용구와 결이 다르다)
+            // [냐냐 요청] 아직 한 번도 안 만난 단어만
+            if (writeScope === 'untouched') {
+                return vocabulary.filter(w => (typeof isUntouchedWord === 'function') && isUntouchedWord(w));
+            }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
@@ -3541,7 +3545,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // [냐냐 요청] 맞은 단어 / 틀린 단어 목록 (단어 + 뜻)
                 const res = s.results || [];
                 const chip = (r, ok) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
-                const okList = res.filter(r => r.correct);
+                // [냐냐 요청] '한 번에 맞힌 것' 과 '2바퀴에서 익히고 3바퀴에 맞힌 것' 을 가른다.
+                //   둘 다 초록으로 뭉뚱그리면 뭘 원래 알았고 뭘 방금 외웠는지 안 보인다.
+                const okList = res.filter(r => r.correct && r.firstTry);
+                const learnedList = res.filter(r => r.correct && !r.firstTry);
                 const noList = res.filter(r => !r.correct);
                 // [냐냐 요청] 실제로 붙은 점수대로 묶어서 보여준다 (오타 고친 +1을 +2로 뭉뚱그리지 않게)
                 const groups = [
@@ -3551,10 +3558,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     ['끝내',         nBy(-2),  '−2',   'text-rose-500']
                 ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
                 const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
-                const listBlock = (title, arr, ok) => arr.length ? `
+                //   익혀서 맞힌 것은 초록도 빨강도 아니다 — 노랑으로 따로 둔다 (점수도 −1 이다)
+                const chipAmber = (r) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold bg-amber-50 border-amber-200 text-amber-700">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span></span>`;
+                const listBlock = (title, arr, ok, tone) => arr.length ? `
                     <div class="text-left">
-                        <p class="text-xs font-black ${ok ? 'text-emerald-600' : 'text-rose-500'} mb-1.5">${title} ${arr.length}개</p>
-                        <div class="-m-0.5">${arr.map(r => chip(r, ok)).join('')}</div>
+                        <p class="text-xs font-black ${tone || (ok ? 'text-emerald-600' : 'text-rose-500')} mb-1.5">${title} ${arr.length}개</p>
+                        <div class="-m-0.5">${arr.map(r => (tone === 'text-amber-600' ? chipAmber(r) : chip(r, ok))).join('')}</div>
                     </div>` : '';
                 // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어들 (core.js 의 공용 표시를 쓴다)
                 //   관용구 문제였어도 점수는 그 단어에 붙으므로, 여기선 단어 이름으로 보여준다
@@ -3562,10 +3571,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
                 const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
 
-                const resultLists = (okList.length || noList.length) ? `
+                const resultLists = (okList.length || learnedList.length || noList.length) ? `
                     <div class="pt-2 mt-2 border-t border-slate-100 space-y-3">
-                        ${listBlock('✅ 맞은 단어', okList, true)}
-                        ${listBlock('❌ 틀린 단어', noList, false)}
+                        ${listBlock('✅ 바로 맞힌 단어', okList, true)}
+                        ${listBlock('📖 익혀서 맞힌 단어', learnedList, true, 'text-amber-600')}
+                        ${listBlock('❌ 끝내 틀린 단어', noList, false)}
                     </div>` : '';
 
                 body.innerHTML = wrap(`

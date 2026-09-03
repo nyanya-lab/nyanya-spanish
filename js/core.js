@@ -1808,6 +1808,21 @@ let vocabulary = [];
         //   틀려서 곡선 안으로 들어와도 복습에 영영 안 나왔다 — 점수가 높으면(4.5 이상)
         //   마스터가 안 풀리기 때문이다. 실제로 aprender 는 40일 동안 안 나왔다.
         //   이제는 안 뺀다. 한 번도 안 틀린 단어는 lastWrongDate 가 없어서 어차피 안 나온다.
+        // ============================================================
+        // [냐냐 요청] '아직 한 번도 안 만난 단어' (2026-09-03).
+        //   단어장 1174개에서 무작위로 20개씩 뽑으니 한 바퀴 도는 데 쉰 번이 넘게 걸린다 —
+        //   실제로 절반이 넘는 단어가 아직 점수 한 번 못 받았다. 그 단어들만 골라 볼 수 있게 한다.
+        //   ⚠️ '점수가 0' 만으로는 모자란다 (+2 받았다가 −2 로 돌아온 단어도 0이다).
+        //      맞힌 적·틀린 적·곡선·마스터 흔적이 하나도 없어야 '안 만난 것' 이다.
+        // ============================================================
+        function isUntouchedWord(w) {
+            if (!w) return false;
+            return (w.score || 0) === 0
+                && !(w.correctTotal || 0) && !(w.wrongTotal || 0)
+                && !w.lastWrongDate && !w.lastReviewDate
+                && !w.mastered && !w.perfect && !w.weak && !w.subjectivePassed;
+        }
+
         function getReviewDueWords() {
             const today = getLocalDateString();
             return vocabulary.filter(w => {
