@@ -2148,6 +2148,24 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
+            // [냐냐 요청] 내가 몰라서 한글로 적은 자리를 AI 가 스페인어로 채워줬으면 그 낱말도 추천한다
+            //   (내 문장엔 없고 고친 문장에만 있는 낱말). 위 목록은 '내가 쓴 낱말' 이라 여기 안 잡힌다.
+            //   ⚠️ 동사 활용형은 뺀다 — 사전형이 아닌 꼴 그대로 등록하게 되면 안 된다 (decoraron 사고).
+            const toks = (html) => String(html || '').replace(/<[^>]*>/g, ' ')
+                .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+            const mineSet = new Set(toks(feedback && feedback.originalMarked).map(norm));
+            const looksConjugated = (k) => /(ando|iendo|yendo|aron|ieron|aste|iste|amos|emos|imos|é|ó|í)$/.test(k);
+            toks(feedback && feedback.correctedText).forEach(raw => {
+                const key = norm(raw);
+                if (!key || key.length < 3 || seen.has(key) || mineSet.has(key)) return;
+                if (have.has(key)) return;
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
+                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
+                if (looksConjugated(key)) return;
+                seen.add(key);
+                out.newWords.push({ word: raw, mean: meanOf(raw) });
+            });
+
             out.newWords = out.newWords.slice(0, 5);
             return out;
         }
@@ -3894,6 +3912,14 @@ ${noteListText}
                             // 현재분사에 대명사가 붙은 꼴 — "hablándome" → hablando
                             if (encliticBases.length && encliticBases.indexOf(formN) >= 0) {
                                 offer(v, FVBF_RANK.ENCLITIC);
+                            }
+                            // [냐냐 지적] 과거분사는 형용사처럼 성·수가 붙는다 —
+                            //   'escrito' 로 등록돼 있어도 'escritas' 는 같은 동사다 (안 그러면 추천에 활용형이 뜬다)
+                            if (tk === 'participio' && /o$/.test(formN)) {
+                                const stem = formN.slice(0, -1);
+                                if (target === stem + 'a' || target === stem + 'os' || target === stem + 'as') {
+                                    offer(v, FVBF_RANK.REG_FORM);
+                                }
                             }
                         }
                     }
