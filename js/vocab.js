@@ -3826,16 +3826,29 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (typeof levenshtein !== 'function') return false;
             const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(correctRaw);
             if (!u || !c || c.length < 4) return false;
+            // [냐냐 지적] 여전히 느리다 → 두 글자까지 오타로 본다. 대신 안전장치를 하나 둔다:
+            //   내가 쓴 답이 단어장에서 '어떤 낱말' 로 알아들어지면 그건 오타가 아닐 수 있다.
+            //   (esperando 를 물었는데 esperado — 같은 동사 다른 활용, 또는 아예 다른 낱말)
+            //   그런 건 판정이 갈리는 자리라 그대로 AI 에게 맡긴다.
+            if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(userRaw)) return false;
             const d = levenshtein(u, c);
-            if (d === 1) return true;
-            // 붙은 두 글자를 바꿔 쓴 것(porqeu)은 거리로는 2지만 흔한 오타다
-            if (d === 2 && u.length === c.length) {
-                for (let i = 0; i + 1 < u.length; i++) {
-                    if (u[i] === c[i + 1] && u[i + 1] === c[i]
-                        && u.slice(0, i) === c.slice(0, i) && u.slice(i + 2) === c.slice(i + 2)) return true;
-                }
+            return d > 0 && d <= 2;
+        }
+
+        // [냐냐 요청] 내가 이미 등록해 둔 유의어면 AI 에게 물을 것도 없다 — 답이 단어장에 있다.
+        //   (유의어만. 반의어는 뜻이 반대라 봐주면 안 된다)
+        function writeRegisteredSynonym(userRaw, w) {
+            const base = (w && (w._idiomOf || w._conjOf || w)) || w;
+            const list = (base && Array.isArray(base.synonyms)) ? base.synonyms : [];
+            if (!list.length || typeof vocabulary === 'undefined') return null;
+            const u = normalizeWriteAnswer(userRaw);
+            if (!u) return null;
+            for (const sy of list) {
+                if (!sy || sy.type === 'antonym') continue;
+                const v = vocabulary.find(x => x.id === sy.id);
+                if (v && normalizeWriteAnswer(v.word) === u) return v;
             }
-            return false;
+            return null;
         }
 
         function writePracticeKeydown(e) {
@@ -4057,6 +4070,30 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                 writeAskRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`, userAnswer);
                 return;
+            }
+
+            // 3-0) [냐냐 지적] 내가 쓴 답이 '그 낱말의 다른 형태' 면 AI 를 부를 이유가 없다.
+            //   같은 낱말인지 아닌지는 역추적으로 알 수 있고, 그 뒤 판정은 이미 정해진 규칙이다:
+            //     활용형 문제에서 같은 동사 다른 형태 → 오답, 기회 없음 (그게 이 문제가 묻는 바로 그것)
+            //     그 밖(명사 단·복수 등)          → 오타와 같은 대접으로 한 번 더
+            //   다른 낱말로 알아들어지면 유의어일 수 있으니 그건 그대로 AI 가 본다.
+            {
+                const baseW = w._idiomOf || w._conjOf || w;
+                const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+                if (hit && baseW && hit.id === baseW.id) {
+                    if (w._isConjTask || used.typo) { writeFirstRoundFail(w, userAnswer); return; }
+                    writeAskRetry('typo', `✏️ 형태가 조금 달라요! 다시 한 번 써볼까요?`, userAnswer);
+                    return;
+                }
+            }
+
+            // 3-1) 내가 등록해 둔 유의어 — AI 없이 그 자리에서 되묻는다
+            if (!used.synonym) {
+                const syn = writeRegisteredSynonym(userAnswer, w);
+                if (syn) {
+                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요. 다시 한 번 써볼까요?`, userAnswer);
+                    return;
+                }
             }
 
             // 3-2) 철자가 살짝 틀린 것 — AI 를 안 부르고 그 자리에서 되묻는다 (기다림 0초)

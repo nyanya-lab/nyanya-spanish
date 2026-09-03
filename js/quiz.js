@@ -1029,12 +1029,12 @@ This is a CONJUGATION question: the student saw only the Korean meaning plus "${
 - "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".` : '';
                 const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}
 Student answered: "${userAnswer}".
-Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장)", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답이 실제 스페인어 단어라면 그 한글 뜻, 아니면 빈 문자열" }`;
+Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 30자 이내)", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답이 실제 스페인어 단어라면 그 한글 뜻(짧게), 아니면 빈 문자열" }`;
                 const schema = {
                     type: "OBJECT",
                     properties: {
                         verdict: { type: "STRING" },
-                        comment: { type: "STRING" },
+                        comment: { type: "STRING", description: "한국어 한 문장, 30자 이내. 길게 쓰지 말 것 — 이 글자를 만드는 시간이 곧 학생이 기다리는 시간이다" },
                         answerIsRealWord: { type: "BOOLEAN", description: "학생이 쓴 답이 실제로 존재하는 스페인어 단어인가" },
                         answerMeaning: { type: "STRING", description: "그 답의 한글 뜻. 실제 단어가 아니면 빈 문자열" }
                     },
