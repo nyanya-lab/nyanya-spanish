@@ -3211,13 +3211,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (lab) lab.innerText = writeMix.idiom + '%';
             if (wordLab) wordLab.innerText = (100 - writeMix.idiom) + '%';
 
+            // [냐냐 요청] 개수 안내는 여기 한 줄로 모은다 (범위 밑에도 따로 적어서 숫자가 어긋나 보였다).
+            //   단어는 고른 범위 안의 개수, 관용구는 실제로 나올 수 있는 표현의 개수다.
             const hint = document.getElementById('write-mix-hint');
             if (hint) {
                 const n = countIdiomEntries();
-                hint.innerText = writeMix.mode === 'word' ? '단어 뜻만 나와요'
+                const wordN = (typeof getWriteScopePool === 'function') ? getWriteScopePool().length : 0;
+                hint.innerText = writeMix.mode === 'word'
+                        ? (wordN ? `단어 ${wordN}개에서 나와요` : '이 범위엔 단어가 없어요')
                     : (n === 0 ? '등록된 관용구가 없어서 단어만 나와요'
-                    : (writeMix.mode === 'idiom' ? `등록된 관용구 ${n}개 중에서만 나와요`
-                                                 : `단어와 관용구 ${n}개를 섞어서 내요`));
+                    : (writeMix.mode === 'idiom' ? `관용구 ${n}개에서 나와요`
+                                                 : `단어 ${wordN}개 · 관용구 ${n}개를 섞어서 내요`));
             }
         }
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
@@ -3365,12 +3369,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 b.classList.toggle('border-slate-200', !on);
                 b.classList.toggle('text-slate-600', !on);
             });
-            const el = document.getElementById('write-scope-count');
-            if (el) {
-                const n = getWriteScopePool().length;
-                el.innerText = n > 0 ? `이 범위에 ${n}개 있어요` : '이 범위엔 단어가 없어요';
-            }
-            if (typeof renderWriteMix === 'function') renderWriteMix();   // 관용구 개수 안내도 범위 따라 바뀐다
+            // [냐냐 요청] 범위 밑의 개수 줄은 없앴다 — 문제 유형 밑 한 줄이 단어·관용구를 같이 적는다
+            if (typeof renderWriteMix === 'function') renderWriteMix();
         }
 
         function getWriteScopePool() {
