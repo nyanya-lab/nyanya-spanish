@@ -2432,6 +2432,44 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (useEvidence && !grammarEvidenceFound(ev, hay)) return;   // 근거를 못 대면 점수도 없다
                 parsed.push({ note, ok: item.ok, ev });
             });
+            // ============================================================
+            // [냐냐 요청] 신호가 겹치는 노트는 같이 짚는다 (2026-09-03).
+            //   현재분사와 현재진행은 채점 단서의 신호가 'estoy ...-ando' 로 똑같다. 그래서 AI 는
+            //   "같은 걸 말하는 노트 둘이네" 하고 하나만 골랐다 — 프롬프트로 조여도 안 됐다.
+            //   같은 신호를 나눠 가진 노트가 있고, 그 신호가 문장에 실제로 있으면 코드가 같이 넣는다.
+            //   ⚠️ AI 가 짚은 노트의 '형제' 만 본다. 안 그러면 신호가 넓은 노트(en·a·de)가
+            //      아무 문장에나 끌려온다. 한 번에 둘까지만 더한다.
+            // ============================================================
+            if (typeof grammarAiHintOf === 'function') {
+                // 노트 → { 정규화한 신호 : 원래 신호 } (너무 짧은 신호는 우연히 겹치니 뺀다)
+                const sigMap = (t) => {
+                    const out = new Map();
+                    (((grammarAiHintOf(t) || {}).t) || []).forEach(x => {
+                        const raw = String(x || '').trim();
+                        const k = grammarEvidenceNorm(raw.replace(/\.\.\./g, ' '));
+                        if (k.length >= 4) out.set(k, raw);
+                    });
+                    return out;
+                };
+                const already = new Set(parsed.map(x => x.note.id));
+                const extra = [];
+                parsed.slice().forEach(picked => {
+                    const mine = sigMap(picked.note);
+                    if (!mine.size) return;
+                    (notes || []).forEach(q => {
+                        if (already.has(q.id) || extra.some(e => e.note.id === q.id)) return;
+                        const his = sigMap(q);
+                        for (const [k, raw] of his) {
+                            if (!mine.has(k)) continue;
+                            if (!grammarEvidenceFound(raw, hay)) continue;
+                            extra.push({ note: q, ok: picked.ok, ev: raw });
+                            break;
+                        }
+                    });
+                });
+                extra.slice(0, 2).forEach(e => parsed.push(e));
+            }
+
             // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
             const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
 
