@@ -2481,12 +2481,141 @@ ${koEsNoteListText}${refGrammar}${refWords}
             });
         }
 
+        // ============================================================
+        // [냐냐 요청] 동사 꼴로 노트를 같이 짚는다 (2026-09-04).
+        //   왜: AI 는 한 문장이 노트 둘을 동시에 쓰면 하나만 고른다 — 'estoy pidiendo' 를
+        //   현재분사로만 보고 현재진행은 빠뜨렸다. 프롬프트에 그 예문을 그대로 적어뒀는데도 그렇다.
+        //   예전엔 AI 가 노트마다 뽑아준 '신호' 로 형제를 이었는데 그건 걷어냈다.
+        //   대신 앱이 이미 가진 것으로 판다 — 단어장의 동사 활용표다.
+        //     ① 문장이 어떤 동사 꼴을 썼는지는 등록된 활용형·규칙형 계산으로 알아낸다
+        //     ② 그 꼴을 가르치는 노트는 '제목과 표 제목' 으로 찾는다 (본문은 안 본다 —
+        //        현재분사 노트가 '과거분사는 수동적' 이라고 대조로 적어둬서 과거분사 노트로도 잡혔다)
+        //   현재진행·현재완료처럼 두 조각으로 된 꼴은 조각이 다 있을 때만 친다.
+        //   시제를 새로 배워 노트를 만들면 이름만 맞으면 저절로 걸린다 — 손댈 것이 없다.
+        // ============================================================
+        const VERB_FORM_NOTE_NAMES = {
+            presente:      ['직설법 현재', '현재시제', 'presente'],
+            indefinido:    ['부정과거', '단순과거', 'indefinido'],
+            imperfecto:    ['불완료과거', 'imperfecto'],
+            futuro:        ['미래', 'futuro'],
+            condicional:   ['조건법', 'condicional'],
+            subjPresente:  ['접속법 현재', 'subjuntivo'],
+            subjImperfecto:['접속법 불완료'],
+            imperativo:    ['명령법', 'imperativo'],
+            gerundio:      ['현재분사', 'gerundio'],
+            participio:    ['과거분사', 'participio'],
+            // 두 조각짜리 — 앱의 시제 목록에는 없다 (estar+현재분사, haber+과거분사라 따로 안 둔다)
+            progresivo:    ['현재진행', '진행형'],
+            perfecto:      ['현재완료', '완료시제', 'perfecto']
+        };
+        // 그 꼴을 '가르치는' 노트. 제목과 표 제목만 본다.
+        function notesTeachingVerbForm(key, notes) {
+            const names = VERB_FORM_NOTE_NAMES[key] || [];
+            if (!names.length) return [];
+            return (notes || []).filter(t => {
+                const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
+                const head = ((t.title || '') + ' ' + blocks.map(b => (b && b.caption) || '').join(' ')).toLowerCase();
+                return names.some(n => head.includes(n.toLowerCase()));
+            });
+        }
+
+        // 단어장의 동사 활용형을 '꼴 → 시제키' 로 한 번에 펴둔다 (등록된 것 + 규칙형 계산)
+        function buildVerbFormIndex() {
+            const idx = new Map();     // 정규화한 꼴 → Set(시제키)
+            const lemma = new Map();   // 정규화한 꼴 → 원형(정규화)
+            if (typeof vocabulary === 'undefined') return { idx, lemma };
+            const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            const put = (form, key, inf) => {
+                const f = nz(form);
+                if (!f) return;
+                if (!idx.has(f)) idx.set(f, new Set());
+                idx.get(f).add(key);
+                if (inf && !lemma.has(f)) lemma.set(f, nz(inf));
+            };
+            vocabulary.forEach(v => {
+                if (v.pos !== 'verb') return;
+                const inf = String(v.word || '').trim();
+                const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                Object.keys(tenses).forEach(tk => {
+                    const forms = tenses[tk] || {};
+                    Object.keys(forms).forEach(pk => put(forms[pk], tk, inf));
+                });
+                // 안 채워둔 시제라도 규칙형이면 계산해서 넣는다 (현재분사·과거분사만 — 계산이 확실한 둘)
+                const bare = inf.replace(/se$/i, '');
+                if (typeof regularGerundioForm === 'function') put(regularGerundioForm(inf), 'gerundio', inf);
+                if (typeof regularParticipioForm === 'function') {
+                    const pa = regularParticipioForm(bare);
+                    if (pa) {
+                        put(pa, 'participio', inf);
+                        // 과거분사는 형용사처럼 성·수가 붙는다 (escrito/escrita/escritos/escritas)
+                        const st = pa.slice(0, -1);
+                        ['a', 'os', 'as'].forEach(sfx => put(st + sfx, 'participio', inf));
+                    }
+                }
+            });
+            return { idx, lemma };
+        }
+
+        // 문장이 쓴 동사 꼴 → { 시제키: 근거 낱말 }
+        function detectVerbFormsInText(text, corrected) {
+            const out = new Map();
+            if (!text) return out;
+            const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            const toks = String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+            const { idx, lemma } = buildVerbFormIndex();
+            const mark = (key, ev) => { if (!out.has(key)) out.set(key, ev); };
+            let estarTok = '', haberTok = '', gerTok = '', partTok = '';
+            // 진행·완료를 만드는 두 동사는 어느 시제로 와도 알아봐야 한다 (estaba/había …).
+            //   둘 다 심한 불규칙이고 활용표에 다 채워져 있으리란 보장이 없어서 글자로도 받아둔다.
+            //   ⚠️ 이 목록은 estar·haber 두 동사만이다 — 짜임을 만드는 게 이 둘뿐이라 늘어나지 않는다.
+            const ESTAR_FORMS = new Set(['estoy','estas','esta','estamos','estais','estan',
+                'estaba','estabas','estabamos','estabais','estaban',
+                'estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron',
+                'estare','estaras','estara','estaremos','estareis','estaran','estaria','estarian']);
+            const HABER_FORMS = new Set(['he','has','ha','hemos','habeis','han',
+                'habia','habias','habiamos','habiais','habian',
+                'habre','habras','habra','habremos','habreis','habran','habria','habrian']);
+            const bare = (x) => String(x).normalize('NFD').replace(/[̀-ͯ]/g, '');
+            let prevWasHaber = false;
+            toks.forEach(raw => {
+                const t = nz(raw);
+                if (!t) { prevWasHaber = false; return; }
+                const b = bare(t);
+                const keys = idx.get(t);
+                if (keys) keys.forEach(k => mark(k, raw));
+                // 현재분사는 어미가 유일하게 안전하다 — 틀리게 쓴 꼴(pediendo)도 여기서 잡힌다.
+                const isGer = t.length >= 6 && /(ando|iendo|yendo)$/.test(b);
+                if (isGer) { mark('gerundio', raw); if (!gerTok) gerTok = raw; }
+                else if (keys && keys.has('gerundio') && !gerTok) gerTok = raw;
+                // 과거분사는 어미로는 못 잡는다 (nido·lado·partido 가 다 걸린다) — 활용표로만 본다.
+                //   단, 바로 앞이 haber 면 그 자리는 과거분사 자리다. 틀리게 쓴 꼴도 여기서 잡힌다.
+                const isPart = (keys && keys.has('participio'))
+                    || (prevWasHaber && t.length >= 4 && /(ado|ido|to|cho)$/.test(b));
+                if (isPart) { mark('participio', raw); if (!partTok) partTok = raw; }
+                const lem = lemma.get(t);
+                if (lem === 'estar' || ESTAR_FORMS.has(b)) estarTok = estarTok || raw;
+                const isHaber = (lem === 'haber' || HABER_FORMS.has(b));
+                if (isHaber) haberTok = haberTok || raw;
+                prevWasHaber = isHaber;
+            });
+            // 두 조각이 다 있을 때만 — 'estoy en casa' 는 현재진행이 아니다
+            if (estarTok && gerTok) mark('progresivo', `${estarTok} ${gerTok}`);
+            if (haberTok && partTok) mark('perfecto', `${haberTok} ${partTok}`);
+            return out;
+        }
+
         function applyEsKoGrammarScores(feedback, notes, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
             const list = flattenScoredList(feedback, 'grammarOk', 'grammarBad', 'usedGrammar', 'title', 'usage');
-            if (!list.length || !notes || !notes.length) return;
+            if (!notes || !notes.length) return;
             if (typeof addGrammarScore !== 'function') return;
+            // [냐냐 요청] AI 가 노트를 하나도 안 짚어도 동사 꼴 훑기는 돌린다 (2026-09-04).
+            //   문장을 제대로 써서 고칠 데가 없으면 AI 가 문법 목록을 통째로 비워 보내는 일이 있는데,
+            //   그때 현재진행을 잘 쓴 것까지 같이 사라졌다. 다만 고친 문장조차 없으면 판단할 근거가 없다.
+            if (!list.length && !String((feedback && feedback.correctedText) || '').trim()) return;
 
             const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
             const byTitle = new Map();
@@ -2505,11 +2634,33 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (useEvidence && !grammarEvidenceFound(ev, hay)) return;   // 근거를 못 대면 점수도 없다
                 parsed.push({ note, ok: item.ok, ev });
             });
-            // [냐냐 요청] '신호가 겹치는 형제 노트를 같이 짚는' 장치는 걷어냈다 (2026-09-04).
-            //   그건 AI 채점 단서의 신호 목록(triggers) 위에 세운 것이라, 단서를 없애면 설 자리가 없다.
-            //   노트의 표 칸에서 신호를 뽑아 살려보려 했지만 안 된다 — 현재진행 노트는 표가 아예 없고
-            //   (그 장치를 만든 바로 그 경우다), 대신 'cuatro' 같은 흔한 낱말로 숫자 노트와 시간 노트가 엮인다.
-            //   이제는 노트 글이 통째로 프롬프트에 들어가니, 두 노트가 서로 다르다는 걸 AI 가 직접 읽는다.
+            // [냐냐 요청] AI 가 빠뜨린 '동사 꼴 노트' 를 코드가 채운다 (2026-09-04).
+            //   AI 는 한 문장이 노트 둘을 동시에 쓰면 하나만 고른다. 동사 꼴은 단어장 활용표로
+            //   코드가 확실히 알아낼 수 있으니, AI 를 기다리지 않고 여기서 잇는다.
+            //   맞음/틀림 잣대는 꼴에 따라 다르다:
+            //     한 낱말짜리(현재분사·과거분사·각 시제) → 그 낱말이 고친 문장에 그대로 살아남았나.
+            //       ('pediendo' 는 고쳐졌으니 현재분사 노트는 틀림)
+            //     두 조각짜리(현재진행·현재완료) → 고친 문장에도 그 짜임이 그대로 있나.
+            //       (estoy + 현재분사 는 그대로 남았다 — 틀린 건 분사의 철자지 짜임이 아니다)
+            if (typeof detectVerbFormsInText === 'function') {
+                const COMPOUND = new Set(['progresivo', 'perfecto']);
+                const fixedHay = grammarEvidenceNorm(aiStripTags(feedback && feedback.correctedText));
+                const wordSurvived = (ev) => String(ev || '').split(/\s+/).filter(Boolean).every(w => {
+                    const k = grammarEvidenceNorm(w);
+                    return k && fixedHay.indexOf(k) >= 0;
+                });
+                const fixedForms = detectVerbFormsInText(feedback && feedback.correctedText);
+                const already = new Set(parsed.map(x => x.note.id));
+                const extra = [];
+                detectVerbFormsInText(feedback && feedback.originalMarked).forEach((ev, key) => {
+                    const ok = COMPOUND.has(key) ? fixedForms.has(key) : wordSurvived(ev);
+                    notesTeachingVerbForm(key, notes).forEach(note => {
+                        if (already.has(note.id) || extra.some(e => e.note.id === note.id)) return;
+                        extra.push({ note, ok, ev });
+                    });
+                });
+                extra.slice(0, 3).forEach(e => parsed.push(e));
+            }
 
             // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
             const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
