@@ -2796,10 +2796,23 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //       (estoy + 현재분사 는 그대로 남았다 — 틀린 건 분사의 철자지 짜임이 아니다)
             if (typeof detectVerbFormsInText === 'function') {
                 const COMPOUND = new Set(['progresivo', 'perfecto']);
+                //   [냐냐 지적] 'Como muy mucho aspirina … tengo mucho dolor' 처럼 같은 낱말을
+                //   두 번 쓰면서 한 번만 틀리는 일이 있다. '고친 문장에 있나' 로만 보면 살아남은 쪽을
+                //   보고 +2 를 준다. 그래서 '몇 번 나오나' 로 센다 — 개수가 줄었으면 하나는 고쳐진 것이다.
+                const mineHay = grammarEvidenceNorm(aiStripTags(feedback && feedback.originalMarked));
                 const fixedHay = grammarEvidenceNorm(aiStripTags(feedback && feedback.correctedText));
+                const countIn = (hay, k) => {
+                    if (!k) return 0;
+                    let n = 0, at = 0;
+                    while ((at = (' ' + hay + ' ').indexOf(' ' + k + ' ', at)) >= 0) { n++; at += k.length; }
+                    return n;
+                };
                 const wordSurvived = (ev) => String(ev || '').split(/\s+/).filter(Boolean).every(w => {
                     const k = grammarEvidenceNorm(w);
-                    return k && fixedHay.indexOf(k) >= 0;
+                    if (!k) return false;
+                    const before = countIn(mineHay, k);
+                    if (before <= 1) return fixedHay.indexOf(k) >= 0;   // 한 번 썼으면 있나 없나로
+                    return countIn(fixedHay, k) >= before;              // 여러 번 썼으면 개수가 안 줄어야
                 });
                 const fixedForms = detectVerbFormsInText(feedback && feedback.correctedText);
                 const already = new Set(parsed.map(x => x.note.id));
