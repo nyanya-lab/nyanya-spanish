@@ -3409,12 +3409,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
         // 찾아보고 썼다고 표시하면, 첨삭 노트에서도 '맞음' 이 아니게 한다.
         //   찾아봐야 쓸 수 있었다면 약한 문법에 잡히는 게 맞다.
-        function setAiNoteGramOk(noteKey, gramId, ok) {
+        //   [냐냐 지적] 해제했다가 되돌릴 수 있으니, 빠져 있으면 도로 넣는다.
+        function setAiNoteGramOk(noteKey, gramId, ok, name) {
             if (!noteKey || !gramId || typeof aiNotes === 'undefined') return;
             const n = aiNotes.find(x => x && x.t === noteKey);
             if (!n || !Array.isArray(n.gram)) return;
             const g = n.gram.find(x => x.id === gramId);
             if (g) g.ok = ok;
+            else n.gram.push({ id: gramId, n: name || '', ok: ok });
         }
 
         // 이 기록 자체를 없앤다 — AI 가 문장을 통째로 잘못 봤을 때
@@ -3512,7 +3514,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
             } else {
                 e.delta = 0;
             }
-            setAiNoteGramOk(_lastAiNoteKey, id, state === 'normal' && e.usage === 'correct');
+            // [냐냐 지적] 해제는 'AI 가 잘못 짚었다' 는 뜻이라 첨삭 노트에서도 빼야 한다 (2026-09-04).
+            //   빼지 않으면 ok=false 로 남아서, 해제한 그 문법이 '약한 문법' 순위에 틀린 것으로
+            //   오히려 계속 잡혔다. 세 단계 토글을 만들 때 이 호출이 빠져 있었다.
+            if (state === 'undone') removeAiNoteGram(_lastAiNoteKey, id);
+            else setAiNoteGramOk(_lastAiNoteKey, id, state === 'normal' && e.usage === 'correct', e.note.title);
 
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
