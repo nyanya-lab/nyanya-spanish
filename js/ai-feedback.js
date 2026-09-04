@@ -2782,12 +2782,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     notesTeachingVerbForm(key, notes).forEach(note => {
                         if (extra.some(e => e.note.id === note.id)) return;
                         if (already.has(note.id)) {
-                            // [냐냐 지적] AI 가 '제대로 썼다' 고 하는데 코드가 보기엔 그 낱말이 고쳐졌다 (2026-09-04).
-                            //   'es hecho' → 'fue hecha' 로 고쳐놓고 근거를 고친 문장에서 떠와서 +2 를 줬다.
-                            //   그 낱말이 살아남았는지는 코드가 기계적으로 안다 — 이럴 땐 코드를 따른다.
-                            //   ⚠️ 내리기만 한다. 올리는 건 안 한다 — AI 가 틀렸다고 본 데는 우리가 모르는 이유가 있을 수 있다.
+                            // [냐냐 지적] 동사 꼴은 코드가 기계적으로 안다 — 내가 쓴 그 낱말이 고친 문장에
+                            //   그대로 살아남았나. AI 판정과 어긋나면 코드를 따른다. 양쪽 다 고친다:
+                            //   ① 내림 — 'es hecho' → 'fue hecha' 로 고쳐놓고 근거를 고친 문장에서 떠와 +2 를 줬다.
+                            //   ② 올림 — 'es escrita' → 'fue escrita' 인데 과거분사에 −2 를 줬다. 분사는 그대로
+                            //      살아남았고 틀린 건 옆의 ser 시제다. 지시문에도 '옆 낱말이 바뀌었다고 그 노트를
+                            //      벌하지 마라' 고 적혀 있는데 AI 가 어긴 것이라, 코드가 바로잡는 게 맞다.
+                            //   근거도 코드가 찾은 낱말로 바꾼다 — AI 근거는 오류까지 묶어 와서 오해를 부른다.
                             const hit = parsed.find(x => x.note.id === note.id);
-                            if (hit && hit.ok && !ok) { hit.ok = false; hit.ev = ev; }
+                            if (hit && hit.ok !== ok) { hit.ok = ok; hit.ev = ev; }
                             return;
                         }
                         extra.push({ note, ok, ev });
@@ -2799,8 +2802,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     if (!note || extra.some(e => e.note.id === noteId)) return;
                     const ok = wordSurvived(ev);
                     if (already.has(noteId)) {
+                        // 표 낱말도 같은 잣대 — 그 낱말이 살아남았으면 그 노트는 제대로 쓴 것이다
                         const hit = parsed.find(x => x.note.id === noteId);
-                        if (hit && hit.ok && !ok) { hit.ok = false; hit.ev = ev; }
+                        if (hit && hit.ok !== ok) { hit.ok = ok; hit.ev = ev; }
                         return;
                     }
                     extra.push({ note, ok, ev });
