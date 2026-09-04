@@ -2478,7 +2478,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function buildVerbFormIndex() {
             const idx = new Map();     // 정규화한 꼴 → Set(시제키)
             const lemma = new Map();   // 정규화한 꼴 → 원형(정규화)
-            if (typeof vocabulary === 'undefined') return { idx, lemma };
+            const nonVerb = new Set(); // 단어장에 동사 아닌 품사로 등록된 꼴 (단·복수까지)
+            if (typeof vocabulary === 'undefined') return { idx, lemma, nonVerb };
             const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
                 ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
             const put = (form, key, inf) => {
@@ -2488,13 +2489,32 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 idx.get(f).add(key);
                 if (inf && !lemma.has(f)) lemma.set(f, nz(inf));
             };
+            // [냐냐 지적] 'las comidas'(음식)를 comer 의 과거분사로 잡았다 (2026-09-04).
+            //   규칙형 계산이 comido → comida/comidos/comidas 를 다 넣는데, comida 는 단어장에
+            //   명사로도 등록돼 있다. 명사로 등록된 꼴은 과거분사 후보에서 뺀다.
+            //   ⚠️ 성 변형(comida→comido)은 넣지 않는다 — 진짜 과거분사까지 막아버린다. 단·복수만.
+            vocabulary.forEach(v => {
+                if (v.pos === 'verb') return;
+                const k = nz(String(v.word || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, ''));
+                if (!k) return;
+                nonVerb.add(k); nonVerb.add(k + 's'); nonVerb.add(k + 'es');
+            });
             vocabulary.forEach(v => {
                 if (v.pos !== 'verb') return;
                 const inf = String(v.word || '').trim();
                 const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
                 Object.keys(tenses).forEach(tk => {
                     const forms = tenses[tk] || {};
-                    Object.keys(forms).forEach(pk => put(forms[pk], tk, inf));
+                    Object.keys(forms).forEach(pk => {
+                        put(forms[pk], tk, inf);
+                        // 등록해 둔 과거분사도 형용사처럼 성·수가 붙는다 (escrito → escrita/escritos/escritas).
+                        //   규칙형 계산 쪽은 이미 이렇게 하고 있었다 — 등록형만 빠져 있었다.
+                        if (tk !== 'participio') return;
+                        const f = String(forms[pk] || '').trim();
+                        if (!/o$/.test(f)) return;
+                        const st = f.slice(0, -1);
+                        ['a', 'os', 'as'].forEach(sfx => put(st + sfx, 'participio', inf));
+                    });
                 });
                 // 안 채워둔 시제라도 규칙형이면 계산해서 넣는다 (현재분사·과거분사만 — 계산이 확실한 둘)
                 const bare = inf.replace(/se$/i, '');
@@ -2509,7 +2529,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     }
                 }
             });
-            return { idx, lemma };
+            return { idx, lemma, nonVerb };
         }
 
         // 문장이 쓴 동사 꼴 → { 시제키: 근거 낱말 }
@@ -2519,7 +2539,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
                 ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
             const toks = String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-            const { idx, lemma } = buildVerbFormIndex();
+            const { idx, lemma, nonVerb } = buildVerbFormIndex();
             const mark = (key, ev) => { if (!out.has(key)) out.set(key, ev); };
             let estarTok = '', haberTok = '', gerTok = '', partTok = '';
             // 진행·완료를 만드는 두 동사는 어느 시제로 와도 알아봐야 한다 (estaba/había …).
@@ -2533,27 +2553,34 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 'habia','habias','habiamos','habiais','habian',
                 'habre','habras','habra','habremos','habreis','habran','habria','habrian']);
             const bare = (x) => String(x).normalize('NFD').replace(/[̀-ͯ]/g, '');
-            let prevWasHaber = false;
+            const ARTICLES = new Set(['el','la','los','las','un','una','unos','unas','lo']);
+            let prevWasHaber = false, prevWasArticle = false;
             toks.forEach(raw => {
                 const t = nz(raw);
-                if (!t) { prevWasHaber = false; return; }
+                if (!t) { prevWasHaber = false; prevWasArticle = false; return; }
                 const b = bare(t);
                 const keys = idx.get(t);
-                if (keys) keys.forEach(k => mark(k, raw));
+                //   ⚠️ 과거분사는 여기서 통째로 표시하지 않는다 — 명사 자리인지 아래에서 가려야 한다.
+                if (keys) keys.forEach(k => { if (k !== 'participio') mark(k, raw); });
                 // 현재분사는 어미가 유일하게 안전하다 — 틀리게 쓴 꼴(pediendo)도 여기서 잡힌다.
                 const isGer = t.length >= 6 && /(ando|iendo|yendo)$/.test(b);
                 if (isGer) { mark('gerundio', raw); if (!gerTok) gerTok = raw; }
                 else if (keys && keys.has('gerundio') && !gerTok) gerTok = raw;
                 // 과거분사는 어미로는 못 잡는다 (nido·lado·partido 가 다 걸린다) — 활용표로만 본다.
                 //   단, 바로 앞이 haber 면 그 자리는 과거분사 자리다. 틀리게 쓴 꼴도 여기서 잡힌다.
-                const isPart = (keys && keys.has('participio'))
-                    || (prevWasHaber && t.length >= 4 && /(ado|ido|to|cho)$/.test(b));
+                //   [냐냐 지적] 명사 자리는 뺀다 — 단어장에 명사로 등록된 꼴이거나 관사 바로 뒤면
+                //   그건 명사다 ('las comidas' = 음식). 과거분사가 형용사로 쓰일 땐 명사 뒤에 온다.
+                //   haber 뒤는 예외 없이 과거분사 자리라 그쪽이 이긴다.
+                const nounish = nonVerb.has(t) || prevWasArticle;
+                const isPart = (prevWasHaber && t.length >= 4 && /(ado|ido|to|cho)$/.test(b))
+                    || (!nounish && keys && keys.has('participio'));
                 if (isPart) { mark('participio', raw); if (!partTok) partTok = raw; }
                 const lem = lemma.get(t);
                 if (lem === 'estar' || ESTAR_FORMS.has(b)) estarTok = estarTok || raw;
                 const isHaber = (lem === 'haber' || HABER_FORMS.has(b));
                 if (isHaber) haberTok = haberTok || raw;
                 prevWasHaber = isHaber;
+                prevWasArticle = ARTICLES.has(b);
             });
             // 두 조각이 다 있을 때만 — 'estoy en casa' 는 현재진행이 아니다
             if (estarTok && gerTok) mark('progresivo', `${estarTok} ${gerTok}`);
