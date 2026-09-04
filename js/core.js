@@ -7483,13 +7483,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         function getNoteBlocks(t) {
             if (t && Array.isArray(t.blocks) && t.blocks.length) {
-                return t.blocks.map(b => {
-                    if (b && b.type === 'table') return normalizeTableBlock(b);
-                    const out = { id: (b && b.id) || newBlockId(), type: 'text', html: (b && b.html) || '', style: (b && b.style === 'tip') ? 'tip' : 'plain' };
-                    // 노트 보강이 넣은 줄이라는 표시는 살려둔다 — 나중에 통째로 도로 뺄 수 있어야 한다
-                    if (b && b.aiBoost) out.aiBoost = true;
-                    return out;
-                });
+                return t.blocks.map(b => (b && b.type === 'table')
+                    ? normalizeTableBlock(b)
+                    : { id: (b && b.id) || newBlockId(), type: 'text', html: (b && b.html) || '', style: (b && b.style === 'tip') ? 'tip' : 'plain' });
             }
             // 옛 구조 → 블록으로 승격 (표 블록 id 를 고정값으로 둬야 예전 칸 강조가 그대로 붙는다)
             const out = [];

@@ -2911,7 +2911,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const lines = rows.map(r => `${escapeHtml(r.es)} — ${escapeHtml(r.ko)}${r.ex ? ` <span style="color:#94a3b8">${escapeHtml(r.ex)}</span>` : ''}`);
                 const html = `<b>✨ 더 알아두기</b><br>${lines.join('<br>')}`;
                 const blocks = ((typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : []).slice();
-                blocks.push({ id: (typeof newBlockId === 'function') ? newBlockId() : ('b' + Date.now()), type: 'text', html, style: 'tip', aiBoost: true });
+                blocks.push({ id: (typeof newBlockId === 'function') ? newBlockId() : ('b' + Date.now()), type: 'text', html, style: 'tip' });
                 const next = Object.assign({}, t, { blocks, _edited: true });
                 const i = customGrammarTables.findIndex(c => c.id === noteId);
                 if (i >= 0) customGrammarTables[i] = next; else customGrammarTables.push(next);
@@ -2928,44 +2928,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast(`${picked.length}개를 노트 ${touched}곳에 넣었어요 ✨`, "success");
         }
 
-        // [냐냐 요청] 보강으로 들어간 줄을 도로 빼낸다 (2026-09-04).
-        //   왜: 넣고 나면 내가 정리한 줄과 AI 가 쓴 줄이 섞여서, 어디까지가 내 노트인지 흐려진다.
-        //   되돌릴 길이 있어야 마음 놓고 눌러볼 수 있다. 표시(aiBoost)가 없는 예전 줄은 머리글로 찾는다.
-        const AI_BOOST_HEAD = '✨ 더 알아두기';
-        function isAiBoostBlock(b) {
-            if (!b || b.type !== 'text') return false;
-            if (b.aiBoost) return true;
-            return String(b.html || '').replace(/<[^>]*>/g, '').trim().indexOf(AI_BOOST_HEAD) === 0;
-        }
-        // 보강은 손대는 순간 노트를 customGrammarTables 로 복사해 넣는다 — 거기만 보면 된다
-        function aiBoostBlockCount() {
-            if (typeof customGrammarTables === 'undefined') return 0;
-            return customGrammarTables.reduce((n, t) => n + (((t && t.blocks) || []).filter(isAiBoostBlock).length), 0);
-        }
-        function removeAiBoostBlocks() {
-            const n = aiBoostBlockCount();
-            if (!n) { showToast("AI 가 넣은 줄이 없어요", "info"); return; }
-            showConfirm("AI 가 넣은 줄을 지울까요?",
-                `노트 보강으로 들어간 ${n}줄을 다시 뺍니다. 직접 쓰신 내용은 그대로 남아요.`,
-                () => {
-                    const touched = [];
-                    customGrammarTables.forEach((t, i) => {
-                        const blocks = (t.blocks || []).filter(b => !isAiBoostBlock(b));
-                        if (blocks.length === (t.blocks || []).length) return;
-                        customGrammarTables[i] = Object.assign({}, t, { blocks, _edited: true });
-                        touched.push(t.id);
-                    });
-                    // 내용이 줄었으니 그 노트의 채점 단서는 버린다.
-                    //   손으로 고쳐둔 단서(m)는 남긴다 — 그건 냐냐님이 쓴 줄이다.
-                    //   다시 만드는 건 문법 탭 윗줄의 '만들기' 가 한다 (한꺼번에 여러 개를 부르면 한도에 걸린다)
-                    touched.forEach(id => { const e = grammarAiHints[id]; if (e && !e.m) delete grammarAiHints[id]; });
-                    if (typeof saveToStorage === 'function') saveToStorage();
-                    if (typeof renderGrammarTables === 'function') renderGrammarTables();
-                    showToast(`${n}줄을 도로 뺐어요`, "success");
-                },
-                { okLabel: '지우기' });
-        }
-
         // 문법 탭 위의 한 줄 — 단서가 없는 노트가 있을 때만 보인다
         function renderGrammarHintBar(doneN, totalN, waiting) {
             const box = document.getElementById('grammar-hint-bar');
@@ -2979,18 +2941,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
             }
             const n = staleGrammarHintNotes().length;
             const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
-            // 보강으로 들어간 줄이 있을 때만 — 도로 빼는 길
-            const nb = aiBoostBlockCount();
-            const undo = nb ? `<button type="button" onclick="removeAiBoostBlocks()" title="노트 보강으로 들어간 줄을 전부 도로 뺍니다" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 text-[11px] font-bold transition-all active:scale-95">🧹 AI 줄 빼기 ${nb}</button>` : '';
-            // 버튼이 셋까지 붙을 수 있다 (빼기·보강·만들기) — 폰에서 넘치지 않게 줄바꿈을 연다
-            box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
+            box.className = 'flex items-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
             if (!n) {
-                box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${undo}${boost}`;
+                box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${boost}`;
                 return;
             }
             box.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-violet-500"></i>
                 <span class="flex-1">AI 채점 단서가 없는 노트 ${n}개 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
-                ${undo}${boost}
+                ${boost}
                 <button type="button" onclick="refreshGrammarAiHints(false)" class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold transition-all active:scale-95">만들기</button>`;
         }
 
