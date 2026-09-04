@@ -49,7 +49,10 @@
             if (!grammarReviewTotal) { box.classList.add('hidden'); box.innerHTML = ''; return; }
             const left = grammarReviewQueue.length;
             const at = Math.min(grammarReviewDone + (state === 'graded' ? 0 : 1), grammarReviewTotal);
-            //   푸는 중에는 감춰야 하니 이름은 채점 뒤에만 쓴다 (그때 aiMissionReviewGrammarId 는 이미 비워져 있다)
+            //   [냐냐 요청] 복습에서는 무슨 문법인지 푸는 중에도 알려준다 (2026-09-04).
+            //   예전엔 감췄다 — '알면 짐작해서 쓰게 된다' 는 이유였는데, 그건 랜덤 미션 기준이다.
+            //   복습은 어떤 문법인지 맞히는 게 아니라 그 문법을 다시 써보는 것이 목적이라,
+            //   모르고 우회해 버리면 복습 자체가 헛돈다. 이름을 누르면 노트를 들춰볼 수 있다.
             const noteId = (state === 'graded') ? grammarReviewLastNoteId : aiMissionReviewGrammarId;
             const note = (typeof getAllGrammarTables === 'function' && noteId)
                 ? getAllGrammarTables().find(t => t.id === noteId) : null;
@@ -57,8 +60,7 @@
             box.innerHTML = `
                 <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-3">
                     <span class="text-xs font-black text-amber-700 shrink-0">📋 문법 복습 ${state === 'graded' ? grammarReviewDone : at} / ${grammarReviewTotal}</span>
-                    ${/* [냐냐 요청] 답을 내기 전에는 무슨 문법인지 감춘다 — 알면 짐작해서 쓰게 된다 */''}
-                    ${(note && state === 'graded') ? `<span class="text-[11px] font-bold text-amber-600 truncate min-w-0">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</span>` : ''}
+                    ${note ? `<button type="button" onclick="openGrammarPeek('${escapeAttr(note.id)}')" title="이 노트를 들춰봐요" class="text-[11px] font-bold text-amber-700 truncate min-w-0 underline decoration-amber-300 underline-offset-2 hover:text-amber-900 transition-colors">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</button>` : ''}
                     <div class="ml-auto shrink-0">
                         ${state === 'graded'
                             ? (left
