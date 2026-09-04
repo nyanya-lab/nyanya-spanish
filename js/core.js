@@ -1395,11 +1395,12 @@ let vocabulary = [];
                     ${isToday ? `<span class="text-[10px] font-bold text-slate-400">${fmtDateSlash(ds)}</span>` : ''}
                     ${total > 0 ? `<span class="ml-auto text-[10px] font-black text-violet-600">총 ${total}개 활동</span>` : ''}
                 </div>
+                ${/* [냐냐 요청] 상자를 빼고 글씨를 키웠다 (2026-09-04) — 이제 이 카드의 본문이라 가둘 이유가 없다 */''}
                 ${total > 0
-                    ? `<div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">${grid}</div>`
+                    ? `<div class="grid grid-cols-2 gap-x-3 gap-y-1.5 px-0.5 text-xs text-slate-500 font-medium">${grid}</div>`
                     : (ds > today
                         ? ''
-                        : `<p class="bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-center py-3">${isToday ? '오늘의 첫 학습을 기록해보세요!' : '이 날은 쉬어갔네요 🌙'}</p>`)}
+                        : `<p class="text-slate-400 text-center text-xs py-3">${isToday ? '오늘의 첫 학습을 기록해보세요!' : '이 날은 쉬어갔네요 🌙'}</p>`)}
                 ${planHtml}
             `;
             // 고른 날이 바뀌었으면 달력의 표시도 옮긴다 (renderCalendar 는 이 함수를 안 부른다)
