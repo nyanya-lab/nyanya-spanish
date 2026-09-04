@@ -1454,10 +1454,26 @@
             genBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
             missionHeading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
 
+            // [냐냐 지적] "'작가에 의해 쓰여졌다' 이것만 5번 본 것 같아."
+            //   실제로 최근 미션이 '~에 의해 기록되었어요 / ~에 의해 만들어졌어' 로 몰렸고,
+            //   '북쪽으로 여행하는 것은…' 은 글자까지 똑같이 두 번 나왔다.
+            //   목표 단어만 바꾸면 다른 문장이 나올 줄 알았는데, 문법 노트가 같으면 소재까지 같아진다.
+            //   최근에 낸 문장을 그대로 보여주고 '이것들과 겹치지 마라' 고 못박는다.
+            //   기록은 첨삭 노트(aiNotes)에 이미 남아 있으므로 따로 저장할 것이 없다.
+            const recentAsks = (typeof aiNotes !== 'undefined' ? (aiNotes || []) : [])
+                .filter(n => n && n.mode === 'ko-es' && n.ask)
+                .map(n => String(n.ask).trim()).filter(Boolean).slice(0, 6);
+            const recentBlock = recentAsks.length ? `
+[최근에 낸 문장 — 이것들과 겹치지 마세요]
+${recentAsks.map(a => '· ' + a).join('\n')}
+같은 상황·같은 말투를 다시 쓰면 안 됩니다. 소재(장소·사람·행동·시간대)를 바꾸세요.
+특히 위 목록에 수동태('~에 의해 …되었다')가 이미 있으면 이번엔 다른 짜임으로 가세요.
+` : '';
+
             const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
             매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 스페인어 철자를 한국어 문장 안에 노출하면 절대 안 됩니다.
             ⚠️ 그렇다고 뜻까지 감추면 안 됩니다. 한국어 뜻("${targetWord.meaning}")은 문장 안에 그대로, 분명히 드러나야 합니다 — 학생은 그 한국어 낱말을 보고 스페인어를 떠올립니다. '그것 · 저것 · 그 맛있는 것 · 어떤 물건' 처럼 뭉뚱그리면 학생은 어떤 단어를 쓰라는 건지 알 길이 없고, 그건 실패한 문장입니다. 뜻이 여럿이면(쉼표로 나뉘어 있으면) 그중 하나를 골라 그 낱말을 문장에 쓰세요. 감출 것은 스페인어 철자이지 뜻이 아닙니다.
-${grammarContext ? `
+${recentBlock}${grammarContext ? `
 [이번에 같이 연습할 문법 — 학생이 직접 정리해 둔 노트입니다]
 제목: ${grammarNote.title || ''}
 ${grammarContext}
@@ -2631,6 +2647,52 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return out;
         }
 
+        // ============================================================
+        // [냐냐 요청] 노트 표에 적힌 낱말이 문장에 그대로 있으면 그 노트를 쓴 것이다 (2026-09-04).
+        //   냐냐님이 'Esta fecha de nacimiento…' 를 썼는데 지시형용사 노트가 안 걸렸다.
+        //   동사 꼴 잇기는 동사만 보므로 지시사·숫자·요일·날씨처럼 '닫힌 목록' 노트는 AI 만 믿어야 했다.
+        //   그런데 그런 노트는 코드가 더 확실히 안다 — 표에 그 낱말이 적혀 있으니까.
+        //   조건 넷을 다 넘어야 인정한다 (실데이터 33문장으로 재보니 13건 잡히고 헛짚음 0):
+        //     ① 표 칸이 한 낱말        — 'antes de [명사]' 같은 구는 안 본다
+        //     ② 네 글자 이상            — dar·por·las 는 아무 문장에나 걸린다 (3글자로 낮추면 실제로 걸렸다)
+        //     ③ 그 노트에만 있는 낱말   — 두 노트가 나눠 가진 낱말은 어느 쪽인지 못 가른다
+        //     ④ 악센트까지 똑같이       — esta(이것) 와 está(estar) 는 다른 말이다
+        // ============================================================
+        let _noteCellIndex = null;   // { key: 정규화한 낱말 → 노트id } · 노트 목록이 바뀌면 다시 만든다
+        function buildNoteCellIndex(notes) {
+            const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
+            const owner = new Map();   // 낱말 → 노트id (둘 이상이면 null 로 눌러둔다)
+            (notes || []).forEach(t => {
+                const seen = new Set();
+                (typeof noteSpanishCells === 'function' ? noteSpanishCells(t) : []).forEach(c => {
+                    const k = nz(c);
+                    if (!/^[a-záéíóúüñ]{4,}$/.test(k) || seen.has(k)) return;
+                    seen.add(k);
+                    owner.set(k, owner.has(k) ? null : t.id);
+                });
+            });
+            const out = new Map();
+            owner.forEach((id, k) => { if (id) out.set(k, id); });
+            return out;
+        }
+        // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
+        function detectNoteCellsInText(text, notes) {
+            const out = new Map();
+            if (!text) return out;
+            if (!_noteCellIndex || _noteCellIndex._n !== (notes || []).length) {
+                _noteCellIndex = buildNoteCellIndex(notes);
+                _noteCellIndex._n = (notes || []).length;
+            }
+            const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
+            String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).forEach(raw => {
+                const k = nz(raw);
+                if (!k) return;
+                const id = _noteCellIndex.get(k);
+                if (id && !out.has(id)) out.set(id, raw);
+            });
+            return out;
+        }
+
         function applyEsKoGrammarScores(feedback, notes, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
@@ -2693,7 +2755,19 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         extra.push({ note, ok, ev });
                     });
                 });
-                extra.slice(0, 3).forEach(e => parsed.push(e));
+                // [냐냐 요청] 노트 표의 낱말이 그대로 나온 것도 같은 잣대로 더한다 (지시사·숫자·날씨…).
+                detectNoteCellsInText(feedback && feedback.originalMarked, notes).forEach((ev, noteId) => {
+                    const note = (notes || []).find(t => t.id === noteId);
+                    if (!note || extra.some(e => e.note.id === noteId)) return;
+                    const ok = wordSurvived(ev);
+                    if (already.has(noteId)) {
+                        const hit = parsed.find(x => x.note.id === noteId);
+                        if (hit && hit.ok && !ok) { hit.ok = false; hit.ev = ev; }
+                        return;
+                    }
+                    extra.push({ note, ok, ev });
+                });
+                extra.slice(0, 4).forEach(e => parsed.push(e));
             }
 
             // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
