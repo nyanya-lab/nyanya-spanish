@@ -2019,7 +2019,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   그 꼴 그대로 '아직 단어장에 없어요' 에 떴다. AI 가 쓰는 품사 이름을 넉넉히 담아둔다.
         const AI_POS_WORDS = new Set(['noun', 'verb', 'adjective', 'adverb', 'preposition',
             'pronoun', 'conjunction', 'interrogative', 'phrase',
-            'article', 'determiner', 'numeral', 'number', 'interjection', 'expression', 'idiom', 'other']);
+            'article', 'determiner', 'numeral', 'number', 'interjection', 'expression', 'idiom', 'other',
+            // [냐냐 지적] 'Nancy|proper noun' 이 '|' 를 못 뗀 채로 추천 칩에 그대로 떴다
+            'proper noun', 'proper-noun', 'propernoun', 'proper', 'name']);
+        // 사람·지명 이름은 단어장에 넣을 것이 아니다 (뜻도 없고 외울 것도 없다)
+        const AI_PROPER_POS = new Set(['proper noun', 'proper-noun', 'propernoun', 'proper', 'name']);
         //   [냐냐 요청] neutralKey 는 '점수를 안 주는' 칸이다 (ok === null).
         //     철자는 맞는데 활용·성수를 틀린 낱말 — 맞다고 +2 를 주면 성수일치 지적 바로 밑에
         //     그 동사가 +2 로 붙어 앞뒤가 안 맞는다. 틀렸다고 −2 를 주기엔 낱말을 아는 건 맞다.
@@ -2151,6 +2155,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (have.has(key)) return;                                     // 이미 단어장에 있음
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
+                if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2161,8 +2166,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
             const mineSet = new Set(toks(feedback && feedback.originalMarked).map(norm));
             const looksConjugated = (k) => /(ando|iendo|yendo|aron|ieron|aste|iste|amos|emos|imos|é|ó|í)$/.test(k);
-            toks(feedback && feedback.correctedText).forEach(raw => {
+            //   [냐냐 지적] 이름(Nancy)은 등록할 낱말이 아니다. 여기는 품사를 모르니 대문자로 가른다 —
+            //   스페인어는 요일·달·국적도 소문자라, 문장 첫 자리가 아닌 대문자는 거의 고유명사다.
+            toks(feedback && feedback.correctedText).forEach((raw, i) => {
                 const key = norm(raw);
+                if (i > 0 && /^[A-ZÁÉÍÓÚÑÜ]/.test(raw)) return;
                 if (!key || key.length < 3 || seen.has(key) || mineSet.has(key)) return;
                 if (have.has(key)) return;
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
@@ -2289,11 +2297,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
             });
 
             const done = new Set();
-            const push = (w, survived) => {
+            const push = (w, survived, forceBad) => {
                 if (!w || done.has(w.id)) return;
                 done.add(w.id);
                 // [냐냐 기준] 고쳐진 낱말은 점수를 안 준다(0). 철자를 틀린 것만 −2.
-                const isBad = badIds.has(w.id);
+                const isBad = !!forceBad || badIds.has(w.id);
                 const ok = survived && !isBad;
                 const noScore = !survived && !isBad;
                 const delta = ok ? gainOk : (isBad ? WORD_SPELL_BAD : 0);
@@ -2330,6 +2338,35 @@ ${koEsNoteListText}${refGrammar}${refWords}
             });
             // ② 내가 쓴 낱말을 하나씩
             mineToks.forEach(tok => push(resolve(tok, ''), fixedSet.has(norm(tok))));
+            // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
+            //   'lemones' 라고 쓰면 'el limón' 에 못 닿는다 — 토막으로도, 성·수 변형으로도, 활용형 역추적으로도.
+            //   그래서 반대편에서 본다: 고친 문장의 낱말이 단어장 단어이고, 내가 그 자리에 쓴 낱말이
+            //   단어장에 안 닿으면서 철자가 가까우면, 그건 '그 단어를 틀리게 쓴 것' 이다.
+            //   ⚠️ AI 가 뭐라고 하든 상관없이 코드가 판단한다 — AI 는 이걸 '어휘선택' 으로 분류해 버린다.
+            //   ⚠️ 네 글자 이상만 본다. 짧은 낱말은 한두 글자 차이로 아예 다른 낱말이 된다.
+            if (typeof levenshtein === 'function') {
+                const nearOf = new Map();       // 고친 문장 토막(정규화) → 단어장 단어
+                fixedToks.forEach(tok => {
+                    const k = norm(tok);
+                    if (!k || k.length < 4 || nearOf.has(k)) return;
+                    if (mineFlat.includes(' ' + k + ' ')) return;    // 내가 제대로 쓴 것은 위에서 매겼다
+                    const w = resolve(tok, '');
+                    if (w) nearOf.set(k, w);
+                });
+                mineToks.forEach(tok => {
+                    const k = norm(tok);
+                    if (!k || k.length < 4) return;
+                    if (fixedSet.has(k)) return;                     // 고친 문장에도 그대로 있으면 틀린 게 아니다
+                    if (resolve(tok, '')) return;                    // 단어장에 닿았으면 이미 매겼다
+                    for (const [fk, w] of nearOf) {
+                        if (done.has(w.id)) continue;
+                        const room = Math.max(1, Math.min(3, Math.floor(fk.length / 3)));
+                        if (levenshtein(k, fk) > room) continue;
+                        push(w, false, true);                        // 철자 틀림 → −2
+                        break;
+                    }
+                });
+            }
             // ③ [냐냐 지적] 철자를 크게 틀리면 토막으로는 단어장을 못 찾는다 —
             //    'medicin' 이라고 쓰면 el medicamento 에 안 걸려서 −2 가 조용히 빠졌다.
             //    그래서 AI 가 '틀리게 썼다'(wordsBad)·'형태를 틀렸다'(wordsForm) 고 짚은 것은
@@ -2341,10 +2378,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //       어간이 겹치는 것' 만 받는다 (medicin ↔ medicamento 는 medic 를 공유한다).
             const bare = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const mineBare = mineToks.map(t => bare(norm(t)));
+            //   [냐냐 지적] 앞 네 글자로만 재면 두 번째 글자가 틀린 오타를 놓친다 (lemones ↔ limon).
+            //   어간이 겹치거나(medicin ↔ medicamento) 철자가 가깝거나, 둘 중 하나면 받는다.
             const sharesStem = (dict) => {
                 const d = bare(norm(dict));
                 if (d.length < 4) return false;
-                return mineBare.some(t => t.length >= 4 && (t.startsWith(d.slice(0, 4)) || d.startsWith(t.slice(0, 4))));
+                return mineBare.some(t => {
+                    if (t.length < 4) return false;
+                    if (t.startsWith(d.slice(0, 4)) || d.startsWith(t.slice(0, 4))) return true;
+                    if (typeof levenshtein !== 'function') return false;
+                    return levenshtein(t, d) <= Math.max(1, Math.min(3, Math.floor(d.length / 3)));
+                });
             };
             aiList.forEach(item => {
                 if (item.ok === true) return;
