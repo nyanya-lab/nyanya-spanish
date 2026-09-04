@@ -5823,7 +5823,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         <button type="button" onclick="addGeColumn(${bi})" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button type="button" onclick="removeGeColumn(${bi})" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
                     </div>
-                    <input id="ge-cap-${bi}" value="${escapeAttr(b.caption || '')}" oninput="updateGeTableCaption(${bi}, this.value)"
+                    <input id="ge-cap-${bi}" name="ge-cap" autocomplete="off" autocorrect="off" spellcheck="false" value="${escapeAttr(b.caption || '')}" oninput="updateGeTableCaption(${bi}, this.value)"
                         placeholder="표 제목 — 이 표가 뭘 다루는지 한 줄 (예: 직설법 현재 불규칙)" title="AI 채점·문장 만들기에 이 제목이 같이 넘어가요"
                         class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-300 placeholder:font-normal focus:outline-none focus:ring-1 focus:ring-violet-400">
                     <div id="ge-grid-${bi}" class="overflow-x-auto"></div>
