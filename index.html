@@ -202,31 +202,26 @@
                 </div>
 
 
-                <!-- 일일 학습 일지 현황판 -->
+                <!-- [냐냐 요청] 일일 학습 일지와 달력을 합쳤다 (2026-09-04).
+                     둘이 같은 내용을 두 서식으로 보여주고 있었다. 서식은 일지 것을 쓰고,
+                     날짜는 달력에서 고른다 (기본은 오늘). -->
                 <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex items-center gap-2 text-slate-700 text-xs font-bold border-b border-slate-100 pb-2">
                         <i class="fa-solid fa-calendar-check text-rose-500"></i>
-                        <span>냐냐의 일일 학습 일지</span>
+                        <span>냐냐의 학습 일지</span>
                     </div>
                     <div id="diary-streak-line" class="hidden bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <span class="flex items-center gap-1.5 text-sm font-black text-orange-700"><span id="diary-streak-fire">🔥</span> <span id="diary-streak-days">0일 연속</span></span>
                         <span id="diary-streak-best" class="text-[10px] font-bold text-orange-400">최고 0일</span>
                     </div>
-                    <div id="nyanya-diary-list" class="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-600">
-                        <p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>
-                    </div>
-                </div>
-
-                <!-- [냐냐 PATCH] 학습 달력 (월↔연↔연도별 전환, 학습량 색상) -->
-                <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex items-center justify-between gap-2">
                         <button id="cal-nav-prev" onclick="calNav(-1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-left text-xs"></i></button>
                         <button id="cal-title" onclick="calZoomOut()" class="text-sm font-black text-slate-800 hover:text-violet-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50">2026년</button>
                         <button id="cal-nav-next" onclick="calNav(1)" class="w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all flex items-center justify-center"><i class="fa-solid fa-chevron-right text-xs"></i></button>
                     </div>
                     <div id="learning-calendar"></div>
-                    <!-- [냐냐 PATCH] 날짜 클릭 시 상세 기록 -->
-                    <div id="calendar-day-detail" class="hidden bg-violet-50 border border-violet-100 rounded-xl p-3 text-xs"></div>
+                    <!-- [냐냐 요청] 고른 날의 상세. 기본은 오늘이고, 늘 펼쳐져 있다. -->
+                    <div id="calendar-day-detail" class="text-xs"></div>
                     <div class="flex items-center justify-end gap-1 text-[9px] text-slate-400">
                         <span>적음</span>
                         <span class="w-2.5 h-2.5 rounded-sm bg-slate-100 border border-slate-200"></span>

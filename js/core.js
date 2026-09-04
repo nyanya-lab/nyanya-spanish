@@ -1339,31 +1339,35 @@ let vocabulary = [];
             return steps[idx];
         }
 
+        // [냐냐 요청] 지금 펼쳐둔 날. 다시 그려도 보던 날을 그대로 이어간다 (기본은 오늘).
+        let calSelectedDay = null;
+
         // [냐냐 PATCH] 달력 날짜 클릭 → 그날 상세 기록 (툴팁이 안 보일 때도 확실히 보이게)
         function showCalendarDayDetail(ds) {
             const box = document.getElementById('calendar-day-detail');
             if (!box) return;
+            const prevPicked = calSelectedDay;
+            calSelectedDay = ds;
             const log = (nyanyaDiary && nyanyaDiary[ds]) || {};
+            // [냐냐 요청] 서식은 없앤 '일일 학습 일지' 것을 그대로 쓴다 — 그쪽이 읽기 편했다.
+            //   퀴즈는 일지처럼 '맞은 수/푼 수' 로 낸다 (달력은 푼 수만 보여주고 있었다).
             const items = [
-                ['등록 단어', log.newWordsCount || 0, '개', 'text-violet-600'],
-                ['마스터 단어', log.newMasteredCount || 0, '개', 'text-emerald-600'],
-                ['등록 문법', log.newGrammarCount || 0, '개', 'text-[#5896cb]'],
-                ['마스터 문법', log.newGrammarMasteredCount || 0, '개', 'text-emerald-600'],
-                ['퀴즈', log.quizTotal || 0, '문제', 'text-amber-600'],
-                ['AI 첨삭', log.aiSessions || 0, '회', 'text-indigo-600'],
-                ['복습', log.reviewCount || 0, '개', 'text-sky-600'],
-                ['게임', log.gameCount || 0, '판', 'text-pink-600'],
+                ['등록 단어', log.newWordsCount || 0, `${log.newWordsCount || 0}개`, 'text-violet-600'],
+                ['마스터 단어', log.newMasteredCount || 0, `${log.newMasteredCount || 0}개`, 'text-emerald-600'],
+                ['등록 문법', log.newGrammarCount || 0, `${log.newGrammarCount || 0}개`, 'text-[#5896cb]'],
+                ['마스터 문법', log.newGrammarMasteredCount || 0, `${log.newGrammarMasteredCount || 0}개`, 'text-teal-500'],
+                ['퀴즈', log.quizTotal || 0, `${log.quizCorrect || 0}/${log.quizTotal || 0}개`, 'text-amber-600'],
+                ['AI 첨삭', log.aiSessions || 0, `${log.aiSessions || 0}회`, 'text-indigo-600'],
+                ['복습', log.reviewCount || 0, `${log.reviewCount || 0}개`, 'text-sky-600'],
+                ['미니 게임', log.gameCount || 0, `${log.gameCount || 0}판`, 'text-pink-600'],
             ];
             const total = items.reduce((s, x) => s + x[1], 0);
             // [냐냐 요청] 2열은 그대로 두고 글씨만 줄여서 두 줄로 접히던 걸 없앤다.
             //   데스크톱 사이드바(w-56)에서 칸 하나가 70px 인데, 12px 글씨로는
             //   '마스터 단어'(58px)+값(22px)=80px 라 넘쳤다.
             //   10px 로 줄이면 66px, 좌우 여백도 px-2→px-1.5 로 줄여 74px 를 확보한다.
-            const grid = items.map(([label, val, unit, color]) =>
-                `<div class="flex items-baseline justify-between gap-1 py-0.5" title="${label} ${val}${unit}">
-                    <span class="text-[10px] text-slate-500 whitespace-nowrap truncate min-w-0">${label}</span>
-                    <span class="text-[10px] font-bold whitespace-nowrap shrink-0 ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
-                </div>`).join('');
+            const grid = items.map(([label, val, text, color]) =>
+                `<div>${label}: <strong class="${val > 0 ? color : 'text-slate-300'}">${text}</strong></div>`).join('');
             // [냐냐 요청] 복습 예정과 틀린 것을 버튼 한 줄로 (2026-09-04).
             //   예전엔 둘이 각각 세 줄(단어·관용구·문법)을 펼쳐서 사이드바가 너무 길어졌다.
             //   개수만 버튼에 얹고, 세부는 팝업 안의 탭에서 본다.
@@ -1384,16 +1388,22 @@ let vocabulary = [];
             }
 
             box.classList.remove('hidden');
+            const isToday = ds === today;
             box.innerHTML = `
-                <div class="flex items-center justify-between mb-2">
-                    <span class="font-black text-slate-700">${fmtDateSlash(ds)} ${total > 0 ? `<span class="text-violet-600">· 총 ${total}개 활동</span>` : (ds > today ? '' : '<span class="text-slate-400 font-bold">· 학습 기록 없음</span>')}</span>
-                    <button onclick="document.getElementById('calendar-day-detail').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                <div class="flex items-baseline gap-1.5 mb-1.5 px-0.5">
+                    <span class="font-black text-slate-700">${isToday ? '오늘' : fmtDateSlash(ds)}</span>
+                    ${isToday ? `<span class="text-[10px] font-bold text-slate-400">${fmtDateSlash(ds)}</span>` : ''}
+                    ${total > 0 ? `<span class="ml-auto text-[10px] font-black text-violet-600">총 ${total}개 활동</span>` : ''}
                 </div>
                 ${total > 0
-                    ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
-                    : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
+                    ? `<div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">${grid}</div>`
+                    : (ds > today
+                        ? ''
+                        : `<p class="bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-center py-3">${isToday ? '오늘의 첫 학습을 기록해보세요!' : '이 날은 쉬어갔네요 🌙'}</p>`)}
                 ${planHtml}
             `;
+            // 고른 날이 바뀌었으면 달력의 표시도 옮긴다 (renderCalendar 는 이 함수를 안 부른다)
+            if (prevPicked !== ds && typeof renderCalendar === 'function') renderCalendar();
         }
 
         // [냐냐 요청] 달력에서 '단어 보기' → 그날 복습 예정 단어를 망각곡선 단계별로 묶어서 보여준다.
@@ -1613,7 +1623,10 @@ let vocabulary = [];
                         ? `<span class="relative flex items-center justify-center w-full h-full"><span class="text-slate-300">${d}</span><i class="fa-solid fa-xmark absolute text-slate-300/60 text-[13px]"></i></span>`
                         : `<span class="relative flex items-center justify-center w-full h-full">${d}${dot}</span>`;
                     const planTitle = plan > 0 ? ` · 복습 예정 ${plan}개 (단어·관용구·문법)` : '';
-                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${isToday ? 'ring-2 ring-violet-400' : ''}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${planTitle} (클릭하면 상세)">${inner}</div>`;
+                    // [냐냐 요청] 지금 펼쳐둔 날은 진하게, 오늘은 늘 테두리로 (둘이 겹치면 진한 쪽)
+                    const isPicked = ds === (calSelectedDay || todayStr);
+                    const ringCls = isPicked ? 'ring-2 ring-violet-600' : (isToday ? 'ring-2 ring-violet-400' : '');
+                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${ringCls}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${planTitle} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
             } else if (calView === 'year') {
@@ -3299,30 +3312,13 @@ let vocabulary = [];
         }
 
         // 학습 일지 렌더링
+        //   [냐냐 요청] 따로 있던 '일일 학습 일지' 목록은 없앴다 (2026-09-04) —
+        //   달력에서 오늘을 고른 것과 내용이 똑같았다. 서식은 일지 것을 달력 상세가 물려받았다.
         function renderDiary() {
             renderStreakBadge();
             renderCalendar(); // [냐냐 PATCH] 학습 달력
-            const container = document.getElementById('nyanya-diary-list');
             const today = getLocalDateString();
-            const log = nyanyaDiary[today];
-
-            if (!log) {
-                container.innerHTML = `<p class="text-slate-400 text-center py-4">오늘의 첫 학습을 기록해보세요!</p>`;
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-medium">
-                    <div>등록 단어: <strong class="text-violet-600">${log.newWordsCount || 0}개</strong></div>
-                    <div>마스터 단어: <strong class="text-emerald-600">${log.newMasteredCount || 0}개</strong></div>
-                    <div>등록 문법: <strong class="text-teal-600">${log.newGrammarCount || 0}개</strong></div>
-                    <div>마스터 문법: <strong class="text-teal-500">${log.newGrammarMasteredCount || 0}개</strong></div>
-                    <div>퀴즈: <strong class="text-amber-600">${log.quizCorrect || 0}/${log.quizTotal || 0}개</strong></div>
-                    <div>AI 첨삭: <strong class="text-indigo-600">${log.aiSessions || 0}회</strong></div>
-                    <div>복습: <strong class="text-sky-600">${log.reviewCount || 0}개</strong></div>
-                    <div>미니 게임: <strong class="text-pink-600">${log.gameCount || 0}판</strong></div>
-                </div>
-            `;
+            showCalendarDayDetail(calSelectedDay || today);
         }
 
         // ============================================================
