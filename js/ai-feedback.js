@@ -2776,6 +2776,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function renderGrammarHintBar() {
             const box = document.getElementById('grammar-hint-bar');
             if (!box) return;
+            // 보강 버튼은 평소 줄에만 둔다 — 경고줄은 '표 제목을 채워라' 한 가지만 말해야 한다
             const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
             const missing = notesMissingCaption();
             if (missing.length) {
@@ -2784,8 +2785,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2';
                 box.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
                     <span class="flex-1 min-w-0">표 제목이 없는 노트 ${missing.length}개 — 채점이 무슨 표인지 몰라요 · ${escapeHtml(names)}${more}</span>
-                    <button type="button" onclick="openFirstMissingCaption()" class="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95">채우러 가기</button>
-                    ${boost}`;
+                    <button type="button" onclick="openFirstMissingCaption()" class="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95">채우러 가기</button>`;
                 return;
             }
             box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
