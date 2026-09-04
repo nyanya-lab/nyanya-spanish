@@ -2383,9 +2383,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
                 if (e && e.word.id === w.id) e.missed = true;
             });
-            // [냐냐 요청] 점수순으로 정렬해서 눈에 띄게 (낮은 것부터). 이 순서는 한 번만 정한다 —
-            //   칩을 눌러 점수를 바꿔도 자리가 안 옮겨져야 서식이 이랬다저랬다 하지 않는다.
-            aiLastEsKoWords.sort((a, b) => (a.delta - b.delta) || String(a.word.word || '').localeCompare(String(b.word.word || ''), 'es'));
+            // [냐냐 요청] 점수 묶음으로 보여준다 — +2 쫙, 0 쫙, −2 쫙 (2026-09-04).
+            //   묶음과 순서는 여기서 한 번만 정한다(groupDelta). 칩을 눌러 점수를 바꿔도
+            //   자리를 안 옮긴다 — 옮기면 누를 때마다 줄이 튀어서 서식이 이랬다저랬다 한다.
+            aiLastEsKoWords.sort((a, b) => (b.delta - a.delta) || String(a.word.word || '').localeCompare(String(b.word.word || ''), 'es'));
+            aiLastEsKoWords.forEach(e => { e.groupDelta = e.delta; });
         }
 
         // ============================================================
@@ -3630,15 +3632,29 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     ${cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
 
-            // [냐냐 요청] 단어도 한 줄에 하나씩 — 점수가 세로로 줄 맞아서 눈에 바로 들어온다
-            const wordHtml = aiLastEsKoWords.map((w, i) => `
-                <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1">
-                    ${badge(w.delta)}
-                    <button type="button" onclick="openWordModal('${w.word.id}')" class="flex-1 text-left min-w-0 truncate">
-                        <span class="text-xs font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>
-                        <span class="text-[10px] text-slate-400 ml-1.5">${escapeHtml(w.word.meaning || '')}</span>
-                    </button>
-                    ${cycleBtn('cycleWordEntry', i)}
+            // [냐냐 요청] 단어는 점수 묶음으로 — +2 쫙, 0 쫙, −2 쫙 (2026-09-04).
+            //   묶음은 채점할 때 정해둔 것(groupDelta)을 쓴다. 점수를 바꿔도 칩이 딴 묶음으로
+            //   안 넘어간다 — 넘어가면 누를 때마다 줄이 튄다. 바뀐 칩만 제 점수를 달고 있는다.
+            const wordGroups = [];
+            aiLastEsKoWords.forEach((w, i) => {
+                const g = (typeof w.groupDelta === 'number') ? w.groupDelta : w.delta;
+                let bucket = wordGroups.find(x => x.g === g);
+                if (!bucket) { bucket = { g, items: [] }; wordGroups.push(bucket); }
+                bucket.items.push({ w, i });
+            });
+            const wordHtml = wordGroups.map(bucket => `
+                <div class="flex items-start gap-2">
+                    ${badge(bucket.g)}
+                    <div class="flex flex-wrap gap-1 flex-1 min-w-0">
+                        ${bucket.items.map(({ w, i }) => {
+                            const moved = w.delta !== bucket.g;
+                            return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${moved ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-white'}">
+                                <button type="button" onclick="openWordModal('${w.word.id}')" title="${escapeAttr(w.word.meaning || '')}" class="text-[11px] font-extrabold text-slate-800 hover:text-violet-600 transition-colors">${escapeHtml(w.word.word || '')}</button>
+                                ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
+                                <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
+                            </span>`;
+                        }).join('')}
+                    </div>
                 </div>`).join('');
 
             // [냐냐 요청] 등급이 바뀐 단어가 있을 때만 한 덩어리 보여준다.
@@ -3659,7 +3675,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
-                <div class="space-y-1">${wordHtml}</div>` : ''}
+                <div class="space-y-1.5">${wordHtml}</div>` : ''}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
                 ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 (+2 → 0 → −2) · 이름을 누르면 자세히</p>` : ''}`;
