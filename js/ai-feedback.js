@@ -2127,6 +2127,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   AI 를 더 부르지 않는다. 교정본과 내 단어장만으로 만든다.
         let aiLastSuggest = { idioms: [], newWords: [] };
 
+        // [냐냐 지적] 서수(primero·tercera)를 단어장에 등록하라고 권했다. 서수·지시사·숫자·요일·월은
+        //   문법 노트의 표로 익히는 것이지 낱말 카드로 외울 것이 아니다.
+        //   내 문법 노트의 표에 그 낱말이 있으면 추천에서 뺀다 — 목록을 손으로 관리할 필요가 없다.
+        function inGrammarNoteTable(raw) {
+            if (typeof detectNoteCellsInText !== 'function' || typeof aiScoringNoteList !== 'function') return false;
+            return detectNoteCellsInText(String(raw || ''), aiScoringNoteList()).size > 0;
+        }
+
         function buildAiSuggestions(feedback) {
             const out = { idioms: [], newWords: [] };
             const bareTok = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -2168,6 +2176,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
+                if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2191,6 +2200,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   [냐냐 지적] 'fue' 를 등록하라고 권했다 — ser 의 부정과거가 활용표에 없어서
                 //   역추적이 못 찾고, 어미 규칙에도 안 걸린다. 네 보조동사는 글자로 막는다.
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;
+                if (inGrammarNoteTable(raw)) return;
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2809,6 +2819,28 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     }
                     extra.push({ note, ok, ev });
                 });
+                // [냐냐 지적] '¿…o usas trecia cubierta?' 를 'tercera' 로 고쳐줬는데 서수 노트가 +2 였다.
+                //   내가 쓴 문장에는 'primera' 만 있어서 그것만 보고 '잘 썼다' 로 끝났다.
+                //   고친 쪽에만 있는 노트 낱말은 '그 문법을 쓰려다 틀린 것' 이다.
+                //   ⚠️ 고친 쪽이 한 낱말일 때만 본다. AI 가 짜임을 통째로 바꾼 자리
+                //   ('usas' → 'estás usando la')는 내가 시도한 게 아니라 AI 가 넣은 것이라 벌하면 안 된다.
+                //   ⚠️ changes 의 from 이 비어 있으면 AI 가 새로 넣은 말이다 — 역시 건드리지 않는다.
+                ((feedback && feedback.changes) || []).forEach(ch => {
+                    const to = String((ch && ch.to) || '').replace(/<[^>]*>/g, ' ').trim();
+                    const from = String((ch && ch.from) || '').replace(/<[^>]*>/g, ' ').trim();
+                    if (!to || !from) return;
+                    if (to.split(/\s+/).filter(Boolean).length !== 1) return;
+                    const hitMap = detectNoteCellsInText(to, notes);
+                    hitMap.forEach((word, noteId) => {
+                        const note = (notes || []).find(t => t.id === noteId);
+                        if (!note) return;
+                        const inExtra = extra.find(e => e.note.id === noteId);
+                        if (inExtra) { inExtra.ok = false; inExtra.ev = `${from} → ${word}`; return; }
+                        const hit = parsed.find(x => x.note.id === noteId);
+                        if (hit) { hit.ok = false; hit.ev = `${from} → ${word}`; return; }
+                        extra.push({ note, ok: false, ev: `${from} → ${word}` });
+                    });
+                });
                 extra.slice(0, 4).forEach(e => parsed.push(e));
             }
 
@@ -3124,6 +3156,23 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   한글이 섞인 칸은 뜻풀이라 제외한다.
                 if (!s || s.length > 40 || /[ㄱ-ㅎ가-힣]/.test(s)) return;
                 if (!/^[¿¡A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(s)) return;
+                // [냐냐 지적] 서수는 'tercer/o/a/os/as' 꼴로 적혀 있다. 슬래시 때문에 통째로 걸러져서
+                //   서수 노트의 낱말이 하나도 안 잡혔다. 슬래시 묶음은 펴서 넣는다.
+                //   짧은 조각은 어미다 — 붙이기(tercer+o)와 끝모음 갈아끼우기(sexto→sexta) 둘 다 만든다.
+                //   틀린 꼴이 몇 개 섞여도 문장에 나타날 일이 없어서 해가 없다.
+                if (s.indexOf('/') >= 0) {
+                    const parts = s.split('/').map(x => x.trim()).filter(Boolean);
+                    const base = parts[0];
+                    const stem = base.split(/\s+/).pop();
+                    const add = (x) => { if (x && x.length > 2 && !out.includes(x)) out.push(x); };
+                    add(base);
+                    parts.slice(1).forEach(pp => {
+                        if (pp.length > 3) { add(pp); return; }          // 'nuestro / nuestra' 처럼 온낱말
+                        add(stem + pp);                                   // tercer + a
+                        if (/[aeiouáéíóú]$/i.test(stem)) add(stem.slice(0, -1) + pp);   // sexto → sexta
+                    });
+                    return;
+                }
                 if (!/^[¿¡?!.,'’\- A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/.test(s)) return;
                 if (!out.includes(s)) out.push(s);
             };
