@@ -1364,68 +1364,23 @@ let vocabulary = [];
                     <span class="text-[10px] text-slate-500 whitespace-nowrap truncate min-w-0">${label}</span>
                     <span class="text-[10px] font-bold whitespace-nowrap shrink-0 ${val > 0 ? color : 'text-slate-300'}">${val}${unit}</span>
                 </div>`).join('');
-            // [냐냐 요청] 오늘·앞날이면 그날 복습 예정 단어도 같이 보여준다.
-            //   지난 날은 '한 일', 오늘·앞날은 '할 일' — 달력 한 곳에서 둘 다 본다.
-            //   단어 목록은 여기 늘어놓지 않고 '단어 보기'로 팝업에서 단계별로 본다.
+            // [냐냐 요청] 복습 예정과 틀린 것을 버튼 한 줄로 (2026-09-04).
+            //   예전엔 둘이 각각 세 줄(단어·관용구·문법)을 펼쳐서 사이드바가 너무 길어졌다.
+            //   개수만 버튼에 얹고, 세부는 팝업 안의 탭에서 본다.
             const today = getLocalDateString();
             const plan3 = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
-            const due = plan3 ? plan3.word : null;
+            const bad3 = (ds === today && typeof getAllWrongOn === 'function') ? getAllWrongOn(ds) : null;
+            const pill = (label, n, mode, tone) =>
+                `<button onclick="openReviewPlanModal('${ds}', 'word', '${mode}')" class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl border font-black transition-all active:scale-95 ${tone}">
+                    <span class="truncate">${label}</span><span class="shrink-0">${n}</span>
+                 </button>`;
             let planHtml = '';
-            if (due) {
-                // 기준 설명('밀린 것 포함' / '오늘 걸 다 하면')은 여기 안 쓴다.
-                //   좁은 사이드바에서 개수와 한 줄에 못 들어가고, 어차피 '단어 보기' 팝업 머리에 적혀 있다.
-                // [냐냐 요청] 예전엔 '단어 보기' 버튼 하나뿐이라 관용구·문법은 개수만 보이고
-                //   그 안을 들여다볼 길이 없었다. 세 줄을 그대로 누르게 만들고 버튼은 없앤다.
-                const planRow = (icon, label, n, kind) => n
-                    ? `<button onclick="openReviewPlanModal('${ds}', '${kind}')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-amber-100 transition-all active:scale-95">
-                            <span class="text-slate-600">${icon} ${label}</span>
-                            <span class="font-bold text-amber-700">${n}개 <i class="fa-solid fa-chevron-right text-[9px] text-amber-400"></i></span>
-                       </button>`
-                    : `<div class="w-full flex items-center justify-between gap-2 px-2 py-1 opacity-50">
-                            <span class="text-slate-500">${icon} ${label}</span><span class="font-bold text-slate-400">0개</span>
-                       </div>`;
+            if (plan3 || bad3) {
                 planHtml = `
-                    <div class="mt-2 pt-2 border-t border-violet-100">
-                        <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <span class="font-black text-amber-700">복습 예정</span>
-                            <span class="font-black text-amber-600">${plan3.total}개</span>
-                        </div>
-                        ${plan3.total ? `<div class="space-y-0.5">
-                            ${planRow('📖', '단어', due.length, 'word')}
-                            ${planRow('📘', '관용구', plan3.idiom.length, 'idiom')}
-                            ${planRow('📋', '문법', plan3.grammar.length, 'grammar')}
-                        </div>` : '<p class="text-slate-400 text-center py-1">이 날은 복습할 게 없어요 ✨</p>'}
+                    <div class="mt-2 pt-2 border-t border-violet-100 flex items-stretch gap-1.5 text-[11px]">
+                        ${plan3 ? pill('복습 예정', plan3.total, 'plan', 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100') : ''}
+                        ${bad3 && bad3.total ? pill('틀린 것', bad3.total, 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100') : ''}
                     </div>`;
-            }
-
-            // [냐냐 요청] 오늘 틀린 것도 같은 자리에서 본다 (2026-09-04).
-            //   복습 예정과 똑같은 세 줄(단어·관용구·문법)이고, 누르면 같은 창이 '틀린 것' 으로 열린다.
-            //   ⚠️ 오늘만 낸다 — 셋 다 '마지막으로 틀린 날' 하나만 들고 있어서 지난 날은 반쪽이 된다.
-            let wrongHtml = '';
-            if (ds === today && typeof getAllWrongOn === 'function') {
-                const bad = getAllWrongOn(ds);
-                if (bad && bad.total) {
-                    const badRow = (icon, label, n, kind) => n
-                        ? `<button onclick="openReviewPlanModal('${ds}', '${kind}', 'wrong')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-rose-100 transition-all active:scale-95">
-                                <span class="text-slate-600">${icon} ${label}</span>
-                                <span class="font-bold text-rose-600">${n}개 <i class="fa-solid fa-chevron-right text-[9px] text-rose-400"></i></span>
-                           </button>`
-                        : `<div class="w-full flex items-center justify-between gap-2 px-2 py-1 opacity-50">
-                                <span class="text-slate-500">${icon} ${label}</span><span class="font-bold text-slate-400">0개</span>
-                           </div>`;
-                    wrongHtml = `
-                        <div class="mt-2 pt-2 border-t border-rose-100">
-                            <div class="flex items-center justify-between gap-2 mb-1.5">
-                                <span class="font-black text-rose-600">오늘 틀린 것</span>
-                                <span class="font-black text-rose-500">${bad.total}개</span>
-                            </div>
-                            <div class="space-y-0.5">
-                                ${badRow('📖', '단어', bad.word.length, 'word')}
-                                ${badRow('📘', '관용구', bad.idiom.length, 'idiom')}
-                                ${badRow('📋', '문법', bad.grammar.length, 'grammar')}
-                            </div>
-                        </div>`;
-                }
             }
 
             box.classList.remove('hidden');
@@ -1437,7 +1392,6 @@ let vocabulary = [];
                 ${total > 0
                     ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
                     : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
-                ${wrongHtml}
                 ${planHtml}
             `;
         }
@@ -1475,8 +1429,24 @@ let vocabulary = [];
                     ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
                     : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.');
 
+            // [냐냐 요청] 팝업 안에서 '복습 예정 ↔ 틀린 것' 도 오간다 (2026-09-04).
+            //   달력에서는 버튼 하나만 누르지만, 들어와서 반대쪽도 볼 수 있어야 한다.
+            //   틀린 것은 오늘만 있으니(마지막으로 틀린 날 하나뿐), 오늘이 아니면 이 줄을 안 낸다.
+            const otherTotal = isToday
+                ? (isWrong
+                    ? ((typeof getAllScheduledOn === 'function' ? getAllScheduledOn(ds) : null) || {}).total
+                    : ((typeof getAllWrongOn === 'function' ? getAllWrongOn(ds) : null) || {}).total)
+                : null;
+            const modeTab = (isToday && (plan.total || otherTotal))
+                ? `<div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-20 mb-1.5">
+                    ${[['plan', '📅 복습 예정', isWrong ? otherTotal : plan.total],
+                       ['wrong', '⚠️ 틀린 것', isWrong ? plan.total : otherTotal]].map(([m, label, n]) =>
+                        `<button onclick="openReviewPlanModal('${ds}', '${cur.key}', '${m}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${((m === 'wrong') === isWrong) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${label} ${n || 0}</button>`).join('')}
+                   </div>`
+                : '';
+
             // 셋을 오가는 줄. 0개인 것은 눌러도 볼 게 없으니 흐리게 둔다.
-            const tabs = `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+            const tabs = modeTab + `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
                 ${KINDS.map(k => k.list.length
                     ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}', '${isWrong ? 'wrong' : 'plan'}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
                     : `<div class="py-2 rounded-xl text-[11px] font-black text-slate-300 text-center">${k.icon} ${k.label} 0</div>`).join('')}
