@@ -3857,8 +3857,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     <div class="flex flex-wrap gap-1 flex-1 min-w-0">
                         ${bucket.items.map(({ w, i }) => {
                             const moved = w.delta !== bucket.g;
-                            return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${moved ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-white'}">
-                                <button type="button" onclick="openWordModal('${w.word.id}')" title="${escapeAttr(w.word.meaning || '')}" class="text-[11px] font-extrabold text-slate-800 hover:text-violet-600 transition-colors">${escapeHtml(w.word.word || '')}</button>
+                            // [냐냐 요청] 뜻도 같이 낸다. 뜻이 길면(', ~에 의해, ~을 통해…') 첫 뜻만 —
+                            //   칩이 한 줄을 다 먹으면 점수 묶음이 안 보인다. 전체는 툴팁에 남는다.
+                            const fullMean = String(w.word.meaning || '').trim();
+                            let mean = fullMean.split(/[,;/·]/)[0].trim();
+                            // 괄호가 열린 채 잘리면 지저분하다 ('~이다(영구적 본질') — 괄호 앞에서 끊는다
+                            if (mean.indexOf('(') >= 0 && mean.indexOf(')') < 0) mean = mean.slice(0, mean.indexOf('(')).trim();
+                            if (mean.length > 12) mean = mean.slice(0, 12).trim() + '…';
+                            return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${moved ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-white'}" title="${escapeAttr(fullMean)}">
+                                <button type="button" onclick="openWordModal('${w.word.id}')" class="min-w-0 text-left hover:opacity-70 transition-opacity">
+                                    <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
+                                
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
                                 <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
                             </span>`;
