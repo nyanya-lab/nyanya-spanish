@@ -2326,6 +2326,58 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (w) badIds.add(w.id);
             });
 
+            // ⑤ [냐냐 지적] 같은 철자가 명사로도, 동사 활용형으로도 등록돼 있을 때 (2026-09-04).
+            //   훑기는 '글자 그대로 등록된 쪽' 을 먼저 집는다 — "Paseo un poco por la noche" 의
+            //   paseo 가 pasear(산책하다)가 아니라 el paseo(산책)로 잡혔다.
+            //   문장 안에서 그 낱말이 어느 품사였는지를 아는 건 AI 뿐이니(사전형|품사 로 받는다)
+            //   그 목록에 든 항목을 이 문장의 임자로 친다.
+            const aiIds = new Set();
+            aiList.forEach(item => {
+                const w = resolve(item.name, item.pos);
+                if (w) aiIds.add(w.id);
+            });
+            //   AI 가 짚은 동사가 이 문장에서 취할 수 있는 꼴들 → 그 동사
+            //   (등록된 활용형 + 규칙 현재분사·과거분사. 키는 norm 으로 맞춰야 악센트가 안 엇갈린다)
+            const aiVerbForm = new Map();
+            const formKey = (s) => norm(s).replace(/^(me|te|se|nos|os)\s+/, '');
+            vocabulary.forEach(v => {
+                if (!aiIds.has(v.id) || v.pos !== 'verb') return;
+                const add = (f) => { const k = formKey(f); if (k && !aiVerbForm.has(k)) aiVerbForm.set(k, v); };
+                const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                for (const tk in tenses) {
+                    const forms = tenses[tk];
+                    if (!forms) continue;
+                    for (const pk in forms) if (forms[pk]) add(forms[pk]);
+                }
+                const bareInf = String(v.word || '').trim().replace(/se$/i, '');
+                if (typeof regularGerundioForm === 'function') { const g = regularGerundioForm(v.word); if (g) add(g); }
+                if (typeof regularParticipioForm === 'function') {
+                    const pa = regularParticipioForm(bareInf);
+                    if (pa) { add(pa); if (/o$/.test(pa)) { add(pa.slice(0, -1) + 'a'); add(pa + 's'); add(pa.slice(0, -1) + 'as'); } }
+                }
+                //   현재형을 안 채워둔 동사가 17개 있다 — pasear 도 그 중 하나라 'paseo' 가 안 나온다.
+                //   규칙 동사일 때만 계산해서 채운다. 불규칙에 규칙표를 씌우면 없는 꼴이 생기고
+                //   (jugar → 'jugo'), 그게 진짜 명사(el jugo)를 가로챈다.
+                const presDone = Object.keys(tenses.presente || {}).some(k => (tenses.presente || {})[k]);
+                const presClass = (v.verbClassByTense && v.verbClassByTense.presente) || v.verbClass || 'regular';
+                if (!presDone && presClass !== 'irregular' && typeof regularPresentForms === 'function') {
+                    const pres = regularPresentForms(v.word);
+                    if (pres) for (const pk in pres) add(pres[pk]);
+                }
+            });
+            //   토막 하나를 '이 문장에서의' 단어장 항목으로.
+            //   ① 글자 그대로 등록된 것 중 AI 가 짚은 것  ①′ 없으면 AI 가 짚은 동사의 활용형
+            //   ② 둘 다 안 맞으면 예전대로 (AI 가 목록을 빼먹었거나 품사를 안 붙였을 때의 안전망)
+            const resolveHere = (raw) => {
+                const k = norm(raw);
+                if (!k) return null;
+                const hit = (byWord.get(k) || []).find(w => aiIds.has(w.id));
+                if (hit) return hit;
+                const verb = aiVerbForm.get(k);
+                if (verb) return verb;
+                return resolve(raw, '');
+            };
+
             const done = new Set();
             const push = (w, survived, forceBad) => {
                 if (!w || done.has(w.id)) return;
@@ -2367,7 +2419,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 push(w, fixedFlat.includes(' ' + k + ' '));
             });
             // ② 내가 쓴 낱말을 하나씩
-            mineToks.forEach(tok => push(resolve(tok, ''), fixedSet.has(norm(tok))));
+            mineToks.forEach(tok => push(resolveHere(tok), fixedSet.has(norm(tok))));
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
             //   'lemones' 라고 쓰면 'el limón' 에 못 닿는다 — 토막으로도, 성·수 변형으로도, 활용형 역추적으로도.
             //   그래서 반대편에서 본다: 고친 문장의 낱말이 단어장 단어이고, 내가 그 자리에 쓴 낱말이
