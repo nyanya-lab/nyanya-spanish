@@ -8044,7 +8044,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             renderGeTableGrid(bi);
         }
 
+        // [냐냐 요청] 저장이 도중에 걸려 넘어지면 아무 말도 없이 창만 그대로 남는다 —
+        //   '눌렀는데 반응이 없다' 로 보인다. 넘어진 걸 화면에 알려주고 콘솔에도 남긴다.
         async function saveGrammarEditor() {
+            try { return await saveGrammarEditorInner(); }
+            catch (e) {
+                console.error('[문법 노트 저장 실패]', e);
+                showToast("저장하다 걸렸어요: " + (e && e.message ? e.message : e), "error");
+            }
+        }
+        async function saveGrammarEditorInner() {
             const s = grammarEditorState;
             s.icon = document.getElementById('ge-icon').value.trim() || '📋';
             s.title = document.getElementById('ge-title').value.trim();

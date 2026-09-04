@@ -1854,7 +1854,10 @@
 
             <div class="flex gap-2 pt-2">
                 <button onclick="closeGrammarEditor()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95">취소</button>
-                <button onclick="saveGrammarEditor()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
+                <!-- [냐냐 요청] onmousedown 의 preventDefault 는 이 버튼이 focus 를 뺏지 않게 한다.
+                     칸에 커서가 있는 채로 누르면 blur 가 먼저 나고, 그때 화면이 조금이라도 움직이면
+                     mousedown 과 mouseup 이 다른 자리에 떨어져 click 이 아예 안 난다 ('한 번은 헛누름'). -->
+                <button type="button" onmousedown="event.preventDefault()" onclick="saveGrammarEditor()" class="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100">저장</button>
             </div>
         </div>
     </div>
