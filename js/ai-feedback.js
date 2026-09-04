@@ -2130,6 +2130,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // [냐냐 지적] 서수(primero·tercera)를 단어장에 등록하라고 권했다. 서수·지시사·숫자·요일·월은
         //   문법 노트의 표로 익히는 것이지 낱말 카드로 외울 것이 아니다.
         //   내 문법 노트의 표에 그 낱말이 있으면 추천에서 뺀다 — 목록을 손으로 관리할 필요가 없다.
+        // ⚠️ [나중에 지울 것] 이 목록은 '부정과거를 활용표에 채운 동사가 하나도 없어서' 둔 임시방편이다.
+        //   동사에 부정과거를 채우면 findVocabWordByForm 이 그 꼴을 알아보므로 여기 안 와도 걸린다.
+        //   지우는 조건: 자주 쓰는 불규칙 동사(tener·hacer·decir·poder·poner·saber·querer·venir·traer·
+        //   estar·andar·conducir)에 부정과거가 다 채워졌을 때. 그때 이 정규식을 지우고 추천을 한 번 재보면 된다.
+        //   ⚠️ 단어장에 없는 동사의 과거형은 그래도 샌다 — 완전히 지울지, 안전망으로 남길지는 그때 판단.
         const STRONG_PRET_RE = /^(estuv|tuv|anduv|hub|pud|pus|sup|quis|vin|hic|hiz|dij|traj|[a-z]*duj)(e|iste|o|imos|isteis|ieron|eron)$/;
         const STRONG_PRET_EXCEPT = new Set(['traje', 'vino']);
         function looksConjugatedWord(k) {
