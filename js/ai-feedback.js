@@ -1283,7 +1283,14 @@
         function openAiGrammarScope() {
             const modal = document.getElementById('ai-grammar-scope-modal');
             if (!modal) return;
-            aiScopePending = new Set(aiMissionGrammarScope);
+            // [냐냐 지적] 범위가 비어 있는 건 '전체' 라는 뜻이다 — 다 골라서 적용하면
+            //   applyAiGrammarScope 가 빈 배열로 저장한다. 그걸 그대로 빈 Set 으로 열면
+            //   전체를 골라뒀는데 모달은 전부 해제된 것처럼 보였다. 배지와 같게 맞춘다.
+            //   지금 쓸 수 있는 노트로 걸러서 연다 — 세는 수(n / 전체)도 그래야 맞는다.
+            const usable = new Set(aiUsableGrammarNotes().map(t => t.id));
+            aiScopePending = aiMissionGrammarScope.length
+                ? new Set(aiMissionGrammarScope.filter(id => usable.has(id)))
+                : new Set(usable);
             renderAiGrammarScope();
             modal.classList.remove('hidden');
         }
