@@ -1113,18 +1113,6 @@
         // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
         //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
 
-        // 참조 문법 카드를 누르면 문법·개념 탭에서 그 노트를 펼쳐 보여준다
-        function openGrammarNoteFromMission(id) {
-            // ⚠️ 순서 주의: changeTab 이 문법 탭을 다시 그리면서 펼침 상태를 초기화하므로
-            //    탭을 먼저 옮기고 → 그 다음에 펼침 표시 → 다시 그리기
-            if (typeof changeTab === 'function') changeTab('grammar');   // switchTab 이 아니라 changeTab
-            setTimeout(() => {
-                if (typeof grammarOpenState !== 'undefined') grammarOpenState[id] = true;
-                if (typeof renderGrammarTables === 'function') renderGrammarTables();
-                const el = document.querySelector(`[data-grammar-body="${id}"]`);
-                if (el && el.parentElement) el.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 80);
-        }
 
         // [냐냐 요청] 문법 노트 한 개를 AI에게 넘길 글로 요약 — 표 칸뿐 아니라 노트에 쓴 설명까지 통째로
         function buildGrammarContextForMission(note) {
@@ -3912,11 +3900,13 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const grammarHtml = aiLastEsKoGrammar.map((g, i) => `
                 <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
                     ${badge(g.delta)}
-                    <button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="flex-1 text-left min-w-0">
+                    ${/* [냐냐 지적] 제목을 누르면 문법 탭으로 점프했는데 그 노트가 화면에 바로 안 보였다.
+                         들춰보기 팝업으로 보내기로 했던 대로 고친다 — 팝업 안에 '문법·개념 탭에서 보기' 가
+                         있어서 탭으로 가는 길도 그대로 남는다. 따로 있던 돋보기는 같은 일이라 뺐다. */''}
+                    <button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
                         ${g.ev ? `<div class="text-[10px] text-slate-400 truncate">근거 · ${escapeHtml(g.ev)}</div>` : ''}
                     </button>
-                    <button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-teal-100 text-slate-400 hover:text-teal-600 text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
                     ${cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
 
@@ -3979,7 +3969,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 <div class="space-y-1.5">${wordHtml}</div>` : ''}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
-                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 (+2 → 0 → −2) · 이름을 누르면 자세히</p>` : ''}`;
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 (+2 → 0 → −2) · 이름을 누르면 열려요</p>` : ''}`;
             box.classList.remove('hidden');
         }
 
