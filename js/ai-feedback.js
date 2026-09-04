@@ -1110,46 +1110,6 @@
         // [PATCH] 내 단어장 기반으로 AI가 실시간으로 자연스러운 한국어 미션 문장을 생성
         // (이전엔 실패 시 미리 써둔 문장으로 대체했는데, 그 템플릿이 신체 부위 등에서
         //  "저기 있는 귀 좀 갖다 줄래?" 처럼 이상하게 나와서 — 그냥 실패를 솔직하게 알려주는 방식으로 변경)
-        // [냐냐 요청] 첨삭 결과 아래에 '이번 미션이 참고한 문법·단어'를 보여준다.
-        //   문제 풀기 전에 보이면 답 힌트가 되므로 채점 후에만 연다.
-        function renderAiMissionRefs() {
-            const box = document.getElementById('ai-mission-refs');
-            if (!box) return;
-            const g = aiCurrentGrammarForMission;
-            // [냐냐 요청] 덧붙임 단어는 '미션을 만들 때 후보로 준 것' 이라 문장에 안 들어갈 수 있다.
-            //   채점이 끝난 뒤에는 실제로 정답 문장에 나온 것만 남긴다 (안 그러면 beber 처럼
-            //   쓰지도 않은 단어가 '이번 미션이 참고한 내용' 에 남아서 헷갈린다).
-            //   목표 단어는 미션의 핵심이라 안 썼어도 그대로 둔다.
-            const usedInSentence = (word) => {
-                const t = (aiLastCorrectedText || '').toLowerCase();
-                if (!t) return true;                       // 아직 채점 전이면 다 보여준다
-                //   'el/la estudiante' 처럼 슬래시가 낀 관사도 떼야 한다 (core.js 의 규칙을 그대로 쓴다)
-                const key = String(word.word || '').toLowerCase().replace(RE_LEADING_ARTICLE, '').trim();
-                return !!key && t.includes(key);
-            };
-            const words = [aiCurrentWordForMission,
-                           ...(aiCurrentExtraWordsForMission || []).filter(usedInSentence)].filter(Boolean);
-            if (!g && !words.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-            const wordChips = words.map(w =>
-                `<span class="inline-flex items-baseline gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
-                    <b class="text-slate-800">${escapeHtml(w.word || '')}</b>
-                    <span class="text-slate-400">${escapeHtml(w.meaning || '')}</span>
-                </span>`).join('');
-            box.innerHTML = `<div data-mission-refs>
-
-                <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
-                    <i class="fa-solid fa-book-open text-violet-500"></i><span>이번 미션이 참고한 내용</span>
-                </div>
-                ${g ? `<button type="button" onclick="openGrammarNoteFromMission('${g.id}')" class="w-full text-left mb-2 bg-white border border-slate-200 hover:border-violet-300 rounded-xl px-3 py-2 transition-colors">
-                    <span class="text-[10px] font-bold text-violet-500">문법</span>
-                    <div class="text-xs font-extrabold text-slate-800">${escapeHtml(g.icon || '📋')} ${escapeHtml(g.title || '')}</div>
-                    <div class="text-[10px] text-slate-400 mt-0.5">이 문법으로 문장을 만들었어요 · 눌러서 노트 보기 →</div>
-                    ${aiCurrentGrammarDetailForMission ? `<div class="mt-1.5 pt-1.5 border-t border-slate-100 text-[10px] text-slate-500"><b class="text-violet-500">이번 대목</b> · ${escapeHtml(aiCurrentGrammarDetailForMission)}</div>` : ''}
-                </button>` : ''}
-                ${wordChips ? `<div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordChips}</div>` : ''}
-                </div>`;
-            box.classList.remove('hidden');
-        }
 
         // 참조 문법 카드를 누르면 문법·개념 탭에서 그 노트를 펼쳐 보여준다
         function openGrammarNoteFromMission(id) {
@@ -1233,13 +1193,6 @@
             return lines[Math.floor(Math.random() * lines.length)];
         }
 
-        // 단어장 항목이 '단어/짧은 표현'인지 (문장 통째로 등록된 건 미션 재료로 안 씀)
-        function isSimpleWordEntry(w) {
-            const s = ((w && w.word) || '').trim();
-            if (!s || s.length > 24) return false;
-            if (/[?¿!¡.,;:\[\]()]/.test(s)) return false;   // 문장부호가 있으면 문장·표현
-            return s.split(/\s+/).length <= 3;              // 'el disco duro' 정도까지만
-        }
 
         // ============================================================
         // [냐냐 요청] 출제할 문법 범위 — 내가 고른 노트들 안에서만 문법을 뽑는다.
@@ -2979,22 +2932,16 @@ ${koEsNoteListText}${refGrammar}${refWords}
             (t.rows || []).forEach(r => (r || []).forEach(push));
             return out;
         }
-        // 자르되 말 중간에서 끊기지 않게 — 끝에서 60자 안에 마디(· . ej.)가 있으면 거기서 자른다
-        function cutAtBreak(txt, n) {
-            const s = String(txt || '');
-            if (s.length <= n) return s;
-            const head = s.slice(0, n);
-            const at = Math.max(head.lastIndexOf(' · '), head.lastIndexOf('. '), head.lastIndexOf(' ej.'));
-            return (at > n - 60) ? head.slice(0, at) : head;
-        }
         function aiScoringNoteHint(t) {
             // 표 제목이 제일 짧고 정확하다 — 노트에 표가 여럿이면 이게 유일한 이름표다
             const caps = (t.blocks || []).map(b => String((b && b.caption) || '').trim()).filter(Boolean);
             const capTxt = caps.join(' / ').slice(0, 120);
-            //   [냐냐 요청] 150 → 400자. AI 가 쓴 요약 한 줄(60자)을 대신하게 됐으니 그만큼 넉넉해야 한다.
-            //   노트 서른 개의 글은 절반이 200자 안쪽이라 400 이면 긴 노트 대여섯만 잘린다.
-            //   ⚠️ 이 줄은 노트 서른 개가 매 첨삭마다 통째로 프롬프트에 들어간다. 늘리면 그만큼 매번 무거워진다.
-            const desc = cutAtBreak(noteRichText(t), 400);
+            //   [냐냐 요청] 안 자른다 (2026-09-04). 150 → 400 → 통째로.
+            //   자르면 하필 뒷부분의 예문·예외가 날아간다 — 노트 31개 중 14개가 400자를 넘었다.
+            //   합쳐서 16,844자, 토큰으로 6천 남짓이라 통째로 보내도 된다.
+            //   (표는 여전히 낱말 12개만 추린다. 표 모든 행까지 넣으면 20,467자인데
+            //    칸 대부분이 뜻풀이·활용형이라 얻는 것보다 잡음이 크다.)
+            const desc = noteRichText(t);
             const ex = noteSpanishCells(t).slice(0, 12).join(', ').slice(0, 240);
             return [capTxt && `표: ${capTxt}`, desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
         }

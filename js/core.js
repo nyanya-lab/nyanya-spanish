@@ -2232,14 +2232,6 @@ let vocabulary = [];
             }
         }
 
-        // [냐냐 요청] 오늘 복습할 관용구로 바로 쓰기 복습을 시작한다.
-        //   단어 복습과 같은 묶음 크기를 쓴다 (한 번에 너무 많이 나오면 지친다).
-        //   [냐냐 요청] 이제 단어와 한 묶음이라 그냥 오늘의 복습을 연다.
-        //   (옛 화면·다른 곳에서 이 이름으로 부르는 데가 있어 함수는 남긴다)
-        function startIdiomReview() {
-            if (typeof startTodayReviewShortcut === 'function') startTodayReviewShortcut();
-        }
-
         // 헤더 '복습 · 문법' 버튼 갱신 (단어 쪽은 renderTodayReview 가 한다)
         function renderGrammarReviewBtn() {
             const btn = document.getElementById('grammar-review-btn');

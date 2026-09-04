@@ -3794,33 +3794,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function stripAccentMarks(s) {
             return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
         }
-        // [냐냐 요청] 관용구는 같은 뜻을 내는 표현이 단어보다 훨씬 많다.
-        //   다른 표현으로 맞게 말했어도 지금 외우려는 건 이 표현이니, 어느 낱말을 써야 하는지
-        //   짚어주고 한 번 더 쓰게 한다. ("querer 말고 tener 를 써서 말해볼까요?")
-        //   고르는 법: 정답 표현의 낱말 중 내가 안 쓴 것, 그중 기능어가 아닌 첫 낱말.
-        const WRITE_HINT_STOPWORDS = new Set([
-            'el','la','los','las','un','una','unos','unas','de','del','a','al','en','con','por','para',
-            'que','se','y','o','u','lo','le','me','te','nos','os','su','mi','tu','es','ser','estar'
-        ]);
-        function writeIdiomHintWord(userRaw, targetRaw) {
-            const bare = (t) => String(t || '').toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9\s]/g, ' ').trim();
-            const mine = new Set(bare(userRaw).split(/\s+/).filter(Boolean));
-            const raw = String(targetRaw || '').trim().split(/\s+/).filter(Boolean);
-            const pick = (test) => {
-                for (let i = 0; i < raw.length; i++) {
-                    const k = bare(raw[i]);
-                    if (k && test(k)) return raw[i].replace(/^[^\wÁÉÍÓÚÜÑáéíóúüñ]+|[^\wÁÉÍÓÚÜÑáéíóúüñ]+$/g, '');
-                }
-                return '';
-            };
-            // ① 내가 안 쓴 알맹이 낱말 → ② 안 쓴 아무 낱말 → ③ 알맹이 낱말 아무거나
-            return pick(k => !mine.has(k) && !WRITE_HINT_STOPWORDS.has(k) && k.length > 2)
-                || pick(k => !mine.has(k) && k.length > 1)
-                || pick(k => !WRITE_HINT_STOPWORDS.has(k) && k.length > 2);
-        }
-
         function writeAnswerMatches(userRaw, correctRaw) {
             return normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw);
         }
