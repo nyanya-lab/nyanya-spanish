@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 파일을 고쳐 올렸는데 반영이 안 되면
          아래 ?v= 값들을 오늘 날짜로 한꺼번에 바꾼다 (js 스크립트 태그도 같은 값). -->
-    <link rel="stylesheet" href="css/style.css?v=20260904i">
+    <link rel="stylesheet" href="css/style.css?v=20260904j">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1719,6 +1719,23 @@
     </div>
 
     <!-- [냐냐 요청] AI 번역 미션에서 출제할 문법 범위 고르기 (여러 개 선택 — 그 안에서 무작위로 한 개씩 나옴) -->
+    <!-- [냐냐 요청] 첨삭이 놓친 문법을 내가 직접 더한다 (네 모드가 같은 결과 칸을 쓴다) -->
+    <div id="add-grammar-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onclick="if(event.target===this) closeAddGrammarPicker()">
+        <div class="bg-white w-full max-w-md rounded-3xl max-h-[80vh] overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                <div class="min-w-0">
+                    <h3 class="text-base font-black text-slate-900">이 문장이 쓴 문법 더하기</h3>
+                    <p class="text-[11px] text-slate-500 font-semibold mt-0.5">첨삭이 놓친 문법을 고르면 +2로 들어가요. 점수는 ↺로 바꾸면 돼요.</p>
+                </div>
+                <button onclick="closeAddGrammarPicker()" class="w-8 h-8 shrink-0 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="px-4 py-2.5 border-b border-slate-100 shrink-0">
+                <input id="add-grammar-search" autocomplete="off" oninput="renderAddGrammarPicker()" placeholder="노트 이름으로 찾기" class="w-full bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            </div>
+            <div id="add-grammar-list" class="p-3 space-y-1 overflow-y-auto"></div>
+        </div>
+    </div>
+
     <div id="ai-grammar-scope-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-2xl rounded-3xl max-h-[88vh] overflow-hidden shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
@@ -2294,13 +2311,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=20260904i"></script>
-    <script src="js/creatures.js?v=20260904i"></script>
-    <script src="js/core.js?v=20260904i"></script>
-    <script src="js/vocab.js?v=20260904i"></script>
-    <script src="js/flashcards.js?v=20260904i"></script>
-    <script src="js/quiz.js?v=20260904i"></script>
-    <script src="js/games.js?v=20260904i"></script>
-    <script src="js/ai-feedback.js?v=20260904i"></script>
+    <script src="js/dictionary-data.js?v=20260904j"></script>
+    <script src="js/creatures.js?v=20260904j"></script>
+    <script src="js/core.js?v=20260904j"></script>
+    <script src="js/vocab.js?v=20260904j"></script>
+    <script src="js/flashcards.js?v=20260904j"></script>
+    <script src="js/quiz.js?v=20260904j"></script>
+    <script src="js/games.js?v=20260904j"></script>
+    <script src="js/ai-feedback.js?v=20260904j"></script>
 </body>
 </html>

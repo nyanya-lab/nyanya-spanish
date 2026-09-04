@@ -3594,7 +3594,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   [냐냐 요청] 네 모드가 같은 점수를 쓴다 — 제대로 쓰면 +2, 틀리면 −2.
         //   자유 작문만 절반이던 건 '찾아보고 쓸 수 있어서' 였는데, 이제 찾아본 건 내가
         //   결과 카드에서 표시하면 되므로(−2) 미리 깎아둘 이유가 없다.
+        let aiLastFeedbackForAdd = null;   // 손으로 문법을 더할 때 근거를 찾으려고 마지막 첨삭을 들고 있는다
         function applyAiWritingScores(feedback, notes) {
+            aiLastFeedbackForAdd = feedback || null;
             applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK);
             applyEsKoWordScores(feedback, WORD_SPELL_OK);
             aiLastSuggest = buildAiSuggestions(feedback);   // [냐냐 요청] 추천은 점수 다음에 (쓴 관용구를 알아야 뺀다)
@@ -3708,6 +3710,85 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast(`"${e.word.word}" · ${fmtDelta(to)}`, "info");
         }
 
+        // ============================================================
+        // [냐냐 요청] 첨삭이 놓친 문법을 내가 더한다 (2026-09-04).
+        //   AI 도 코드도 못 짚는 문법이 있다. 그때 손으로 넣을 길이 없어서 그냥 넘어가야 했다.
+        //   더하면 +2 로 들어가고, 점수는 다른 항목과 똑같이 ↺ 로 바꾼다.
+        //   근거는 코드가 찾아본다 — 동사 꼴이나 노트 표의 낱말이 문장에 있으면 그 낱말을 적어둔다.
+        //   ⚠️ 네 모드(미션·줄글·질문답하기·예문 연습)가 이 결과 칸을 같이 쓴다. 한 곳만 고치면 다 된다.
+        // ============================================================
+        function openAddGrammarPicker() {
+            const modal = document.getElementById('add-grammar-modal');
+            if (!modal) return;
+            const box = document.getElementById('add-grammar-search');
+            if (box) box.value = '';
+            renderAddGrammarPicker();
+            modal.classList.remove('hidden');
+            if (box) setTimeout(() => box.focus(), 30);
+        }
+        function closeAddGrammarPicker() {
+            document.getElementById('add-grammar-modal')?.classList.add('hidden');
+        }
+        function renderAddGrammarPicker() {
+            const list = document.getElementById('add-grammar-list');
+            if (!list) return;
+            const q = String((document.getElementById('add-grammar-search') || {}).value || '').trim().toLowerCase();
+            const already = new Set((aiLastEsKoGrammar || []).map(g => g.note.id));
+            const notes = (typeof aiScoringNoteList === 'function' ? aiScoringNoteList() : [])
+                .filter(t => !q || String(t.title || '').toLowerCase().includes(q));
+            if (!notes.length) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">찾는 노트가 없어요</p>'; return; }
+            list.innerHTML = notes.map(t => {
+                const has = already.has(t.id);
+                return `<button type="button" ${has ? 'disabled' : `onclick="addGrammarEntryManually('${escapeAttr(t.id)}')"`}
+                    class="w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${has ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 hover:bg-violet-50 hover:border-violet-200'}">
+                    <span class="text-sm font-extrabold text-slate-800 min-w-0 truncate flex-1">${escapeHtml(t.icon || '📋')} ${escapeHtml(t.title || '')}</span>
+                    <span class="shrink-0 text-[10px] font-black ${has ? 'text-slate-400' : 'text-violet-500'}">${has ? '이미 있음' : '+2'}</span>
+                </button>`;
+            }).join('');
+        }
+        function addGrammarEntryManually(noteId) {
+            const notes = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
+            const note = notes.find(t => t.id === noteId);
+            if (!note) return;
+            if ((aiLastEsKoGrammar || []).some(g => g.note.id === noteId)) { showToast("이미 목록에 있어요", "info"); return; }
+
+            // 근거를 코드가 찾아본다 (동사 꼴 → 노트 표 낱말 순). 못 찾으면 '직접 더함'.
+            const mine = (aiLastFeedbackForAdd && aiLastFeedbackForAdd.originalMarked) || '';
+            let ev = '';
+            if (mine && typeof detectVerbFormsInText === 'function') {
+                detectVerbFormsInText(mine).forEach((word, key) => {
+                    if (ev) return;
+                    if ((notesTeachingVerbForm(key, notes) || []).some(x => x.id === noteId)) ev = word;
+                });
+            }
+            if (!ev && mine && typeof detectNoteCellsInText === 'function') {
+                const hit = detectNoteCellsInText(mine, notes).get(noteId);
+                if (hit) ev = hit;
+            }
+
+            const prev = {
+                score: (typeof grammarScores !== 'undefined') ? grammarScores[noteId] : undefined,
+                transUsed: (typeof grammarTransUsed !== 'undefined') ? grammarTransUsed[noteId] : undefined,
+                mastered: (typeof masteredGrammar !== 'undefined') ? masteredGrammar[noteId] : undefined,
+                review: (typeof grammarReview !== 'undefined' && grammarReview[noteId])
+                    ? JSON.parse(JSON.stringify(grammarReview[noteId])) : undefined
+            };
+            const canMove = (noteId === grammarReviewLastNoteId);
+            addGrammarScore(noteId, GRAMMAR_TRANS_OK, { transUsed: true });
+            applyGrammarCurve(noteId, true, canMove);
+            aiLastEsKoGrammar.push({
+                note, usage: 'correct', delta: GRAMMAR_TRANS_OK, baseDelta: GRAMMAR_TRANS_OK,
+                prev, canMove, ev: ev || '직접 더함', state: 'normal', undone: false, manual: true
+            });
+            setAiNoteGramOk(_lastAiNoteKey, noteId, true, note.title);
+            if (typeof saveToStorage === 'function') saveToStorage();
+            closeAddGrammarPicker();
+            renderEsKoGrammarRefs();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            if (typeof renderAiNoteList === 'function') renderAiNoteList();
+            showToast(`"${note.title}" +2`, "success");
+        }
+
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
         function renderEsKoGrammarRefs() {
             const box = document.getElementById('ai-mission-refs');
@@ -3780,10 +3861,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
             box.innerHTML = keepHtml + `
                 ${keepHtml ? '<div class="border-t border-slate-200 my-3"></div>' : ''}
-                ${grammarHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+                ${/* [냐냐 요청] 하나도 안 걸렸을 때도 이 줄은 낸다 — 그때가 바로 손으로 더해야 할 때다 */''}
+                <div class="text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
                     <i class="fa-solid fa-book-open text-violet-500"></i><span>이 문장이 쓴 내 문법</span>
+                    <button type="button" onclick="openAddGrammarPicker()" title="첨삭이 놓친 문법을 내가 더해요" class="ml-auto shrink-0 px-2 py-0.5 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[10px] font-bold transition-colors"><i class="fa-solid fa-magnifying-glass mr-0.5"></i> 문법 더하기</button>
                 </div>
-                <div class="space-y-1.5">${grammarHtml}</div>` : ''}
+                ${grammarHtml
+                    ? `<div class="space-y-1.5">${grammarHtml}</div>`
+                    : '<p class="text-[11px] text-slate-400 py-1.5">걸린 문법이 없어요 — 쓴 게 있으면 위에서 더해 주세요.</p>'}
                 ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
