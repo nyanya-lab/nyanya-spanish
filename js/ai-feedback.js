@@ -2130,6 +2130,13 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // [냐냐 지적] 서수(primero·tercera)를 단어장에 등록하라고 권했다. 서수·지시사·숫자·요일·월은
         //   문법 노트의 표로 익히는 것이지 낱말 카드로 외울 것이 아니다.
         //   내 문법 노트의 표에 그 낱말이 있으면 추천에서 뺀다 — 목록을 손으로 관리할 필요가 없다.
+        const STRONG_PRET_RE = /^(estuv|tuv|anduv|hub|pud|pus|sup|quis|vin|hic|hiz|dij|traj|[a-z]*duj)(e|iste|o|imos|isteis|ieron|eron)$/;
+        const STRONG_PRET_EXCEPT = new Set(['traje', 'vino']);
+        function looksConjugatedWord(k) {
+            const t = String(k || '').toLowerCase();
+            if (/(ando|iendo|yendo|aron|ieron|aste|iste|amos|emos|imos|é|ó|í)$/.test(t)) return true;
+            return !STRONG_PRET_EXCEPT.has(t) && STRONG_PRET_RE.test(t);
+        }
         function inGrammarNoteTable(raw) {
             if (typeof detectNoteCellsInText !== 'function' || typeof aiScoringNoteList !== 'function') return false;
             return detectNoteCellsInText(String(raw || ''), aiScoringNoteList()).size > 0;
@@ -2177,6 +2184,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
+                if (looksConjugatedWord(key)) return;                          // 활용형 (불규칙 과거형 포함)
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2186,7 +2194,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const toks = (html) => String(html || '').replace(/<[^>]*>/g, ' ')
                 .split(/[^\p{L}\p{N}]+/u).filter(Boolean);
             const mineSet = new Set(toks(feedback && feedback.originalMarked).map(norm));
-            const looksConjugated = (k) => /(ando|iendo|yendo|aron|ieron|aste|iste|amos|emos|imos|é|ó|í)$/.test(k);
+            //   [냐냐 지적] 불규칙 과거형이 추천에 떴다 (tuvo·hizo·dijo·puso·supo…).
+            //   이것들은 -ó 로 안 끝나서 어미 규칙에 안 걸리고, 부정과거를 활용표에 채운 동사가
+            //   하나도 없어서 역추적도 못 한다. 어간이 정해진 닫힌 무리라 글자로 막는다.
+            //   ⚠️ traje(정장)·vino(와인)는 진짜 명사이기도 해서 통과시킨다.
+            const looksConjugated = (k) => looksConjugatedWord(k);
             //   [냐냐 지적] 이름(Nancy)은 등록할 낱말이 아니다. 여기는 품사를 모르니 대문자로 가른다 —
             //   스페인어는 요일·달·국적도 소문자라, 문장 첫 자리가 아닌 대문자는 거의 고유명사다.
             toks(feedback && feedback.correctedText).forEach((raw, i) => {
