@@ -2461,46 +2461,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (useEvidence && !grammarEvidenceFound(ev, hay)) return;   // 근거를 못 대면 점수도 없다
                 parsed.push({ note, ok: item.ok, ev });
             });
-            // ============================================================
-            // [냐냐 요청] 신호가 겹치는 노트는 같이 짚는다 (2026-09-03).
-            //   현재분사와 현재진행은 채점 단서의 신호가 'estoy ...-ando' 로 똑같다. 그래서 AI 는
-            //   "같은 걸 말하는 노트 둘이네" 하고 하나만 골랐다 — 프롬프트로 조여도 안 됐다.
-            //   같은 신호를 나눠 가진 노트가 있고, 그 신호가 문장에 실제로 있으면 코드가 같이 넣는다.
-            //   ⚠️ AI 가 짚은 노트의 '형제' 만 본다. 안 그러면 신호가 넓은 노트(en·a·de)가
-            //      아무 문장에나 끌려온다. 한 번에 둘까지만 더한다.
-            // ============================================================
-            if (typeof grammarAiHintOf === 'function') {
-                // 노트 → { 정규화한 신호 : 원래 신호 } (너무 짧은 신호는 우연히 겹치니 뺀다)
-                //   ⚠️ 신호가 '한 낱말 네 글자' 면 우연히 겹친다 — 동서남북 노트에 'este'(동쪽) 가 들어가면
-                //      지시형용사 노트의 'este'(이것) 와 형제가 되어 아무 문장에나 같이 걸린다.
-                //      그래서 형제 판정에는 두 낱말 이상이거나 다섯 글자 이상인 신호만 쓴다.
-                const sigMap = (t) => {
-                    const out = new Map();
-                    (((grammarAiHintOf(t) || {}).t) || []).forEach(x => {
-                        const raw = String(x || '').trim();
-                        const k = grammarEvidenceNorm(raw.replace(/\.\.\./g, ' '));
-                        if (k.includes(' ') || k.length >= 5) out.set(k, raw);
-                    });
-                    return out;
-                };
-                const already = new Set(parsed.map(x => x.note.id));
-                const extra = [];
-                parsed.slice().forEach(picked => {
-                    const mine = sigMap(picked.note);
-                    if (!mine.size) return;
-                    (notes || []).forEach(q => {
-                        if (already.has(q.id) || extra.some(e => e.note.id === q.id)) return;
-                        const his = sigMap(q);
-                        for (const [k, raw] of his) {
-                            if (!mine.has(k)) continue;
-                            if (!grammarEvidenceFound(raw, hay)) continue;
-                            extra.push({ note: q, ok: picked.ok, ev: raw });
-                            break;
-                        }
-                    });
-                });
-                extra.slice(0, 2).forEach(e => parsed.push(e));
-            }
+            // [냐냐 요청] '신호가 겹치는 형제 노트를 같이 짚는' 장치는 걷어냈다 (2026-09-04).
+            //   그건 AI 채점 단서의 신호 목록(triggers) 위에 세운 것이라, 단서를 없애면 설 자리가 없다.
+            //   노트의 표 칸에서 신호를 뽑아 살려보려 했지만 안 된다 — 현재진행 노트는 표가 아예 없고
+            //   (그 장치를 만든 바로 그 경우다), 대신 'cuatro' 같은 흔한 낱말로 숫자 노트와 시간 노트가 엮인다.
+            //   이제는 노트 글이 통째로 프롬프트에 들어가니, 두 노트가 서로 다르다는 걸 AI 가 직접 읽는다.
 
             // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
             const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
@@ -2560,194 +2525,18 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
         }
         // ============================================================
-        // [냐냐 요청] AI 채점 단서 — 노트 하나를 통째로 읽혀 '이 노트가 실제로 가르치는 규칙' 한 줄을 미리 받아둔다.
-        //   왜: 제목이 넓은 노트(예: '위치를 나타내는 표현' 인데 내용은 al/del 축약)는 AI 가 제목만 보고
-        //   아무 문장에나 갖다 붙였다. 프롬프트로 네 번 조여도 단서 자체가 거칠어서 한계가 있었다.
-        //   제목을 좁히는 건 냐냐님 손이 많이 가고, 규칙 줄은 노트 내용만 보면 AI 가 만들 수 있다.
-        //   ⚠️ 만들 때 제목은 일부러 안 준다 — 제목을 주면 또 제목에 끌려간 요약이 나온다.
+        // [냐냐 요청] 채점이 노트를 읽는 방법 (2026-09-04 다시 짬).
+        //   예전엔 AI 가 노트마다 '규칙 한 줄' 을 미리 써두고(grammarAiHints) 채점은 그 줄만 봤다.
+        //   제목이 넓은 노트가 아무 문장에나 걸리는 걸 막으려던 장치였다.
+        //   표마다 제목을 달 수 있게 되면서 그 자리를 냐냐님이 쓴 글이 대신하게 됐다 —
+        //   글은 이미 노트에 있고 표는 표 제목이 말해주니, 요약을 한 번 더 거칠 이유가 없다.
+        //   AI 단서는 통째로 걷어냈다: 만들기 버튼도, 분당 한도 대기도, 낡음 판정도, 손으로 고치기도 없다.
         // ============================================================
         function grammarHintSource(t) {
             return buildGrammarContextForMission(t).trim();
         }
-        // 내용이 바뀌면 단서를 다시 만들어야 하니 짧은 지문을 남긴다
-        function grammarHintHash(src) {
-            let h = 0;
-            for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) | 0;
-            return h.toString(36) + '.' + src.length;
-        }
-        // 지금 쓸 수 있는 단서 (내용이 바뀌었으면 null). 내가 손댄 줄(m)은 내용이 바뀌어도 그대로 쓴다
-        function grammarAiHintOf(t) {
-            if (typeof grammarAiHints === 'undefined' || !t) return null;
-            const e = grammarAiHints[t.id];
-            if (!e || !String(e.r || '').trim()) return null;
-            if (e.m) return e;
-            return (e.h === grammarHintHash(grammarHintSource(t))) ? e : null;
-        }
-        function grammarAiHintText(e) {
-            if (!e) return '';
-            const tr = (e.t || []).filter(Boolean).join(', ').slice(0, 200);
-            return String(e.r || '').trim() + (tr ? ' | 신호: ' + tr : '');
-        }
-        // 단서가 없거나 낡은 노트들 (내용이 빈 노트는 애초에 채점 목록에 안 들어간다)
-        function staleGrammarHintNotes() {
-            const all = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
-            return all.filter(t => grammarHintSource(t) && !grammarAiHintOf(t));
-        }
 
         const GRAMMAR_HINT_SYSTEM = 'You are a Spanish grammar analyst. Return ONLY JSON, no markdown fences.';
-
-        async function makeGrammarAiHint(t) {
-            const src = grammarHintSource(t);
-            if (!src) return null;
-            const prompt = `Below is ONE grammar note kept by a Korean learner of Spanish — its explanation and tables.
-            The note's TITLE is deliberately withheld: describe only what the content below actually shows.
-
-            NOTE CONTENT:
-            ${src.slice(0, 3000)}
-
-            Return two things.
-            "rule": ONE line of Korean stating the rule this note teaches AS A TESTABLE CONDITION - written so that
-            someone holding a Spanish sentence can answer yes or no. Name the actual forms, and write it as a sentence
-            with a verb: "전치사 a/de 가 관사 el 을 만나면 al/del 로 줄어든다", "비교는 más/menos ... que 로 잇는다".
-            60자 이내. Do NOT hand back a topic label - a noun phrase ending in 용법·사용법·표현·만들기 ("시간 전치사의
-            용법", "비교급 문장 만들기") is exactly what the title already says, and it is what makes the judgement go wrong.
-            "triggers": 3-12 concrete Spanish signals whose presence in a sentence means this note is in play —
-            actual words (al, del, encima de), endings (-ando, -ído), or short patterns with ... for gaps
-            (más ... que). Spanish only, no Korean, no explanation. If the note is a closed list (months,
-            weekdays, possessives), give the list words themselves.`;
-            const schema = {
-                type: "OBJECT",
-                properties: {
-                    rule: { type: "STRING", description: "이 노트가 가르치는 규칙 한 줄 (한국어, 60자 이내)" },
-                    triggers: { type: "ARRAY", items: { type: "STRING" }, description: "이 노트가 걸려야 할 스페인어 신호" }
-                },
-                required: ["rule", "triggers"]
-            };
-            // 가끔 규칙 없이 빈 응답이 온다 — 30개를 한 번에 만드니 한 번은 더 물어본다
-            let rule = '', triggersRaw = [];
-            for (let tries = 0; tries < 2 && !rule; tries++) {
-                const data = extractAndParseJson(await callGemini(prompt, GRAMMAR_HINT_SYSTEM, schema, 'low'));
-                rule = String((data && data.rule) || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-                triggersRaw = Array.isArray(data && data.triggers) ? data.triggers : [];
-            }
-            if (!rule) return null;
-            const triggers = triggersRaw.map(x => String(x || '').trim()).filter(Boolean).slice(0, 12);
-            return { h: grammarHintHash(src), r: rule, t: triggers };
-        }
-
-        let grammarHintBusy = false;
-        // 낡은 노트만 골라 하나씩 만든다. force 면 내가 손댄 것 빼고 전부 다시.
-        async function refreshGrammarAiHints(force) {
-            if (grammarHintBusy) { showToast("단서를 만드는 중이에요", "info"); return; }
-            const all = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
-            const targets = force
-                ? all.filter(t => grammarHintSource(t) && !((grammarAiHints[t.id] || {}).m))
-                : staleGrammarHintNotes();
-            if (!targets.length) { showToast("모든 노트에 단서가 있어요", "info"); return; }
-            grammarHintBusy = true;
-            renderGrammarHintBar();
-            let done = 0, failed = 0;
-            showToast(`AI 채점 단서를 만들어요 · ${targets.length}개`, "info");
-            const nap = (ms) => new Promise(r => setTimeout(r, ms));
-            for (const t of targets) {
-                let hint = null;
-                // [냐냐 지적] 30개를 쉬지 않고 물으면 분당 한도(429)에 걸려 뒤쪽 열몇 개가 통째로 실패했다.
-                //   한도에 걸리면 기다렸다 그 노트만 다시 묻는다 — 한도가 넉넉한 키면 그냥 빨리 끝난다.
-                for (let tries = 0; tries < 3 && !hint; tries++) {
-                    try {
-                        hint = await makeGrammarAiHint(t);
-                        if (!hint) break;                 // 답은 왔는데 규칙이 없으면 그만 (안에서 이미 한 번 더 물었다)
-                    } catch (e) {
-                        const rate = e && (e.status === 429 || e.apiStatus === 'RESOURCE_EXHAUSTED');
-                        if (!rate || tries === 2) break;
-                        renderGrammarHintBar(done + failed, targets.length, true);
-                        await nap(20000);
-                    }
-                }
-                if (hint) { grammarAiHints[t.id] = hint; done++; } else failed++;
-                renderGrammarHintBar(done + failed, targets.length);
-                await nap(600);
-            }
-            grammarHintBusy = false;
-            if (done && typeof saveToStorage === 'function') saveToStorage();
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
-            renderGrammarHintBar();
-            showToast(failed ? `단서 ${done}개 완성 · ${failed}개 실패` : `단서 ${done}개를 만들었어요`, failed ? "error" : "success");
-        }
-
-        // [냐냐 요청] 노트를 저장하면 그 노트 단서만 조용히 다시 만든다 (호출 한 번).
-        //   내용을 고쳤는데 단서가 옛날 것으로 남아 있으면 채점이 어긋나므로 사람 손을 안 빌린다.
-        //   실패해도 아무 말 안 한다 — 단서가 없으면 예전 방식(설명 앞부분 + 표 낱말)으로 채점되고,
-        //   문법 탭 맨 위 줄이 '단서 없는 노트'로 알려준다.
-        //   ⚠️ 서른 개를 한꺼번에 만드는 건 여전히 '만들기' 버튼으로 둔다 — 분당 한도(429)에 걸려
-        //      첨삭까지 같이 막히므로, 그런 몰아치기는 냐냐님이 누를 때만 일어나야 한다.
-        async function autoMakeGrammarAiHint(id) {
-            if (grammarHintBusy || !id) return;
-            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
-            if (!t || !grammarHintSource(t)) return;
-            if (grammarAiHintOf(t)) return;              // 이미 최신이거나, 내가 고쳐둔 줄이면 그대로 둔다
-            try {
-                const hint = await makeGrammarAiHint(t);
-                if (!hint) return;
-                grammarAiHints[id] = hint;
-                if (typeof saveToStorage === 'function') saveToStorage();
-                refreshGrammarHintViews(id);
-            } catch (e) { /* 조용히 넘어간다 */ }
-        }
-
-        // 노트 하나만 다시 만들기 (카드 안의 새로고침 버튼)
-        async function regenGrammarAiHint(id) {
-            if (grammarHintBusy) return;
-            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
-            if (!t) return;
-            if (!grammarHintSource(t)) { showToast("노트가 비어 있어서 단서를 못 만들어요", "error"); return; }
-            grammarHintBusy = true;
-            showToast("단서를 다시 만드는 중...", "info");
-            try {
-                const hint = await makeGrammarAiHint(t);
-                if (hint) {
-                    grammarAiHints[id] = hint;
-                    if (typeof saveToStorage === 'function') saveToStorage();
-                    showToast("단서를 새로 만들었어요", "success");
-                } else showToast("단서를 못 만들었어요", "error");
-            } catch (e) { showToast("단서를 못 만들었어요", "error"); }
-            grammarHintBusy = false;
-            refreshGrammarHintViews(id);
-            renderGrammarHintBar();
-        }
-
-        // 단서 줄은 들춰보기 팝업 안에 있다 — 고치고 나면 그 팝업을 다시 그려야 바뀐 게 보인다
-        function refreshGrammarHintViews(id) {
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
-            if (typeof _grammarPeekId !== 'undefined' && _grammarPeekId
-                && (!id || _grammarPeekId === id) && typeof openGrammarPeek === 'function') {
-                openGrammarPeek(_grammarPeekId);
-            }
-        }
-
-        // [냐냐 요청] 단서를 직접 고치기 — AI 요약이 어긋나도 노트 제목·구조는 안 건드리고 한 줄만 손본다
-        let grammarHintEditId = null;
-        function editGrammarAiHint(id) {
-            grammarHintEditId = (grammarHintEditId === id) ? null : id;
-            refreshGrammarHintViews(id);
-        }
-        function saveGrammarAiHint(id) {
-            const rule = (document.getElementById('ghint-rule-' + id) || {}).value || '';
-            const trig = (document.getElementById('ghint-trig-' + id) || {}).value || '';
-            const r = rule.replace(/\s+/g, ' ').trim().slice(0, 120);
-            if (!r) { showToast("규칙 한 줄은 비울 수 없어요", "error"); return; }
-            const t = ((typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : []).find(x => x.id === id);
-            grammarAiHints[id] = {
-                h: t ? grammarHintHash(grammarHintSource(t)) : '',
-                r: r,
-                t: trig.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
-                m: 1                                   // 내가 손댄 줄 — 노트를 고쳐도, 전체 다시 만들기에도 안 지운다
-            };
-            grammarHintEditId = null;
-            if (typeof saveToStorage === 'function') saveToStorage();
-            refreshGrammarHintViews(id);
-            showToast("채점 단서를 고쳤어요", "success");
-        }
 
         // ============================================================
         // [냐냐 요청] 노트 보강 (2026-09-03) — 노트에 빠진 용법을 AI 가 찾아 제안한다.
@@ -2916,11 +2705,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const i = customGrammarTables.findIndex(c => c.id === noteId);
                 if (i >= 0) customGrammarTables[i] = next; else customGrammarTables.push(next);
                 touched++;
-                // 내용이 바뀌었으니 채점 단서도 그 노트만 다시 만든다
-                if (typeof autoMakeGrammarAiHint === 'function') {
-                    if (grammarAiHints[noteId]) delete grammarAiHints[noteId];
-                    autoMakeGrammarAiHint(noteId);
-                }
             });
             if (typeof saveToStorage === 'function') saveToStorage();
             if (typeof renderGrammarTables === 'function') renderGrammarTables();
@@ -2929,67 +2713,62 @@ ${koEsNoteListText}${refGrammar}${refWords}
         }
 
         // 문법 탭 위의 한 줄 — 단서가 없는 노트가 있을 때만 보인다
-        function renderGrammarHintBar(doneN, totalN, waiting) {
+        function renderGrammarHintBar() {
             const box = document.getElementById('grammar-hint-bar');
             if (!box) return;
-            if (grammarHintBusy) {
-                const prog = totalN ? ` · ${doneN}/${totalN}` : '';
-                const msg = waiting ? '요청이 몰려서 20초 쉬었다 이어가요' : 'AI 채점 단서를 만드는 중이에요';
-                box.className = 'flex items-center gap-2 text-[11px] font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl px-3 py-2';
-                box.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> ${msg}${prog}`;
-                return;
-            }
-            const n = staleGrammarHintNotes().length;
-            const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
             box.className = 'flex items-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
-            if (!n) {
-                box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${boost}`;
-                return;
-            }
-            box.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-violet-500"></i>
-                <span class="flex-1">AI 채점 단서가 없는 노트 ${n}개 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
-                ${boost}
-                <button type="button" onclick="refreshGrammarAiHints(false)" class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold transition-all active:scale-95">만들기</button>`;
+            box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>
+                <button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
         }
 
-        // [냐냐 요청] 예전엔 제목만 보냈다. AI 가 표 안에 뭐가 있는지 모른 채 제목만 보고 짐작해서,
-        //   문장에 없는 문법에도 점수가 붙는 일이 있었다. 표 전체는 하나에 3천 자라 못 보내니
-        //   설명 앞부분과 표 안의 스페인어 낱말 몇 개만 단서로 붙인다 (한 표당 150자 안팎).
-        //   [냐냐 요청] 이제 AI 가 미리 만들어 둔 '규칙 한 줄'이 있으면 그걸 쓴다.
-        //   단서가 없는 노트만 아래 거친 방식(설명 앞부분 + 표 낱말)으로 떨어진다.
-        function aiScoringNoteHint(t) {
-            const ai = (typeof grammarAiHintOf === 'function') ? grammarAiHintOf(t) : null;
-            if (ai) return grammarAiHintText(ai);
-            return aiScoringNoteHintRaw(t);
-        }
-        function aiScoringNoteHintRaw(t) {
+        // ============================================================
+        // [냐냐 요청] 채점에 넘어가는 노트 한 줄 — 전부 냐냐님이 쓴 것으로만 만든다 (2026-09-04).
+        //   표 제목 + 노트에 적어둔 글 + 표 안의 스페인어. AI 가 요약한 줄은 더 안 쓴다.
+        //   ⚠️ 표 전체는 노트 하나에 3천 자라 통째로는 못 보낸다. 그래서 여기는 여전히 '추린 것' 이다.
+        // ============================================================
+        function noteRichText(t) {
             const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-            // 설명이 없으면 첫 글 블록의 본문을 대신 쓴다 (표만 있고 desc 가 빈 노트가 있다)
-            let desc = strip(t.desc);
-            if (!desc) {
-                const textBlock = (t.blocks || []).find(b => b && b.html);
-                if (textBlock) desc = strip(textBlock.html);
-            }
-            //   [냐냐 요청] 80 → 150자. 단서가 모자라면 '근거를 못 짚겠으면 빼라'는 지시 때문에
-            //   실제로 쓴 문법도 놓친다. 정보를 늘리면 헛점수와 놓침이 같이 줄어든다.
-            desc = desc.slice(0, 150);
-
-            const words = [];
+            // 글 블록을 전부 잇는다. 예전엔 첫 블록 하나만 봤는데, 표 아래 팁 상자에
+            //   정작 중요한 예외가 적혀 있는 노트가 많다.
+            const parts = (t.blocks || []).filter(b => b && b.type !== 'table' && b.html).map(b => strip(b.html));
+            if (!parts.length && t.desc) parts.push(strip(t.desc));
+            if (t.note) parts.push(strip(t.note));
+            return parts.filter(Boolean).join(' · ');
+        }
+        // 표 안에서 '스페인어처럼 보이는 칸' 만 추린다 — 이 노트가 문장에 걸렸는지 보는 신호가 된다
+        function noteSpanishCells(t) {
+            const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+            const out = [];
             const push = (c) => {
                 const s = strip(c);
-                // 스페인어처럼 보이는 칸만 고른다. 낱말뿐 아니라 짧은 문구도 단서가 되므로
-                //   쉼표·물음표·¿¡ 까지 허용하되, 한글이 섞인 칸은 뜻풀이라 제외한다.
+                // 낱말뿐 아니라 짧은 문구도 신호가 되므로 쉼표·물음표·¿¡ 까지 허용하되,
+                //   한글이 섞인 칸은 뜻풀이라 제외한다.
                 if (!s || s.length > 40 || /[ㄱ-ㅎ가-힣]/.test(s)) return;
                 if (!/^[¿¡A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(s)) return;
                 if (!/^[¿¡?!.,'’\- A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/.test(s)) return;
-                if (!words.includes(s)) words.push(s);
+                if (!out.includes(s)) out.push(s);
             };
             (t.blocks || []).forEach(b => (b.rows || []).forEach(r => (r || []).forEach(push)));
             (t.rows || []).forEach(r => (r || []).forEach(push));
-            const ex = words.slice(0, 12).join(', ').slice(0, 240);
-            // 표 제목이 달려 있으면 그게 제일 짧고 정확한 단서다
+            return out;
+        }
+        // 자르되 말 중간에서 끊기지 않게 — 끝에서 60자 안에 마디(· . ej.)가 있으면 거기서 자른다
+        function cutAtBreak(txt, n) {
+            const s = String(txt || '');
+            if (s.length <= n) return s;
+            const head = s.slice(0, n);
+            const at = Math.max(head.lastIndexOf(' · '), head.lastIndexOf('. '), head.lastIndexOf(' ej.'));
+            return (at > n - 60) ? head.slice(0, at) : head;
+        }
+        function aiScoringNoteHint(t) {
+            // 표 제목이 제일 짧고 정확하다 — 노트에 표가 여럿이면 이게 유일한 이름표다
             const caps = (t.blocks || []).map(b => String((b && b.caption) || '').trim()).filter(Boolean);
             const capTxt = caps.join(' / ').slice(0, 120);
+            //   [냐냐 요청] 150 → 400자. AI 가 쓴 요약 한 줄(60자)을 대신하게 됐으니 그만큼 넉넉해야 한다.
+            //   노트 서른 개의 글은 절반이 200자 안쪽이라 400 이면 긴 노트 대여섯만 잘린다.
+            //   ⚠️ 이 줄은 노트 서른 개가 매 첨삭마다 통째로 프롬프트에 들어간다. 늘리면 그만큼 매번 무거워진다.
+            const desc = cutAtBreak(noteRichText(t), 400);
+            const ex = noteSpanishCells(t).slice(0, 12).join(', ').slice(0, 240);
             return [capTxt && `표: ${capTxt}`, desc, ex && `e.g. ${ex}`].filter(Boolean).join(' | ');
         }
         function aiScoringNoteListText(notes) {
@@ -2998,7 +2777,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const hint = aiScoringNoteHint(t);
                 return `- ${t.title || ''}${hint ? ` :: ${hint}` : ''}`;
             });
-            return `\n            My grammar notes. Each line is "TITLE :: the rule this note actually teaches | 신호: the Spanish signals that mean this note is in play".\n            The TITLE is only a label the student typed - it is often broader than the note. JUDGE ONLY BY THE RULE after "::",\n            never by the title: a note titled "위치를 나타내는 표현" whose rule is about al/del is NOT used by a sentence with no contraction.\n            ${lines.join('\n            ')}\n`;
+            return `\n            My grammar notes. Each line is "TITLE :: what the note actually contains - 표: its table names, then the student's own written explanation, then e.g. Spanish taken from its tables".\n            The TITLE is only a label the student typed - it is often broader than the note. JUDGE ONLY BY THE CONTENT after "::",\n            never by the title: a note titled "위치를 나타내는 표현" whose content is about al/del is NOT used by a sentence with no contraction.
+            The content is the student's own note, written in shorthand (X = does not apply, · = bullet). Read what it teaches; a topic the note never mentions is not covered by that note.\n            ${lines.join('\n            ')}\n`;
         }
         // [냐냐 요청] 실수 유형. 예전엔 자유 작문·질문답하기에만 있어서, 한→스 미션과
         //   예문 연습으로 틀린 것은 첨삭 노트에서 유형 없이 떠돌았다. 네 곳이 같은 표를 쓴다.

@@ -268,7 +268,6 @@ let vocabulary = [];
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
-                grammarAiHints: grammarAiHints,           // [냐냐 요청] 노트별 AI 채점 단서
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
@@ -444,7 +443,6 @@ let vocabulary = [];
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
-                grammarAiHints = payload.grammarAiHints || {};           // [냐냐 요청] 노트별 AI 채점 단서
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
                     GRAMMAR_ICONS = payload.grammarTopics
@@ -476,7 +474,6 @@ let vocabulary = [];
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
                 grammarCellWords = {};
-                grammarAiHints = {};
                 eggState = defaultEggState();
             }
 
@@ -3973,11 +3970,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const blocks = getNoteBlocks(t)
                     .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
                     .filter(Boolean).join('');
-                // [냐냐 요청] AI 채점 단서는 여기 맨 위에만 둔다 — 노트 목록에 줄줄이 붙으면 지저분하고,
-                //   정작 궁금할 때는 첨삭에서 '왜 이 노트가 걸렸지' 하고 이 팝업을 여니까.
-                const hintRow = (typeof renderGrammarHintRow === 'function') ? renderGrammarHintRow(t) : '';
-                body.innerHTML = (hintRow ? `<div class="mb-3">${hintRow}</div>` : '')
-                    + (blocks || '<p class="text-xs text-slate-400 py-4 text-center">이 노트에는 아직 내용이 없어요.</p>');
+                body.innerHTML = blocks || '<p class="text-xs text-slate-400 py-4 text-center">이 노트에는 아직 내용이 없어요.</p>';
             }
             const goto = document.getElementById('grammar-peek-goto');
             if (goto) goto.onclick = () => { closeGrammarPeek(); goToGrammarNote(id); };
@@ -4615,11 +4608,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //      즉 "연결이 하나라도 있는 표 = 단어 시험" 이라 따로 켜고 끄는 스위치가 필요 없다.
         let grammarCellWords = {};
 
-        // [냐냐 요청] AI 채점 단서 — 노트마다 '이 노트가 실제로 가르치는 규칙 한 줄 + 걸려야 할 신호'.
-        //   AI 가 노트 내용을 한 번 읽고 만들어 두고, 첨삭 채점 때 제목 대신 이 줄로 판단하게 한다.
-        //   {노트id: { h: 내용해시, r: '규칙 한 줄', t: ['al','del',...], m: 1(내가 손댐) }}
-        //   ⚠️ 기본 노트는 코드 상수라 노트 안에 못 넣는다. 그래서 칸 강조처럼 노트 바깥에 둔다.
-        let grammarAiHints = {};
         const GRAMMAR_TABLES = [
             {
                 id: 'possessive',
@@ -4952,43 +4940,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         // [냐냐 요청] 노트 카드 하나 — 그룹 모드·일반 모드가 공유
         //   showTopicBadge: 그룹으로 안 묶일 때(검색·필터 중)만 카드에 주제를 적어준다
-        // [냐냐 요청] AI 채점 단서 한 줄 — 첨삭이 이 노트를 판단할 때 제목 대신 읽는 줄이다.
-        //   제목이 넓어도(예: '위치를 나타내는 표현') 이 줄이 좁으면 엉뚱한 문장에 안 걸린다.
-        //   연필로 직접 고칠 수 있다 — 노트 제목·구조는 그대로 두고 한 줄만 손보는 것.
-        function renderGrammarHintRow(t) {
-            if (typeof grammarAiHintOf !== 'function') return '';
-            const hint = grammarAiHintOf(t);
-            const editing = (typeof grammarHintEditId !== 'undefined') && grammarHintEditId === t.id;
-            if (editing) {
-                const e = (typeof grammarAiHints !== 'undefined' && grammarAiHints[t.id]) || {};
-                return `<div class="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 space-y-2">
-                    <div class="text-[10px] font-black text-violet-500">AI 채점 단서 고치기</div>
-                    <textarea id="ghint-rule-${t.id}" rows="2" placeholder="이 노트가 가르치는 규칙 한 줄" class="w-full text-xs rounded-lg border border-violet-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400">${escapeHtml(e.r || '')}</textarea>
-                    <input id="ghint-trig-${t.id}" value="${escapeHtml((e.t || []).join(', '))}" placeholder="신호가 되는 스페인어 (쉼표로 구분)" class="w-full text-xs rounded-lg border border-violet-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-400">
-                    <div class="flex gap-2">
-                        <button type="button" onclick="editGrammarAiHint('${t.id}')" class="flex-1 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 text-[11px] font-bold">취소</button>
-                        <button type="button" onclick="saveGrammarAiHint('${t.id}')" class="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold">저장</button>
-                    </div>
-                </div>`;
-            }
-            const btns = `<button type="button" onclick="event.stopPropagation(); regenGrammarAiHint('${t.id}')" title="AI로 다시 만들기" class="shrink-0 w-6 h-6 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-100 text-[10px] transition-colors"><i class="fa-solid fa-rotate-right"></i></button>
-                <button type="button" onclick="event.stopPropagation(); editGrammarAiHint('${t.id}')" title="직접 고치기" class="shrink-0 w-6 h-6 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-100 text-[10px] transition-colors"><i class="fa-solid fa-pen"></i></button>`;
-            if (!hint) {
-                return `<div class="flex items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2">
-                    <span class="flex-1 text-[11px] font-bold text-slate-400">AI 채점 단서가 없어요 — 첨삭이 이 노트를 제목만 보고 짐작해요</span>
-                    ${btns}
-                </div>`;
-            }
-            const tr = (hint.t || []).filter(Boolean);
-            return `<div class="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2">
-                <div class="flex-1 min-w-0 space-y-1">
-                    <div class="text-[10px] font-black text-violet-400">AI 채점 단서${hint.m ? ' · 내가 고침' : ''}</div>
-                    <div class="text-[11px] font-bold text-slate-600">${escapeHtml(hint.r || '')}</div>
-                    ${tr.length ? `<div class="text-[10px] text-slate-400 break-words">신호 · ${escapeHtml(tr.join(', '))}</div>` : ''}
-                </div>
-                ${btns}
-            </div>`;
-        }
 
         function renderGrammarNoteCard(t, query, showTopicBadge) {
                 // [냐냐 요청] 노트 = 블록 목록 — 글 블록과 표 블록을 저장된 순서 그대로 그린다
@@ -8168,8 +8119,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             await saveToStorage();
             if (typeof updateStats === 'function') updateStats(); // 헤더 문법 개수 갱신
             showToast("문법 표가 저장됐어요! ✨", "success");
-            // [냐냐 요청] 내용이 바뀌었으면 AI 채점 단서도 그 노트만 조용히 다시 만든다 (기다리지 않는다)
-            if (typeof autoMakeGrammarAiHint === 'function') autoMakeGrammarAiHint(s.id);
         }
 
         function deleteGrammarTable(id) {
@@ -8188,7 +8137,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     delete grammarScores[id];        // [냐냐 요청] 점수·마스터 자격도 같이 정리
                     delete grammarTransUsed[id];
                     delete grammarCellWords[id];     // [냐냐 요청] 단어 연결도 정리
-                    if (typeof grammarAiHints !== 'undefined') delete grammarAiHints[id];   // AI 채점 단서도
                     if (typeof logAction === 'function') logAction('undo-new-grammar');
                     renderGrammarTables();
                     await saveToStorage();
