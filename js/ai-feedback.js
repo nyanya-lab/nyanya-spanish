@@ -2735,6 +2735,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
         // ============================================================
         // [냐냐 요청] 노트 보강 (2026-09-03) — 노트에 빠진 용법을 AI 가 찾아 제안한다.
+        //   ⚠️ 2026-09-04 부터 화면에서 들어가는 길이 없다 (문법 탭 윗줄의 버튼을 뺐다).
+        //      코드는 통째로 묵혀둔다 — 되살리려면 renderGrammarHintBar 에 버튼 한 줄만 되돌리면 된다.
+        //      이유는 그 함수 위 주석에 적어뒀다. 되살릴지 다시 묻지 말 것.
         //   왜: 채점은 '노트에 적힌 규칙' 으로만 판단한다. 그래서 노트가 좁으면 안 걸린다 —
         //   '동서남북' 노트가 Corea del Sur 용법만 담고 있어서 'viajar al norte' 가 안 걸렸다.
         //   노트를 넓히는 게 답인데 서른 개를 손으로 채우는 건 할 일이 아니다. AI 가 뽑고 사람은 고른다.
@@ -2924,23 +2927,25 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (typeof openGrammarEditor === 'function') openGrammarEditor(list[0].id);
         }
 
+        // [냐냐 요청] 이 줄은 '표 제목이 빈 표가 있다' 는 경고에만 쓴다. 빈 표가 없으면 줄 자체가 없다.
+        //   ⚠️ '✨ 노트 보강' 버튼은 2026-09-04 에 뺐다. 기능(openGrammarBoost·모달·프롬프트)은
+        //      코드에 그대로 묵혀둔다 — 다시 쓰려면 여기에 버튼 한 줄만 되돌리면 된다.
+        //      뺀 이유: ① 동사 꼴은 활용표 잇기가 노트와 상관없이 짚는다 ② 채점에 넘어가는 노트 글은
+        //      400자에서 자르는데 보강은 줄을 노트 맨 끝에 붙인다 — 노트 31개 중 14개가 이미 400자를
+        //      넘어서, 붙여도 채점이 못 본다. 남는 값은 '읽을거리로 노트가 넓어지는 것' 뿐인데
+        //      그건 냐냐님이 싫다고 한 바로 그 지점이다 (내 노트에 AI 가 쓴 줄이 섞이는 것).
+        //   되살릴지 다시 묻지 말 것. 냐냐님이 묵혀두기로 정했다.
         function renderGrammarHintBar() {
             const box = document.getElementById('grammar-hint-bar');
             if (!box) return;
-            // 보강 버튼은 평소 줄에만 둔다 — 경고줄은 '표 제목을 채워라' 한 가지만 말해야 한다
-            const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
             const missing = notesMissingCaption();
-            if (missing.length) {
-                const names = missing.slice(0, 3).map(t => t.title || '(제목 없음)').join(', ');
-                const more = missing.length > 3 ? ` 외 ${missing.length - 3}개` : '';
-                box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2';
-                box.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                    <span class="flex-1 min-w-0">표 제목이 없는 노트 ${missing.length}개 — 채점이 무슨 표인지 몰라요 · ${escapeHtml(names)}${more}</span>
-                    <button type="button" onclick="openFirstMissingCaption()" class="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95">채우러 가기</button>`;
-                return;
-            }
-            box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
-            box.innerHTML = `<span class="flex-1 min-w-0">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${boost}`;
+            if (!missing.length) { box.className = 'hidden'; box.innerHTML = ''; return; }
+            const names = missing.slice(0, 3).map(t => t.title || '(제목 없음)').join(', ');
+            const more = missing.length > 3 ? ` 외 ${missing.length - 3}개` : '';
+            box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2';
+            box.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                <span class="flex-1 min-w-0">표 제목이 없는 노트 ${missing.length}개 — 채점이 무슨 표인지 몰라요 · ${escapeHtml(names)}${more}</span>
+                <button type="button" onclick="openFirstMissingCaption()" class="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95">채우러 가기</button>`;
         }
 
         // ============================================================
