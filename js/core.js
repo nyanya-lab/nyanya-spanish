@@ -1398,6 +1398,36 @@ let vocabulary = [];
                     </div>`;
             }
 
+            // [냐냐 요청] 오늘 틀린 것도 같은 자리에서 본다 (2026-09-04).
+            //   복습 예정과 똑같은 세 줄(단어·관용구·문법)이고, 누르면 같은 창이 '틀린 것' 으로 열린다.
+            //   ⚠️ 오늘만 낸다 — 셋 다 '마지막으로 틀린 날' 하나만 들고 있어서 지난 날은 반쪽이 된다.
+            let wrongHtml = '';
+            if (ds === today && typeof getAllWrongOn === 'function') {
+                const bad = getAllWrongOn(ds);
+                if (bad && bad.total) {
+                    const badRow = (icon, label, n, kind) => n
+                        ? `<button onclick="openReviewPlanModal('${ds}', '${kind}', 'wrong')" class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-rose-100 transition-all active:scale-95">
+                                <span class="text-slate-600">${icon} ${label}</span>
+                                <span class="font-bold text-rose-600">${n}개 <i class="fa-solid fa-chevron-right text-[9px] text-rose-400"></i></span>
+                           </button>`
+                        : `<div class="w-full flex items-center justify-between gap-2 px-2 py-1 opacity-50">
+                                <span class="text-slate-500">${icon} ${label}</span><span class="font-bold text-slate-400">0개</span>
+                           </div>`;
+                    wrongHtml = `
+                        <div class="mt-2 pt-2 border-t border-rose-100">
+                            <div class="flex items-center justify-between gap-2 mb-1.5">
+                                <span class="font-black text-rose-600">오늘 틀린 것</span>
+                                <span class="font-black text-rose-500">${bad.total}개</span>
+                            </div>
+                            <div class="space-y-0.5">
+                                ${badRow('📖', '단어', bad.word.length, 'word')}
+                                ${badRow('📘', '관용구', bad.idiom.length, 'idiom')}
+                                ${badRow('📋', '문법', bad.grammar.length, 'grammar')}
+                            </div>
+                        </div>`;
+                }
+            }
+
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="flex items-center justify-between mb-2">
@@ -1407,6 +1437,7 @@ let vocabulary = [];
                 ${total > 0
                     ? `<div class="grid grid-cols-2 gap-1">${grid}</div>`
                     : (ds > today ? '' : '<p class="text-slate-400 text-center py-1">이 날은 쉬어갔네요 🌙</p>')}
+                ${wrongHtml}
                 ${planHtml}
             `;
         }
@@ -1415,8 +1446,12 @@ let vocabulary = [];
         //   단계를 보여주는 이유: 같은 '61개'라도 처음 틀린 40개인지 30일차 5개인지에 따라
         //   그날 복습의 성격이 완전히 다르다.
         //   단어를 누르면 팝업 위에 팝업을 또 띄우지 않고 그 자리에서 아래로 펼친다 (폰 배려).
-        function openReviewPlanModal(ds, kind) {
-            const plan = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
+        //   [냐냐 요청] mode 'wrong' 이면 '그 날 틀린 것' 을 같은 창으로 본다 (2026-09-04).
+        function openReviewPlanModal(ds, kind, mode) {
+            const isWrong = (mode === 'wrong');
+            const plan = isWrong
+                ? ((typeof getAllWrongOn === 'function') ? getAllWrongOn(ds) : null)
+                : ((typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null);
             const modal = document.getElementById('review-plan-modal');
             if (!plan || !modal) return;
 
@@ -1433,15 +1468,17 @@ let vocabulary = [];
             const bodyEl = document.getElementById('review-plan-body');
             const isToday = ds === getLocalDateString();
 
-            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} 복습 예정 · ${cur.icon} ${cur.label} ${cur.list.length}개`;
-            if (subEl) subEl.innerText = isToday
-                ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
-                : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.';
+            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} ${isWrong ? '틀린 것' : '복습 예정'} · ${cur.icon} ${cur.label} ${cur.list.length}개`;
+            if (subEl) subEl.innerText = isWrong
+                ? '오늘 어디서든 틀린 것이에요 — 퀴즈·게임·복습·첨삭 전부요.'
+                : (isToday
+                    ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
+                    : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.');
 
             // 셋을 오가는 줄. 0개인 것은 눌러도 볼 게 없으니 흐리게 둔다.
             const tabs = `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
                 ${KINDS.map(k => k.list.length
-                    ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
+                    ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}', '${isWrong ? 'wrong' : 'plan'}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
                     : `<div class="py-2 rounded-xl text-[11px] font-black text-slate-300 text-center">${k.icon} ${k.label} 0</div>`).join('')}
             </div>`;
 
@@ -1491,6 +1528,13 @@ let vocabulary = [];
 
             const label = (stage) => stage === 0 ? '처음 틀린 뒤 첫 복습' : `${stage}번 복습한 ${cur.unit}`;
 
+            if (isWrong) {
+                bodyEl.innerHTML = tabs + (cur.list.length
+                    ? `<div class="space-y-1.5">${cur.list.map(itemHtml).join('')}</div>`
+                    : '<p class="text-slate-400 text-center text-xs py-4">이 갈래는 오늘 틀린 게 없어요 ✨</p>');
+                modal.classList.remove('hidden');
+                return;
+            }
             bodyEl.innerHTML = tabs + (groups.length ? groups.map(g => `
                 <div class="space-y-1.5">
                     <button onclick="toggleReviewPlanGroup(${g.stage})" class="w-full flex items-center gap-2 bg-white py-1.5 hover:bg-slate-50 rounded-lg transition-colors">
@@ -2355,6 +2399,48 @@ let vocabulary = [];
             const grammar = getGrammarScheduledOn(ds) || [];
             const idiom = getIdiomScheduledOn(ds) || [];
             return { word, grammar, idiom, total: word.length + grammar.length + idiom.length };
+        }
+
+        // ============================================================
+        // [냐냐 요청] 그 날 틀린 것 — 단어·관용구·문법 (2026-09-04).
+        //   달력에서 오늘을 누르면 '복습 예정' 아래에 '오늘 틀린 것' 이 같이 뜬다.
+        //   ⚠️ 오늘만 정확하다. 셋 다 'lastWrongDate'(마지막으로 틀린 날) 하나만 들고 있어서,
+        //      지난 날을 물으면 '그 날 틀리고 그 뒤로 다시 안 틀린 것' 만 나온다. 그래서 오늘만 연다.
+        //   문법은 lastWrongDate 로는 모자란다 — 이미 곡선에 들어와 있으면 다시 틀려도
+        //   그 날짜가 안 바뀌기 때문이다(grammarReviewEnter 가 한 번만 적는다).
+        //   그래서 오늘 첨삭 기록(aiNotes)에서 틀리게 짚인 노트를 합쳐서 본다.
+        // ============================================================
+        function getAllWrongOn(ds) {
+            if (!ds) return null;
+            const words = (vocabulary || []).filter(w => w && w.lastWrongDate === ds);
+
+            const idioms = [];
+            Object.keys(idiomReview || {}).forEach(key => {
+                const rec = idiomReview[key];
+                if (!rec || rec.lastWrongDate !== ds) return;
+                const sep = key.indexOf('::');
+                if (sep < 0) return;
+                const w = (vocabulary || []).find(v => String(v.id) === key.slice(0, sep));
+                if (!w) return;
+                const found = (typeof findIdiomByKeyPart === 'function') ? findIdiomByKeyPart(w, key.slice(sep + 2)) : null;
+                if (found) idioms.push({ word: w, idiom: found, key, stage: rec.stage || 0 });
+            });
+
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const badIds = new Set();
+            tables.forEach(t => {
+                const rec = (typeof grammarReview !== 'undefined') ? grammarReview[t.id] : null;
+                if (rec && rec.lastWrongDate === ds) badIds.add(t.id);
+            });
+            (typeof aiNotes !== 'undefined' ? (aiNotes || []) : []).forEach(n => {
+                if (!n || !n.t) return;
+                const d = new Date(n.t);
+                if (isNaN(d) || getLocalDateString(d) !== ds) return;
+                (n.gram || []).forEach(g => { if (g && g.id && !g.ok) badIds.add(g.id); });
+            });
+            const grammar = tables.filter(t => badIds.has(t.id));
+
+            return { word: words, idiom: idioms, grammar, total: words.length + idioms.length + grammar.length };
         }
 
         // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
