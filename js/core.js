@@ -5823,7 +5823,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         <button type="button" onclick="addGeColumn(${bi})" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button type="button" onclick="removeGeColumn(${bi})" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
                     </div>
-                    <input value="${escapeAttr(b.caption || '')}" oninput="updateGeTableCaption(${bi}, this.value)"
+                    <input id="ge-cap-${bi}" value="${escapeAttr(b.caption || '')}" oninput="updateGeTableCaption(${bi}, this.value)"
                         placeholder="표 제목 — 이 표가 뭘 다루는지 한 줄 (예: 직설법 현재 불규칙)" title="AI 채점·문장 만들기에 이 제목이 같이 넘어가요"
                         class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 placeholder:text-slate-300 placeholder:font-normal focus:outline-none focus:ring-1 focus:ring-violet-400">
                     <div id="ge-grid-${bi}" class="overflow-x-auto"></div>
@@ -8064,6 +8064,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //      → 병합에 걸린 행은 남기고, 지운 행만큼 병합·강조 좌표를 보정한다
             s.blocks.forEach((b, bi) => {
                 if (b.type !== 'table') return;
+                // [냐냐 요청] 표 제목은 저장할 때 칸에서 다시 읽는다. 한글은 마지막 글자가 조합 중일 수 있어서
+                //   oninput 만 믿으면 '쳤는데 안 들어간' 것처럼 보인다 (노트 제목도 같은 이유로 여기서 다시 읽는다).
+                const capEl = document.getElementById('ge-cap-' + bi);
+                if (capEl) b.caption = capEl.value.trim();
                 b.merges = b.merges || {};
                 const rowsCoveredByMerge = () => {
                     const set = new Set();

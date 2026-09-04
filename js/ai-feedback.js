@@ -2713,12 +2713,39 @@ ${koEsNoteListText}${refGrammar}${refWords}
         }
 
         // 문법 탭 위의 한 줄 — 단서가 없는 노트가 있을 때만 보인다
+        // [냐냐 요청] 표 제목이 빈 표를 찾는다 (2026-09-04).
+        //   채점은 이제 표 제목을 읽는다. 제목이 없으면 AI 는 이름표 없는 격자를 받는 셈이라
+        //   비어 있는 걸 알려주고 그 노트로 바로 데려간다. 다 채우면 줄이 사라진다.
+        function notesMissingCaption() {
+            return (typeof aiScoringNoteList === 'function' ? aiScoringNoteList() : []).filter(t => {
+                const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
+                return blocks.some(b => b && b.type === 'table' && !String(b.caption || '').trim()
+                    && (typeof tableBlockHasContent !== 'function' || tableBlockHasContent(b)));
+            });
+        }
+        function openFirstMissingCaption() {
+            const list = notesMissingCaption();
+            if (!list.length) { showToast("표 제목이 다 채워져 있어요", "info"); return; }
+            if (typeof openGrammarEditor === 'function') openGrammarEditor(list[0].id);
+        }
+
         function renderGrammarHintBar() {
             const box = document.getElementById('grammar-hint-bar');
             if (!box) return;
-            box.className = 'flex items-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
-            box.innerHTML = `<span class="flex-1">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>
-                <button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
+            const boost = `<button type="button" onclick="openGrammarBoost()" title="노트마다 빠진 용법을 AI가 찾아줘요" class="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[11px] font-bold transition-all active:scale-95">✨ 노트 보강</button>`;
+            const missing = notesMissingCaption();
+            if (missing.length) {
+                const names = missing.slice(0, 3).map(t => t.title || '(제목 없음)').join(', ');
+                const more = missing.length > 3 ? ` 외 ${missing.length - 3}개` : '';
+                box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2';
+                box.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                    <span class="flex-1 min-w-0">표 제목이 없는 노트 ${missing.length}개 — 채점이 무슨 표인지 몰라요 · ${escapeHtml(names)}${more}</span>
+                    <button type="button" onclick="openFirstMissingCaption()" class="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition-all active:scale-95">채우러 가기</button>
+                    ${boost}`;
+                return;
+            }
+            box.className = 'flex items-center flex-wrap gap-2 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2';
+            box.innerHTML = `<span class="flex-1 min-w-0">노트에 빠진 용법을 AI가 찾아 제안해요 — 체크만 하면 들어가요</span>${boost}`;
         }
 
         // ============================================================
