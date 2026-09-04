@@ -3743,7 +3743,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return `<button type="button" ${has ? 'disabled' : `onclick="addGrammarEntryManually('${escapeAttr(t.id)}')"`}
                     class="w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${has ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 hover:bg-violet-50 hover:border-violet-200'}">
                     <span class="text-sm font-extrabold text-slate-800 min-w-0 truncate flex-1">${escapeHtml(t.icon || '📋')} ${escapeHtml(t.title || '')}</span>
-                    <span class="shrink-0 text-[10px] font-black ${has ? 'text-slate-400' : 'text-violet-500'}">${has ? '이미 있음' : '+2'}</span>
+                    <span class="shrink-0 text-[10px] font-black ${has ? 'text-slate-400' : 'text-violet-500'}">${has ? '이미 있음' : '더하기'}</span>
                 </button>`;
             }).join('');
         }
@@ -3774,20 +3774,31 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 review: (typeof grammarReview !== 'undefined' && grammarReview[noteId])
                     ? JSON.parse(JSON.stringify(grammarReview[noteId])) : undefined
             };
+            // [냐냐 요청] 근거를 찾았으면 판정까지 한다 — 그 낱말이 고친 문장에 살아남았나.
+            //   다른 항목과 똑같은 잣대다. 근거를 못 찾으면 '썼다' 는 냐냐님 말을 믿고 +2.
+            //   ⚠️ AI 를 더 부르지 않는다. 수기 추가가 느려지면 그때부터 본선이 되어버린다.
+            let ok = true;
+            if (ev) {
+                const fixedHay = grammarEvidenceNorm(aiStripTags(
+                    (aiLastFeedbackForAdd && aiLastFeedbackForAdd.correctedText) || ''));
+                const k = grammarEvidenceNorm(ev);
+                ok = !k || fixedHay.indexOf(k) >= 0;
+            }
+            const delta = ok ? GRAMMAR_TRANS_OK : GRAMMAR_TRANS_BAD;
             const canMove = (noteId === grammarReviewLastNoteId);
-            addGrammarScore(noteId, GRAMMAR_TRANS_OK, { transUsed: true });
-            applyGrammarCurve(noteId, true, canMove);
+            addGrammarScore(noteId, delta, { transUsed: ok });
+            applyGrammarCurve(noteId, ok, canMove);
             aiLastEsKoGrammar.push({
-                note, usage: 'correct', delta: GRAMMAR_TRANS_OK, baseDelta: GRAMMAR_TRANS_OK,
+                note, usage: ok ? 'correct' : 'wrong', delta, baseDelta: delta,
                 prev, canMove, ev: ev || '직접 더함', state: 'normal', undone: false, manual: true
             });
-            setAiNoteGramOk(_lastAiNoteKey, noteId, true, note.title);
+            setAiNoteGramOk(_lastAiNoteKey, noteId, ok, note.title);
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddGrammarPicker();
             renderEsKoGrammarRefs();
             if (typeof renderGrammarTables === 'function') renderGrammarTables();
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
-            showToast(`"${note.title}" +2`, "success");
+            showToast(`"${note.title}" ${fmtDelta(delta)}`, delta > 0 ? "success" : "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
