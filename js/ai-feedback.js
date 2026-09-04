@@ -2075,6 +2075,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
         function buildAiSuggestions(feedback) {
             const out = { idioms: [], newWords: [] };
+            const bareTok = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
             // [냐냐 요청] '이 문장에 쓸 수 있었던 내 관용구' 는 없앴다 (2026-09-02).
             //   문장에 든 낱말 하나만 겹쳐도 그 낱말에 달린 표현이 전부 딸려나왔다.
 
@@ -2112,6 +2113,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
+                if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2132,6 +2134,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (looksConjugated(key)) return;
+                //   [냐냐 지적] 'fue' 를 등록하라고 권했다 — ser 의 부정과거가 활용표에 없어서
+                //   역추적이 못 찾고, 어미 규칙에도 안 걸린다. 네 보조동사는 글자로 막는다.
+                if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2533,6 +2538,26 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return { idx, lemma, nonVerb };
         }
 
+        // [냐냐 요청] 짜임을 만드는 동사와, 활용표에 없어도 알아봐야 하는 심한 불규칙.
+        //   ⚠️ 네 동사(estar·haber·ser·ir)뿐이다 — 늘어나지 않는다.
+        //   두 군데가 같이 쓴다: 동사 꼴 알아보기, 그리고 '아직 단어장에 없어요' 추천에서 빼기
+        //   ('fue' 를 등록하라고 권한 적이 있다 — ser 의 부정과거가 활용표에 없어서 낱말로 보였다).
+        const ESTAR_FORMS = new Set(['estoy','estas','esta','estamos','estais','estan',
+            'estaba','estabas','estabamos','estabais','estaban',
+            'estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron',
+            'estare','estaras','estara','estaremos','estareis','estaran','estaria','estarian']);
+        const HABER_FORMS = new Set(['he','has','ha','hemos','habeis','han',
+            'habia','habias','habiamos','habiais','habian',
+            'habre','habras','habra','habremos','habreis','habran','habria','habrian']);
+        //   ser 와 ir 은 부정과거가 글자까지 똑같다 (fui/fue/fueron …)
+        const SER_IR_FORMS = new Set(['soy','eres','es','somos','sois','son',
+            'era','eras','eramos','erais','eran',
+            'fui','fuiste','fue','fuimos','fuisteis','fueron',
+            'sere','seras','sera','seremos','sereis','seran','seria','serian',
+            'voy','vas','va','vamos','vais','van',
+            'iba','ibas','ibamos','ibais','iban']);
+        const IRREGULAR_AUX_FORMS = new Set([...ESTAR_FORMS, ...HABER_FORMS, ...SER_IR_FORMS]);
+
         // 문장이 쓴 동사 꼴 → { 시제키: 근거 낱말 }
         function detectVerbFormsInText(text, corrected) {
             const out = new Map();
@@ -2546,13 +2571,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
             // 진행·완료를 만드는 두 동사는 어느 시제로 와도 알아봐야 한다 (estaba/había …).
             //   둘 다 심한 불규칙이고 활용표에 다 채워져 있으리란 보장이 없어서 글자로도 받아둔다.
             //   ⚠️ 이 목록은 estar·haber 두 동사만이다 — 짜임을 만드는 게 이 둘뿐이라 늘어나지 않는다.
-            const ESTAR_FORMS = new Set(['estoy','estas','esta','estamos','estais','estan',
-                'estaba','estabas','estabamos','estabais','estaban',
-                'estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron',
-                'estare','estaras','estara','estaremos','estareis','estaran','estaria','estarian']);
-            const HABER_FORMS = new Set(['he','has','ha','hemos','habeis','han',
-                'habia','habias','habiamos','habiais','habian',
-                'habre','habras','habra','habremos','habreis','habran','habria','habrian']);
             const bare = (x) => String(x).normalize('NFD').replace(/[̀-ͯ]/g, '');
             const ARTICLES = new Set(['el','la','los','las','un','una','unos','unas','lo']);
             let prevWasHaber = false, prevWasArticle = false;
@@ -2638,7 +2656,16 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 detectVerbFormsInText(feedback && feedback.originalMarked).forEach((ev, key) => {
                     const ok = COMPOUND.has(key) ? fixedForms.has(key) : wordSurvived(ev);
                     notesTeachingVerbForm(key, notes).forEach(note => {
-                        if (already.has(note.id) || extra.some(e => e.note.id === note.id)) return;
+                        if (extra.some(e => e.note.id === note.id)) return;
+                        if (already.has(note.id)) {
+                            // [냐냐 지적] AI 가 '제대로 썼다' 고 하는데 코드가 보기엔 그 낱말이 고쳐졌다 (2026-09-04).
+                            //   'es hecho' → 'fue hecha' 로 고쳐놓고 근거를 고친 문장에서 떠와서 +2 를 줬다.
+                            //   그 낱말이 살아남았는지는 코드가 기계적으로 안다 — 이럴 땐 코드를 따른다.
+                            //   ⚠️ 내리기만 한다. 올리는 건 안 한다 — AI 가 틀렸다고 본 데는 우리가 모르는 이유가 있을 수 있다.
+                            const hit = parsed.find(x => x.note.id === note.id);
+                            if (hit && hit.ok && !ok) { hit.ok = false; hit.ev = ev; }
+                            return;
+                        }
                         extra.push({ note, ok, ev });
                     });
                 });
