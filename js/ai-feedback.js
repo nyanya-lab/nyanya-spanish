@@ -1157,6 +1157,32 @@
         //   여러 번 하는 사이에 노트 구석까지 돌아간다. 고르는 건 코드가 하고(무작위) AI 는 따른다.
         //   ⚠️ 대목은 '노트에 적힌 줄' 그대로다. 요약하지 않는다 — 요약하면 디테일이 날아간다.
         // ============================================================
+        // [냐냐 요청] 냐냐님은 노트에서 예문을 기울임(<i>)으로 적는다 (2026-09-04).
+        //   그 표시를 읽어서 '이번 대목이 예문인지' 를 안다. 예문이면 소재를 더 세게 버리라고 시킨다.
+        //   ⚠️ 예문을 대목 후보에서 빼자는 안은 접었다 — 예문에만 있는 용법이 있다.
+        //   과거분사 노트가 그렇다: 'estar + 과거분사(형용사 용법)' 은 규칙 줄에 없고
+        //   'Las ventanas están abiertas.' 라는 예문에만 있다. 빼면 그 연습이 사라진다.
+        function noteItalicLines(note) {
+            const out = [];
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(note) : [];
+            blocks.forEach(b => {
+                if (!b || b.type === 'table' || !b.html) return;
+                (String(b.html).match(/<(i|em)\b[^>]*>[\s\S]*?<\/(i|em)>/gi) || []).forEach(seg => {
+                    const t = ((typeof richTextToPlain === 'function') ? richTextToPlain(seg) : seg)
+                        .replace(/\s+/g, ' ').trim();
+                    if (t) out.push(t);
+                });
+            });
+            return out;
+        }
+        function grammarDetailIsExample(note, line) {
+            const t = String(line || '').replace(/\s+/g, ' ').trim();
+            if (!t) return false;
+            if (/^ej\.?\s/i.test(t)) return true;
+            const head = t.slice(0, 14);
+            return noteItalicLines(note).some(x => x.indexOf(head) >= 0);
+        }
+
         function grammarNoteDetailLines(note) {
             const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(note) : [];
             const out = [];
@@ -1493,7 +1519,10 @@ ${grammarDetail}
 ⚠️ 대목에서 가져올 것은 **문법 규칙뿐**입니다. 대목에 나오는 소재(사람 이름·사물·상황)는 그 규칙을 보여주려고
 학생이 노트에 적어둔 예시일 뿐이니 그대로 옮겨오지 마세요. 예를 들어 대목이
 'Don quijote fue escrito por Miguel de Cervantes.' 라면 가져올 것은 'ser + 과거분사 + por 행위자' 라는 짜임이지
-'작가가 쓴 책' 이라는 소재가 아닙니다 — 그 짜임으로 전혀 다른 이야기를 만드세요.
+'작가가 쓴 책' 이라는 소재가 아닙니다 — 그 짜임으로 전혀 다른 이야기를 만드세요.${grammarDetailIsExample(grammarNote, grammarDetail) ? `
+🚫 이번 대목은 학생이 노트에 적어둔 **예문**입니다 (노트에서 기울임으로 표시해 둔 줄).
+   그래서 소재를 베낄 위험이 특히 큽니다. 이 예문에 나오는 사람·사물·장소는 **하나도 쓰지 마세요**.
+   짜임만 남기고 소재는 완전히 새로 잡으세요.` : ''}
 다만 이 대목으로 도저히 자연스러운 문장이 안 나오면 '같은 노트 안의 다른 대목'으로 바꾸세요 — 자연스러움이 먼저입니다.
 노트 밖으로 나가지는 마세요. 이 노트를 하나도 쓰지 않는 문장은 실패입니다 (대목을 바꾸는 건 괜찮고, 노트를 통째로 버리는 게 안 됩니다).` : ''}` : ''}
 
