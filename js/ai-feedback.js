@@ -2364,6 +2364,28 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: false });
                 aiLastEsKoWords.push({ word: w, ok: false, noScore: !isBad, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             });
+            // ④ [냐냐 요청] 알면서 못 떠올린 단어도 −2 (2026-09-04).
+            //   'rizo(곱슬)' 라고 쓴 자리를 'arroz(쌀)' 로 고쳐줬는데, arroz 는 단어장에 있는 단어다.
+            //   글자가 멀어서 철자 오류로도 안 잡히고, 내가 안 썼으니 훑기에도 안 들어와서
+            //   아무 흔적이 없었다. 고친 문장에만 나온 내 단어는 '아는데 못 꺼낸 것' 으로 본다.
+            //   ⚠️ 기능어는 뺀다. AI 는 문장을 손볼 때마다 con·de·a 를 넣고 빼는데,
+            //      그걸 '못 떠올린 단어' 로 치면 첨삭마다 −2 가 줄줄이 붙는다.
+            const FUNC_POS = new Set(['preposition', 'article', 'pronoun', 'conjunction', 'determiner']);
+            fixedToks.forEach(tok => {
+                const k = norm(tok);
+                if (!k || k.length < 3) return;
+                if (mineFlat.includes(' ' + k + ' ')) return;      // 내가 쓴 것은 위에서 매겼다
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k)) return;
+                const w = resolve(tok, '');
+                if (!w || done.has(w.id)) return;
+                if (FUNC_POS.has(String(w.pos || '').toLowerCase())) return;
+                push(w, false, true);                              // −2
+                const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
+                if (e && e.word.id === w.id) e.missed = true;
+            });
+            // [냐냐 요청] 점수순으로 정렬해서 눈에 띄게 (낮은 것부터). 이 순서는 한 번만 정한다 —
+            //   칩을 눌러 점수를 바꿔도 자리가 안 옮겨져야 서식이 이랬다저랬다 하지 않는다.
+            aiLastEsKoWords.sort((a, b) => (a.delta - b.delta) || String(a.word.word || '').localeCompare(String(b.word.word || ''), 'es'));
         }
 
         // ============================================================
@@ -2700,6 +2722,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 applyGrammarCurve(note.id, item.ok, canMove);
                 aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, ev: item.ev, state: 'normal', undone: false });
             });
+            // 단어와 같이 점수순(낮은 것부터). 한 번만 정하고 점수를 바꿔도 자리는 안 옮긴다.
+            aiLastEsKoGrammar.sort((a, b) => (a.delta - b.delta) || String(a.note.title || '').localeCompare(String(b.note.title || ''), 'ko'));
         }
 
         // [냐냐 요청] AI 가 잘못 알아들어 붙은 점수를 한 건씩 해제한다.
@@ -3495,34 +3519,26 @@ ${koEsNoteListText}${refGrammar}${refWords}
             }
         }
 
-        function setGrammarEntryState(i, state) {
+        //   [냐냐 요청] 점수를 직접 정한다 (+2 / 0 / −2). 반영 전 상태로 되돌린 뒤 그 점수로 다시 붙인다.
+        function setGrammarEntryDelta(i, delta) {
             const e = aiLastEsKoGrammar[i];
-            if (!e || e.state === state) return;
+            if (!e || e.delta === delta) return;
             const id = e.note.id;
             restoreGrammarPrev(e);
 
-            e.state = state;
-            e.undone = (state === 'undone');
-            e.lookedUp = (state === 'looked');
+            e.delta = delta;
+            const ok = delta > 0;
+            e.undone = (delta === 0);
 
-            if (state === 'normal') {
-                e.delta = e.baseDelta;
-                addGrammarScore(id, e.delta, { transUsed: e.usage === 'correct' });
-                applyGrammarCurve(id, e.usage === 'correct', e.canMove);   // 처음 반영과 같은 자격으로
-            } else if (state === 'looked') {
-                e.delta = LOOKUP_PENALTY;
-                // [냐냐 요청] 찾아봐도 번역에서 쓴 건 쓴 거라 마스터 자격은 그대로 둔다.
-                //   어차피 점수가 −2 로 깎여서 마스터 기준(4.5)에 한참 못 미친다.
-                addGrammarScore(id, e.delta, { transUsed: e.usage === 'correct' });
-                applyGrammarCurve(id, false, e.canMove);   // 찾아보고 쓴 건 틀린 것과 같이 친다
-            } else {
-                e.delta = 0;
+            if (delta !== 0) {
+                addGrammarScore(id, delta, { transUsed: ok });
+                applyGrammarCurve(id, ok, e.canMove);   // 처음 반영과 같은 자격으로
             }
-            // [냐냐 지적] 해제는 'AI 가 잘못 짚었다' 는 뜻이라 첨삭 노트에서도 빼야 한다 (2026-09-04).
-            //   빼지 않으면 ok=false 로 남아서, 해제한 그 문법이 '약한 문법' 순위에 틀린 것으로
-            //   오히려 계속 잡혔다. 세 단계 토글을 만들 때 이 호출이 빠져 있었다.
-            if (state === 'undone') removeAiNoteGram(_lastAiNoteKey, id);
-            else setAiNoteGramOk(_lastAiNoteKey, id, state === 'normal' && e.usage === 'correct', e.note.title);
+            // [냐냐 지적] 0 은 'AI 가 잘못 짚었다' 는 뜻이라 첨삭 노트에서도 뺀다 (2026-09-04).
+            //   빼지 않으면 ok=false 로 남아서, 없앤 그 문법이 '약한 문법' 순위에 틀린 것으로
+            //   오히려 계속 잡혔다.
+            if (delta === 0) removeAiNoteGram(_lastAiNoteKey, id);
+            else setAiNoteGramOk(_lastAiNoteKey, id, ok, e.note.title);
 
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
@@ -3530,44 +3546,39 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
         }
 
-        // [냐냐 요청] 버튼 하나로 세 상태를 돌린다 — 그대로 → 찾아봄 → 해제 → 그대로.
-        //   (돋보기는 '자세히 보기' 로 넘겼다)
-        const AI_ENTRY_CYCLE = ['normal', 'looked', 'undone'];
-        function nextEntryState(cur) {
-            const i = AI_ENTRY_CYCLE.indexOf(cur || 'normal');
-            return AI_ENTRY_CYCLE[(i + 1) % AI_ENTRY_CYCLE.length];
+        // [냐냐 요청] 버튼 하나로 점수만 돌린다 — +2 → 0 → −2 → +2 (2026-09-04).
+        //   예전엔 '그대로 / 찾아보고 씀 / 해제' 세 상태였는데, 이름이 붙으니 화면이 시끄럽고
+        //   정작 하고 싶은 건 '이 점수 아닌데' 를 고치는 것뿐이었다. 이제 숫자만 돈다.
+        //   ⚠️ 양수 칸은 그 모드가 주는 값이다 (스→한 자유 작문은 +1).
+        function entryRing(e) {
+            const pos = (e && e.baseDelta > 0) ? e.baseDelta : 2;
+            return [pos, 0, -2];
         }
-        function aiEntryStateLabel(state) {
-            return state === 'looked' ? '찾아보고 썼어요' : state === 'undone' ? '해제됨' : '점수 그대로';
+        function nextEntryDelta(e) {
+            const ring = entryRing(e);
+            const i = ring.indexOf(e ? e.delta : 0);
+            return ring[(i < 0 ? 0 : i + 1) % ring.length];
         }
+        function fmtDelta(d) { return (d > 0 ? '+' : '') + d; }
 
         function cycleGrammarEntry(i) {
             const e = aiLastEsKoGrammar[i];
             if (!e) return;
-            const to = nextEntryState(e.state);
-            setGrammarEntryState(i, to);
-            showToast(`"${e.note.title}" · ${aiEntryStateLabel(to)}${to === 'looked' ? ` (${LOOKUP_PENALTY})` : ''}`, "info");
+            const to = nextEntryDelta(e);
+            setGrammarEntryDelta(i, to);
+            showToast(`"${e.note.title}" · ${fmtDelta(to)}`, "info");
         }
 
-        function setWordEntryState(i, state) {
+        function setWordEntryDelta(i, delta) {
             const e = aiLastEsKoWords[i];
-            if (!e || e.state === state) return;
+            if (!e || e.delta === delta) return;
             restoreWordScoreState(e.word, e.prev);
 
-            e.state = state;
-            e.undone = (state === 'undone');
-            e.lookedUp = (state === 'looked');
-
-            if (state === 'normal') {
-                e.delta = e.baseDelta;
-                if (e.delta) addWordScore(e.word, e.delta, { correct: e.ok });
-            } else if (state === 'looked') {
-                e.delta = LOOKUP_PENALTY;
-                // 틀린 것과 같이 친다 — 그래야 망각곡선에 들어가 다시 만나게 된다
-                addWordScore(e.word, e.delta, { correct: false });
-            } else {
-                e.delta = 0;
-            }
+            e.delta = delta;
+            e.ok = delta > 0;
+            e.noScore = (delta === 0);
+            e.undone = (delta === 0);
+            if (delta) addWordScore(e.word, delta, { correct: delta > 0 });
 
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
@@ -3578,9 +3589,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function cycleWordEntry(i) {
             const e = aiLastEsKoWords[i];
             if (!e) return;
-            const to = nextEntryState(e.state);
-            setWordEntryState(i, to);
-            showToast(`"${e.word.word}" · ${aiEntryStateLabel(to)}${to === 'looked' ? ` (${LOOKUP_PENALTY})` : ''}`, "info");
+            const to = nextEntryDelta(e);
+            setWordEntryDelta(i, to);
+            showToast(`"${e.word.word}" · ${fmtDelta(to)}`, "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
@@ -3598,41 +3609,37 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return;
             }
 
-            // [냐냐 요청] 각 항목에 '해제' 버튼 — AI 가 의도와 다르게 알아들었을 때 그 점수만 되돌린다.
-            const grammarHtml = aiLastEsKoGrammar.map((g, i) => {
-                const ok = g.usage === 'correct';
-                const txt = g.lookedUp ? '찾아보고 썼어요' : (ok ? '이 문법을 제대로 썼어요' : '이 문법을 쓰긴 했는데 틀렸어요');
-                const cls = g.lookedUp ? 'text-amber-600' : (ok ? 'text-emerald-600' : 'text-rose-500');
-                return `<div class="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 ${g.undone ? 'opacity-50' : ''}">
+            // [냐냐 요청] 점수 배지 하나로 말한다 (2026-09-04). 멘트('찾아보고 썼어요' 같은)는 다 뺐다.
+            //   ↺ 를 누르면 +2 → 0 → −2 로 돌기만 한다. 자리는 점수순으로 한 번만 정해져 있어서
+            //   점수를 바꿔도 줄이 안 뛴다.
+            const badge = (d) => {
+                const cls = d > 0 ? 'bg-emerald-100 text-emerald-700'
+                          : (d < 0 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400');
+                return `<span class="shrink-0 w-9 text-center rounded-lg py-0.5 text-[11px] font-black tabular-nums ${cls}">${fmtDelta(d)}</span>`;
+            };
+            const cycleBtn = (fn, i) => `<button type="button" onclick="${fn}(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`;
+
+            const grammarHtml = aiLastEsKoGrammar.map((g, i) => `
+                <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
+                    ${badge(g.delta)}
                     <button type="button" onclick="openGrammarNoteFromMission('${g.note.id}')" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
-                        <div class="text-[10px] font-bold ${g.undone ? 'text-slate-400 line-through' : cls}">${txt} · 점수 ${g.delta > 0 ? '+' : ''}${g.delta}</div>
-                        <!-- [냐냐 요청] AI 가 이 노트를 고른 근거 — 문장의 어느 조각 때문인지 보여준다.
-                             엉뚱한 노트가 걸리면 여기가 먼저 이상해 보인다 -->
                         ${g.ev ? `<div class="text-[10px] text-slate-400 truncate">근거 · ${escapeHtml(g.ev)}</div>` : ''}
                     </button>
-                    ${g.undone ? '<span class="text-[10px] font-bold text-slate-400 shrink-0 mr-1">해제됨</span>' : ''}
-                    ${`<button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-teal-100 text-slate-400 hover:text-teal-600 text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
-                           <button type="button" onclick="cycleGrammarEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="shrink-0 w-6 h-6 rounded-full ${g.lookedUp ? 'bg-amber-100 text-amber-600' : (g.undone ? 'bg-slate-700 text-white' : 'bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600')} text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
-                </div>`;
-            }).join('');
+                    <button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-teal-100 text-slate-400 hover:text-teal-600 text-[10px] transition-colors"><i class="fa-solid fa-magnifying-glass"></i></button>
+                    ${cycleBtn('cycleGrammarEntry', i)}
+                </div>`).join('');
 
-            // 단어는 개수가 많을 수 있어 한 줄짜리 칩으로
-            const wordHtml = aiLastEsKoWords.map((w, i) => {
-                // 철자는 맞고 형태만 틀린 낱말은 초록도 빨강도 아니다 — 점수가 없다는 걸 회색으로 보여준다
-                const cls = w.undone ? 'border-slate-200 bg-slate-50 text-slate-400'
-                          : (w.lookedUp ? 'border-amber-200 bg-amber-50 text-amber-700'
-                          : (w.noScore ? 'border-slate-300 bg-slate-50 text-slate-500'
-                          : (w.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-600')));
-                const mark = w.undone ? '해제됨'
-                    : (w.missed ? '이 단어를 못 썼어요 · ' + w.delta
-                    : (w.noScore && !w.lookedUp ? '고쳐졌어요 · 0' : (w.delta > 0 ? '+' : '') + w.delta));
-                return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${cls}">
-                    <b class="${w.undone ? 'line-through' : ''}">${escapeHtml(w.word.word || '')}</b><span class="text-[10px] font-bold">${mark}</span>
-                    <button type="button" onclick="openWordModal('${w.word.id}')" title="이 단어 자세히 보기" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] opacity-60 hover:opacity-100 transition-opacity"><i class="fa-solid fa-magnifying-glass"></i></button>
-                    <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 — 그대로 → 찾아봄(${LOOKUP_PENALTY}) → 해제" class="w-4 h-4 rounded-full hover:bg-white/70 text-[9px] ${(w.lookedUp || w.undone) ? 'opacity-100' : 'opacity-60'} hover:opacity-100 transition-opacity"><i class="fa-solid fa-rotate-left"></i></button>
-                </span>`;
-            }).join('');
+            // [냐냐 요청] 단어도 한 줄에 하나씩 — 점수가 세로로 줄 맞아서 눈에 바로 들어온다
+            const wordHtml = aiLastEsKoWords.map((w, i) => `
+                <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1">
+                    ${badge(w.delta)}
+                    <button type="button" onclick="openWordModal('${w.word.id}')" class="flex-1 text-left min-w-0 truncate">
+                        <span class="text-xs font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>
+                        <span class="text-[10px] text-slate-400 ml-1.5">${escapeHtml(w.word.meaning || '')}</span>
+                    </button>
+                    ${cycleBtn('cycleWordEntry', i)}
+                </div>`).join('');
 
             // [냐냐 요청] 등급이 바뀐 단어가 있을 때만 한 덩어리 보여준다.
             //   해제·찾아봄으로 점수를 바꾸면 여기도 같이 다시 계산된다 (지금 등급을 그때그때 읽으므로)
@@ -3652,10 +3659,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
                 </div>
-                <div class="flex flex-wrap gap-1.5 text-[11px] font-semibold">${wordHtml}</div>` : ''}
+                <div class="space-y-1">${wordHtml}</div>` : ''}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
-                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">🔍 자세히 보기 · ↺ 눌러서 점수 바꾸기 (그대로 → 찾아보고 씀 ${LOOKUP_PENALTY} → 해제)</p>` : ''}`;
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 (+2 → 0 → −2) · 이름을 누르면 자세히</p>` : ''}`;
             box.classList.remove('hidden');
         }
 
