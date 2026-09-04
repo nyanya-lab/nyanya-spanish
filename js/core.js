@@ -2796,6 +2796,16 @@ let vocabulary = [];
                     ['떨어지는 단어', '+0.8', '−0.5 <span class="text-[10px] font-semibold text-slate-400">(바닥까지 놓쳤을 때)</span>'],
                     ['듣기 받아쓰기', '점수 없음', '점수 없음']
                 ]},
+                // [냐냐 요청] 첨삭이 빠져 있었다 (2026-09-04). 문장 하나에 낱말 대여섯 개가
+                //   한꺼번에 움직이는 곳이라, 지금은 여기가 단어 점수를 제일 많이 흔든다.
+                { group: '첨삭', color: 'text-violet-600 bg-violet-50 border-violet-200', rows: [
+                    ['내가 쓴 낱말 <span class="text-[10px] font-semibold text-slate-400">(문장을 통째로 훑어요)</span>',
+                     '+2 <span class="text-[10px] font-semibold text-slate-400">(고친 문장에 그대로 살아남음)</span>',
+                     '−2 <span class="text-[10px] font-semibold text-slate-400">(철자를 틀림 · lemones → limones)</span>'],
+                    ['고쳐진 낱말 <span class="text-[10px] font-semibold text-slate-400">(muchas → muchísimo)</span>',
+                     '점수 없음', '점수 없음'],
+                    ['미션 목표 단어를 안 쓰고 우회', '문장이 맞으면 점수 없음', '−2 <span class="text-[10px] font-semibold text-slate-400">(문장도 틀렸을 때)</span>']
+                ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
                     ['단어 빈칸 <span class="text-[10px] font-semibold text-slate-400">(한 판 합계 최대 ±2.5)</span>', '맞힌 칸당 +0.7 (동사변형 칸 +0.1)', '틀린 칸당 −0.5 (동사변형 칸 −0.1)'],
                     ['쓰기 복습 · 1바퀴에 바로 맞힘', '+2', '(점수 없이 2바퀴로)'],
@@ -2859,6 +2869,12 @@ let vocabulary = [];
                     </thead>
                     <tbody>${scoreRows}</tbody>
                 </table>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                    <b>첨삭의 잣대는 하나예요 — 내가 쓴 그 낱말이 고친 문장에 그대로 살아남았나.</b>
+                    살아남았으면 제대로 쓴 것(+2), 고쳐졌으면 점수 없음(0), 철자를 틀린 것만 −2예요.
+                    고쳐진 걸 −2로 치지 않는 건 <b>낱말은 아는데 자리를 잘못 쓴 것</b>일 때가 많아서예요.
+                    점수가 이상하면 첨삭 결과의 칩을 눌러 <b>해제</b>하면 되돌아가요.
+                </p>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
