@@ -2779,6 +2779,10 @@ let vocabulary = [];
                     if (w.mastered && w.score < SCORE_MASTER) w.score = SCORE_MASTER;
                     if (w.mastered) w.subjectivePassed = true;
                 }
+                // [냐냐 지적] 쓰기 복습이 단어에 박아두고 간 '이번 판에 틀림' 표시를 걷어낸다 (2026-09-07).
+                //   판마다 새로 세야 하는 값인데 저장까지 돼서, 한 번 틀린 단어는 그 뒤로
+                //   틀려도 점수·곡선·복습 표시가 다 건너뛰어졌다. 이제 세션이 들고 있는다.
+                if ('_firstFailScored' in w) delete w._firstFailScored;
                 syncWordFlags(w, { silent: true }); // 일지 카운트는 건드리지 않음
             });
         }

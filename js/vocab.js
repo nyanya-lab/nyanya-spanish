@@ -3451,6 +3451,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 hint: '',                 // 1바퀴 재입력 안내 문구
                 grading: false,           // AI 채점 중
                 wrongCount: 0,            // 최종(3바퀴) 오답 수
+                // [냐냐 지적] '1바퀴에서 이미 틀렸다' 는 표시를 단어에 박아두면 안 된다 (2026-09-07).
+                //   과제 객체가 단어 그 자체일 때가 있어서(관용구·활용형이 아닌 낱말) 그대로
+                //   저장까지 됐고, 다음 날 그 단어를 또 틀려도 '이미 적었다' 며 −2 도 곡선도
+                //   복습 표시도 통째로 건너뛰었다. 복습 표시가 안 되니 계속 '오늘 할 것' 으로
+                //   남아서 같은 단어가 회차마다 되풀이됐다. 이번 판 안에서만 기억한다.
+                failedOnce: {},           // { '단어id::과제글자': true }
                 results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct, firstTry}
                 // [냐냐 요청] '다음 N개 이어서'가 처음 시작한 개수를 그대로 따라가도록 기억
                 //   배너로 시작 → 5개 / 쓰기연습 탭에서 시작 → 내가 고른 개수
@@ -3635,23 +3641,38 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             let cardHtml, inputLabel, placeholder;
             if (s.phase === 2) {
                 const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
-                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+                //   [냐냐 요청] 예문은 맨 밑으로 — 위쪽은 낱말·활용을 먼저 보는 자리로 둔다
+                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { skipExample: true }) : '';
+                const exampleOf = (w._isConjTask && w._conjOf) ? w._conjOf : w;
+                const example = (typeof buildExampleHtml === 'function') ? buildExampleHtml(exampleOf) : '';
                 const parts = [badges, notes].filter(x => x && x.trim());
                 //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
                 const learnWord = writeRoundTarget(w, 2);
                 const learnMean = (w._isConjTask && w._conjOf) ? (w._conjOf.meaning || '') : (w.meaning || '');
-                const conjBack = (w._isConjTask && w._conjSlot)
-                    ? `<p class="text-[11px] font-bold text-indigo-500">🔀 원형부터 익히고, 다음 바퀴에서 <b>${escapeHtml(w._conjSlot.personLabel ? w._conjSlot.tenseLabel + ' · ' + w._conjSlot.personLabel : w._conjSlot.tenseLabel)}</b> 로 다시 물어봐요</p>`
+                //   [냐냐 요청] 틀린 시제를 원형 옆에 한 번 더 적는다 — 아래 안내문만으로는
+                //   '무엇을 틀렸는지' 가 눈에 안 들어왔다. 꼴 자체는 안 적는다 (3바퀴 답이라서).
+                const conjCue = (w._isConjTask && w._conjSlot)
+                    ? (w._conjSlot.personLabel ? w._conjSlot.tenseLabel + ' · ' + w._conjSlot.personLabel : w._conjSlot.tenseLabel)
+                    : '';
+                const conjBadge = conjCue
+                    ? `<span class="shrink-0 inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg px-2 py-0.5 text-[11px] font-black align-middle">🔀 ${escapeHtml(conjCue)}</span>`
+                    : '';
+                const conjBack = conjCue
+                    ? `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`
                     : '';
                 cardHtml = `
                     <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
                         <div class="text-left space-y-1">
-                            <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
+                                ${conjBadge}
+                            </div>
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(learnMean)}</p>
                             ${conjBack}
                         </div>
                         ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
                         <div id="write-conj-box" class="hidden"></div>
+                        ${example ? '<div class="border-t border-slate-100 my-3"></div>' + example : ''}
                     </div>`;
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = learnWord;
@@ -3697,6 +3718,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <div class="rounded-2xl border p-5 text-center space-y-1 ${fb.correct ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}">
                         <p class="text-xs font-black ${fb.correct ? 'text-emerald-600' : 'text-rose-500'}">${fb.correct ? `✅ 정답! <span class="text-emerald-500">${gainText}</span>` : '❌ 아쉬워요'}</p>
                         <p class="text-2xl font-extrabold ${fb.correct ? 'text-emerald-700' : 'text-rose-600'} break-words">${escapeHtml(fb.answer)}</p>
+                        ${fb.base ? `<p class="text-xs font-bold text-slate-400 break-words">원형 <b class="text-slate-600">${escapeHtml(fb.base)}</b></p>` : ''}
                         <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(fb.meaning || '')}</p>
                         ${(!fb.correct && fb.why) ? `
                         <div class="pt-2 mt-2 border-t border-rose-200 text-xs">${fb.why}</div>` : ((!fb.correct && mine) ? `
@@ -3748,8 +3770,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     </div>
                 </div>`);
             // [냐냐 요청] 익히기 바퀴에서 동사면 등록된 시제 전부 (퀴즈 정답 화면과 동일한 렌더러 재사용)
+            //   [냐냐 요청] 시제 이름·규칙만 남기고 접어둔다 — 등록된 시제가 여섯이면
+            //   표만으로 카드가 가득 차서 정작 낱말이 안 보였다. 궁금한 시제만 펴서 본다.
             if (s.phase === 2 && typeof renderQuizConjugation === 'function') {
-                renderQuizConjugation(w, null, 'write-conj-box');
+                renderQuizConjugation(w, null, 'write-conj-box', { collapsed: true });
             }
             setTimeout(() => {
                 const nextBtn = document.getElementById('write-next-btn');
@@ -3758,8 +3782,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }, 60);
             // [냐냐 요청] 익히기 바퀴(보고 쓰기)에선 매 시도마다 읽어줌 (1회차 제출 후 2회차에도 한 번 더).
             //   테스트 바퀴는 정답이 새어나가므로 안 읽음.
+            //   [냐냐 지적] 활용형 문제는 화면·입력이 원형인데 소리만 활용형이라 어긋났다.
+            //   둘 다 원형으로 맞춘다 (writeRoundTarget 이 그 바퀴에 쓸 말을 정한다).
             if (s.phase === 2 && typeof speakSpanishVoice === 'function') {
-                setTimeout(() => speakSpanishVoice(w.word), 120);
+                setTimeout(() => speakSpanishVoice(writeRoundTarget(w, 2)), 120);
             }
         }
 
@@ -3859,6 +3885,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 활용형 문제를 틀리면 2바퀴(익히기)는 '원형' 으로 익힌다 (2026-09-03).
         //   활용을 틀렸다는 건 대개 원형부터 흔들린다는 뜻이라, 익히기 바퀴에서 뿌리를 잡는다.
         //   3바퀴는 1바퀴에 냈던 그 시제로 다시 묻는다 — 과제 객체를 그대로 쓰므로 저절로 같다.
+        //   과제 하나를 가리키는 열쇠. 같은 단어라도 관용구·활용형은 다른 과제라 글자까지 본다.
+        //   [냐냐 요청] 활용형을 틀렸다고 알려줄 때 원형도 같이 적는다 — 활용형만 보면
+        //   어느 동사였는지 몰라서 '뭘 틀렸는지' 가 안 남는다.
+        function writeBaseForm(w) {
+            return (w && w._isConjTask && w._conjOf && w._conjOf.word) ? w._conjOf.word : '';
+        }
+
+        function writeFailKey(w) {
+            return String((w && w.id) || '') + '::' + String((w && w.word) || '');
+        }
+
         function writeRoundTarget(w, phase) {
             if (phase === 2 && w && w._isConjTask && w._conjOf && w._conjOf.word) return w._conjOf.word;
             return (w && w.word) || '';
@@ -3931,7 +3968,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const idiomTask = !!w._isIdiomTask;
             // [냐냐 지적] 1바퀴에서 틀린 순간 −2 와 곡선을 이미 적었다. 여기서는 차액만 반영한다:
             //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
-            const already = !!w._firstFailScored;
+            const already = !!s.failedOnce[writeFailKey(w)];
             if (isMatch) {
                 const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
                     if (typeof addWordScore !== 'function') return;
@@ -3966,7 +4003,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   판정은 AI에게 맡긴다 (키가 없거나 실패하면 로컬 채점으로 폴백).
         //   점수도 퀴즈 주관식과 같은 값: 바로 정답 +2 / 유의어 후 정답 +2 / 오타 후 정답 +1
         // ============================================================
-        const WRITE_FEEDBACK_MS = 900;   // 정답은 잠깐 보여주고 알아서 넘어간다
+        //   [냐냐 요청] 900 → 600. 맞힌 건 확인만 되면 되니 더 기다릴 이유가 없다
+        const WRITE_FEEDBACK_MS = 600;   // 정답은 잠깐 보여주고 알아서 넘어간다
 
         // [냐냐 요청] 쓰기 복습으로도 마스터가 되고 약점으로도 떨어지는데, 결과 화면이
         //   맞은/틀린 것만 보여줘서 그 변화를 알 수가 없었다. 점수를 매기기 전후의 등급을
@@ -3987,7 +4025,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') logAction('review');
             s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
-            s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '' };
+            s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '', base: writeBaseForm(w) };
             writePracticeSave();
             renderWritePractice();
             // 정답은 굳이 손을 안 대도 넘어가게 (엔터를 치면 기다리지 않고 바로)
@@ -4008,8 +4046,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   ⚠️ 최종 점수는 그대로다 — 여기서 −2 를 먼저 적고, 3바퀴에서 맞히면 +1 을 돌려줘
             //   합이 −1 이 된다 (끝내 틀리면 −2 그대로). 곡선과 복습 횟수는 여기서 한 번만 민다.
             const idiomTask = !!w._isIdiomTask;
-            if (!w._firstFailScored) {
-                w._firstFailScored = true;
+            const failKey = writeFailKey(w);
+            if (!s.failedOnce[failKey]) {
+                s.failedOnce[failKey] = true;
                 if (typeof addWordScore === 'function') {
                     addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
                 }
@@ -4022,7 +4061,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
             const why = (typeof buildWrongAnswerHtml === 'function')
                 ? buildWrongAnswerHtml(mine || '', w.word, aiInfo || {}) : '';
-            s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why };
+            s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why, base: writeBaseForm(w) };
             writePracticeSave();
             renderWritePractice();
             // [냐냐 요청] 틀렸을 때 정답을 한 번 읽어준다. 화면에 이미 답이 떠 있으니

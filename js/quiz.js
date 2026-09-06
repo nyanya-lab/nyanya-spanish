@@ -826,14 +826,9 @@ let quizSession = null;
                     </div>`);
             }
             // 예문
-            if (word.example) {
-                sections.push(`
-                    <div>
-                        <span class="block text-xs font-black text-sky-600 mb-1.5">✍️ 예문</span>
-                        <span class="block text-sm text-slate-700 italic leading-relaxed">${escapeHtml(word.example)}</span>
-                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
-                    </div>`);
-            }
+            //   [냐냐 요청] 쓰기 2바퀴는 예문을 카드 맨 밑으로 내린다 — 여기서 빼고
+            //   부르는 쪽이 buildExampleHtml 로 원하는 자리에 그린다.
+            if (word.example && !opts.skipExample) sections.push(buildExampleHtml(word));
             // [냐냐 요청] 노트는 예문 밑으로
             if (word.notes) {
                 sections.push(`
@@ -850,9 +845,33 @@ let quizSession = null;
             return sections.join('<div class="border-t border-slate-100 my-3"></div>');
         }
 
+        // 예문 한 덩어리 (buildNotesHtml 안에서도, 따로 떼서도 같은 모양으로 쓴다)
+        function buildExampleHtml(word) {
+            if (!word || !word.example) return '';
+            return `
+                    <div>
+                        <span class="block text-xs font-black text-sky-600 mb-1.5">✍️ 예문</span>
+                        <span class="block text-sm text-slate-700 italic leading-relaxed">${escapeHtml(word.example)}</span>
+                        ${word.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(word.exampleMeaning)}</span>` : ''}
+                    </div>`;
+        }
+
         // [냐냐 PATCH-1배치] 퀴즈 정답 화면 동사 활용표 — 등록된 "모든 시제"를 다 보여줌
         //   (예전엔 출제된 시제 하나만 보여줬음. 출제된 시제는 맨 위 + 보라 테두리로 강조)
-        function renderQuizConjugation(word, q, boxId) {
+        // [냐냐 요청] 접었다 폈다 — 접힌 시제 줄을 누르면 표가 나온다.
+        //   버튼 바로 다음 형제가 그 시제의 표다 (renderQuizConjugation 이 그렇게 그린다).
+        function toggleConjTenseBlock(btn) {
+            const box = btn && btn.nextElementSibling;
+            if (!box) return;
+            const open = box.classList.toggle('hidden');
+            const chev = btn.querySelector('.conj-chevron');
+            if (chev) chev.classList.toggle('fa-chevron-down', open);
+            if (chev) chev.classList.toggle('fa-chevron-up', !open);
+        }
+
+        //   opts.collapsed = 시제 이름·규칙만 남기고 표는 접어둔다 (쓰기 2바퀴)
+        function renderQuizConjugation(word, q, boxId, opts) {
+            opts = opts || {};
             const box = document.getElementById(boxId || 'quiz-review-conj-box'); // [3배치] 복습 화면에서도 재사용
             if (!box) return;
             if (!word || word.pos !== 'verb') { box.classList.add('hidden'); box.innerHTML = ''; return; }
@@ -920,13 +939,24 @@ let quizSession = null;
                     }).join('');
                 }
 
+                const head = `<span>🔀</span> ${escapeHtml(labelOf(k))}
+                        ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
+                        ${isIrr ? `<span class="text-rose-500">· 불규칙${irrType === '불규칙' ? '' : ` <span class="text-blue-600">(${escapeHtml(irrType)})</span>`}</span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}`;
+                const headCls = `${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap`;
+                if (opts.collapsed) {
+                    // 접힌 상태 — 이름과 규칙/불규칙만 보이고, 누르면 표가 펴진다
+                    return `
+                <div class="bg-white border ${isAsked ? 'border-2 border-violet-400' : 'border-slate-200'} rounded-xl overflow-hidden">
+                    <button type="button" onclick="toggleConjTenseBlock(this)" class="w-full ${headCls} hover:brightness-95 transition-all">
+                        ${head}
+                        <i class="conj-chevron fa-solid fa-chevron-down text-[9px] opacity-60"></i>
+                    </button>
+                    <div class="grid grid-cols-3 hidden">${cells}</div>
+                </div>`;
+                }
                 return `
                 <div class="bg-white border ${isAsked ? 'border-2 border-violet-400' : 'border-slate-200'} rounded-xl overflow-hidden">
-                    <div class="${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap">
-                        <span>🔀</span> ${escapeHtml(labelOf(k))}
-                        ${isAsked ? '<span class="text-violet-500">· 이번 문제</span>' : ''}
-                        ${isIrr ? `<span class="text-rose-500">· 불규칙${irrType === '불규칙' ? '' : ` <span class="text-blue-600">(${escapeHtml(irrType)})</span>`}</span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}
-                    </div>
+                    <div class="${headCls}">${head}</div>
                     <div class="grid grid-cols-3">${cells}</div>
                 </div>`;
             }).filter(Boolean).join('');
