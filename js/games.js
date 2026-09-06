@@ -1919,9 +1919,9 @@ Return JSON only, no markdown.`;
                 addGrammarScore(t.id, gDelta);
                 // [냐냐 요청] 빈칸은 못했을 때만 곡선을 건드린다 (70% 미만).
                 //   잘 봤다고 앞으로 밀어주진 않는다 — 문법 복습은 번역으로 하는 거라서.
-                // [냐냐 기준] 여기서는 '들여놓기' 까지만 한다. 이미 곡선 안에 있는 표의 칸은
-                //   복습 배너로 시작한 번역 미션에서만 움직인다.
-                if (rate < 0.7 && typeof grammarReviewEnter === 'function') grammarReviewEnter(t.id);
+                // [냐냐 기준 2026-09-07] 못 봤으면 한 칸 뒤로 간다 — 단어와 똑같이,
+                //   어디서 틀리든 물린다. 하루에 한 칸까지만 물리는 건 demote 가 막아준다.
+                if (rate < 0.7 && typeof grammarReviewDemote === 'function') grammarReviewDemote(t.id);
             }
             const unmastered = wasMastered && !masteredGrammar[t.id];
             if (unmastered) showToast(`"${t.title || '이 표'}" 마스터가 해제됐어요 ⚠️`, "warning");

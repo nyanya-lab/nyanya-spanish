@@ -2544,13 +2544,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //     스→한 자유 작문 = +1 (아는 문법을 골라 쓰는 거라 절반)
         //     틀리게 쓴 경우는 어디서든 −2.
         //   ok = 제대로 썼나 / canMove = 복습 배너로 시작한 그 미션인가
+        // [냐냐 기준 2026-09-07] 틀리면 어디서든 한 칸 뒤로 간다 — 단어와 똑같이.
+        //   앞으로 가는 건 여전히 복습 미션에서만이다 (아무 데서나 나가면 너무 빨리 졸업한다).
+        //   하루에 한 칸만 물리는 건 grammarReviewDemote 가 막아준다.
         function applyGrammarCurve(id, ok, canMove) {
             if (ok) {
                 if (canMove && typeof grammarReviewAdvance === 'function') grammarReviewAdvance(id);
                 return;                                   // 복습 밖에서 잘 쓴 건 점수만
             }
-            if (canMove && typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
-            else if (typeof grammarReviewEnter === 'function') grammarReviewEnter(id);
+            if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
         }
 
         // ============================================================
