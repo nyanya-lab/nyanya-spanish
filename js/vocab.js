@@ -4169,7 +4169,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!used.synonym) {
                 const syn = writeRegisteredSynonym(userAnswer, w);
                 if (syn) {
-                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요. 다시 한 번 써볼까요?`, userAnswer);
+                    //   [냐냐 지적] 이 길만 '무엇으로 시작하는지' 를 안 알려주고 있었다 (2026-09-07).
+                    //   AI 가 유의어로 본 길도, 오타로 본 길도 다 앞글자를 흘려준다. 여기만 빠져서
+                    //   '다른 낱말이에요' 만 듣고 뭘 떠올려야 할지 알 수가 없었다.
+                    const p = writePrefixHint(userAnswer, w.word);
+                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
