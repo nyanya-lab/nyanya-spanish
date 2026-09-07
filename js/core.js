@@ -1412,6 +1412,40 @@ let vocabulary = [];
         //   그날 복습의 성격이 완전히 다르다.
         //   단어를 누르면 팝업 위에 팝업을 또 띄우지 않고 그 자리에서 아래로 펼친다 (폰 배려).
         //   [냐냐 요청] mode 'wrong' 이면 '그 날 틀린 것' 을 같은 창으로 본다 (2026-09-04).
+        // 목록 한 줄. 복습 예정 팝업과 곡선 칸 팝업이 같은 모양을 쓴다.
+        //   단어·문법은 그 자리에서 펼쳐 더 본다 (팝업 위에 팝업을 또 띄우지 않는다).
+        function reviewPlanItemHtml(kind, it) {
+            if (kind === 'word') {
+                return `<div class="border border-slate-200 rounded-xl overflow-hidden">
+                    <button onclick="toggleReviewPlanWord('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                        <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.word)}</span>
+                        <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(it.meaning || '')}</span>
+                        <i id="rpw-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
+                    </button>
+                    <div id="rpw-${it.id}" class="hidden px-3 pb-3"></div>
+                </div>`;
+            }
+            if (kind === 'idiom') {
+                const text = (it.idiom && it.idiom.idiom) || '';
+                const mean = (it.idiom && it.idiom.idiomMeaning) || '';
+                return `<div class="border border-slate-200 rounded-xl px-3 py-2">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(text)}</span>
+                        <span class="ml-auto shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5">${escapeHtml((it.word && it.word.word) || '')}</span>
+                    </div>
+                    ${mean ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(mean)}</p>` : ''}
+                </div>`;
+            }
+            return `<div class="border border-slate-200 rounded-xl overflow-hidden">
+                <button onclick="toggleReviewPlanGrammar('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
+                    <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
+                    <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
+                    <i id="rpgm-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300 shrink-0"></i>
+                </button>
+                <div id="rpgm-${it.id}" class="hidden px-3 pb-3"></div>
+            </div>`;
+        }
+
         function openReviewPlanModal(ds, kind, mode) {
             const isWrong = (mode === 'wrong');
             const plan = isWrong
@@ -1474,38 +1508,7 @@ let vocabulary = [];
             })).filter(g => g.items.length);
 
             // 단어만 펼쳐서 더 볼 게 있다 (뱃지·메모). 표현·문법은 한 줄로 충분하다.
-            const itemHtml = (it) => {
-                if (cur.key === 'word') {
-                    return `<div class="border border-slate-200 rounded-xl overflow-hidden">
-                        <button onclick="toggleReviewPlanWord('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
-                            <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.word)}</span>
-                            <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(it.meaning || '')}</span>
-                            <i id="rpw-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
-                        </button>
-                        <div id="rpw-${it.id}" class="hidden px-3 pb-3"></div>
-                    </div>`;
-                }
-                if (cur.key === 'idiom') {
-                    const text = (it.idiom && it.idiom.idiom) || '';
-                    const mean = (it.idiom && it.idiom.idiomMeaning) || '';
-                    return `<div class="border border-slate-200 rounded-xl px-3 py-2">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(text)}</span>
-                            <span class="ml-auto shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5">${escapeHtml((it.word && it.word.word) || '')}</span>
-                        </div>
-                        ${mean ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(mean)}</p>` : ''}
-                    </div>`;
-                }
-                // 문법도 단어처럼 그 자리에서 펼친다 (팝업 위에 팝업을 또 띄우지 않는다)
-                return `<div class="border border-slate-200 rounded-xl overflow-hidden">
-                    <button onclick="toggleReviewPlanGrammar('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
-                        <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
-                        <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
-                        <i id="rpgm-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300 shrink-0"></i>
-                    </button>
-                    <div id="rpgm-${it.id}" class="hidden px-3 pb-3"></div>
-                </div>`;
-            };
+            const itemHtml = (it) => reviewPlanItemHtml(cur.key, it);
 
             const label = (stage) => stage === 0 ? '처음 틀린 뒤 첫 복습' : `${stage}번 복습한 ${cur.unit}`;
 
@@ -1907,6 +1910,95 @@ let vocabulary = [];
             return stats;
         }
 
+        // ============================================================
+        // [냐냐 요청] 학습기록 망각곡선의 막대를 누르면 그 칸에 뭐가 들었는지 본다 (2026-09-07).
+        //   개수만 보이니 '30일차 5개' 가 뭔지 알 수가 없었다.
+        //   ⚠️ 고르는 기준은 getReviewCurveStats·getIdiomCurveStats·getGrammarCurveStats 의
+        //      byStage 와 글자 그대로 같아야 한다. 한쪽만 고치면 막대와 목록의 수가 어긋난다.
+        // ============================================================
+        const CURVE_KINDS = {
+            word:    { icon: '📖', label: '단어',   unit: '단어' },
+            idiom:   { icon: '📘', label: '관용구', unit: '표현' },
+            grammar: { icon: '📋', label: '문법',   unit: '문법' }
+        };
+
+        //   그 칸이 오늘 할 차례인가 (목록에서 앞으로 올리는 데 쓴다)
+        function curveRecDue(lastReviewDate, lastWrongDate, stage) {
+            if (lastReviewDate === getLocalDateString()) return false;
+            return daysSince(lastReviewDate || lastWrongDate) >= REVIEW_INTERVALS[stage];
+        }
+
+        function getCurveStageItems(kind, stage) {
+            const out = [];
+            if (stage < 0 || stage >= REVIEW_INTERVALS.length) return out;
+            if (kind === 'word') {
+                (vocabulary || []).forEach(w => {
+                    if (!w.lastWrongDate) return;
+                    if ((w.reviewStage || 0) !== stage) return;
+                    out.push({ it: w, due: curveRecDue(w.lastReviewDate, w.lastWrongDate, stage), sort: getScore(w) });
+                });
+            } else if (kind === 'idiom') {
+                (vocabulary || []).forEach(w => {
+                    const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                    list.forEach(item => {
+                        const rec = idiomReview[idiomKey(w.id, item.idiom)];
+                        if (!rec || !rec.lastWrongDate) return;
+                        if ((rec.stage || 0) !== stage) return;
+                        out.push({ it: { word: w, idiom: item },
+                                   due: curveRecDue(rec.lastReviewDate, rec.lastWrongDate, stage), sort: 0 });
+                    });
+                });
+            } else {
+                const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+                tables.forEach(t => {
+                    const rec = grammarReview[t.id];
+                    if (!rec || !rec.lastWrongDate) return;
+                    if ((rec.stage || 0) !== stage) return;
+                    out.push({ it: t, due: curveRecDue(rec.lastReviewDate, rec.lastWrongDate, stage),
+                               sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0 });
+                });
+            }
+            // 오늘 할 것 먼저, 그 안에서는 약한 것부터 — 다른 목록과 같은 순서
+            out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
+            return out;
+        }
+
+        function openCurveStageModal(kind, stage) {
+            const modal = document.getElementById('review-plan-modal');
+            const meta = CURVE_KINDS[kind];
+            if (!modal || !meta) return;
+            const rows = getCurveStageItems(kind, stage);
+            const days = REVIEW_INTERVALS[stage];
+            const dueN = rows.filter(r => r.due).length;
+
+            const titleEl = document.getElementById('review-plan-title');
+            const subEl = document.getElementById('review-plan-sub');
+            const bodyEl = document.getElementById('review-plan-body');
+            if (titleEl) titleEl.innerText = `${days}일차 · ${meta.icon} ${meta.label} ${rows.length}개`;
+            //   받침이 있으면 '이에요', 없으면 '예요' (표현/문법 vs 단어)
+            const code = meta.unit.charCodeAt(meta.unit.length - 1) - 0xac00;
+            const yeyo = (code >= 0 && code <= 11171 && code % 28 === 0) ? '예요' : '이에요';
+            if (subEl) subEl.innerText = (stage === 0
+                ? `아직 첫 복습을 못 넘긴 ${meta.unit}${yeyo}.`
+                : `${stage}번 복습하고 ${days}일을 기다리는 ${meta.unit}${yeyo}.`)
+                + (dueN ? ` 빨간 점 ${dueN}개가 오늘 할 것이에요.` : '');
+
+            // 칸 사이를 오간다 — 빈 칸은 눌러도 볼 게 없으니 흐리게 둔다
+            const counts = REVIEW_INTERVALS.map((d, i) => getCurveStageItems(kind, i).length);
+            const tabs = `<div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+                ${REVIEW_INTERVALS.map((d, i) => counts[i]
+                    ? `<button onclick="openCurveStageModal('${kind}', ${i})" class="py-1.5 rounded-xl text-[11px] font-black leading-tight transition-all ${i === stage ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${d}일<br><span class="text-[10px] font-bold">${counts[i]}</span></button>`
+                    : `<div class="py-1.5 rounded-xl text-[11px] font-black leading-tight text-slate-300 text-center">${d}일<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
+            </div>`;
+
+            bodyEl.innerHTML = tabs + (rows.length
+                ? `<div class="space-y-1.5">${rows.map(r => r.due
+                    ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
+                    : reviewPlanItemHtml(kind, r.it)).join('')}</div>`
+                : '<p class="text-slate-400 text-center text-xs py-4">이 칸은 비어 있어요 ✨</p>');
+            modal.classList.remove('hidden');
+        }
+
         // [냐냐 요청] 학습기록의 망각곡선 칸 — 왼쪽 단어 / 오른쪽 문법으로 반반.
         //   두 곡선이 규칙은 같고 대상만 다르므로, 한 틀로 그리고 이름만 바꿔 끼운다.
         function renderReviewCurveCard() {
@@ -1921,20 +2013,23 @@ let vocabulary = [];
                     <p class="mt-0.5">${num(n, cls)}</p>
                 </div>`;
 
-            const half = (title, icon, s, unit, barColor, howto) => {
+            const half = (title, icon, s, unit, barColor, howto, kind) => {
                 // 단계 막대 — 곡선 안에서 가장 많은 칸을 기준으로 길이를 잡는다
+                //   [냐냐 요청] 누르면 그 칸에 뭐가 들었는지 본다 (빈 칸은 안 눌린다)
                 const maxStage = Math.max(1, ...s.byStage);
                 const bars = REVIEW_INTERVALS.map((days, i) => {
                     const n = s.byStage[i];
                     const pct = Math.round((n / maxStage) * 100);
-                    return `
-                        <div class="flex items-center gap-2">
+                    const inner = `
                             <span class="w-12 shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 text-center">${days}일차</span>
                             <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
                                 <div class="h-full ${barColor} rounded-full transition-all" style="width: ${n ? Math.max(pct, 4) : 0}%"></div>
                             </div>
-                            <span class="w-10 shrink-0 text-right text-[11px] font-black text-slate-600">${n}개</span>
-                        </div>`;
+                            <span class="w-10 shrink-0 text-right text-[11px] font-black text-slate-600">${n}개</span>`;
+                    return n
+                        ? `<button type="button" onclick="openCurveStageModal('${kind}', ${i})" title="이 칸에 든 ${unit} 보기"
+                                class="w-full flex items-center gap-2 rounded-lg -mx-1 px-1 py-0.5 hover:bg-slate-50 transition-colors text-left">${inner}</button>`
+                        : `<div class="flex items-center gap-2 -mx-1 px-1 py-0.5 opacity-60">${inner}</div>`;
                 }).join('');
                 return `
                 <div class="space-y-3 h-full flex flex-col">
@@ -1962,9 +2057,9 @@ let vocabulary = [];
             const col = (inner) => `<div class="md:pl-6 pt-5 md:pt-0 border-t md:border-t-0 border-slate-100">${inner}</div>`;
             box.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6 md:divide-x md:divide-slate-100 items-stretch">
-                    <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로')}</div>
-                    ${idiomStats ? col(half('관용구', '📘', idiomStats, '표현', 'bg-violet-400', '쓰기 복습으로')) : ''}
-                    ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로')) : ''}
+                    <div>${half('단어', '📖', wordStats, '단어', 'bg-amber-400', '쓰기 복습으로', 'word')}</div>
+                    ${idiomStats ? col(half('관용구', '📘', idiomStats, '표현', 'bg-violet-400', '쓰기 복습으로', 'idiom')) : ''}
+                    ${grammarStats ? col(half('문법', '📋', grammarStats, '문법', 'bg-[#5896cb]', 'AI 문장 번역으로', 'grammar')) : ''}
                 </div>`;
         }
 
