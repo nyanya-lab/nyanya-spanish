@@ -3933,7 +3933,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // ── 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감 (점수 없음) ──
             if (s.retry) {
-                if (isMatch) { s.retry = false; s.lastWrong = ''; s.index++; s.done = 0; renderWritePractice(); }
+                if (isMatch) {
+                    s.retry = false; s.lastWrong = ''; s.index++; s.done = 0;
+                    s.hint = ''; s.hintMine = '';   // 지난 안내를 걷는다 (아래 [냐냐 지적] 참고)
+                    renderWritePractice();
+                }
                 else writePracticeFlashWrong(el);
                 return;
             }
@@ -3957,6 +3961,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // ── 1바퀴: 가리고 쓰기 (테스트) — 퀴즈 주관식과 같은 채점 경로 ──
             if (s.phase === 1) { gradeWriteFirstRound(el.value); return; }
+
+            // [냐냐 지적] 3바퀴는 안내문을 걷는 자리가 없었다 (2026-09-07).
+            //   1바퀴는 채점 뒤 writeFirstRoundNext 가 s.hint 를 지우는데, 3바퀴는 여기서
+            //   바로 채점하고 끝나서 '빈칸이에요…' 안내가 다음 단어까지 따라다녔다.
+            //   (빈칸으로 엔터를 두 번 치면 위 else-if 를 안 거치고 여기로 떨어진다)
+            s.hint = ''; s.hintMine = '';
 
             // ── 3바퀴: 다시 가리고 쓰기 (최종) ──
             //   [냐냐 요청] 1바퀴에서 틀린 단어의 기록을 여기서 한꺼번에 반영한다.
