@@ -2082,6 +2082,22 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   ⚠️ 점수는 그대로 붙는다 — 단어장에 직접 등록해 둔 것은 여기 있어도 그대로 채점된다
         //      (이 목록은 '활용형을 추측해서 억지로 맞추지 마라' 는 뜻으로도 쓰인다).
         //   악센트를 뗀 꼴과 붙인 꼴을 같이 넣어 둔다 — 두 자리에서 각각 다르게 다듬어 오기 때문.
+        // [냐냐 요청] 숫자는 등록할 낱말이 아니다 (2026-09-07). 문법 노트에서 표로 익히는 것이고,
+        //   꼴만 백 개가 넘어서 낱말 카드로 외울 것도 아니다.
+        //   ⚠️ 서수(primero·segundo…)는 여기 안 넣는다 — 서수 노트가 이미 걸러내고 있고,
+        //      cuarto(방)·segundo(초) 처럼 진짜 낱말로도 쓰는 것들이라 막으면 손해다.
+        //   ⚠️ veintidós 처럼 악센트가 붙는 꼴이 있어서 악센트를 뗀 글자로 견준다.
+        const AI_NUMBER_WORDS = new Set([
+            'cero','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez',
+            'once','doce','trece','catorce','quince','dieciseis','diecisiete','dieciocho','diecinueve',
+            'veinte','veintiuno','veintiun','veintiuna','veintidos','veintitres','veinticuatro',
+            'veinticinco','veintiseis','veintisiete','veintiocho','veintinueve',
+            'treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa',
+            'cien','ciento','cientos','doscientos','trescientos','cuatrocientos','quinientos',
+            'seiscientos','setecientos','ochocientos','novecientos',
+            'mil','miles','millon','millones','billon','billones'
+        ]);
+
         const AI_FUNCTION_WORDS = new Set([
             'el','la','los','las','un','una','uno','unos','unas','al','del','lo',
             'a','de','en','con','por','para','sin','sobre','entre','hasta','desde','hacia','tras',
@@ -2157,6 +2173,13 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 .replace(/\s+/g, ' ').trim();
             // [냐냐 지적] AI 가 관사를 'un/una' 처럼 슬래시로 묶어 보내면 기능어 목록에 안 걸려서
             //   등록하라고 떴다 (el/la · los/las · unos/unas 도 같다). 조각이 전부 기능어면 거른다.
+            //   글자로 쓴 숫자(dos·veinte·mil)와 아라비아 숫자(21·100·2026) 둘 다 막는다.
+            //   'mil novecientos' 처럼 이어 쓴 것도 조각이 전부 숫자면 숫자로 본다.
+            const isNumberKey = (k) => {
+                if (/^[\d.,:/\s]+$/.test(k)) return true;
+                const parts = String(k).split(/\s+/).filter(Boolean);
+                return parts.length > 0 && parts.every(x => AI_NUMBER_WORDS.has(bareTok(x)) || x === 'y');
+            };
             const isFunctionKey = (k) => {
                 if (typeof AI_FUNCTION_WORDS === 'undefined') return false;
                 if (AI_FUNCTION_WORDS.has(k)) return true;
@@ -2189,7 +2212,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!key || key.length < 2 || seen.has(key)) return;
                 if (have.has(key)) return;                                     // 이미 단어장에 있음
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
-                if (isFunctionKey(key)) return;
+                if (isFunctionKey(key) || isNumberKey(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
@@ -2215,7 +2238,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (i > 0 && /^[A-ZÁÉÍÓÚÑÜ]/.test(raw)) return;
                 if (!key || key.length < 3 || seen.has(key) || mineSet.has(key)) return;
                 if (have.has(key)) return;
-                if (isFunctionKey(key)) return;
+                if (isFunctionKey(key) || isNumberKey(key)) return;
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (looksConjugated(key)) return;
                 //   [냐냐 지적] 'fue' 를 등록하라고 권했다 — ser 의 부정과거가 활용표에 없어서
