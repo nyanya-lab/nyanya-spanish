@@ -2224,16 +2224,28 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function aiSuggestHtml() {
             const s = aiLastSuggest || { idioms: [], newWords: [] };
             if (!s.newWords.length) return '';
-            const wordPart = s.newWords.length ? `
+            // [냐냐 요청] 등록하고 나면 체크 표시 (2026-09-07). 목록은 채점할 때 정해둔 그대로 두고,
+            //   '지금 단어장에 있나' 만 그릴 때마다 다시 본다 — 따로 기억해 둘 게 없다.
+            //   (단어를 저장하면 saveWord 가 이 카드를 다시 그린다)
+            const chip = (x) => {
+                const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(x.word) : null;
+                if (hit) {
+                    return `<button type="button" onclick="openWordModal('${escapeAttr(hit.id)}')" title="등록했어요 — 눌러서 열어보기" class="inline-flex items-center gap-1 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
+                        <i class="fa-solid fa-check text-[9px] text-emerald-500"></i><b class="line-through">${escapeHtml(x.word)}</b>
+                        <span class="text-[10px] text-slate-300">${escapeHtml(x.mean)}</span>
+                    </button>`;
+                }
+                return `<button type="button" onclick="openQuickWordRegister(this.dataset.w)" data-w="${escapeAttr(x.word)}" title="눌러서 등록하기" class="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
+                    <i class="fa-solid fa-plus text-[9px]"></i><b>${escapeHtml(x.word)}</b>
+                    <span class="text-[10px] text-slate-400">${escapeHtml(x.mean)}</span>
+                </button>`;
+            };
+            const left = s.newWords.filter(x => !(typeof findVocabWordByForm === 'function' && findVocabWordByForm(x.word))).length;
+            const wordPart = `
                 <div>
-                    <p class="text-[11px] font-bold text-slate-500 mb-1">➕ 아직 단어장에 없어요</p>
-                    <div class="flex flex-wrap gap-1.5">
-                        ${s.newWords.map(x => `<button type="button" onclick="openQuickWordRegister(this.dataset.w)" data-w="${escapeAttr(x.word)}" title="눌러서 등록하기" class="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
-                            <i class="fa-solid fa-plus text-[9px]"></i><b>${escapeHtml(x.word)}</b>
-                            <span class="text-[10px] text-slate-400">${escapeHtml(x.mean)}</span>
-                        </button>`).join('')}
-                    </div>
-                </div>` : '';
+                    <p class="text-[11px] font-bold text-slate-500 mb-1">${left ? '➕ 아직 단어장에 없어요' : '✅ 추천한 낱말을 다 등록했어요'}</p>
+                    <div class="flex flex-wrap gap-1.5">${s.newWords.map(chip).join('')}</div>
+                </div>`;
             return `<div class="mt-3 pt-3 border-t border-slate-200">${wordPart}</div>`;
         }
 
@@ -2535,8 +2547,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const prev = snapshotWordScoreState(w);
             const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
             addWordScore(w, WORD_SPELL_BAD, { correct: false });
+            // [냐냐 지적] groupDelta 를 같이 박아둔다 (2026-09-07). 이 칩만 채점이 끝난 뒤에
+            //   붙어서 묶음 값이 비어 있었고, 그래서 점수를 바꾸면 지금 점수를 따라 딴 묶음으로
+            //   튀었다 — 다른 칩은 다 제자리인데 맨 끝 하나만 칸을 옮기는 것으로 보였다.
             aiLastEsKoWords.push({ word: w, ok: false, noScore: false, delta: WORD_SPELL_BAD,
-                baseDelta: WORD_SPELL_BAD, prev, gradeBefore, missed: true, state: 'normal', undone: false });
+                baseDelta: WORD_SPELL_BAD, groupDelta: WORD_SPELL_BAD,
+                prev, gradeBefore, missed: true, state: 'normal', undone: false });
         }
 
         //   [냐냐 요청] 문법을 제대로 썼을 때 주는 점수는 모드마다 다르다.
