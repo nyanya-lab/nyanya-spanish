@@ -3651,24 +3651,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
                 const learnWord = writeRoundTarget(w, 2);
                 const learnMean = (w._isConjTask && w._conjOf) ? (w._conjOf.meaning || '') : (w.meaning || '');
-                //   [냐냐 요청] 틀린 시제를 원형 옆에 한 번 더 적는다 — 아래 안내문만으로는
-                //   '무엇을 틀렸는지' 가 눈에 안 들어왔다. 꼴 자체는 안 적는다 (3바퀴 답이라서).
-                const conjCue = (w._isConjTask && w._conjSlot)
-                    ? (w._conjSlot.personLabel ? w._conjSlot.tenseLabel + ' · ' + w._conjSlot.personLabel : w._conjSlot.tenseLabel)
-                    : '';
-                const conjBadge = conjCue
-                    ? `<span class="shrink-0 inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg px-2 py-0.5 text-[11px] font-black align-middle">🔀 ${escapeHtml(conjCue)}</span>`
-                    : '';
-                const conjBack = conjCue
+                //   [냐냐 지적] 원형 옆에 달았던 시제 배지는 뺐다 — 활용표를 위로 올린 뒤로는
+                //   바로 밑 표 머리말('직설법 현재 · 틀린 꼴')이 같은 말을 하고 있다.
+                const conjBack = (w._isConjTask && w._conjSlot)
                     ? `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`
                     : '';
                 cardHtml = `
                     <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
                         <div class="text-left space-y-1">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
-                                ${conjBadge}
-                            </div>
+                            <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(learnMean)}</p>
                             ${conjBack}
                         </div>
