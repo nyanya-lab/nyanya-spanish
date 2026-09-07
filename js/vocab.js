@@ -4159,8 +4159,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const baseW = w._idiomOf || w._conjOf || w;
                 const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
                 if (hit && baseW && hit.id === baseW.id) {
-                    if (w._isConjTask || used.typo) { writeFirstRoundFail(w, userAnswer); return; }
-                    writeAskRetry('typo', `✏️ 형태가 조금 달라요! 다시 한 번 써볼까요?`, userAnswer);
+                    //   [냐냐 요청] 활용형 문제도 다른 유의어들처럼 한 번 되묻는다 (2026-09-07).
+                    //   예전엔 여기서 바로 오답이었다 ('그게 이 문제가 묻는 바로 그것' 이라는 이유).
+                    //   그런데 gustarse 처럼 활용형이 아예 아닌 꼴을 써도 기회 없이 끝나서,
+                    //   무엇이 틀렸는지 모른 채 -2 를 맞았다. 되묻는 다른 길과 같은 대접으로 맞춘다.
+                    //   ⚠️ 공짜는 아니다 — 오타 대접이라 고쳐 써도 +2 가 아니라 +1 이고,
+                    //      철자로 이미 한 번 봐줬으면(used.typo) 그때는 그대로 오답이다.
+                    if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
+                    const p = writePrefixHint(userAnswer, w.word);
+                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
