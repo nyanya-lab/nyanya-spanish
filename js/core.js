@@ -2294,32 +2294,6 @@ let vocabulary = [];
             else if (typeof startTranslationWithGrammar === 'function') startTranslationWithGrammar(due[0].id, true);
         }
 
-        // [냐냐 요청] 복습 탭 맨 위 '오늘의 망각곡선' 줄 — 폰에서는 여기가 유일한 입구다
-        //   (헤더의 복습 버튼은 lg 이상에서만 보인다)
-        function renderReviewDueBar() {
-            const box = document.getElementById('review-due-bar');
-            if (!box) return;
-            const nW = (typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0;
-            const nG = (typeof getGrammarDueList === 'function') ? getGrammarDueList().length : 0;
-            // [냐냐 지적] 관용구가 여기 없어서 폰에서는 관용구 복습을 시작할 길이 아예 없었다
-            //   (헤더의 세 버튼은 hidden lg:flex 라 폰에서 안 보인다)
-            const nI = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
-            if (!nW && !nG && !nI) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-            box.classList.remove('hidden');
-            const btn = (n, label, sub, fn) => n ? `
-                <button onclick="${fn}" class="flex-1 min-w-0 bg-white hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2 text-left transition-all active:scale-95">
-                    <p class="text-[10px] font-bold text-amber-600">${label} <span class="text-amber-400 font-semibold">${sub}</span></p>
-                    <p class="text-sm font-black text-amber-700">${n}개 <i class="fa-solid fa-arrow-right text-[10px]"></i></p>
-                </button>` : '';
-            // [냐냐 요청] 단어·관용구는 한 버튼 — 같은 쓰기 복습이라 세션을 나눌 이유가 없다
-            const writeLabel = nI ? `📖 단어 ${nW} · 📘 관용구 ${nI}` : '📖 단어';
-            box.innerHTML = `
-                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5 flex items-stretch gap-2">
-                    ${btn(nW + nI, writeLabel, '쓰기 복습', 'startTodayReviewShortcut()')}
-                    ${btn(nG, '📋 문법', 'AI 문장 번역', 'startGrammarReview()')}
-                </div>`;
-        }
-
         // 헤더 '복습 · 관용구' 버튼 갱신
         //   [냐냐 요청] 단어와 한 묶음이 되면서 그 버튼은 헤더에서 뺐다 (단어 버튼이 둘 다 센다).
         //   버튼이 없으면 아래에서 그냥 빠져나간다 — 옛 화면이 캐시에 남아 있을 때를 위해 함수는 둔다.
@@ -2582,7 +2556,6 @@ let vocabulary = [];
             renderTodayWrongBtn(); // 버튼이 헤더에 있을 때만 동작 (지금은 내려가 있어 그냥 통과)
             renderGrammarReviewBtn(); // [냐냐 요청] 헤더 복습의 문법 쪽도 같이 갱신
             renderIdiomReviewBtn();   // [냐냐 요청] 관용구 쪽도
-            renderReviewDueBar();     // [냐냐 요청] 복습 탭 위 줄 (폰 입구)
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
             // [냐냐 요청] 단어와 관용구를 한 묶음으로 하므로 개수도 합쳐서 센다
@@ -8410,7 +8383,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     (typeof gfillState !== 'undefined' && gfillState) ||
                     (typeof writePracticeState !== 'undefined' && writePracticeState);
                 if (typeof resetReviewTab === 'function' && !reviewInProgress) resetReviewTab();
-                renderReviewDueBar();   // [냐냐 요청] 오늘의 망각곡선 줄 갱신
             } else if (tabId === 'ai-feedback') {
                 // [냐냐 요청] 탭 이동해도 진행 중이던 미션/결과/대화 유지.
                 //   '아직 아무것도 안 한 완전 처음' 상태일 때만 초기화한다.
