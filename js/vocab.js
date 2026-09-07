@@ -3819,8 +3819,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function stripAccentMarks(s) {
             return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
         }
+        //   [냐냐 요청] 슬래시로 갈린 답은 어느 쪽을 써도 인정한다 ("salir bien/mal")
         function writeAnswerMatches(userRaw, correctRaw) {
-            return normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw);
+            if (normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw)) return true;
+            return (typeof spanishAnswerMatches === 'function') && spanishAnswerMatches(userRaw, correctRaw, true);
         }
 
         // 같은 뜻이지만 다른 표현을 썼을 때 보여줄 안내.
@@ -3840,8 +3842,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         // 악센트만 틀린 경우 — 봐주지는 않고 '한 번 더' 기회를 준다
         function writeAccentOnlyMiss(userRaw, correctRaw) {
-            const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(correctRaw);
-            return u !== c && !!u && stripAccentMarks(u) === stripAccentMarks(c);
+            const u = normalizeWriteAnswer(userRaw);
+            if (!u || writeAnswerMatches(userRaw, correctRaw)) return false;
+            //   갈림이 있으면 그 꼴들과도 대본다 ("salir mal" 을 악센트만 틀리게 쓴 것도 같은 대접)
+            const cands = (typeof spanishAnswerVariants === 'function')
+                ? spanishAnswerVariants(correctRaw, true) : [normalizeWriteAnswer(correctRaw)];
+            return cands.some(c => stripAccentMarks(u) === stripAccentMarks(c));
         }
 
         // [냐냐 지적] 채점이 오래 걸린다. 재보니 AI 한 번 왕복이 빠를 때 1초, 밀릴 땐 5~8초다.

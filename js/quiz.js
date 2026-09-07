@@ -567,8 +567,8 @@ let quizSession = null;
             const correctNorm = normalizeSpanishAnswer(correct);
             const userNorm = normalizeSpanishAnswer(userRaw);
 
-            // 1) 정답 (악센트/관사 관용 처리 후 일치)
-            if (userNorm === correctNorm) return { isCorrect: true, hint: '' };
+            // 1) 정답 (악센트/관사 관용 처리 후 일치. 슬래시 갈림은 어느 쪽이든 인정)
+            if (userNorm === correctNorm || spanishAnswerMatches(userRaw, correct)) return { isCorrect: true, hint: '' };
 
             // 빈칸이면 힌트 없이 오답
             if (!userRaw.trim()) return { isCorrect: false, hint: '' };
@@ -687,6 +687,77 @@ let quizSession = null;
                 .replace(/\s+/g, ' ').trim()
                 .replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '') // 기호 제거 후 남은 관사도 한 번 더
                 .trim();
+        }
+
+        // ============================================================
+        // [냐냐 요청] 슬래시로 갈린 답 (2026-09-07).
+        //   "hacer/tener un examen" 은 둘 중 아무거나 쓰면 맞는 말인데, 기호를 공백으로
+        //   바꾸는 정규화만 거치면 "hacer tener un examen" 이 되어 둘 다 이어 써야만
+        //   정답이 됐다. 슬래시를 '갈림' 으로 읽어서 받아줄 꼴을 다 펼친다.
+        //     낱말 통째  bien/mal          → "salir bien" · "salir mal"
+        //     어미 나열  mexicano/a/os/as  → mexicano · mexicana · mexicanos · mexicanas
+        //     구절 통째  A / B (양옆 공백) → A · B
+        //   ⚠️ 대괄호 안의 슬래시는 갈림이 아니다 ("antes de [명사/동사원형]") — 먼저 걷어낸다.
+        //   ⚠️ 펼친 꼴은 '받아줄 답' 이라 넉넉해도 손해가 적다. 모자라면 아예 못 맞힌다.
+        // ============================================================
+        const SAV_MAX = 200;
+        //   스페인어 성·수 어미 (a · os · as · s · e · es 와 그 앞에 an·es 가 붙은 꼴).
+        //   mal · bien · verde 같은 진짜 낱말은 여기 안 걸린다.
+        const SAV_ENDING = /^(?:an|es|n|ñ)?(?:o|a|os|as|e|es|s)$/i;
+
+        //   낱말 하나가 될 수 있는 꼴들
+        function spanishTokenAlts(tok) {
+            if (tok.indexOf('/') < 0) return [tok];
+            const parts = tok.split('/').map(x => x.trim()).filter(Boolean);
+            if (parts.length < 2) return [tok.replace(/\//g, ' ')];
+            const first = parts[0];
+            const out = new Set([first]);
+            //   조각이 '성·수 어미' 인지 '딴 낱말' 인지 가른다.
+            //     어미면 (a · os · as · s · ana · esa · eses …) 첫 낱말의 꼬리를 갈아끼운다.
+            //     낱말이면 (mal · verde · televisión) 그 자리에 통째로 들어간다.
+            //   ⚠️ 어미는 혼자서는 답이 아니다 — 'a' 만 써서 mexicano/a/os/as 를 맞히면 안 된다.
+            parts.slice(1).forEach(e => {
+                if (!SAV_ENDING.test(e)) { out.add(e); return; }
+                //   몇 글자를 떼야 하는지는 낱말마다 다르다 (mexicano→mexican, alemán→alem).
+                //   어미 길이 + 1 까지 떼 본다 — 실제 꼴은 그 안에 다 들어온다.
+                for (let k = 0; k <= e.length + 1 && first.length - k >= 2; k++) {
+                    out.add(first.slice(0, first.length - k) + e);
+                }
+            });
+            return Array.from(out);
+        }
+
+        //   정답 하나가 받아줄 꼴들 (정규화까지 끝난 문자열 배열)
+        function spanishAnswerVariants(raw, keepAccents) {
+            const out = new Set();
+            const add = (x) => { const n = normalizeSpanishAnswer(x, keepAccents); if (n && out.size < SAV_MAX) out.add(n); };
+            const base = String(raw || '');
+            add(base);                                    // 예전 그대로도 받는다
+            if (base.indexOf('/') < 0) return Array.from(out);
+
+            const cleaned = base
+                .replace(RE_PLACEHOLDER, ' ')
+                .replace(RE_HANGUL, ' ')
+                .replace(/\s+/g, ' ').trim();
+            // 구절 통째 갈림 — 슬래시 양옆이 비어 있는 것 ("delante de mí / delante de ti")
+            String(cleaned).split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean).forEach(ph => {
+                let forms = [''];
+                ph.split(/\s+/).forEach(tok => {
+                    const alts = spanishTokenAlts(tok);
+                    const next = [];
+                    forms.forEach(f => alts.forEach(a => { if (next.length < SAV_MAX) next.push(f ? f + ' ' + a : a); }));
+                    if (next.length) forms = next;
+                });
+                forms.forEach(add);
+            });
+            return Array.from(out);
+        }
+
+        //   내가 쓴 답이 그 꼴들 중 하나인가
+        function spanishAnswerMatches(userRaw, correctRaw, keepAccents) {
+            const u = normalizeSpanishAnswer(userRaw, keepAccents);
+            if (!u) return false;
+            return spanishAnswerVariants(correctRaw, keepAccents).indexOf(u) >= 0;
         }
 
         function submitMcAnswer(choice, btnEl) {
@@ -1122,9 +1193,9 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     q._subjectiveHint = hint || '';
                     finishQuizQuestion(ok, q);
                 };
-                if (normalizeSpanishAnswer(userAnswer, true) === normalizeSpanishAnswer(q.answer, true)) { done(true, ''); return; }
+                if (spanishAnswerMatches(userAnswer, q.answer, true)) { done(true, ''); return; }
                 // 악센트만 틀림 → 아직 안 봐줬으면 한 번 더
-                if (userAnswer && normalizeSpanishAnswer(userAnswer) === normalizeSpanishAnswer(q.answer)
+                if (userAnswer && spanishAnswerMatches(userAnswer, q.answer)
                     && !(q._usedRetries && q._usedRetries.typo)) {
                     q._usedRetries = { typo: true };
                     q._retryReason = 'typo';
@@ -1220,11 +1291,11 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             }
             q._blankAsked = false;   // 뭔가 쓰고 냈으면 물어본 건 없던 일로
             // 1) 악센트까지 정확히 맞으면 AI 안 부르고 바로 통과 (빠름)
-            if (normalizeSpanishAnswer(userAnswer, true) === normalizeSpanishAnswer(correct, true)) { gradeNow(true, ''); return; }
+            if (spanishAnswerMatches(userAnswer, correct, true)) { gradeNow(true, ''); return; }
             // 1-2) [냐냐 요청] 악센트만 틀렸으면 그냥 넘기지 않고 한 번 더 물어본다.
             //   esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다.
             //   고쳐 쓰면 오타와 같은 대접(+1). AI를 부를 것도 없다.
-            if (userNorm === correctNorm) {
+            if (userNorm === correctNorm || spanishAnswerMatches(userAnswer, correct)) {
                 // 철자로 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
                 if (used().typo) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
                 askRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);

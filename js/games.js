@@ -64,8 +64,9 @@
             const norm = (s) => normalizeSpanishAnswer(s, true);
             const stripArticle = (s) => norm(s).replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
             // 관사 포함/미포함 둘 다 정답 인정 (힌트가 관사를 뗀 앞글자를 주므로)
-            return norm(userRaw) === norm(correct)
-                || stripArticle(userRaw) === stripArticle(correct);
+            if (norm(userRaw) === norm(correct) || stripArticle(userRaw) === stripArticle(correct)) return true;
+            // [냐냐 요청] 슬래시로 갈린 답은 어느 쪽이든 인정 ("salir bien/mal")
+            return (typeof spanishAnswerMatches === 'function') && spanishAnswerMatches(userRaw, correct, true);
         }
 
         // [냐냐 PATCH] 동의어 방지용 시작 글자 힌트 (앞 2글자) — 게임 item 2
@@ -1340,7 +1341,9 @@
             if (blank.language === 'es') {
                 // [냐냐 요청] 악센트도 엄격하게 — AI 채점 프롬프트가 "악센트가 빠지면 오답"이라
                 //   못박아 두고 있는데 폴백만 봐주면 AI 유무에 따라 결과가 갈린다
-                return normalizeSpanishAnswer(ans, true) === normalizeSpanishAnswer(blank.expected, true);
+                if (normalizeSpanishAnswer(ans, true) === normalizeSpanishAnswer(blank.expected, true)) return true;
+                // [냐냐 요청] 슬래시로 갈린 답은 어느 쪽이든 인정
+                return (typeof spanishAnswerMatches === 'function') && spanishAnswerMatches(ans, blank.expected, true);
             }
             // 한국어 뜻은 관대하게 (대괄호 자리표시자와 기호는 무시)
             const cleanKo = (t) => (t || '').toString().toLowerCase()
