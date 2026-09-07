@@ -3645,7 +3645,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { skipExample: true }) : '';
                 const exampleOf = (w._isConjTask && w._conjOf) ? w._conjOf : w;
                 const example = (typeof buildExampleHtml === 'function') ? buildExampleHtml(exampleOf) : '';
-                const parts = [badges, notes].filter(x => x && x.trim());
+                //   [냐냐 요청] 활용표를 관용구·노트 위로 올린다 — 이 바퀴에서 외울 게 그 표라
+                //   아래에 두면 카드가 스크롤돼서 정작 안 보였다. 품사 칩만 낱말 옆에 남긴다.
+                const parts = [notes, example].filter(x => x && x.trim());
                 //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
                 const learnWord = writeRoundTarget(w, 2);
                 const learnMean = (w._isConjTask && w._conjOf) ? (w._conjOf.meaning || '') : (w.meaning || '');
@@ -3670,9 +3672,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(learnMean)}</p>
                             ${conjBack}
                         </div>
-                        ${parts.length ? '<div class="border-t border-slate-200 my-2"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                        ${badges && badges.trim() ? '<div class="border-t border-slate-200 my-2"></div>' + badges : ''}
                         <div id="write-conj-box" class="hidden"></div>
-                        ${example ? '<div class="border-t border-slate-100 my-3"></div>' + example : ''}
+                        ${parts.length ? '<div class="border-t border-slate-100 my-3"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
                     </div>`;
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = learnWord;
