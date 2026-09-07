@@ -1039,7 +1039,7 @@
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 질문-답변 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>질문:</b> ${currentQuestionForAnswer.question}<br><b>냐냐님 답변:</b> ${userAnswer}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 답변:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "assistant", content: `<b>질문:</b> ${currentQuestionForAnswer.question}<br><b>냐냐님 답변:</b> ${userAnswer}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 답변:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
@@ -1750,7 +1750,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
@@ -1980,7 +1980,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 추가 질문에 친근하게 한국어로 답해주세요." },
-                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>제출 답안:</b> ${userText}<br><b>총평:</b> ${feedback.message}<br><b>정석:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>제출 답안:</b> ${userText}<br><b>총평:</b> ${feedback.message}<br><b>정석:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
@@ -3386,6 +3386,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 naturalWhy: { type: "STRING", description: "그 표현이 더 자연스러운 이유 한 문장 (없으면 빈 문자열)" }
             };
         }
+        // [냐냐 지적] '이렇게 말하면 더 자연스러워요' 문장을 대화 맥락에도 넘긴다 (2026-09-07).
+        //   화면에는 떠 있는데 밑의 'AI 에게 물어보기' 는 그 문장을 본 적이 없어서,
+        //   그걸 두고 물으면 무슨 말인지 못 알아들었다. 네 모드가 다 같이 쓴다.
+        function aiChatNaturalLine(feedback) {
+            const plain = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+            const sentence = plain(feedback && feedback.moreNatural);
+            if (!sentence) return '';
+            const why = plain(feedback && feedback.naturalWhy);
+            return `<br><b>더 자연스러운 표현:</b> ${sentence}${why ? ` — ${why}` : ''}`;
+        }
+
         // 결과 카드의 '이렇게 말하면 더 자연스러워요' 박스. 알려줄 게 없으면 통째로 숨긴다.
         function renderAiNatural(feedback) {
             const box = document.getElementById('ai-natural-box');
@@ -4222,7 +4233,7 @@ ${noteListText}
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 자유 작문 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}` }
+                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
