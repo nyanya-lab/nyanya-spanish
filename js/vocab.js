@@ -3772,8 +3772,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // [냐냐 요청] 익히기 바퀴에서 동사면 등록된 시제 전부 (퀴즈 정답 화면과 동일한 렌더러 재사용)
             //   [냐냐 요청] 시제 이름·규칙만 남기고 접어둔다 — 등록된 시제가 여섯이면
             //   표만으로 카드가 가득 차서 정작 낱말이 안 보였다. 궁금한 시제만 펴서 본다.
+            //   [냐냐 지적] 틀린 시제는 맨 위에 펴 둔다 — 2바퀴는 퀴즈가 아니라 베껴 쓰는
+            //   바퀴라, 불규칙 꼴이 화면에 있어야 외워진다. 이름만 적힌 배지로는 안 보인다.
             if (s.phase === 2 && typeof renderQuizConjugation === 'function') {
-                renderQuizConjugation(w, null, 'write-conj-box', { collapsed: true });
+                const askedTense = (w._isConjTask && w._conjSlot) ? { tenseKey: w._conjSlot.tense } : null;
+                renderQuizConjugation(w, askedTense, 'write-conj-box',
+                    { collapsed: true, openAsked: true, askedLabel: '틀린 꼴' });
             }
             setTimeout(() => {
                 const nextBtn = document.getElementById('write-next-btn');
