@@ -782,6 +782,7 @@
         let vconjState = null;
         let vconjTenses = ['presente'];     // 고른 시제
         let vconjScope = 'all';             // all | weak | notMastered
+        let vconjIrrOnly = false;           // [냐냐 요청] 불규칙만 내기
         let vconjCount = 20;
 
         const VCONJ_PERSONS = [
@@ -789,15 +790,31 @@
             { key: 'nos', label: 'nosotros' }, { key: 'vos', label: 'vosotros' }, { key: 'ellos', label: 'ellos/ellas' }
         ];
         const VCONJ_SCOPES = [{ key: 'all', label: '전체' }, { key: 'weak', label: '약점만' }, { key: 'notMastered', label: '미마스터' }];
+        //   [냐냐 요청] 규칙형은 어미만 갈아끼우면 되니, 외울 게 있는 건 불규칙 쪽이다.
+        //   범위(마스터 기준)와 따로 두어 '약점 + 불규칙' 처럼 겹쳐 쓸 수 있게 한다.
+        const VCONJ_IRR = [{ key: false, label: '전체' }, { key: true, label: '불규칙만' }];
         const VCONJ_COUNTS = [10, 20, 30, 0];   // 0 = 전부
 
         function vconjTenseOptions() {
             return (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
         }
+        //   [냐냐 요청] 그 시제에서 이 동사가 불규칙인가.
+        //   적힌 이름이 불규칙이어도 형태가 규칙형이면 규칙으로 본다 — 퀴즈 활용표와 같은 잣대다.
+        function vconjIsIrregular(w, tense) {
+            const irrByTense = (w && w.irregularByTense) || {};
+            const vcByTense = (w && w.verbClassByTense) || {};
+            const rawIrr = irrByTense[tense] || ((tense === 'presente') ? ((w && w.irregularType) || '') : '');
+            const rawClass = vcByTense[tense]
+                || ((rawIrr && rawIrr !== 'none') ? 'irregular' : (tense === 'presente' ? ((w && w.verbClass) || 'regular') : 'regular'));
+            const r = (typeof resolveTenseIrregularity === 'function')
+                ? resolveTenseIrregularity(w, tense, rawClass, rawIrr) : { verbClass: rawClass, irrType: rawIrr };
+            return r.verbClass === 'irregular' && r.irrType && r.irrType !== 'none';
+        }
         // 그 시제가 채워져 있는 동사만 — 없는 시제를 물어볼 수는 없다
         function vconjVerbsFor(tense) {
             return (vocabulary || []).filter(w => w.pos === 'verb'
-                && typeof getTenseConj === 'function' && hasConjValues(getTenseConj(w, tense)));
+                && typeof getTenseConj === 'function' && hasConjValues(getTenseConj(w, tense))
+                && (!vconjIrrOnly || vconjIsIrregular(w, tense)));
         }
         function vconjScopeOk(w) {
             if (vconjScope === 'weak') return !!w.weak;
@@ -807,8 +824,10 @@
         function getVconjPool() {
             const picked = vconjTenses.filter(Boolean);
             if (!picked.length) return [];
+            //   불규칙만 일 때는 '고른 시제 중 하나라도 불규칙인 동사' 만 낸다
             return (vocabulary || []).filter(w => w.pos === 'verb' && vconjScopeOk(w)
-                && picked.some(t => hasConjValues(getTenseConj(w, t))));
+                && picked.some(t => hasConjValues(getTenseConj(w, t))
+                    && (!vconjIrrOnly || vconjIsIrregular(w, t))));
         }
 
         function renderVconjSetup() {
@@ -829,6 +848,11 @@
             if (scopeBox) {
                 scopeBox.innerHTML = VCONJ_SCOPES.map(sc => `<button type="button" onclick="setVconjScope('${sc.key}')"
                     class="py-2.5 rounded-xl border text-xs font-bold transition-all ${vconjScope === sc.key ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">${sc.label}</button>`).join('');
+            }
+            const irrBox = document.getElementById('vconj-irr-btns');
+            if (irrBox) {
+                irrBox.innerHTML = VCONJ_IRR.map(o => `<button type="button" onclick="setVconjIrrOnly(${o.key})"
+                    class="py-2.5 rounded-xl border text-xs font-bold transition-all ${vconjIrrOnly === o.key ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">${o.label}</button>`).join('');
             }
             const cntBox = document.getElementById('vconj-count-btns');
             if (cntBox) {
@@ -853,6 +877,7 @@
             renderVconjSetup();
         }
         function setVconjScope(k) { vconjScope = k; renderVconjSetup(); }
+        function setVconjIrrOnly(on) { vconjIrrOnly = !!on; renderVconjSetup(); }
         function setVconjCount(n) { vconjCount = n; renderVconjSetup(); }
 
         function resetVconjSetup() {
@@ -867,7 +892,10 @@
         function startVconjReview() {
             if (!vconjTenses.length) { showToast("시제를 하나 이상 골라주세요", "error"); return; }
             const pool = shuffleArray(getVconjPool().slice());
-            if (!pool.length) { showToast("고른 시제가 채워진 동사가 없어요", "error"); return; }
+            if (!pool.length) {
+                showToast(vconjIrrOnly ? "고른 시제에 불규칙인 동사가 없어요" : "고른 시제가 채워진 동사가 없어요", "error");
+                return;
+            }
             const picked = vconjCount ? pool.slice(0, vconjCount) : pool;
             vconjState = { pool: picked, index: 0, total: picked.length, results: [], current: null, phase: 'input' };
             const setup = document.getElementById('vconj-setup');
@@ -885,6 +913,8 @@
             order.filter(t => vconjTenses.includes(t)).forEach(t => {
                 const c = getTenseConj(w, t);
                 if (!hasConjValues(c)) return;
+                //   불규칙만 일 때는 그 동사가 규칙인 시제는 빼고 묻는다
+                if (vconjIrrOnly && !vconjIsIrregular(w, t)) return;
                 const label = (vconjTenseOptions().find(o => o.key === t) || {}).label || t;
                 const cells = isSingleTense(t)
                     ? [{ person: 'form', personLabel: '', expected: String(c.form || '').trim() }]
