@@ -772,6 +772,14 @@ let vocabulary = [];
                 if (norm(w.word).includes(q) || norm(w.meaning).includes(q)) {
                     out.push({ word: w.word, meaning: w.meaning, pos: w.pos, id: w.id });
                 }
+                // [냐냐 요청] 관용구도 같이 찾는다 (2026-09-07). 표현은 1100개가 넘는데
+                //   여기서는 안 찾아져서, 등록해 둔 표현을 두고 '없다' 고 나왔다.
+                //   누르면 그 표현이 달린 단어창이 열린다 (표현은 단어에 딸려 있다).
+                const idioms = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                idioms.forEach(it => {
+                    if (!norm(it.idiom).includes(q) && !norm(it.idiomMeaning).includes(q)) return;
+                    out.push({ word: it.idiom, meaning: it.idiomMeaning, pos: 'phrase', id: w.id, idiomOf: w.word });
+                });
             });
 
             // 정확히 일치 → 입력으로 시작 → 그냥 포함
@@ -796,7 +804,7 @@ let vocabulary = [];
                     <div class="h-full flex flex-col items-center justify-center text-center gap-1.5 px-4">
                         <div class="text-2xl">🔎</div>
                         <p class="text-[11px] font-bold text-slate-500">찾을 단어를 적어주세요</p>
-                        <p class="text-[10px] text-slate-400">스페인어 · 한글 뜻 둘 다 돼요</p>
+                        <p class="text-[10px] text-slate-400">스페인어 · 한글 뜻 · 관용구 다 돼요</p>
                     </div>`;
                 return;
             }
@@ -815,7 +823,10 @@ let vocabulary = [];
             // 이제 결과는 전부 내 단어장에서 온다 (사전 항목이 없으므로 '사전' 배지도 없다)
             box.innerHTML = _quickWordResults.map((r, i) => {
                 const posLabel = (typeof POS_LABELS !== 'undefined' && POS_LABELS[r.pos]) ? POS_LABELS[r.pos] : '';
-                const badge = `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-md px-1.5 py-0.5 shrink-0">등록됨</span>`;
+                //   [냐냐 요청] 관용구는 '어느 단어에 달린 표현인지' 를 같이 보여준다
+                const badge = r.idiomOf
+                    ? `<span class="text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5 shrink-0" title="${escapeAttr(r.idiomOf)} 의 관용구">💬 ${escapeHtml(r.idiomOf)}</span>`
+                    : `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-md px-1.5 py-0.5 shrink-0">등록됨</span>`;
                 return `
                     <div onclick="pickQuickWord(${i})" title="단어창 열기"
                         class="px-2.5 py-2 rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2 transition-colors">
@@ -4079,10 +4090,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   탭을 옮기면 첨삭 노트에서 보던 자리·필터를 잃는다. 확인만 하려던 건데 손해가 크다.
         //   그래서 기본은 팝업, 정말 문법 탭으로 가고 싶으면 아래 버튼으로 간다.
         let _grammarPeekId = null;
-        function openGrammarPeek(id) {
+        //   [냐냐 요청] ev = 첨삭이 이 노트를 짚은 근거 (문장에서 베껴온 조각).
+        //   예전엔 칩 밑에 작게 달려 있었는데, 칩은 이름만 남기고 근거는 여기 위에 낸다.
+        function openGrammarPeek(id, ev) {
             const t = getAllGrammarTables().find(x => x.id === id);
             if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }
             _grammarPeekId = id;
+            const evBox = document.getElementById('grammar-peek-evidence');
+            if (evBox) {
+                const e = String(ev || '').trim();
+                evBox.classList.toggle('hidden', !e);
+                evBox.innerHTML = e
+                    ? `<span class="text-slate-400 font-bold">이 노트를 짚은 근거</span> <b class="text-violet-700">${escapeHtml(e)}</b>`
+                    : '';
+            }
 
             const gi = GRADE_INFO[getGrammarGrade(id)] || GRADE_INFO.normal;
             const titleEl = document.getElementById('grammar-peek-title');

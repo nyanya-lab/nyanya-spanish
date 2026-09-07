@@ -2083,7 +2083,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //      (이 목록은 '활용형을 추측해서 억지로 맞추지 마라' 는 뜻으로도 쓰인다).
         //   악센트를 뗀 꼴과 붙인 꼴을 같이 넣어 둔다 — 두 자리에서 각각 다르게 다듬어 오기 때문.
         const AI_FUNCTION_WORDS = new Set([
-            'el','la','los','las','un','una','unos','unas','al','del','lo',
+            'el','la','los','las','un','una','uno','unos','unas','al','del','lo',
             'a','de','en','con','por','para','sin','sobre','entre','hasta','desde','hacia','tras',
             'me','te','se','nos','os','le','les','mi','tu','su','mis','tus','sus',
             'yo','ti','ella','ello','ellos','ellas','usted','ustedes','nosotros','vosotros',
@@ -2155,6 +2155,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 .replace(/\[[^\]]*\]/g, ' ')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
                 .replace(/\s+/g, ' ').trim();
+            // [냐냐 지적] AI 가 관사를 'un/una' 처럼 슬래시로 묶어 보내면 기능어 목록에 안 걸려서
+            //   등록하라고 떴다 (el/la · los/las · unos/unas 도 같다). 조각이 전부 기능어면 거른다.
+            const isFunctionKey = (k) => {
+                if (typeof AI_FUNCTION_WORDS === 'undefined') return false;
+                if (AI_FUNCTION_WORDS.has(k)) return true;
+                if (k.indexOf('/') < 0) return false;
+                const parts = k.split('/').map(x => x.trim()).filter(Boolean);
+                return parts.length > 1 && parts.every(x => AI_FUNCTION_WORDS.has(x));
+            };
             // 단수/복수·성 변형까지 '이미 있음' 으로 친다 (medicamento ↔ los medicamentos)
             const have = new Set();
             (vocabulary || []).forEach(w => {
@@ -2180,7 +2189,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!key || key.length < 2 || seen.has(key)) return;
                 if (have.has(key)) return;                                     // 이미 단어장에 있음
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
-                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
+                if (isFunctionKey(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
@@ -2206,7 +2215,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (i > 0 && /^[A-ZÁÉÍÓÚÑÜ]/.test(raw)) return;
                 if (!key || key.length < 3 || seen.has(key) || mineSet.has(key)) return;
                 if (have.has(key)) return;
-                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(key)) return;
+                if (isFunctionKey(key)) return;
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (looksConjugated(key)) return;
                 //   [냐냐 지적] 'fue' 를 등록하라고 권했다 — ser 의 부정과거가 활용표에 없어서
@@ -4009,9 +4018,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     ${/* [냐냐 지적] 제목을 누르면 문법 탭으로 점프했는데 그 노트가 화면에 바로 안 보였다.
                          들춰보기 팝업으로 보내기로 했던 대로 고친다 — 팝업 안에 '문법·개념 탭에서 보기' 가
                          있어서 탭으로 가는 길도 그대로 남는다. 따로 있던 돋보기는 같은 일이라 뺐다. */''}
-                    <button type="button" onclick="openGrammarPeek('${g.note.id}')" title="이 문법 노트 들춰보기" class="flex-1 text-left min-w-0">
+                    ${/* [냐냐 요청] 근거는 칩에서 빼고 들춰보기 팝업 위쪽에 낸다 (2026-09-07).
+                         칩은 문법 이름만 이고, 왜 짚였는지는 노트를 열었을 때 보면 된다. */''}
+                    <button type="button" onclick="openGrammarPeek(this.dataset.id, this.dataset.ev)"
+                        data-id="${escapeAttr(g.note.id)}" data-ev="${escapeAttr(g.ev || '')}"
+                        title="이 문법 노트 들춰보기" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
-                        ${g.ev ? `<div class="text-[10px] text-slate-400 truncate">근거 · ${escapeHtml(g.ev)}</div>` : ''}
                     </button>
                     ${cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
