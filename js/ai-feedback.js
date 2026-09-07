@@ -2943,14 +2943,18 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   AI 가 grammarOk/Bad 에 그 노트를 안 넣으면 (또는 근거를 문장에서 못 찾으면)
             //   그 노트는 목록에서 통째로 빠졌다 — 점수도 곡선도 안 돌아서, 복습을 하고도
             //   칸이 안 나갔다. 미션 자체가 그 문법을 써야 풀리게 만든 것이므로,
-            //   짚은 게 없을 때만 '문장이 맞았나'(isCorrect) 로 대신 본다.
+            //   짚은 게 없을 때만, 그리고 '문장이 맞았을 때만' 제대로 쓴 것으로 친다.
             //   ⚠️ 복습 미션에서만 한다. 랜덤 미션·자유 작문은 지금처럼 AI 판정만 따른다.
-            //   ⚠️ 문법을 피해 가고도 문장이 맞으면 +2 가 붙을 수 있다. 그 대신 복습이
-            //      조용히 사라지는 일이 없어진다 — 칩을 눌러 점수는 되돌릴 수 있다.
+            //   ⚠️ [냐냐 지적] 틀린 문장에 −2 를 주면 안 된다 (2026-09-07). 문장이 틀렸다고
+            //      그 문법을 틀린 게 아니다 — 'Cuesto comer una fresa porque hace mucho frío hoy'
+            //      는 costar 를 잘못 썼을 뿐 'hace mucho frío' 는 완벽한데, 날씨 노트가 −2 를 맞았다.
+            //      아무도 안 짚었으면 그 문법이 왜 틀렸는지 댈 근거가 없다는 뜻이므로 건드리지 않는다.
+            //      (그러면 곡선도 그대로 남아서 다음에 다시 복습으로 나온다 — 그게 맞다)
             if (typeof aiMissionReviewGrammarId !== 'undefined' && aiMissionReviewGrammarId
+                && feedback && feedback.isCorrect
                 && !parsed.some(x => x.note.id === aiMissionReviewGrammarId)) {
                 const note = notes.find(t => t.id === aiMissionReviewGrammarId);
-                if (note) parsed.push({ note, ok: !!(feedback && feedback.isCorrect), ev: '' });
+                if (note) parsed.push({ note, ok: true, ev: '' });
             }
 
             // 같은 노트가 맞음·틀림 양쪽에 오면 틀림을 따른다 (근거가 달라서 앞단 정리에 안 걸린다)
