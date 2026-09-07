@@ -1939,39 +1939,119 @@ let vocabulary = [];
             return daysSince(lastReviewDate || lastWrongDate) >= REVIEW_INTERVALS[stage];
         }
 
-        function getCurveStageItems(kind, stage) {
-            const out = [];
-            if (stage < 0 || stage >= REVIEW_INTERVALS.length) return out;
+        //   곡선 위의 한 줄을 갈래에 상관없이 같은 모양으로 넘겨준다.
+        //   기록이 놓인 자리가 셋 다 달라서(단어는 제 몸에, 관용구·문법은 따로) 여기서 한 번만 가른다.
+        function eachCurveRec(kind, fn) {
             if (kind === 'word') {
-                (vocabulary || []).forEach(w => {
-                    if (!w.lastWrongDate) return;
-                    if ((w.reviewStage || 0) !== stage) return;
-                    out.push({ it: w, due: curveRecDue(w.lastReviewDate, w.lastWrongDate, stage), sort: getScore(w) });
-                });
+                (vocabulary || []).forEach(w => fn({
+                    it: w, wrong: w.lastWrongDate, review: w.lastReviewDate,
+                    stage: w.reviewStage || 0, sort: getScore(w)
+                }));
             } else if (kind === 'idiom') {
                 (vocabulary || []).forEach(w => {
                     const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
                     list.forEach(item => {
-                        const rec = idiomReview[idiomKey(w.id, item.idiom)];
-                        if (!rec || !rec.lastWrongDate) return;
-                        if ((rec.stage || 0) !== stage) return;
-                        out.push({ it: { word: w, idiom: item },
-                                   due: curveRecDue(rec.lastReviewDate, rec.lastWrongDate, stage), sort: 0 });
+                        const rec = (idiomReview || {})[idiomKey(w.id, item.idiom)] || {};
+                        fn({ it: { word: w, idiom: item }, wrong: rec.lastWrongDate, review: rec.lastReviewDate,
+                             stage: rec.stage || 0, sort: 0 });
                     });
                 });
             } else {
                 const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
                 tables.forEach(t => {
-                    const rec = grammarReview[t.id];
-                    if (!rec || !rec.lastWrongDate) return;
-                    if ((rec.stage || 0) !== stage) return;
-                    out.push({ it: t, due: curveRecDue(rec.lastReviewDate, rec.lastWrongDate, stage),
-                               sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0 });
+                    const rec = (grammarReview || {})[t.id] || {};
+                    fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, stage: rec.stage || 0,
+                         sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0 });
                 });
             }
+        }
+
+        function getCurveStageItems(kind, stage) {
+            const out = [];
+            if (stage < 0 || stage >= REVIEW_INTERVALS.length) return out;
+            eachCurveRec(kind, r => {
+                if (!r.wrong || r.stage !== stage) return;
+                out.push({ it: r.it, due: curveRecDue(r.review, r.wrong, stage), sort: r.sort });
+            });
             // 오늘 할 것 먼저, 그 안에서는 약한 것부터 — 다른 목록과 같은 순서
             out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
             return out;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 막대 위의 숫자 넷도 눌러서 뭐가 들었는지 본다 (2026-09-07).
+        //   오늘 복습할 것 · 곡선 안 · 곡선 졸업 · 한 번도 안 틀림.
+        //   ⚠️ 고르는 기준은 getReviewCurveStats·getIdiomCurveStats·getGrammarCurveStats 와 같아야 한다.
+        // ============================================================
+        //   받침이 있으면 '이에요', 없으면 '예요' (표현·문법 vs 단어)
+        function curveYeyo(unit) {
+            const code = String(unit || '').charCodeAt(String(unit || '').length - 1) - 0xac00;
+            return (code >= 0 && code <= 11171 && code % 28 === 0) ? '예요' : '이에요';
+        }
+
+        const CURVE_BUCKETS = [
+            { key: 'due',       label: '오늘 복습할 것' },
+            { key: 'inCurve',   label: '곡선 안' },
+            { key: 'graduated', label: '곡선 졸업' },
+            { key: 'never',     label: '한 번도 안 틀림' }
+        ];
+
+        function getCurveBucketItems(kind, bucket) {
+            const out = [];
+            const last = REVIEW_INTERVALS.length;
+            eachCurveRec(kind, r => {
+                if (!r.wrong) { if (bucket === 'never') out.push({ it: r.it, due: false, sort: r.sort }); return; }
+                if (r.stage >= last) { if (bucket === 'graduated') out.push({ it: r.it, due: false, sort: r.sort }); return; }
+                const due = curveRecDue(r.review, r.wrong, r.stage);
+                if (bucket === 'inCurve') out.push({ it: r.it, due, sort: r.sort });
+                else if (bucket === 'due' && due) out.push({ it: r.it, due: true, sort: r.sort });
+            });
+            out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
+            return out;
+        }
+
+        //   '한 번도 안 틀림' 은 천 개가 넘을 수 있다 — 한 번에 다 그리면 무겁다
+        const CURVE_LIST_MAX = 300;
+
+        function openCurveBucketModal(kind, bucket) {
+            const modal = document.getElementById('review-plan-modal');
+            const meta = CURVE_KINDS[kind];
+            const bmeta = CURVE_BUCKETS.find(b => b.key === bucket);
+            if (!modal || !meta || !bmeta) return;
+            const rows = getCurveBucketItems(kind, bucket);
+            const dueN = rows.filter(r => r.due).length;
+
+            const titleEl = document.getElementById('review-plan-title');
+            const subEl = document.getElementById('review-plan-sub');
+            const bodyEl = document.getElementById('review-plan-body');
+            if (titleEl) titleEl.innerText = `${bmeta.label} · ${meta.icon} ${meta.label} ${rows.length}개`;
+            const y = curveYeyo(meta.unit);
+            const SUB = {
+                due: `곡선 차례가 된 ${meta.unit}${y}. 밀린 것도 다 들어 있어요.`,
+                inCurve: `한 번이라도 틀려서 곡선에 들어와 있는 ${meta.unit}${y}.`,
+                graduated: `${REVIEW_INTERVALS[REVIEW_INTERVALS.length - 1]}일까지 다 버틴 ${meta.unit}${y}.`,
+                never: `한 번도 안 틀려서 곡선에 들어온 적이 없는 ${meta.unit}${y}.`
+            };
+            if (subEl) subEl.innerText = (SUB[bucket] || '')
+                + ((bucket !== 'due' && dueN) ? ` 빨간 점 ${dueN}개가 오늘 할 것이에요.` : '');
+
+            const counts = {};
+            CURVE_BUCKETS.forEach(b => { counts[b.key] = getCurveBucketItems(kind, b.key).length; });
+            const tabs = `<div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+                ${CURVE_BUCKETS.map(b => counts[b.key]
+                    ? `<button onclick="openCurveBucketModal('${kind}', '${b.key}')" class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight transition-all ${b.key === bucket ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${b.label}<br><span class="text-[10px] font-bold">${counts[b.key]}</span></button>`
+                    : `<div class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight text-slate-300 text-center">${b.label}<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
+            </div>`;
+
+            const shown = rows.slice(0, CURVE_LIST_MAX);
+            const more = rows.length - shown.length;
+            bodyEl.innerHTML = tabs + (rows.length
+                ? `<div class="space-y-1.5">${shown.map(r => r.due
+                        ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
+                        : reviewPlanItemHtml(kind, r.it)).join('')}</div>`
+                    + (more ? `<p class="text-[11px] text-slate-400 text-center pt-2">…외 ${more}개는 안 그렸어요 (너무 많아서요)</p>` : '')
+                : '<p class="text-slate-400 text-center text-xs py-4">여기는 비어 있어요 ✨</p>');
+            modal.classList.remove('hidden');
         }
 
         function openCurveStageModal(kind, stage) {
@@ -1986,9 +2066,7 @@ let vocabulary = [];
             const subEl = document.getElementById('review-plan-sub');
             const bodyEl = document.getElementById('review-plan-body');
             if (titleEl) titleEl.innerText = `${days}일차 · ${meta.icon} ${meta.label} ${rows.length}개`;
-            //   받침이 있으면 '이에요', 없으면 '예요' (표현/문법 vs 단어)
-            const code = meta.unit.charCodeAt(meta.unit.length - 1) - 0xac00;
-            const yeyo = (code >= 0 && code <= 11171 && code % 28 === 0) ? '예요' : '이에요';
+            const yeyo = curveYeyo(meta.unit);
             if (subEl) subEl.innerText = (stage === 0
                 ? `아직 첫 복습을 못 넘긴 ${meta.unit}${yeyo}.`
                 : `${stage}번 복습하고 ${days}일을 기다리는 ${meta.unit}${yeyo}.`)
@@ -2018,8 +2096,14 @@ let vocabulary = [];
             const num = (n, cls) => `<span class="text-lg font-black ${cls}">${n}</span><span class="text-[10px] font-bold text-slate-400 ml-0.5">개</span>`;
             // [냐냐 요청] 회색 설명 줄은 뺐다. 칸 이름만으로 읽히고, 줄 수가 달라서
             //   단어·문법·관용구 세 칸의 높이가 어긋나는 원인이기도 했다.
-            const cell = (label, n, cls) => `
-                <div class="bg-slate-50 rounded-2xl px-3 py-2.5">
+            //   [냐냐 요청] 숫자 칸도 눌러서 뭐가 들었는지 본다 (빈 칸은 안 눌린다)
+            const cell = (label, n, cls, kind, bucket) => n
+                ? `<button type="button" onclick="openCurveBucketModal('${kind}', '${bucket}')" title="여기 든 것 보기"
+                        class="bg-slate-50 hover:bg-slate-100 rounded-2xl px-3 py-2.5 text-left transition-colors">
+                    <p class="text-[10px] font-bold text-slate-500">${label}</p>
+                    <p class="mt-0.5">${num(n, cls)}</p>
+                </button>`
+                : `<div class="bg-slate-50 rounded-2xl px-3 py-2.5 opacity-60">
                     <p class="text-[10px] font-bold text-slate-500">${label}</p>
                     <p class="mt-0.5">${num(n, cls)}</p>
                 </div>`;
@@ -2049,10 +2133,10 @@ let vocabulary = [];
                         <p class="text-[10px] text-slate-400 font-semibold">${howto}</p>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
-                        ${cell(s.overdue ? `오늘 복습할 것 (밀린 것 ${s.overdue})` : '오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600')}
-                        ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600')}
-                        ${cell('곡선 졸업', s.graduated, 'text-emerald-600')}
-                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500')}
+                        ${cell(s.overdue ? `오늘 복습할 것 (밀린 것 ${s.overdue})` : '오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600', kind, 'due')}
+                        ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600', kind, 'inCurve')}
+                        ${cell('곡선 졸업', s.graduated, 'text-emerald-600', kind, 'graduated')}
+                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500', kind, 'never')}
                     </div>
                     <div class="space-y-1.5 mt-auto">
                         <p class="text-[10px] font-bold text-slate-500">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
