@@ -19,6 +19,16 @@
                     el.innerHTML = `이번 주 <b class="text-slate-600">${week}</b> · 역대 <b class="text-amber-500">${all}</b>`;
                 }
             });
+            //   십자말풀이는 크기별 최단 시간
+            const cwEl = document.getElementById('hs-crossword');
+            if (cwEl && typeof CROSSWORD_SIZES !== 'undefined') {
+                const bests = getCrosswordBests();
+                cwEl.innerHTML = CROSSWORD_SIZES.map(sz => {
+                    const b = bests[sz.key];
+                    const has = typeof b === 'number';
+                    return `${sz.label.split(' ')[0]} <b class="${has ? 'text-teal-600' : 'text-slate-300'}">${has ? fmtSecs(b) : '—'}</b>`;
+                }).join(' · ');
+            }
         }
 
         // 진행 중인 게임의 타이머/애니메이션 정리
@@ -139,10 +149,13 @@
                 } catch (e) {}
                 if (all || week) out[g] = { all: all || 0, week: week || null };
             });
+            const cw = getCrosswordBests();
+            if (Object.keys(cw).length) out.crossword = cw;   // 십자말풀이만 '짧을수록 좋다'
             return out;
         }
         function mergeGameHighScores(remote) {
             if (!remote || typeof remote !== 'object') return;
+            mergeCrosswordBests(remote.crossword);
             GAME_TYPES.forEach(g => {
                 const r = remote[g];
                 if (!r) return;
@@ -156,6 +169,35 @@
                 }
             });
         }
+
+        // [냐냐 요청] 십자말풀이는 '얼마나 빨리' 가 기록이라 작을수록 좋다 (2026-09-09).
+        //   위의 장치는 클수록 좋다는 잣대라 여기만 따로 둔다. 크기별로 나눠 잰다 —
+        //   6개짜리와 15개짜리를 같은 줄에 세울 수 없다.
+        const CW_BEST_KEY = 'nyanya_cw_best';
+        function getCrosswordBests() {
+            try { const raw = localStorage.getItem(CW_BEST_KEY); return raw ? (JSON.parse(raw) || {}) : {}; }
+            catch (e) { return {}; }
+        }
+        function setCrosswordBest(size, secs) {
+            const bests = getCrosswordBests();
+            if (typeof bests[size] === 'number' && bests[size] <= secs) return false;   // 0초도 값이다
+            bests[size] = secs;
+            try { localStorage.setItem(CW_BEST_KEY, JSON.stringify(bests)); } catch (e) {}
+            if (typeof saveToStorage === 'function') { try { saveToStorage(); } catch (e) {} }
+            return true;
+        }
+        function mergeCrosswordBests(remote) {
+            if (!remote || typeof remote !== 'object') return;
+            const bests = getCrosswordBests();
+            let changed = false;
+            Object.keys(remote).forEach(k => {
+                const v = Number(remote[k]);
+                if (!Number.isFinite(v) || v < 0) return;
+                if (typeof bests[k] !== 'number' || v < bests[k]) { bests[k] = v; changed = true; }   // 짧은 쪽을 남긴다
+            });
+            if (changed) { try { localStorage.setItem(CW_BEST_KEY, JSON.stringify(bests)); } catch (e) {} }
+        }
+        function fmtSecs(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
         function setGameHighScore(gameType, score) {
             let isNewAllTime = false;
@@ -1087,7 +1129,7 @@
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
                     <div class="flex items-center justify-between gap-3">
                         <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500">낱말 <b class="text-teal-600">${board.placed.length}</b>개 · <span id="cw-timer" class="text-slate-600">0:00</span></span>
+                        <span class="text-xs font-bold text-slate-500">낱말 <b class="text-teal-600">${board.placed.length}</b>개 · <span id="cw-timer" class="text-slate-600">0:00</span>${typeof getCrosswordBests()[crosswordSize] === 'number' ? ` <span class="text-slate-300">/ 최고 ${fmtSecs(getCrosswordBests()[crosswordSize])}</span>` : ''}</span>
                     </div>
                     <div id="cw-sizes" class="flex justify-center gap-1.5">${CROSSWORD_SIZES.map(s =>
                         `<button type="button" onclick="startCrossword('${s.key}')" title="바꾸면 새 격자를 만들어요"
@@ -1131,7 +1173,7 @@
                         ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none">${num}</span>` : ''}
                         <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
-                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
+                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
                     </div>`;
                 }
                 html += '</div>';
@@ -1247,9 +1289,12 @@
                 el.classList.remove('bg-rose-50', 'border-rose-300');
                 el.classList.add('bg-emerald-50', 'border-emerald-300', 'text-emerald-700');
             });
+            const isBest = setCrosswordBest(crosswordSize, secs);
             const msg = document.getElementById('cw-msg');
             if (msg) {
-                msg.innerHTML = `🎉 다 맞혔어요! <span class="text-slate-400">${Math.floor(secs / 60)}분 ${secs % 60}초</span>`;
+                msg.innerHTML = isBest
+                    ? `🎉 다 맞혔어요! <span class="text-amber-500">${fmtSecs(secs)} — 이 크기 최고 기록!</span>`
+                    : `🎉 다 맞혔어요! <span class="text-slate-400">${fmtSecs(secs)} · 최고 ${fmtSecs(getCrosswordBests()[crosswordSize])}</span>`;
                 msg.className = 'text-center text-xs font-bold h-4 text-emerald-600';
             }
             AudioFX.playSuccess();
