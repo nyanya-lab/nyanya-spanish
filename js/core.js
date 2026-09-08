@@ -998,7 +998,7 @@ let vocabulary = [];
         function touchDiarySnapshot() {
             const today = getLocalDateString();
             if (!nyanyaDiary[today]) {
-                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0, newGrammarCount: 0, newGrammarMasteredCount: 0 };
+                nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, writeTotal: 0, writeCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0, newGrammarCount: 0, newGrammarMasteredCount: 0 };
             }
             // 마이그레이션: 예전 데이터 구조(punches/quizzes/masters)가 남아있어도 안전하게 새 필드로 보강
             const d = nyanyaDiary[today];
@@ -1006,6 +1006,10 @@ let vocabulary = [];
             if (d.masteredTotal === undefined) d.masteredTotal = 0;
             if (d.quizTotal === undefined) d.quizTotal = d.quizzes || 0;
             if (d.quizCorrect === undefined) d.quizCorrect = 0;
+            // [냐냐 요청] 쓰기 복습 1바퀴 정오답 (2026-09-08). 이 날부터 쌓인다 —
+            //   지난 날은 정오답이 어디에도 안 남아 있어서 채울 수가 없다.
+            if (d.writeTotal === undefined) d.writeTotal = 0;
+            if (d.writeCorrect === undefined) d.writeCorrect = 0;
             if (d.aiSessions === undefined) d.aiSessions = 0;
             if (d.newWordsCount === undefined) d.newWordsCount = 0;
             if (d.newMasteredCount === undefined) d.newMasteredCount = 0;
@@ -3434,6 +3438,10 @@ let vocabulary = [];
             if (type === 'quiz') {
                 nyanyaDiary[today].quizTotal++;
                 if (extra) nyanyaDiary[today].quizCorrect++;
+            } else if (type === 'write') {
+                // [냐냐 요청] 쓰기 복습 1바퀴 — 한 낱말당 한 번만 (건너뛴 건 안 센다)
+                nyanyaDiary[today].writeTotal = (nyanyaDiary[today].writeTotal || 0) + 1;
+                if (extra) nyanyaDiary[today].writeCorrect = (nyanyaDiary[today].writeCorrect || 0) + 1;
             } else if (type === 'ai') {
                 nyanyaDiary[today].aiSessions++;
             } else if (type === 'new-word') {
@@ -3590,23 +3598,32 @@ let vocabulary = [];
         // ============================================================
         const ACC_WINDOW_DAYS = 15;
 
+        //   [냐냐 요청] 갈래별로도 갈라서 돌려준다 — 퀴즈·첨삭·쓰기는 판정이 박한 정도가 달라서
+        //   한 숫자로 뭉치면 무엇 때문에 낮은지 알 수가 없다.
         function recentAccuracy(days) {
             const n = days || ACC_WINDOW_DAYS;
             const from = addDaysToDateString(getLocalDateString(), -(n - 1));
-            let total = 0, correct = 0;
+            const parts = { quiz: { t: 0, c: 0 }, ai: { t: 0, c: 0 }, write: { t: 0, c: 0 } };
             Object.keys(nyanyaDiary || {}).forEach(ds => {
                 if (ds < from) return;
                 const d = nyanyaDiary[ds] || {};
-                total += (d.quizTotal || 0);
-                correct += (d.quizCorrect || 0);
+                parts.quiz.t += (d.quizTotal || 0);
+                parts.quiz.c += (d.quizCorrect || 0);
+                parts.write.t += (d.writeTotal || 0);
+                parts.write.c += (d.writeCorrect || 0);
             });
             (typeof aiNotes !== 'undefined' ? aiNotes : []).forEach(x => {
                 const ds = String((x && x.t) || '').slice(0, 10);
                 if (!ds || ds < from) return;
-                total++;
-                if (x.ok) correct++;
+                parts.ai.t++;
+                if (x.ok) parts.ai.c++;
             });
-            return { days: n, total, correct, pct: total ? Math.round((correct / total) * 100) : null };
+            Object.keys(parts).forEach(k => {
+                parts[k].pct = parts[k].t ? Math.round((parts[k].c / parts[k].t) * 100) : null;
+            });
+            const total = parts.quiz.t + parts.ai.t + parts.write.t;
+            const correct = parts.quiz.c + parts.ai.c + parts.write.c;
+            return { days: n, total, correct, pct: total ? Math.round((correct / total) * 100) : null, parts };
         }
 
         //   [냐냐 지적] 정답률은 등급으로 옮기기 어렵다 — 퀴즈가 쉬우면 B2 가 나오고 어려우면 A2 가
@@ -3897,9 +3914,18 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         <span class="text-lg font-black text-slate-700">${accuracy}%</span>
                     </div>
                 </div>
+                ${useRecent ? `
+                <div class="grid grid-cols-3 gap-2 mb-2">
+                    ${[['퀴즈', rec.parts.quiz], ['AI 첨삭', rec.parts.ai], ['쓰기 복습', rec.parts.write]].map(([nm, pt]) => `
+                        <div class="bg-white/70 rounded-xl px-2 py-2 text-center">
+                            <span class="block text-[10px] text-slate-400 font-bold">${nm}</span>
+                            <span class="text-sm font-black ${pt.t ? 'text-slate-700' : 'text-slate-300'}">${pt.t ? pt.pct + '%' : '—'}</span>
+                            <span class="block text-[10px] text-slate-300">${pt.t ? pt.c + '/' + pt.t : '아직 없어요'}</span>
+                        </div>`).join('')}
+                </div>` : ''}
                 <p class="text-[11px] text-slate-400 mb-3">${useRecent
-                    ? `최근 ${rec.days}일 ${rec.correct}/${rec.total}문제 · 누적 ${totalCorrect}/${totalAnswered}문제 (퀴즈 + AI 첨삭)`
-                    : `최근 ${rec.days}일에 푼 게 ${rec.total}문제뿐이라 누적으로 보여드려요 · 총 ${totalAnswered}문제 (퀴즈 + AI 첨삭)`}</p>
+                    ? `최근 ${rec.days}일 ${rec.correct}/${rec.total}문제 · 누적 ${totalCorrect}/${totalAnswered}문제`
+                    : `최근 ${rec.days}일에 푼 게 ${rec.total}문제뿐이라 누적으로 보여드려요 · 총 ${totalAnswered}문제`}</p>
             `;
 
             html += `<div class="mb-2">
@@ -4004,7 +4030,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   정답률처럼 비율로 쓰는 값은 그래프 쪽에서 합계로 다시 계산하니까 여기선 안 건드린다.
         //   (합계의 비율이라 '평균의 평균'이 되지 않는다)
         // ============================================================
-        const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
+        const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'writeTotal', 'writeCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
                                    'reviewCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
         const RECORD_LAST_FIELDS = ['registeredTotal', 'masteredTotal', 'perfectTotal', 'weakTotal', 'criticalTotal',
                                     'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal'];
