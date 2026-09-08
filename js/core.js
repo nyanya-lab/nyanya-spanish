@@ -972,7 +972,10 @@ let vocabulary = [];
             if (totalAnswered < 5) {
                 return "학습 데이터가 아직 적어서 평균적인 초급자 기준으로 설명해 주세요.";
             }
-            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            //   [냐냐 요청] 최근 15일만 본다. 그 안에 푼 게 적으면(5문제 미만) 누적으로 물러선다.
+            const rec = recentAccuracy();
+            const useRecent = rec.total >= 5;
+            const accuracy = useRecent ? rec.pct : Math.round((totalCorrect / totalAnswered) * 100);
             let level = "초급";
             if (accuracy >= 85 && vocabulary.length >= 50) level = "중상급";
             else if (accuracy >= 70) level = "중급";
@@ -3576,21 +3579,45 @@ let vocabulary = [];
         }
 
         // ── 축 ③ 정답률 (최근 30일 퀴즈) ──
-        function deleAccuracyAxis() {
+        // ============================================================
+        // [냐냐 요청] 정답률은 최근 15일만 본다 (2026-09-08).
+        //   예전엔 한 번도 안 지워지는 누적값이라 초창기 성적이 계속 따라다녔다.
+        //   재는 감은 그대로 둔다 — 퀴즈 한 문제 = 1, 첨삭 문장 하나 = 1.
+        //   날짜가 붙은 자리가 둘이라 각각에서 가져온다:
+        //     퀴즈  → nyanyaDiary[날짜].quizTotal / quizCorrect
+        //     첨삭  → aiNotes 의 t(찍힌 시각) 와 ok
+        //   ⚠️ 둘 다 지난 기록에 이미 있는 값이라, 옮기는 작업 없이 예전 것도 바로 세어진다.
+        // ============================================================
+        const ACC_WINDOW_DAYS = 15;
+
+        function recentAccuracy(days) {
+            const n = days || ACC_WINDOW_DAYS;
+            const from = addDaysToDateString(getLocalDateString(), -(n - 1));
             let total = 0, correct = 0;
-            const from = addDaysToDateString(getLocalDateString(), -29);
             Object.keys(nyanyaDiary || {}).forEach(ds => {
                 if (ds < from) return;
                 const d = nyanyaDiary[ds] || {};
                 total += (d.quizTotal || 0);
                 correct += (d.quizCorrect || 0);
             });
-            if (total < 20) {
-                return { level: null, detail: `최근 30일 퀴즈가 ${total}문제라 아직 못 재요 (20문제부터)`, pct: null, total };
+            (typeof aiNotes !== 'undefined' ? aiNotes : []).forEach(x => {
+                const ds = String((x && x.t) || '').slice(0, 10);
+                if (!ds || ds < from) return;
+                total++;
+                if (x.ok) correct++;
+            });
+            return { days: n, total, correct, pct: total ? Math.round((correct / total) * 100) : null };
+        }
+
+        //   [냐냐 지적] 정답률은 등급으로 옮기기 어렵다 — 퀴즈가 쉬우면 B2 가 나오고 어려우면 A2 가
+        //   나오는데 그게 실력이 오르내린 게 아니다. 그래서 level 은 안 매기고 퍼센트만 낸다.
+        //   (level 이 null 이라 deleBottleneck 의 '발목 잡는 축' 셈에서도 저절로 빠진다)
+        function deleAccuracyAxis() {
+            const r = recentAccuracy();
+            if (r.total < 20) {
+                return { level: null, detail: `최근 ${r.days}일에 ${r.total}문제라 아직 못 재요 (20문제부터)`, pct: null, total: r.total };
             }
-            const pct = Math.round((correct / total) * 100);
-            const level = (DELE_ACC_STEPS.find(([min]) => pct >= min) || [0, 'A1'])[1];
-            return { level, detail: `최근 30일 ${correct}/${total}문제`, pct, total };
+            return { level: null, detail: `최근 ${r.days}일 ${r.correct}/${r.total}문제`, pct: r.pct, total: r.total };
         }
 
         // ── 축 ① 어휘: AI 에게 보낼 표본 ──
@@ -3796,9 +3823,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
             const axis = (name, a, extra) => {
                 if (!a) return '';
-                const lv = a.level
-                    ? `<span class="text-xs font-black ${DELE_LEVEL_COLOR[a.level] || 'text-slate-500'}">${a.level}</span>`
-                    : `<span class="text-xs font-black text-slate-300">—</span>`;
+                //   [냐냐 요청] 정답률은 등급 대신 퍼센트로 (등급으로 옮기기 어려운 축이라서)
+                const lv = (typeof a.pct === 'number')
+                    ? `<span class="text-xs font-black text-slate-700">${a.pct}%</span>`
+                    : (a.level
+                        ? `<span class="text-xs font-black ${DELE_LEVEL_COLOR[a.level] || 'text-slate-500'}">${a.level}</span>`
+                        : `<span class="text-xs font-black text-slate-300">—</span>`);
                 return `<div class="flex items-baseline gap-2 py-1">
                     <span class="text-[11px] font-bold text-slate-500 w-12 shrink-0">${name}</span>
                     ${lv}
@@ -3842,7 +3872,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 return;
             }
 
-            const accuracy = Math.round((totalCorrect / totalAnswered) * 100);
+            //   [냐냐 요청] 최근 15일만 본다. 그 안에 푼 게 적으면(5문제 미만) 누적으로 물러선다.
+            const rec = recentAccuracy();
+            const useRecent = rec.total >= 5;
+            const accuracy = useRecent ? rec.pct : Math.round((totalCorrect / totalAnswered) * 100);
             let level = "초급";
             let levelColor = "text-emerald-600";
             if (accuracy >= 85 && vocabulary.length >= 50) { level = "중상급"; levelColor = "text-violet-600"; }
@@ -3860,11 +3893,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         <span class="text-lg font-black ${levelColor}">${level}</span>
                     </div>
                     <div class="bg-white/70 rounded-2xl p-3 text-center">
-                        <span class="block text-[10px] text-slate-400 font-bold">전체 정답률</span>
+                        <span class="block text-[10px] text-slate-400 font-bold">${useRecent ? `최근 ${rec.days}일 정답률` : '정답률 (누적)'}</span>
                         <span class="text-lg font-black text-slate-700">${accuracy}%</span>
                     </div>
                 </div>
-                <p class="text-[11px] text-slate-400 mb-3">총 ${totalAnswered}문제 풀이 (퀴즈 + AI 첨삭 합산)</p>
+                <p class="text-[11px] text-slate-400 mb-3">${useRecent
+                    ? `최근 ${rec.days}일 ${rec.correct}/${rec.total}문제 · 누적 ${totalCorrect}/${totalAnswered}문제 (퀴즈 + AI 첨삭)`
+                    : `최근 ${rec.days}일에 푼 게 ${rec.total}문제뿐이라 누적으로 보여드려요 · 총 ${totalAnswered}문제 (퀴즈 + AI 첨삭)`}</p>
             `;
 
             html += `<div class="mb-2">
