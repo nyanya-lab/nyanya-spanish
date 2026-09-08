@@ -3269,9 +3269,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   원형은 활용형을 쓰려면 어차피 알아야 하니, 활용형으로 물으면 둘 다 시험된다.
         //   ⚠️ 시제를 먼저 고르고 그 안에서 인칭을 고른다. 칸을 통째로 섞으면 현재시제가
         //      6칸이라 1칸짜리 분사보다 여섯 배 자주 나온다.
+        // [냐냐 요청] 어느 시제로 물어볼지 고를 수 있게 한다 (2026-09-08).
+        //   예전엔 그 동사에 채워진 시제 중 아무거나 나왔다. 과거형만 훑고 싶을 때가 있는데
+        //   그럴 방법이 없었다. 빈 배열 = 전체 (아무것도 안 고르면 예전과 같다).
+        //   ⚠️ 고른 시제가 그 동사에 안 채워져 있으면 그 동사는 원형으로 묻는다 (pickConjSlot 이 null).
+        let writeTenses = [];
+
         function pickConjSlot(w) {
             const opts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [];
             const tenses = opts.map(o => o.key).filter(t => {
+                if (writeTenses.length && writeTenses.indexOf(t) < 0) return false;
                 const c = (typeof getTenseConj === 'function') ? getTenseConj(w, t) : null;
                 return c && (typeof hasConjValues === 'function' ? hasConjValues(c) : false);
             });
@@ -3362,6 +3369,42 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
 
+        //   그 시제가 채워진 동사가 몇 개인지 같이 적는다 (없는 시제를 고르면 헛돈다)
+        function writeTenseOptions() {
+            return (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
+        }
+        function writeVerbsFor(tense) {
+            return (vocabulary || []).filter(w => w.pos === 'verb'
+                && typeof getTenseConj === 'function' && hasConjValues(getTenseConj(w, tense))).length;
+        }
+        function toggleWriteTense(key) {
+            writeTenses = writeTenses.includes(key) ? writeTenses.filter(k => k !== key) : writeTenses.concat([key]);
+            renderWriteTenses();
+        }
+        function setWriteTensesAll(on) {
+            writeTenses = on ? writeTenseOptions().map(o => o.key).filter(k => writeVerbsFor(k)) : [];
+            renderWriteTenses();
+        }
+        function renderWriteTenses() {
+            const box = document.getElementById('write-tense-list');
+            if (box) {
+                box.innerHTML = writeTenseOptions().map(o => {
+                    const n = writeVerbsFor(o.key);
+                    const on = writeTenses.includes(o.key);
+                    const dim = n === 0;
+                    return `<button type="button" onclick="toggleWriteTense('${o.key}')" ${dim ? 'disabled' : ''}
+                        class="flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${dim ? 'border-slate-100 text-slate-300 cursor-default' : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}">
+                        <span class="truncate">${on ? '✓ ' : ''}${escapeHtml(o.label)}</span>
+                        <span class="shrink-0 ${dim ? 'text-slate-300' : 'text-slate-400'}">${n}</span>
+                    </button>`;
+                }).join('');
+            }
+            const hint = document.getElementById('write-tense-hint');
+            if (hint) hint.innerText = writeTenses.length
+                ? `고른 시제로만 물어봐요 (그 시제가 없는 동사는 원형으로)`
+                : `안 고르면 그 동사에 채워진 시제 중 아무거나 나와요`;
+        }
+
         function selectWriteScope(scope) {
             writeScope = scope;
             document.querySelectorAll('.write-scope-btn').forEach(b => {
@@ -3392,6 +3435,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function resetWriteSetup() {
             selectWriteCount(writeCount || 20);
             selectWriteScope(writeScope || 'not-mastered');
+            renderWriteTenses();
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.remove('hidden');
             // [냐냐 요청] 인라인 진행 영역도 같이 정리 (진행 중이면 changeTab이 여기까지 안 옴)

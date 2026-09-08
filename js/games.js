@@ -962,9 +962,14 @@
                     <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div class="h-full bg-indigo-500 transition-all" style="width:${(vconjState.index / vconjState.total * 100)}%"></div>
                     </div>
+                    ${/* [냐냐 요청] 원형도 같이 보여준다 (2026-09-08). 여기는 '활용' 을 연습하는 자리인데,
+                         원형을 못 떠올리면 활용 실력과 상관없이 표 전체가 0점이 됐다.
+                         뜻→원형은 쓰기 복습이 이미 시험한다. 불규칙만 모드에서는 더 그렇다 —
+                         원형을 아는 채로 꼴을 외우는 게 그 모드의 목적이다. */''}
                     <div class="text-center py-2">
-                        <span class="text-[10px] font-bold text-slate-400 tracking-wider">이 뜻의 동사를 활용해 보세요</span>
-                        <p class="text-2xl font-black text-slate-900 mt-1">${escapeHtml(w.meaning || '(뜻 없음)')}</p>
+                        <span class="text-[10px] font-bold text-slate-400 tracking-wider">이 동사를 활용해 보세요</span>
+                        <p class="text-2xl font-black text-slate-900 mt-1">${escapeHtml(w.word || '')}</p>
+                        <p class="text-xs font-bold text-slate-400 mt-0.5">${escapeHtml(w.meaning || '(뜻 없음)')}</p>
                     </div>
                     <div class="space-y-2.5">${blocksHtml}</div>
                     <div id="vconj-feedback" class="hidden text-center text-sm font-bold"></div>
