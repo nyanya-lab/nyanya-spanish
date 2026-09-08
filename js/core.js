@@ -2874,18 +2874,37 @@ let vocabulary = [];
         function gradeShiftHtml(rows) {
             const list = (rows || []).filter(r => r && r.gradeBefore !== r.gradeAfter);
             if (!list.length) return '';
-            const newMaster = list.filter(r => !IS_MASTER_GRADE(r.gradeBefore) && IS_MASTER_GRADE(r.gradeAfter));
-            const newWeak = list.filter(r => !IS_WEAK_GRADE(r.gradeBefore) && IS_WEAK_GRADE(r.gradeAfter));
-            const lostMaster = list.filter(r => IS_MASTER_GRADE(r.gradeBefore) && !IS_MASTER_GRADE(r.gradeAfter));
+            // [냐냐 요청] 여섯 갈래로 갈라서 다 알려준다 (2026-09-08).
+            //   예전엔 셋뿐이라 세 가지가 조용히 지나갔다 — 마스터와 완벽을, 약점과 치명적을
+            //   각각 한 덩어리로 봤기 때문이다. ① 완벽으로 올라가도 아무 말이 없었고
+            //   ② 약점이 치명적으로 더 나빠져도 조용했고 ③ 약점에서 벗어난 것은 아예 안 알려줬다.
+            //   나빠질 때만 말해주고 좋아질 때 말이 없는 게 냐냐님이 짚은 대목이다.
+            //   ⚠️ 한 단어는 한 갈래에만 넣는다 — 위에서부터 먼저 걸리는 곳으로 간다.
+            //      (마스터에서 약점까지 한 번에 떨어지려면 9점이 움직여야 해서 실제로는 안 겹친다)
+            const buckets = { perfect: [], master: [], leftWeak: [], weak: [], critical: [], lostMaster: [] };
+            list.forEach(r => {
+                const b = r.gradeBefore, a = r.gradeAfter;
+                if (a === 'perfect') buckets.perfect.push(r);
+                else if (a === 'mastered' && !IS_MASTER_GRADE(b)) buckets.master.push(r);
+                else if (a === 'critical') buckets.critical.push(r);
+                else if (a === 'weak' && !IS_WEAK_GRADE(b)) buckets.weak.push(r);
+                else if (IS_MASTER_GRADE(b) && !IS_MASTER_GRADE(a)) buckets.lostMaster.push(r);
+                else if (IS_WEAK_GRADE(b) && !IS_WEAK_GRADE(a)) buckets.leftWeak.push(r);
+                //   남는 것: 완벽→마스터(아직 마스터), 치명적→약점(아직 약점). 굳이 말할 게 없다.
+            });
             const chip = (r, tone) => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold ${tone}">${escapeHtml(r.word)}${r.meaning ? `<span class="font-semibold text-slate-400"> ${escapeHtml(r.meaning)}</span>` : ''}</span>`;
             const block = (title, arr, titleCls, tone) => arr.length ? `
                 <div class="text-left">
                     <p class="text-xs font-black ${titleCls} mb-1.5">${title} ${arr.length}개</p>
                     <div class="-m-0.5">${arr.map(r => chip(r, tone)).join('')}</div>
                 </div>` : '';
-            const inner = block('🟩 이번에 마스터', newMaster, 'text-emerald-700', 'bg-emerald-100 border-emerald-300 text-emerald-800')
-                        + block('🟨 약점이 됐어요', newWeak, 'text-amber-700', 'bg-amber-50 border-amber-300 text-amber-800')
-                        + block('↩️ 마스터가 풀렸어요', lostMaster, 'text-slate-500', 'bg-slate-100 border-slate-300 text-slate-600');
+            //   좋은 소식을 먼저, 나쁜 소식을 뒤에
+            const inner = block('🟢 완벽 달성', buckets.perfect, 'text-emerald-800', 'bg-emerald-200 border-emerald-400 text-emerald-900')
+                        + block('🟩 이번에 마스터', buckets.master, 'text-emerald-700', 'bg-emerald-100 border-emerald-300 text-emerald-800')
+                        + block('✨ 약점에서 벗어났어요', buckets.leftWeak, 'text-sky-700', 'bg-sky-50 border-sky-300 text-sky-800')
+                        + block('🟨 약점이 됐어요', buckets.weak, 'text-amber-700', 'bg-amber-50 border-amber-300 text-amber-800')
+                        + block('🟥 치명적 약점이 됐어요', buckets.critical, 'text-red-600', 'bg-red-50 border-red-300 text-red-700')
+                        + block('↩️ 마스터가 풀렸어요', buckets.lostMaster, 'text-slate-500', 'bg-slate-100 border-slate-300 text-slate-600');
             return inner ? `<div class="space-y-3">${inner}</div>` : '';
         }
 
