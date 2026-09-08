@@ -3915,11 +3915,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     </div>
                 </div>
                 ${useRecent ? `
-                <div class="grid grid-cols-3 gap-2 mb-2">
-                    ${[['퀴즈', rec.parts.quiz], ['AI 첨삭', rec.parts.ai], ['쓰기 복습', rec.parts.write]].map(([nm, pt]) => `
+                ${/* [냐냐 요청] 단어(퀴즈+쓰기 복습) 와 첨삭 둘로 나눈다 — 낱말을 아는가와
+                     문장을 쓰는가는 다른 이야기고, 첨삭은 문장 통째라 판정이 훨씬 박하다. */''}
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    ${[['단어 (퀴즈·쓰기)', { t: rec.parts.quiz.t + rec.parts.write.t, c: rec.parts.quiz.c + rec.parts.write.c }],
+                       ['AI 첨삭', rec.parts.ai]].map(([nm, pt]) => `
                         <div class="bg-white/70 rounded-xl px-2 py-2 text-center">
                             <span class="block text-[10px] text-slate-400 font-bold">${nm}</span>
-                            <span class="text-sm font-black ${pt.t ? 'text-slate-700' : 'text-slate-300'}">${pt.t ? pt.pct + '%' : '—'}</span>
+                            <span class="text-sm font-black ${pt.t ? 'text-slate-700' : 'text-slate-300'}">${pt.t ? Math.round(pt.c / pt.t * 100) + '%' : '—'}</span>
                             <span class="block text-[10px] text-slate-300">${pt.t ? pt.c + '/' + pt.t : '아직 없어요'}</span>
                         </div>`).join('')}
                 </div>` : ''}
