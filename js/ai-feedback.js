@@ -3353,7 +3353,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
             const out = [];
             const push = (c) => {
-                const s = strip(c);
+                // [냐냐 지적] 표 칸에는 괄호로 뜻·보기를 달아둔다 — 'quince/cuarto(1/4)' · 'treinta/media(절반)'
+                //   · 'hora(s)'. 괄호를 안 떼면 두 가지가 망가진다:
+                //     ① (1/4) 의 슬래시가 아래 낱말 쪼개기에 끼어들어 'quince4)' 'quinc4)' 가 나왔다
+                //     ② 괄호 안에 한글이 있으면 칸이 통째로 버려져서 treinta·media 를 잃었다
+                //   괄호 안은 어차피 설명이라 떼고 본다.
+                const s = strip(c).replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
                 // 낱말뿐 아니라 짧은 문구도 신호가 되므로 쉼표·물음표·¿¡ 까지 허용하되,
                 //   한글이 섞인 칸은 뜻풀이라 제외한다.
                 if (!s || s.length > 40 || /[ㄱ-ㅎ가-힣]/.test(s)) return;
