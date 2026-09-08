@@ -2775,6 +2775,34 @@ let vocabulary = [];
 
         // ⭐핵심⭐ 모든 점수 변동은 이 함수를 통해서만!
         //   addWordScore(wordId또는단어객체, 증감점수, { correct: true|false|null, subjective: true })
+        // ============================================================
+        // [냐냐 요청] 유의어를 썼으면 그 낱말에 점수를 준다 (2026-09-08).
+        //   지금까지는 '그것도 맞는 말이지만…' 하고 되묻기만 했다. 그런데 뜻만 보고
+        //   그 낱말을 떠올려 쓴 건 맞힌 것과 같은 증거다 — 물어본 낱말이 아니었을 뿐이다.
+        //   ⚠️ 마스터 열쇠(subjectivePassed)는 안 준다. 화면에 뜬 뜻은 '물어본 낱말' 의 것이라
+        //      그 낱말의 뜻을 보고 쓴 게 아니다.
+        //   ⚠️ 한 판에 한 낱말당 한 번만. 같은 세션에서 되풀이해 받는 걸 막는다.
+        // ============================================================
+        const SYNONYM_AWARD = 2;
+        let _synonymAwarded = new Set();   // 이번 판에 덤을 받은 낱말 id
+
+        function awardSynonymScore(userAnswer, askedWord) {
+            if (typeof findVocabWordByForm !== 'function' || typeof addWordScore !== 'function') return null;
+            const hit = findVocabWordByForm(userAnswer);
+            if (!hit) return null;
+            const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
+            if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
+            if (_synonymAwarded.has(hit.id)) return null;
+            _synonymAwarded.add(hit.id);
+            addWordScore(hit, SYNONYM_AWARD, { correct: true });
+            if (typeof saveToStorage === 'function') { try { saveToStorage(); } catch (e) {} }
+            return hit;
+        }
+        //   덤을 받았으면 안내문 뒤에 한 줄 붙인다
+        function synonymAwardNote(hit) {
+            return hit ? ` <span class="text-emerald-600">${escapeHtml(hit.word)} 에 +${SYNONYM_AWARD} 드렸어요.</span>` : '';
+        }
+
         function addWordScore(wordOrId, delta, opts = {}) {
             const w = (typeof wordOrId === 'string')
                 ? vocabulary.find(v => v.id === wordOrId)

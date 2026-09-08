@@ -480,6 +480,7 @@ let quizSession = null;
             shuffleArray(questions);
 
             quizSession = { questions: questions, currentIndex: 0, correctCount: 0, wrongList: [], correctWordIds: [] };
+            if (typeof _synonymAwarded !== 'undefined') _synonymAwarded = new Set();   // 판마다 유의어 덤 기록을 비운다
 
             document.getElementById('quiz-setup-screen').classList.add('hidden');
             document.getElementById('quiz-results-screen').classList.add('hidden');
@@ -1322,7 +1323,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             if (!ai) {
                 // 3) 폴백 — AI 키가 없거나 실패하면 기존 로컬 채점
                 const analysis = analyzeSubjectiveAnswer(userAnswer, q);
-                if (analysis.isSynonym && !used().synonym) { askRetry('synonym', analysis.hint); return; }
+                if (analysis.isSynonym && !used().synonym) {
+                    askRetry('synonym', analysis.hint + synonymAwardNote(awardSynonymScore(userAnswer, q.word)));
+                    return;
+                }
                 if (analysis.isTypo && !used().typo) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
                 // [냐냐 요청] 틀렸으면 왜 틀렸는지까지 (철자면 틀린 자리 표시, 다른 단어면 그 뜻)
                 const hint = analysis.isCorrect ? analysis.hint : buildWrongAnswerHtml(userAnswer, correct);
@@ -1351,7 +1355,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used().synonym) {
-                askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.`);
+                const got = awardSynonymScore(userAnswer, q.word);
+                askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.` + synonymAwardNote(got));
                 return;
             }
 

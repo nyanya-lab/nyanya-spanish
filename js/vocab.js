@@ -3563,6 +3563,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 onClose: (opts && opts.onClose) || null
             };
 
+            if (typeof _synonymAwarded !== 'undefined') _synonymAwarded = new Set();   // 판마다 덤 기록을 비운다
+
             const setup = document.getElementById('write-setup');
             const play = document.getElementById('write-play-area');
             if (setup) setup.classList.add('hidden');
@@ -4284,7 +4286,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   AI 가 유의어로 본 길도, 오타로 본 길도 다 앞글자를 흘려준다. 여기만 빠져서
                     //   '다른 낱말이에요' 만 듣고 뭘 떠올려야 할지 알 수가 없었다.
                     const p = writePrefixHint(userAnswer, w.word);
-                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?`, userAnswer);
+                    const got = awardSynonymScore(userAnswer, w);
+                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?${synonymAwardNote(got)}`, userAnswer);
                     return;
                 }
             }
@@ -4311,7 +4314,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!ai) {
                 const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
-                if (a.isSynonym && !used.synonym) { writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint), userAnswer); return; }
+                if (a.isSynonym && !used.synonym) {
+                    const got = awardSynonymScore(userAnswer, w);
+                    writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint) + synonymAwardNote(got), userAnswer);
+                    return;
+                }
                 if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`, userAnswer); return; }
                 writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
@@ -4331,8 +4338,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used.synonym) {
+                const got = awardSynonymScore(userAnswer, w);
                 writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
-                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`), userAnswer);
+                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`) + synonymAwardNote(got), userAnswer);
                 return;
             }
             if (verdict === 'typo' && !used.typo) {
