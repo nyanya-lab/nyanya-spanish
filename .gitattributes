@@ -1,1 +1,4 @@
 * text=auto 
+
+# 셸 훅은 CRLF 면 안 돌아간다
+.githooks/** text eol=lf
