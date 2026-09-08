@@ -2707,6 +2707,16 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!k) return;
                 nonVerb.add(k); nonVerb.add(k + 's'); nonVerb.add(k + 'es');
             });
+            // [냐냐 지적] 재귀동사의 현재분사는 'secándose' 하나로만 저장돼 있는데, 문장에서는
+            //   인칭마다 대명사가 바뀐다 (secándome·secándote·secándonos). 대명사를 뗀 어간과
+            //   인칭별 꼴을 같이 넣어둔다 — 어간은 -ando/-iendo/-yendo·-ar/-er/-ir 로 끝날 때만 나온다.
+            const putEnclitic = (form, key, inf) => {
+                if (typeof fvbfEncliticBases !== 'function') return;
+                fvbfEncliticBases(nz(form)).forEach(b => {
+                    put(b, key, inf);
+                    ['me', 'te', 'se', 'nos', 'os'].forEach(pr => put(b + pr, key, inf));
+                });
+            };
             vocabulary.forEach(v => {
                 if (v.pos !== 'verb') return;
                 const inf = String(v.word || '').trim();
@@ -2715,6 +2725,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     const forms = tenses[tk] || {};
                     Object.keys(forms).forEach(pk => {
                         put(forms[pk], tk, inf);
+                        putEnclitic(forms[pk], tk, inf);
                         // 등록해 둔 과거분사도 형용사처럼 성·수가 붙는다 (escrito → escrita/escritos/escritas).
                         //   규칙형 계산 쪽은 이미 이렇게 하고 있었다 — 등록형만 빠져 있었다.
                         if (tk !== 'participio') return;
@@ -2726,7 +2737,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 });
                 // 안 채워둔 시제라도 규칙형이면 계산해서 넣는다 (현재분사·과거분사만 — 계산이 확실한 둘)
                 const bare = inf.replace(/se$/i, '');
-                if (typeof regularGerundioForm === 'function') put(regularGerundioForm(inf), 'gerundio', inf);
+                if (typeof regularGerundioForm === 'function') {
+                    put(regularGerundioForm(inf), 'gerundio', inf);
+                    putEnclitic(regularGerundioForm(inf), 'gerundio', inf);
+                }
                 if (typeof regularParticipioForm === 'function') {
                     const pa = regularParticipioForm(bare);
                     if (pa) {
@@ -4436,6 +4450,18 @@ ${noteListText}
                             // 현재분사에 대명사가 붙은 꼴 — "hablándome" → hablando
                             if (encliticBases.length && encliticBases.indexOf(formN) >= 0) {
                                 offer(v, FVBF_RANK.ENCLITIC);
+                            }
+                            // [냐냐 지적] 재귀동사의 현재분사는 3인칭 꼴 하나로만 저장된다
+                            //   (secarse → 'secándose'). 문장에서는 인칭마다 대명사가 바뀌니
+                            //   secándome·secándote·secándonos 가 하나도 안 걸렸다 (재귀동사 45개 중 44개).
+                            //   저장된 꼴에서도 대명사를 떼서 어간끼리 맞춘다.
+                            //   'me estoy secando' 처럼 대명사를 앞으로 빼 쓴 'secando' 도 이걸로 걸린다.
+                            if (bestRank > FVBF_RANK.ENCLITIC) {
+                                const formBases = fvbfEncliticBases(formN);
+                                if (formBases.length && (formBases.indexOf(target) >= 0
+                                    || formBases.some(b => encliticBases.indexOf(b) >= 0))) {
+                                    offer(v, FVBF_RANK.ENCLITIC);
+                                }
                             }
                             // [냐냐 지적] 과거분사는 형용사처럼 성·수가 붙는다 —
                             //   'escrito' 로 등록돼 있어도 'escritas' 는 같은 동사다 (안 그러면 추천에 활용형이 뜬다)
