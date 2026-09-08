@@ -90,7 +90,11 @@
             rapid: { correct: 0.8, wrong: -1 },
             // [냐냐 요청] 떨어지는 단어도 벌점을 준다. 예전엔 0 이라 이 게임만 반복하면
             //   점수가 손해 없이 계속 올랐다 (유일하게 잃을 게 없는 경로였다).
-            fall:  { correct: 0.8, wrong: -0.5 }
+            fall:  { correct: 0.8, wrong: -0.5 },
+            // [냐냐 요청] 행맨도 점수에 넣는다 (2026-09-08). 글자를 하나씩 알려주는 게임이라
+            //   맞힌 것은 조금만(+0.3) 쳐주고, 끝내 못 맞힌 그 하나만 -2 로 세게 물린다.
+            //   -2 는 correct:false 로 들어가서 망각곡선에도 같이 들어간다.
+            hangman: { correct: 0.3, wrong: -2 }
         };
         function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
             const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
@@ -708,11 +712,12 @@
         //   ⚠️ 악센트 글자는 따로 둔다. a 를 눌러도 á 는 안 열린다 (악센트도 철자다).
         // ============================================================
         const HANGMAN_LIVES = 6;
-        //   스페인어 알파벳 차례대로 (ñ 은 n 다음). 마지막 줄이 악센트 글자.
+        //   [냐냐 요청] 스페인어 자판(QWERTY) 차례로 놓는다 — ñ 은 l 오른쪽이다.
+        //   가나다순보다 손이 아는 자리라 찾기가 빠르다. 마지막 줄이 악센트 글자.
         const HANGMAN_ROWS = [
-            ['a','b','c','d','e','f','g','h','i'],
-            ['j','k','l','m','n','ñ','o','p','q'],
-            ['r','s','t','u','v','w','x','y','z'],
+            ['q','w','e','r','t','y','u','i','o','p'],
+            ['a','s','d','f','g','h','j','k','l','ñ'],
+            ['z','x','c','v','b','n','m'],
             ['á','é','í','ó','ú','ü']
         ];
         let hangmanMode = 'word';        // 'word' | 'idiom' | 'mix'
@@ -730,7 +735,7 @@
             if (mode !== 'idiom') {
                 getGameWordPool().forEach(w => {
                     const t = stripArt(w.word).trim().toLowerCase();
-                    if (hangmanUsable(t)) out.push({ text: t, hint: w.meaning || '', kind: 'word' });
+                    if (hangmanUsable(t)) out.push({ text: t, hint: w.meaning || '', kind: 'word', wordId: w.id });
                 });
             }
             if (mode !== 'word') {
@@ -738,7 +743,7 @@
                     const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
                     list.forEach(it => {
                         const t = String(it.idiom || '').trim().toLowerCase();
-                        if (hangmanUsable(t)) out.push({ text: t, hint: it.idiomMeaning || '', kind: 'idiom' });
+                        if (hangmanUsable(t)) out.push({ text: t, hint: it.idiomMeaning || '', kind: 'idiom', wordId: w.id, idiomText: it.idiom });
                     });
                 });
             }
@@ -853,13 +858,13 @@
                 return `<button type="button" onclick="startHangman('${m[0]}')" title="바꾸면 판을 새로 시작해요"
                     class="px-3 py-1 rounded-full border text-[11px] font-bold transition-all ${on ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}">${m[1]}</button>`;
             }).join(''));
-            set('hm-keys', HANGMAN_ROWS.map(row => `<div class="flex justify-center gap-1">${row.map(k => {
+            set('hm-keys', HANGMAN_ROWS.map(row => `<div class="flex justify-center gap-0.5 sm:gap-1">${row.map(k => {
                 const used = gameState.guessed.indexOf(k) >= 0;
                 const hit = used && cur.text.indexOf(k) >= 0;
                 const cls = !used ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-purple-50 hover:border-purple-300'
                           : (hit ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-300');
                 return `<button type="button" onclick="hangmanGuess('${k}')" ${used || gameState.done ? 'disabled' : ''}
-                    class="w-8 h-9 rounded-lg border text-sm font-black transition-all ${cls}">${k}</button>`;
+                    class="w-7 h-9 sm:w-8 sm:h-10 rounded-lg border text-sm font-black transition-all ${cls}">${k}</button>`;
             }).join('')}</div>`).join(''));
         }
 
@@ -874,6 +879,7 @@
                     gameState.solved++;
                     gameState.misses = Math.max(0, gameState.misses - 1);   // 한 개 맞히면 한 칸 지워준다
                     gameState.done = true;
+                    hangmanScore(gameState.current, true);
                     hangmanRender();
                     if (fb) { fb.innerHTML = `🎉 맞혔어요! <span class="text-slate-400">목숨 한 칸 회복</span>`; fb.className = 'text-xs font-bold h-4 text-emerald-600'; }
                     AudioFX.playSuccess();
@@ -887,6 +893,7 @@
                 AudioFX.playError();
                 if (gameState.misses >= HANGMAN_LIVES) {
                     gameState.done = true;
+                    hangmanScore(gameState.current, false);   // 끝내 못 맞힌 그 하나만 -2
                     hangmanRender();
                     setTimeout(hangmanEnd, 500);
                     return;
@@ -894,6 +901,19 @@
                 if (fb) { fb.innerText = `없어요 (${HANGMAN_LIVES - gameState.misses}칸 남음)`; fb.className = 'text-xs font-bold h-4 text-rose-500'; }
             }
             hangmanRender();
+        }
+
+        //   [냐냐 요청] 맞힌 것은 +0.3, 끝내 못 맞힌 하나는 -2 (2026-09-08).
+        //   ⚠️ 관용구는 점수만 그 단어에 붙이고 단어 곡선은 안 건드린다(skipReviewDate).
+        //      대신 관용구 제 곡선을 움직인다 — 앱의 다른 곳과 같은 규칙이다.
+        function hangmanScore(item, ok) {
+            if (!item || !item.wordId || typeof addWordScore !== 'function') return;
+            const rule = GAME_SCORE.hangman;
+            const isIdiom = item.kind === 'idiom';
+            addWordScore(item.wordId, ok ? rule.correct : rule.wrong, { correct: !!ok, skipReviewDate: isIdiom });
+            if (!isIdiom) return;
+            if (typeof markIdiomSeen === 'function') markIdiomSeen(item.wordId, item.idiomText);
+            if (!ok && typeof idiomReviewDemote === 'function') idiomReviewDemote(item.wordId, item.idiomText);
         }
 
         function hangmanEnd() {
@@ -905,9 +925,10 @@
             try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
             const isNewRecord = setGameHighScore('hangman', solved);
             const highScore = getGameHighScore('hangman');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
             showGamePlayArea(`
                 <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
-                    <div class="text-6xl">🪢</div>
+                    <div class="text-6xl">✏️</div>
                     <h3 class="text-xl font-black text-slate-900">여기까지!</h3>
                     <p class="text-4xl font-black text-purple-600">${solved}개</p>
                     ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}개</p>`}
@@ -922,6 +943,335 @@
                     </div>
                 </div>
             `);
+        }
+
+
+        // ============================================================
+        // 게임 6: 십자말풀이
+        //   [냐냐 요청] 행맨과 따로 둔다 (2026-09-08). 행맨은 글자를 하나씩 찍는 것이고
+        //   여기는 뜻만 보고 철자를 통째로 쓰는 것이라 하는 일이 다르다.
+        //   ⚠️ 악센트는 없이 쳐도 맞는 것으로 본다 — 한글 자판으로 á 를 칠 수가 없다.
+        //      대신 다 맞히면 격자에 악센트가 붙은 제 꼴로 바뀐다 (그걸 보라고 남긴다).
+        //   ⚠️ 점수에는 안 넣는다. 행맨·듣기 받아쓰기와 같은 대접이다.
+        //   ⚠️ 관용구는 안 쓴다 — 칸이 이어져야 해서 띄어쓰기가 든 것은 못 넣는다.
+        // ============================================================
+        const CROSSWORD_SIZES = [
+            { key: 'small',  label: '작게 6개',  words: 6 },
+            { key: 'medium', label: '보통 10개', words: 10 },
+            { key: 'large',  label: '크게 15개', words: 15 }
+        ];
+        let crosswordSize = 'medium';
+
+        //   악센트를 떼고 견준다 (ñ→n, ü→u 도 같이 떨어진다)
+        function cwNorm(ch) {
+            return String(ch || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        }
+        function cwPool() {
+            const out = [];
+            const stripArt = (s) => String(s || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            getGameWordPool().forEach(w => {
+                const t = stripArt(w.word).trim().toLowerCase();
+                if (!/^[a-záéíóúüñ]{3,9}$/.test(t)) return;      // 붙여 쓴 한 낱말만, 3~9글자
+                if (!String(w.meaning || '').trim()) return;
+                out.push({ text: t, hint: String(w.meaning).trim(), id: w.id });
+            });
+            return out;
+        }
+
+        //   격자 짜기 — 이미 놓인 글자에 겹치게만 붙인다
+        function cwGenerate(pool, want) {
+            const words = shuffleArray(pool.slice()).slice(0, 300);
+            if (!words.length) return null;
+            const cells = new Map();                       // 'r,c' → 정답 글자
+            const placed = [];
+            const key = (r, c) => r + ',' + c;
+            const fits = (text, r, c, dir) => {
+                const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
+                if (cells.has(key(r - dr, c - dc))) return false;                        // 앞칸이 비어야
+                if (cells.has(key(r + dr * text.length, c + dc * text.length))) return false;  // 뒤칸도
+                let crosses = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const rr = r + dr * i, cc = c + dc * i;
+                    const cur = cells.get(key(rr, cc));
+                    if (cur) {
+                        if (cwNorm(cur) !== cwNorm(text[i])) return false;
+                        crosses++;
+                    } else if (dir === 'across') {
+                        if (cells.has(key(rr - 1, cc)) || cells.has(key(rr + 1, cc))) return false;  // 옆줄에 붙으면 안 된다
+                    } else {
+                        if (cells.has(key(rr, cc - 1)) || cells.has(key(rr, cc + 1))) return false;
+                    }
+                }
+                return crosses > 0;
+            };
+            //   [냐냐 지적] 처음엔 맞는 자리를 찾자마자 놓았더니 낱말 10개에 12x20 까지 퍼졌다.
+            //   놓을 수 있는 자리를 다 재보고 '격자가 가장 안 커지는 곳' 을 고른다.
+            let minR = 0, minC = 0, maxR = 0, maxC = 0;
+            const put = (item, r, c, dir) => {
+                const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
+                for (let i = 0; i < item.text.length; i++) cells.set(key(r + dr * i, c + dc * i), item.text[i]);
+                placed.push({ text: item.text, hint: item.hint, row: r, col: c, dir });
+                minR = Math.min(minR, r); maxR = Math.max(maxR, r + dr * (item.text.length - 1));
+                minC = Math.min(minC, c); maxC = Math.max(maxC, c + dc * (item.text.length - 1));
+            };
+            const first = words.find(w => w.text.length >= 5) || words[0];
+            put(first, 0, 0, 'across');
+
+            for (const w of words) {
+                if (placed.length >= want) break;
+                if (placed.some(p => p.text === w.text)) continue;
+                let best = null;
+                for (let i = 0; i < w.text.length; i++) {
+                    for (const entry of Array.from(cells)) {
+                        if (cwNorm(entry[1]) !== cwNorm(w.text[i])) continue;
+                        const parts = entry[0].split(',');
+                        const r = Number(parts[0]), c = Number(parts[1]);
+                        for (const dir of ['down', 'across']) {
+                            const rr = dir === 'down' ? r - i : r;
+                            const cc = dir === 'across' ? c - i : c;
+                            if (!fits(w.text, rr, cc, dir)) continue;
+                            const er = dir === 'down' ? rr + w.text.length - 1 : rr;
+                            const ec = dir === 'across' ? cc + w.text.length - 1 : cc;
+                            const h = Math.max(maxR, er) - Math.min(minR, rr) + 1;
+                            const wd = Math.max(maxC, ec) - Math.min(minC, cc) + 1;
+                            //   넓이 + 찌그러짐 + 세로로 긴 것에 벌점 (화면은 아래로 스크롤한다)
+                            const score = h * wd + Math.abs(h - wd) * 3 + h * 2;
+                            if (!best || score < best.score) best = { r: rr, c: cc, dir, score };
+                        }
+                    }
+                }
+                if (best) put(w, best.r, best.c, best.dir);
+            }
+            if (placed.length < Math.min(4, want)) return null;
+            const grid = new Map();
+            Array.from(cells).forEach(e => {
+                const p = e[0].split(',');
+                grid.set((Number(p[0]) - minR) + ',' + (Number(p[1]) - minC), e[1]);
+            });
+            placed.forEach(p => { p.row -= minR; p.col -= minC; });
+
+            //   번호 매기기 — 읽는 차례대로, 낱말이 시작하는 칸에만
+            const rows = maxR - minR + 1, cols = maxC - minC + 1;
+            const nums = new Map();
+            let n = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (!grid.has(r + ',' + c)) continue;
+                    const startsAcross = !grid.has(r + ',' + (c - 1)) && grid.has(r + ',' + (c + 1));
+                    const startsDown = !grid.has((r - 1) + ',' + c) && grid.has((r + 1) + ',' + c);
+                    if (startsAcross || startsDown) nums.set(r + ',' + c, ++n);
+                }
+            }
+            placed.forEach(p => { p.num = nums.get(p.row + ',' + p.col) || 0; });
+            placed.sort((a, b) => a.num - b.num);
+            return { grid, placed, nums, rows, cols };
+        }
+
+        function startCrossword(size) {
+            if (size) crosswordSize = size;
+            const want = (CROSSWORD_SIZES.find(s => s.key === crosswordSize) || CROSSWORD_SIZES[1]).words;
+            const pool = cwPool();
+            if (pool.length < 10) { showToast("십자말풀이를 만들려면 3~9글자 단어가 더 있어야 해요!", "error"); return; }
+            //   여러 번 짜보고 '낱말이 많고 격자가 작은' 것을 고른다
+            let board = null;
+            for (let t = 0; t < 8; t++) {
+                const b = cwGenerate(pool, want);
+                if (!b) continue;
+                b._score = b.placed.length * 1000 - b.rows * b.cols - b.rows * 3;
+                if (!board || b._score > board._score) board = b;
+            }
+            if (!board) { showToast("격자를 못 만들었어요. 다시 눌러주세요!", "error"); return; }
+            stopCurrentGame();
+            gameState = { type: 'crossword', board, dir: 'across', startedAt: Date.now(), done: false };
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">낱말 <b class="text-teal-600">${board.placed.length}</b>개 · <span id="cw-timer" class="text-slate-600">0:00</span></span>
+                    </div>
+                    <div id="cw-sizes" class="flex justify-center gap-1.5">${CROSSWORD_SIZES.map(s =>
+                        `<button type="button" onclick="startCrossword('${s.key}')" title="바꾸면 새 격자를 만들어요"
+                            class="px-3 py-1 rounded-full border text-[11px] font-bold transition-all ${crosswordSize === s.key ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}">${s.label}</button>`).join('')}</div>
+                    <div class="overflow-x-auto -mx-2 px-2"><div id="cw-grid" class="mx-auto w-max"></div></div>
+                    <p id="cw-msg" class="text-center text-xs font-bold h-4"></p>
+                    <div class="flex gap-2 justify-center">
+                        <button onclick="cwCheck()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">확인</button>
+                        <button onclick="cwReveal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">답 보기</button>
+                        <button onclick="startCrossword()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">새 격자</button>
+                    </div>
+                    <p class="text-center text-[11px] text-slate-400 font-semibold">악센트는 없이 쳐도 맞아요 (á → a, ñ → n). 다 맞히면 제 꼴로 바뀌어요.</p>
+                    <div id="cw-clues" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100"></div>
+                </div>
+            `);
+            cwRenderGrid();
+            cwRenderClues();
+            gameState.timerInterval = setInterval(cwTick, 1000);
+        }
+
+        function cwTick() {
+            if (!gameState || gameState.type !== 'crossword') return;
+            const el = document.getElementById('cw-timer');
+            if (!el) return;
+            const s = Math.floor((Date.now() - gameState.startedAt) / 1000);
+            el.innerText = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        }
+
+        function cwRenderGrid() {
+            const b = gameState.board;
+            const box = document.getElementById('cw-grid');
+            if (!box) return;
+            let html = '';
+            for (let r = 0; r < b.rows; r++) {
+                html += '<div class="flex">';
+                for (let c = 0; c < b.cols; c++) {
+                    const k = r + ',' + c;
+                    if (!b.grid.has(k)) { html += '<div class="w-8 h-8 sm:w-9 sm:h-9"></div>'; continue; }
+                    const num = b.nums.get(k);
+                    html += `<div class="relative w-8 h-8 sm:w-9 sm:h-9">
+                        ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none">${num}</span>` : ''}
+                        <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
+                            oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
+                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
+                    </div>`;
+                }
+                html += '</div>';
+            }
+            box.innerHTML = html;
+        }
+
+        function cwRenderClues() {
+            const b = gameState.board;
+            const box = document.getElementById('cw-clues');
+            if (!box) return;
+            const list = (dir, title) => {
+                const items = b.placed.filter(p => p.dir === dir);
+                if (!items.length) return '';
+                return `<div class="text-left space-y-1">
+                    <p class="text-xs font-black text-slate-500">${title}</p>
+                    ${items.map(p => `<button type="button" onclick="cwGoto(${p.row},${p.col},'${p.dir}')"
+                        class="block w-full text-left text-[11px] font-semibold text-slate-500 hover:text-teal-600 transition-colors">
+                        <b class="text-slate-700">${p.num}.</b> ${escapeHtml(p.hint)} <span class="text-slate-300">(${p.text.length})</span>
+                    </button>`).join('')}
+                </div>`;
+            };
+            box.innerHTML = list('across', '가로 →') + list('down', '세로 ↓');
+        }
+
+        function cwCellAt(r, c) { return document.getElementById('cw-' + r + '-' + c); }
+        function cwGoto(r, c, dir) {
+            if (!gameState) return;
+            gameState.dir = dir;
+            const el = cwCellAt(r, c);
+            if (el) { el.focus(); el.select(); }
+        }
+        function cwFocus(el) { if (el) el.select(); }
+        //   같은 칸을 또 누르면 가로↔세로를 바꾼다
+        function cwClick(el) {
+            if (!gameState) return;
+            const r = Number(el.dataset.r), c = Number(el.dataset.c);
+            const b = gameState.board;
+            const hasAcross = b.grid.has(r + ',' + (c - 1)) || b.grid.has(r + ',' + (c + 1));
+            const hasDown = b.grid.has((r - 1) + ',' + c) || b.grid.has((r + 1) + ',' + c);
+            if (hasAcross && hasDown && gameState.lastCell === r + ',' + c) {
+                gameState.dir = gameState.dir === 'across' ? 'down' : 'across';
+            } else if (!hasAcross) gameState.dir = 'down';
+            else if (!hasDown) gameState.dir = 'across';
+            gameState.lastCell = r + ',' + c;
+        }
+        function cwStep(el, back) {
+            if (!gameState) return;
+            const r = Number(el.dataset.r), c = Number(el.dataset.c);
+            const d = back ? -1 : 1;
+            const nr = r + (gameState.dir === 'down' ? d : 0);
+            const nc = c + (gameState.dir === 'across' ? d : 0);
+            const next = cwCellAt(nr, nc);
+            if (next) { next.focus(); next.select(); }
+        }
+        function cwInput(el) {
+            const v = String(el.value || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '').toLowerCase();
+            el.value = v;
+            el.classList.remove('bg-rose-50', 'border-rose-300');
+            if (v) { cwStep(el, false); cwCheck(true); }   // 다 채우면 알아서 끝난다
+        }
+        function cwKeydown(e, el) {
+            if (!gameState) return;
+            const k = e.key;
+            if (k === 'Backspace' && !el.value) { e.preventDefault(); cwStep(el, true); return; }
+            const moves = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
+            if (moves[k]) {
+                e.preventDefault();
+                gameState.dir = (k === 'ArrowRight' || k === 'ArrowLeft') ? 'across' : 'down';
+                const r = Number(el.dataset.r) + moves[k][0], c = Number(el.dataset.c) + moves[k][1];
+                const next = cwCellAt(r, c);
+                if (next) { next.focus(); next.select(); }
+            }
+        }
+
+        //   맞았는지 본다. 다 맞으면 격자를 잠그고 악센트가 붙은 제 꼴로 바꿔준다.
+        function cwCheck(silent) {
+            if (!gameState || gameState.type !== 'crossword') return false;
+            const b = gameState.board;
+            let filled = 0, wrong = 0, total = 0;
+            Array.from(b.grid).forEach(e => {
+                const p = e[0].split(',');
+                const el = cwCellAt(Number(p[0]), Number(p[1]));
+                if (!el) return;
+                total++;
+                const v = String(el.value || '').trim();
+                if (!v) return;
+                filled++;
+                el.classList.remove('bg-rose-50', 'border-rose-300');
+                if (cwNorm(v) !== cwNorm(e[1])) { wrong++; if (!silent) el.classList.add('bg-rose-50', 'border-rose-300'); }
+            });
+            const msg = document.getElementById('cw-msg');
+            if (filled === total && wrong === 0) { cwFinish(); return true; }
+            if (!silent && msg) {
+                if (filled < total) { msg.innerText = `아직 ${total - filled}칸 남았어요` + (wrong ? ` · 틀린 곳 ${wrong}칸` : ''); msg.className = 'text-center text-xs font-bold h-4 text-slate-400'; }
+                else { msg.innerText = `틀린 곳이 ${wrong}칸 있어요`; msg.className = 'text-center text-xs font-bold h-4 text-rose-500'; }
+            }
+            return false;
+        }
+
+        function cwFinish() {
+            if (!gameState || gameState.done) return;
+            gameState.done = true;
+            const secs = Math.floor((Date.now() - gameState.startedAt) / 1000);
+            if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
+            const b = gameState.board;
+            Array.from(b.grid).forEach(e => {
+                const p = e[0].split(',');
+                const el = cwCellAt(Number(p[0]), Number(p[1]));
+                if (!el) return;
+                el.value = e[1];                     // 악센트가 붙은 제 꼴로 바꿔준다
+                el.disabled = true;
+                el.classList.remove('bg-rose-50', 'border-rose-300');
+                el.classList.add('bg-emerald-50', 'border-emerald-300', 'text-emerald-700');
+            });
+            const msg = document.getElementById('cw-msg');
+            if (msg) {
+                msg.innerHTML = `🎉 다 맞혔어요! <span class="text-slate-400">${Math.floor(secs / 60)}분 ${secs % 60}초</span>`;
+                msg.className = 'text-center text-xs font-bold h-4 text-emerald-600';
+            }
+            AudioFX.playSuccess();
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
+        }
+
+        function cwReveal() {
+            if (!gameState || gameState.type !== 'crossword') return;
+            const b = gameState.board;
+            Array.from(b.grid).forEach(e => {
+                const p = e[0].split(',');
+                const el = cwCellAt(Number(p[0]), Number(p[1]));
+                if (!el) return;
+                el.value = e[1];
+                el.disabled = true;
+                el.classList.remove('bg-rose-50', 'border-rose-300');
+                el.classList.add('bg-slate-50', 'text-slate-500');
+            });
+            if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
+            gameState.done = true;
+            const msg = document.getElementById('cw-msg');
+            if (msg) { msg.innerText = '답을 폈어요. 새 격자로 다시 해볼까요?'; msg.className = 'text-center text-xs font-bold h-4 text-slate-400'; }
         }
 
         // ============================================================

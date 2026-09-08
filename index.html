@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609082217">
+    <link rel="stylesheet" href="css/style.css?v=202609082226">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -833,10 +833,15 @@
                             <p class="text-xs text-slate-500 leading-relaxed">예문을 듣고 똑같이 따라 써보세요! 듣기 연습용이라 점수엔 안 들어가요.</p>
                         </button>
                         <button onclick="startHangman()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-purple-300 hover:shadow-md transition-all active:scale-95 space-y-2">
-                            <div class="text-3xl">🪢</div>
+                            <div class="text-3xl">✏️</div>
                             <h3 class="text-sm font-black text-slate-900">행맨</h3>
-                            <p class="text-xs text-slate-500 leading-relaxed">글자를 하나씩 찍어 철자를 맞혀요. 시간 제한은 없고, 살아 있는 동안 몇 개를 맞히느냐가 기록이에요. 점수엔 안 들어가요.</p>
+                            <p class="text-xs text-slate-500 leading-relaxed">글자를 하나씩 찍어 철자를 맞혀요. 시간 제한은 없고, 살아 있는 동안 몇 개를 맞히느냐가 기록이에요. 맞히면 +0.3, 끝내 못 맞힌 하나는 −2예요.</p>
                             <div id="hs-hangman" class="text-[11px] font-bold text-slate-400 pt-1 border-t border-slate-100"></div>
+                        </button>
+                        <button onclick="startCrossword()" class="text-left bg-white border border-slate-200 rounded-3xl p-5 hover:border-teal-300 hover:shadow-md transition-all active:scale-95 space-y-2">
+                            <div class="text-3xl">🔡</div>
+                            <h3 class="text-sm font-black text-slate-900">십자말풀이</h3>
+                            <p class="text-xs text-slate-500 leading-relaxed">한글 뜻을 보고 격자를 채워요. 시간 제한은 없고 점수에도 안 들어가요. 악센트는 없이 쳐도 맞아요.</p>
                         </button>
                     </div>
 
@@ -2341,13 +2346,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609082217"></script>
-    <script src="js/creatures.js?v=202609082217"></script>
-    <script src="js/core.js?v=202609082217"></script>
-    <script src="js/vocab.js?v=202609082217"></script>
-    <script src="js/flashcards.js?v=202609082217"></script>
-    <script src="js/quiz.js?v=202609082217"></script>
-    <script src="js/games.js?v=202609082217"></script>
-    <script src="js/ai-feedback.js?v=202609082217"></script>
+    <script src="js/dictionary-data.js?v=202609082226"></script>
+    <script src="js/creatures.js?v=202609082226"></script>
+    <script src="js/core.js?v=202609082226"></script>
+    <script src="js/vocab.js?v=202609082226"></script>
+    <script src="js/flashcards.js?v=202609082226"></script>
+    <script src="js/quiz.js?v=202609082226"></script>
+    <script src="js/games.js?v=202609082226"></script>
+    <script src="js/ai-feedback.js?v=202609082226"></script>
 </body>
 </html>
