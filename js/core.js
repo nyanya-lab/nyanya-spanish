@@ -3634,7 +3634,14 @@ let vocabulary = [];
             if (r.total < 20) {
                 return { level: null, detail: `최근 ${r.days}일에 ${r.total}문제라 아직 못 재요 (20문제부터)`, pct: null, total: r.total };
             }
-            return { level: null, detail: `최근 ${r.days}일 ${r.correct}/${r.total}문제`, pct: r.pct, total: r.total };
+            //   [냐냐 요청] 무엇 때문에 낮은지 알게 갈래를 괄호로 붙인다.
+            //   단어(퀴즈+쓰기 복습) 와 AI 첨삭 — 첨삭은 문장 통째라 판정이 훨씬 박하다.
+            const w = { t: r.parts.quiz.t + r.parts.write.t, c: r.parts.quiz.c + r.parts.write.c };
+            const bits = [];
+            if (w.t) bits.push(`단어 ${Math.round(w.c / w.t * 100)}%`);
+            if (r.parts.ai.t) bits.push(`첨삭 ${r.parts.ai.pct}%`);
+            const split = bits.length > 1 ? ` (${bits.join(' · ')})` : '';
+            return { level: null, detail: `최근 ${r.days}일 ${r.correct}/${r.total}문제${split}`, pct: r.pct, total: r.total };
         }
 
         // ── 축 ① 어휘: AI 에게 보낼 표본 ──
@@ -3880,75 +3887,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 deleAutoTried = true;
                 setTimeout(() => refreshDeleLevel(false), 300);
             }
-            const box = document.getElementById('learner-profile-display');
-            if (!box) return;
-            const { totalAnswered, totalCorrect, wrongByPos, wrongByGrammarType } = learnerProfile;
-
-            if (!totalAnswered || totalAnswered < 5) {
-                box.innerHTML = `<p class="text-slate-400 text-xs leading-relaxed">아직 데이터가 적어요! 퀴즈나 AI 첨삭을 ${5 - (totalAnswered || 0)}번 더 하면 수준 분석이 시작돼요. (현재 ${totalAnswered || 0}/5)</p>`;
-                return;
-            }
-
-            //   [냐냐 요청] 최근 15일만 본다. 그 안에 푼 게 적으면(5문제 미만) 누적으로 물러선다.
-            const rec = recentAccuracy();
-            const useRecent = rec.total >= 5;
-            const accuracy = useRecent ? rec.pct : Math.round((totalCorrect / totalAnswered) * 100);
-            let level = "초급";
-            let levelColor = "text-emerald-600";
-            if (accuracy >= 85 && vocabulary.length >= 50) { level = "중상급"; levelColor = "text-violet-600"; }
-            else if (accuracy >= 70) { level = "중급"; levelColor = "text-blue-600"; }
-
-            const posNameKo = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', preposition: '전치사', conjunction: '접속사', pronoun: '대명사', phrase: '구문' };
-            const weakPos = Object.entries(wrongByPos || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-            const weakGrammar = Object.entries(wrongByGrammarType || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-            _profileIssueVals = weakGrammar.map(([t]) => t);   // 칩은 값 대신 '몇 번째'로 부른다
-
-            let html = `
-                <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div class="bg-white/70 rounded-2xl p-3 text-center">
-                        <span class="block text-[10px] text-slate-400 font-bold">추정 수준</span>
-                        <span class="text-lg font-black ${levelColor}">${level}</span>
-                    </div>
-                    <div class="bg-white/70 rounded-2xl p-3 text-center">
-                        <span class="block text-[10px] text-slate-400 font-bold">${useRecent ? `최근 ${rec.days}일 정답률` : '정답률 (누적)'}</span>
-                        <span class="text-lg font-black text-slate-700">${accuracy}%</span>
-                    </div>
-                </div>
-                ${useRecent ? `
-                ${/* [냐냐 요청] 단어(퀴즈+쓰기 복습) 와 첨삭 둘로 나눈다 — 낱말을 아는가와
-                     문장을 쓰는가는 다른 이야기고, 첨삭은 문장 통째라 판정이 훨씬 박하다. */''}
-                <div class="grid grid-cols-2 gap-2 mb-2">
-                    ${[['단어 (퀴즈·쓰기)', { t: rec.parts.quiz.t + rec.parts.write.t, c: rec.parts.quiz.c + rec.parts.write.c }],
-                       ['AI 첨삭', rec.parts.ai]].map(([nm, pt]) => `
-                        <div class="bg-white/70 rounded-xl px-2 py-2 text-center">
-                            <span class="block text-[10px] text-slate-400 font-bold">${nm}</span>
-                            <span class="text-sm font-black ${pt.t ? 'text-slate-700' : 'text-slate-300'}">${pt.t ? Math.round(pt.c / pt.t * 100) + '%' : '—'}</span>
-                            <span class="block text-[10px] text-slate-300">${pt.t ? pt.c + '/' + pt.t : '아직 없어요'}</span>
-                        </div>`).join('')}
-                </div>` : ''}
-                <p class="text-[11px] text-slate-400 mb-3">${useRecent
-                    ? `최근 ${rec.days}일 ${rec.correct}/${rec.total}문제 · 누적 ${totalCorrect}/${totalAnswered}문제`
-                    : `최근 ${rec.days}일에 푼 게 ${rec.total}문제뿐이라 누적으로 보여드려요 · 총 ${totalAnswered}문제`}</p>
-            `;
-
-            html += `<div class="mb-2">
-                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 품사 <span class="font-normal text-slate-400">(퀴즈 기준)</span></span>
-                <div class="flex flex-wrap gap-1.5 mt-1">
-                    ${weakPos.length > 0
-                        ? weakPos.map(([pos, cnt]) => `<span class="text-[11px] font-semibold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full border border-rose-100">${posNameKo[pos] || pos} ${cnt}회</span>`).join('')
-                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요</span>'}
-                </div>
-            </div>`;
-            html += `<div>
-                <span class="text-[11px] font-bold text-slate-500">자주 틀리는 문법 <span class="font-normal text-slate-400">(자유 작문·질문답하기 기준)</span></span>
-                <div class="flex flex-wrap gap-1.5 mt-1">
-                    ${weakGrammar.length > 0
-                        ? weakGrammar.map(([t, cnt], i) => `<button onclick="openAiNotesByIssueAt(${i})" title="이 유형으로 틀린 문장 보기" class="text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100 transition-all">${escapeHtml(t)} ${cnt}회 <i class="fa-solid fa-arrow-right text-[8px] opacity-50"></i></button>`).join('')
-                        : '<span class="text-[11px] text-slate-400">아직 데이터가 없어요 (자유 작문/질문답하기를 해보세요!)</span>'}
-                </div>
-            </div>`;
-
-            box.innerHTML = html;
+            //   [냐냐 지적] 접혀 있던 아래쪽(추정 수준·정답률·자주 틀리는 품사/문법)은 통째로 뺐다
+            //   (2026-09-08). 제목을 눌러야 펴지는 자리라 정작 보고 싶은 숫자가 거기 숨어 있었고,
+            //   DELE 상자가 같은 이야기를 더 잘한다. 정답률은 그 안 '정답률' 줄로 옮겼다.
+            //   ⚠️ learnerProfile 자체는 그대로 쌓는다 — buildLearnerProfileSummary 가 AI 에게 넘긴다.
         }
 
         function toggleChartCard(bodyId, btnEl) {
@@ -4215,18 +4157,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             renderLearnerProfileDisplay();
         }
 
-        // [냐냐 요청] 실수 유형은 AI가 준 글자라 따옴표가 섞일 수 있다. onclick 에 글자를 그대로
-        //   적으면 (escape 를 해도) 브라우저가 &#39; 를 ' 로 되돌린 뒤에 JS 를 읽어서 호출이 깨진다.
-        //   그래서 '몇 번째'만 넘기고 값은 배열에서 찾는다 — 단어 빠른찾기와 같은 방식.
-        let _profileIssueVals = [];   // '내 학습 수준' 카드의 유형 칩 값
-
-        function openAiNotesByIssueAt(i) {
-            const v = _profileIssueVals[i];
-            if (v !== undefined) openAiNotesByIssue(v);
-        }
-
-        // [냐냐 요청] '내 학습 수준' 카드의 유형 칩에서 눌러 들어온다.
         //   첨삭 노트는 AI 첨삭 탭에 있으므로, 탭을 옮기고 그 유형만 걸러 놓는다.
+        //   (부르던 유형 칩은 없앴지만, 유형으로 걸러 보는 길은 남겨둔다)
         function openAiNotesByIssue(issue) {
             changeTab('ai-feedback');
             if (typeof switchAiMode === 'function') switchAiMode('note');
@@ -8567,11 +8499,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (statsBody) statsBody.classList.add('hidden');
                 const statsChevron = document.querySelector("button[onclick=\"toggleChartCard('summary-stats-body', this)\"] i");
                 if (statsChevron) statsChevron.style.transform = 'rotate(180deg)';
-                // '내 학습 수준'도 항상 접힌 상태로 시작
-                const profileBody = document.getElementById('learner-profile-display');
-                if (profileBody) profileBody.classList.add('hidden');
-                const profileChevron = document.querySelector("button[onclick=\"toggleChartCard('learner-profile-display', this)\"] i");
-                if (profileChevron) profileChevron.style.transform = 'rotate(180deg)';
                 setRecordRange('7d');
                 renderStreakBadge();
                 if (typeof renderEgg === 'function') renderEgg(); // [냐냐 PATCH] 알 위젯
