@@ -273,6 +273,9 @@ let vocabulary = [];
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
                 idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
                 deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
+                //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
+                //   아직 안 정한 상태(null)면 안 보낸다 — 딴 기기에서 골라둔 걸 덮으면 안 된다.
+                writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
             };
         }
@@ -443,6 +446,11 @@ let vocabulary = [];
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
+                //   [냐냐 요청] 쓰기 복습 동사 시제 (없으면 null 로 둔다 — ensureWriteTenses 가 정한다)
+                if (typeof writeTenses !== 'undefined') {
+                    writeTenses = Array.isArray(payload.writeTenses)
+                        ? payload.writeTenses.filter(x => typeof x === 'string') : null;
+                }
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
                     GRAMMAR_ICONS = payload.grammarTopics

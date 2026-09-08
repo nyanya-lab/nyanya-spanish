@@ -3271,7 +3271,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //      6칸이라 1칸짜리 분사보다 여섯 배 자주 나온다.
         // [냐냐 요청] 어느 시제로 물어볼지 고를 수 있게 한다 (2026-09-08).
         //   처음엔 등록된 시제가 다 켜진 채로 시작하고, 빼고 싶은 것만 냐냐님이 끈다.
-        //   고른 것은 새로고침해도 남는다 (이 기기에만 — 단어장처럼 동기화할 값은 아니다).
+        //   고른 것은 저장·동기화에 같이 실어서 폰에서도 같은 설정이 따라온다 (saveToStorage 의 짐).
         //   ⚠️ 고른 시제가 그 동사에 안 채워져 있으면 그 동사는 원형으로 묻는다 (pickConjSlot 이 null).
         //   ⚠️ 다 빼면 동사도 원형으로 물어본다 — 그것도 고를 만한 값이라 막지 않는다.
         const WRITE_TENSES_KEY = 'nyanya_write_tenses';
@@ -3284,15 +3284,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         function ensureWriteTenses() {
             if (writeTenses) return writeTenses;
+            //   이 기기에만 적어뒀던 예전 값이 있으면 한 번 받아온다 (그 뒤로는 동기화 쪽이 임자)
             try {
                 const raw = localStorage.getItem(WRITE_TENSES_KEY);
-                if (raw) { const v = JSON.parse(raw); if (Array.isArray(v)) { writeTenses = v.filter(x => typeof x === 'string'); return writeTenses; } }
+                if (raw) {
+                    const v = JSON.parse(raw);
+                    if (Array.isArray(v)) {
+                        writeTenses = v.filter(x => typeof x === 'string');
+                        localStorage.removeItem(WRITE_TENSES_KEY);
+                        saveWriteTenses();
+                        return writeTenses;
+                    }
+                }
             } catch (e) {}
             writeTenses = writeLiveTenseKeys();   // 처음 열면 전체
             return writeTenses;
         }
         function saveWriteTenses() {
-            try { localStorage.setItem(WRITE_TENSES_KEY, JSON.stringify(writeTenses || [])); } catch (e) {}
+            if (typeof saveToStorage === 'function') { try { saveToStorage(); } catch (e) {} }
         }
 
         function pickConjSlot(w) {
