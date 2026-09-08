@@ -1,0 +1,13 @@
+#!/bin/sh
+# js/css 를 고쳐 커밋하면 index.html 의 ?v= 를 지금 시각으로 갈아끼운다.
+# 안 올리면 브라우저가 캐시에 있는 옛 파일을 계속 쓴다.
+
+git diff --cached --name-only --diff-filter=ACMR | grep -qE '^(js|css)/.*\.(js|css)$' || exit 0
+
+new=$(date +%Y%m%d%H%M)
+cur=$(sed -n 's/.*style\.css?v=\([0-9a-z]*\).*/\1/p' index.html | head -1)
+[ "$cur" = "$new" ] && exit 0
+
+sed -i "s/?v=[0-9a-z][0-9a-z]*/?v=$new/g" index.html
+git add index.html
+echo "pre-commit: 캐시 표시 $cur -> $new"
