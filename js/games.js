@@ -1157,8 +1157,8 @@
             const due = getTodayReviewTasks();
             if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             todayReviewPlan = null;
-            // 한 번에 다 할 만큼 적으면 굳이 안 물어본다
-            if (due.length <= TODAY_REVIEW_BATCH) { beginTodayReview(1); return; }
+            // [냐냐 요청] 적어도 창은 띄운다 (2026-09-08). 예전엔 스무 개 이하면 건너뛰었는데,
+            //   이 창에 시제 고르는 자리가 생겨서 건너뛰면 그걸 만질 데가 없어진다.
             todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / TODAY_REVIEW_BATCH)));
             renderReviewSplitModal();
             document.getElementById('review-split-modal').classList.remove('hidden');
