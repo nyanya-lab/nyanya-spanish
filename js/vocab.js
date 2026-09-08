@@ -3270,15 +3270,36 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   ⚠️ 시제를 먼저 고르고 그 안에서 인칭을 고른다. 칸을 통째로 섞으면 현재시제가
         //      6칸이라 1칸짜리 분사보다 여섯 배 자주 나온다.
         // [냐냐 요청] 어느 시제로 물어볼지 고를 수 있게 한다 (2026-09-08).
-        //   예전엔 그 동사에 채워진 시제 중 아무거나 나왔다. 과거형만 훑고 싶을 때가 있는데
-        //   그럴 방법이 없었다. 빈 배열 = 전체 (아무것도 안 고르면 예전과 같다).
+        //   처음엔 등록된 시제가 다 켜진 채로 시작하고, 빼고 싶은 것만 냐냐님이 끈다.
+        //   고른 것은 새로고침해도 남는다 (이 기기에만 — 단어장처럼 동기화할 값은 아니다).
         //   ⚠️ 고른 시제가 그 동사에 안 채워져 있으면 그 동사는 원형으로 묻는다 (pickConjSlot 이 null).
-        let writeTenses = [];
+        //   ⚠️ 다 빼면 동사도 원형으로 물어본다 — 그것도 고를 만한 값이라 막지 않는다.
+        const WRITE_TENSES_KEY = 'nyanya_write_tenses';
+        let writeTenses = null;   // null = 아직 안 정함 (ensureWriteTenses 가 채운다)
+
+        //   지금 단어장에 활용이 채워져 있는 시제들
+        function writeLiveTenseKeys() {
+            const opts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [];
+            return opts.map(o => o.key).filter(k => writeVerbsFor(k));
+        }
+        function ensureWriteTenses() {
+            if (writeTenses) return writeTenses;
+            try {
+                const raw = localStorage.getItem(WRITE_TENSES_KEY);
+                if (raw) { const v = JSON.parse(raw); if (Array.isArray(v)) { writeTenses = v.filter(x => typeof x === 'string'); return writeTenses; } }
+            } catch (e) {}
+            writeTenses = writeLiveTenseKeys();   // 처음 열면 전체
+            return writeTenses;
+        }
+        function saveWriteTenses() {
+            try { localStorage.setItem(WRITE_TENSES_KEY, JSON.stringify(writeTenses || [])); } catch (e) {}
+        }
 
         function pickConjSlot(w) {
+            const picked = ensureWriteTenses();
             const opts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [];
             const tenses = opts.map(o => o.key).filter(t => {
-                if (writeTenses.length && writeTenses.indexOf(t) < 0) return false;
+                if (picked.indexOf(t) < 0) return false;
                 const c = (typeof getTenseConj === 'function') ? getTenseConj(w, t) : null;
                 return c && (typeof hasConjValues === 'function' ? hasConjValues(c) : false);
             });
@@ -3378,36 +3399,50 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 && typeof getTenseConj === 'function' && hasConjValues(getTenseConj(w, tense))).length;
         }
         function toggleWriteTense(key) {
-            writeTenses = writeTenses.includes(key) ? writeTenses.filter(k => k !== key) : writeTenses.concat([key]);
+            const cur = ensureWriteTenses();
+            writeTenses = cur.includes(key) ? cur.filter(k => k !== key) : cur.concat([key]);
+            saveWriteTenses();
             renderWriteTenses();
         }
         function setWriteTensesAll(on) {
-            writeTenses = on ? writeTenseOptions().map(o => o.key).filter(k => writeVerbsFor(k)) : [];
+            writeTenses = on ? writeLiveTenseKeys() : [];
+            saveWriteTenses();
             renderWriteTenses();
         }
         //   [냐냐 지적] 채워진 동사가 없는 시제는 아예 안 그린다 — 열 칸 중 일곱이 0 으로
-        //   흐려져 있으니 조잡했다. 남는 건 실제로 낼 수 있는 것뿐이라 칩 한 줄이면 된다.
+        //   흐려져 있으니 조잡했다. 개수도 뺐다 (고르는 데 쓰는 값이 아니다).
         //   짧은 이름으로 줄인다 ('현재분사 (gerundio · 1칸)' 은 칩에 넣기엔 길다).
         const WRITE_TENSE_SHORT = { gerundio: '현재분사', participio: '과거분사' };
         function renderWriteTenses() {
+            const picked = ensureWriteTenses();
+            const live = writeLiveTenseKeys();
             const box = document.getElementById('write-tense-list');
-            const live = writeTenseOptions().map(o => ({ o, n: writeVerbsFor(o.key) })).filter(x => x.n);
             if (box) {
                 box.innerHTML = live.length
-                    ? live.map(({ o, n }) => {
-                        const on = writeTenses.includes(o.key);
-                        const label = WRITE_TENSE_SHORT[o.key] || o.label;
-                        return `<button type="button" onclick="toggleWriteTense('${o.key}')"
-                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[11px] font-bold transition-all ${on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">
-                            ${on ? '✓ ' : ''}${escapeHtml(label)}<span class="text-[10px] font-semibold ${on ? 'text-indigo-400' : 'text-slate-400'}">${n}</span>
+                    ? live.map(k => {
+                        const o = writeTenseOptions().find(x => x.key === k) || { key: k, label: k };
+                        const on = picked.includes(k);
+                        const label = WRITE_TENSE_SHORT[k] || o.label;
+                        return `<button type="button" onclick="toggleWriteTense('${k}')"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[11px] font-bold transition-all ${on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}">
+                            ${on ? '✓ ' : ''}${escapeHtml(label)}
                         </button>`;
                     }).join('')
                     : '<span class="text-[11px] text-slate-400">활용을 채워둔 동사가 아직 없어요</span>';
             }
+            //   버튼 하나로 — 다 켜져 있으면 '모두 빼기', 아니면 '전체'
+            const allOn = live.length > 0 && live.every(k => picked.includes(k));
+            const btn = document.getElementById('write-tense-toggle-all');
+            if (btn) {
+                btn.innerText = allOn ? '모두 빼기' : '전체';
+                btn.setAttribute('onclick', `setWriteTensesAll(${allOn ? 'false' : 'true'})`);
+                btn.classList.toggle('hidden', !live.length);
+            }
             const hint = document.getElementById('write-tense-hint');
-            if (hint) hint.innerText = writeTenses.length
-                ? '고른 시제로만 물어봐요 (그 시제가 없는 동사는 원형으로)'
-                : '안 고르면 아무 시제나 나와요';
+            if (hint) hint.innerText = !picked.length
+                ? '다 뺐어요 — 동사도 원형으로 물어봐요'
+                : (allOn ? '등록된 시제에서 아무거나 나와요'
+                         : '고른 시제로만 물어봐요 (그 시제가 없는 동사는 원형으로)');
         }
 
         function selectWriteScope(scope) {
