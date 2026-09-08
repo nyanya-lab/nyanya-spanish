@@ -2815,27 +2815,45 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   동사 꼴 잇기는 동사만 보므로 지시사·숫자·요일·날씨처럼 '닫힌 목록' 노트는 AI 만 믿어야 했다.
         //   그런데 그런 노트는 코드가 더 확실히 안다 — 표에 그 낱말이 적혀 있으니까.
         //   조건 넷을 다 넘어야 인정한다 (실데이터 33문장으로 재보니 13건 잡히고 헛짚음 0):
-        //     ① 표 칸이 한 낱말        — 'antes de [명사]' 같은 구는 안 본다
+        //     ① 표 칸이 한 낱말        — 네 글자 이상. 구는 아래의 따로 된 잣대로 본다
         //     ② 네 글자 이상            — dar·por·las 는 아무 문장에나 걸린다 (3글자로 낮추면 실제로 걸렸다)
         //     ③ 그 노트에만 있는 낱말   — 두 노트가 나눠 가진 낱말은 어느 쪽인지 못 가른다
         //     ④ 악센트까지 똑같이       — esta(이것) 와 está(estar) 는 다른 말이다
         // ============================================================
-        let _noteCellIndex = null;   // { key: 정규화한 낱말 → 노트id } · 노트 목록이 바뀌면 다시 만든다
+        let _noteCellIndex = null;   // { words: 낱말→노트id, phrases: 구→노트id } · 노트 목록이 바뀌면 다시 만든다
         function buildNoteCellIndex(notes) {
             const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
-            const owner = new Map();   // 낱말 → 노트id (둘 이상이면 null 로 눌러둔다)
+            const owner = new Map();    // 낱말 → 노트id (둘 이상이면 null 로 눌러둔다)
+            // [냐냐 지적] 시간 미션을 풀었는데 시간 노트가 안 잡혔다. 한 낱말짜리 칸만 봐서인데,
+            //   시간 표현은 'y media' 'en punto' 'de la mañana' 처럼 거의 다 여러 낱말이라
+            //   원리상 걸릴 수가 없었다. 구도 같이 색인한다.
+            //   4글자 제한을 둔 것은 짧은 낱말(dar·por)이 아무 문장에나 걸려서였는데,
+            //   구는 길수록 헛짚기 어려워 같은 걱정이 없다. 대신 낱말 2~5개·글자 6자 이상으로 막는다
+            //   ('a las'·'en la' 같은 토막은 떨어진다). 주인이 둘 이상이면 버리는 것은 낱말과 같다.
+            const phraseOwner = new Map();
             (notes || []).forEach(t => {
                 const seen = new Set();
                 (typeof noteSpanishCells === 'function' ? noteSpanishCells(t) : []).forEach(c => {
                     const k = nz(c);
-                    if (!/^[a-záéíóúüñ]{4,}$/.test(k) || seen.has(k)) return;
-                    seen.add(k);
-                    owner.set(k, owner.has(k) ? null : t.id);
+                    if (/^[a-záéíóúüñ]{4,}$/.test(k)) {
+                        if (seen.has(k)) return;
+                        seen.add(k);
+                        owner.set(k, owner.has(k) ? null : t.id);
+                        return;
+                    }
+                    const words = k.split(/[^a-záéíóúüñ]+/).filter(Boolean);
+                    if (words.length < 2 || words.length > 5) return;
+                    const key = words.join(' ');
+                    if (key.replace(/ /g, '').length < 6 || seen.has(key)) return;
+                    seen.add(key);
+                    phraseOwner.set(key, phraseOwner.has(key) ? null : t.id);
                 });
             });
-            const out = new Map();
-            owner.forEach((id, k) => { if (id) out.set(k, id); });
-            return out;
+            const words = new Map();
+            owner.forEach((id, k) => { if (id) words.set(k, id); });
+            const phrases = new Map();
+            phraseOwner.forEach((id, k) => { if (id) phrases.set(k, id); });
+            return { words, phrases };
         }
         // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
         function detectNoteCellsInText(text, notes) {
@@ -2846,10 +2864,19 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 _noteCellIndex._n = (notes || []).length;
             }
             const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
-            String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).forEach(raw => {
+            const raws = String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+            // 구를 먼저 본다 — 같은 노트가 둘 다 걸리면 긴 쪽이 더 분명한 근거다.
+            if (_noteCellIndex.phrases.size) {
+                const hay = ' ' + raws.map(nz).join(' ') + ' ';
+                _noteCellIndex.phrases.forEach((id, key) => {
+                    if (out.has(id)) return;
+                    if (hay.indexOf(' ' + key + ' ') >= 0) out.set(id, key);
+                });
+            }
+            raws.forEach(raw => {
                 const k = nz(raw);
                 if (!k) return;
-                const id = _noteCellIndex.get(k);
+                const id = _noteCellIndex.words.get(k);
                 if (id && !out.has(id)) out.set(id, raw);
             });
             return out;
@@ -2969,6 +2996,22 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     });
                 });
                 extra.slice(0, 4).forEach(e => parsed.push(e));
+            }
+
+            // [냐냐 지적] 시간 복습에서 'las veintidos y media' 를 쓰고 'las diez y media' 로 고쳐졌는데
+            //   시간 노트가 목록에 아예 안 떴다 (2026-09-08). 검출은 내 문장만 보는데, 내가 쓴 꼴이
+            //   틀려서 표의 어느 칸과도 안 맞았기 때문이다 — 시도는 했는데 흔적이 안 남는다.
+            //   ⚠️ 복습 미션의 그 노트에만 적용한다. 그 노트를 쓰라고 낸 문제이므로,
+            //      고친 문장에는 그 노트의 표현이 들어갔는데 내 문장에는 없으면 '쓰려다 틀린 것' 이다.
+            //      근거가 없어서 안 건드린다는 9/7 규칙과 어긋나지 않는다 — 고친 문장이 근거다.
+            //      랜덤 미션·자유 작문에는 안 쓴다. AI 가 제 마음대로 넣은 표현일 수 있다.
+            if (typeof aiMissionReviewGrammarId !== 'undefined' && aiMissionReviewGrammarId
+                && typeof detectNoteCellsInText === 'function'
+                && !parsed.some(x => x.note.id === aiMissionReviewGrammarId)) {
+                const note = notes.find(t => t.id === aiMissionReviewGrammarId);
+                const inFixed = note && detectNoteCellsInText(feedback && feedback.correctedText, notes).get(note.id);
+                const inMine = note && detectNoteCellsInText(feedback && feedback.originalMarked, notes).get(note.id);
+                if (note && inFixed && !inMine) parsed.push({ note, ok: false, ev: inFixed });
             }
 
             // [냐냐 요청] 복습으로 낸 그 문법은 AI 가 안 짚어도 판정을 붙인다 (2026-09-07).
