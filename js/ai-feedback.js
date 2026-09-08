@@ -1068,19 +1068,17 @@
                 hintBox.classList.add('hidden');
                 isAiHintVisible = false;
             } else {
-                if (!aiCurrentWordForMission) {
+                // [냐냐 요청] 목표 단어를 없앴으므로(2026-09-08) 힌트도 단어가 아니라
+                //   이번 미션을 만든 문법 노트를 알려준다. 눌러서 노트를 들춰볼 수 있다.
+                //   눌러야 보이는 자리라, 알려줘도 짐작해서 쓰게 되는 문제가 없다.
+                if (!aiCurrentKoreanSentence) {
                     hintBox.innerText = "아직 미션 문장이 없어요. 먼저 '✨ 랜덤 문장 생성'을 눌러주세요!";
+                } else if (!aiCurrentGrammarForMission) {
+                    hintBox.innerText = "이번 미션은 참고한 문법 노트가 없어요.";
                 } else {
-                    let hintHtml = `💡 <b>학습 단어 힌트:</b> ${aiCurrentWordForMission.word} (${aiCurrentWordForMission.meaning}) <br>`;
-                    if (aiCurrentWordForMission.pos === 'verb') {
-                        hintHtml += `👉 <b>V. (동사) 힌트:</b> 현재 1인칭 변형은 <b>'${aiCurrentWordForMission.conjugations?.yo || '비정형'}'</b> 입니다. 어순에 신경써 보세요!`;
-                    } else if (aiCurrentWordForMission.pos === 'noun') {
-                        const genderKorean = aiCurrentWordForMission.gender === 'masculine' ? '남성명사(정관사 el)' : aiCurrentWordForMission.gender === 'feminine' ? '여성명사(정관사 la)' : '성별 지정 없음';
-                        hintHtml += `👉 <b>명사 성별 힌트:</b> 이 명사는 <b>${genderKorean}</b> 입니다. 관사 및 형용사 어미 일치에 주의하세요!`;
-                    } else {
-                        hintHtml += `👉 문맥 속에서 단어가 매끄럽게 연결되도록 문법 어순을 천천히 조립해 보세요!`;
-                    }
-                    hintBox.innerHTML = hintHtml;
+                    const gn = aiCurrentGrammarForMission;
+                    hintBox.innerHTML = `💡 <b>이번에 연습할 문법:</b> ${escapeHtml(gn.icon || '📋')} ${escapeHtml(gn.title || '')}
+                        <button type="button" onclick="openGrammarPeek('${escapeAttr(gn.id)}')" class="ml-1 underline font-bold text-violet-600 hover:text-violet-800">노트 열기</button>`;
                 }
                 hintBox.classList.remove('hidden');
                 isAiHintVisible = true;
@@ -1101,11 +1099,7 @@
             aiCurrentWordForMission = null;
             aiCurrentKoreanSentence = "";
 
-            if (vocabulary.length === 0) {
-                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
-            } else {
-                missionHeading.innerText = "아직 생성된 문장이 없어요! 위의 '✨ 랜덤 문장 생성'을 눌러서 시작해보세요.";
-            }
+            missionHeading.innerText = "아직 생성된 문장이 없어요! 위의 '✨ 랜덤 문장 생성'을 눌러서 시작해보세요.";
         }
 
         // [PATCH] AI 호출이 실패했을 때만 쓰는 안전한 대체 문장 (기존 curated/rule 로직 재사용)
@@ -1432,13 +1426,6 @@
             aiCurrentExtraWordsForMission = [];
             aiLastCorrectedText = '';
 
-            if (vocabulary.length === 0) {
-                missionHeading.innerText = "단어장 데이터가 비어 있습니다! 내 단어장 탭에서 단어를 추가해 주세요.";
-                aiCurrentWordForMission = null;
-                aiCurrentKoreanSentence = "";
-                return;
-            }
-
             if (!hasGeminiApiKey()) {
                 showToast("Gemini API 키가 없어서 AI 문장 생성을 사용할 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
                 missionHeading.innerText = "API 키가 없어서 문장을 생성할 수 없어요.";
@@ -1448,9 +1435,7 @@
                 return;
             }
 
-            const randIdx = Math.floor(Math.random() * vocabulary.length);
-            const targetWord = vocabulary[randIdx];
-            // [냐냐 요청] 문법표 1개를 골라 문맥으로 주고, 단어장에서 몇 개 더 섞는다
+            // [냐냐 요청] 문법표 1개를 골라 그 문법으로만 문장을 만든다
             //   노트에서 '이 문법으로 번역 연습'을 눌러 들어왔으면 그 문법을 쓴다 (한 번만)
             const forced = aiForcedGrammarId
                 ? (typeof getAllGrammarTables === 'function' ? getAllGrammarTables().find(t => t.id === aiForcedGrammarId) : null)
@@ -1468,7 +1453,18 @@
             //   한 문장에 목표 단어 + 문법 노트 + 대목까지 넣으라는 마당에 단어를 둘 더 얹으니
             //   "저 식당 앞에 있는 그 프로젝트의 성공은…" 처럼 소재가 엉키는 문장이 나왔다.
             //   '어울릴 때만 쓰라' 고 열어뒀지만 값에 비해 어색함에 기여하는 쪽이 컸다.
-            //   목표 단어는 남긴다 — 모르는 단어를 만나게 하는 게 이 미션의 목적이다.
+            //   ⚠️ [냐냐 요청] 목표 단어도 뺐다 (2026-09-08). 9월 2일에는 '모르는 단어를 만나게
+            //   하는 게 목적' 이라고 남겨뒀는데, 실제로 써보니 단어와 문법을 한 문장에 같이 넣느라
+            //   억지스러워지고, 뜻이 겹치는 낱말을 써도 (gorra / sombrero) 목표 단어를 안 썼다고
+            //   짚였다. 이제 미션은 문법 노트 하나만으로 만든다. 단어는 첨삭이 알아서 채점한다.
+            //   ('내 예문으로 연습' 은 그 단어를 연습하는 기능이라 그대로 목표 단어를 쓴다)
+
+            // 미션은 문법 노트 하나로 만든다 — 노트가 없으면 만들 수가 없다
+            if (!grammarNote) {
+                missionHeading.innerText = "문법·개념 탭에 노트를 하나 만들면 그 문법으로 미션이 나와요.";
+                aiCurrentKoreanSentence = "";
+                return;
+            }
 
             const originalBtnHtml = genBtn.innerHTML;
             genBtn.disabled = true;
@@ -1496,9 +1492,9 @@ ${recentAsks.map(a => '· ' + a).join('\n')}
 (예: 수동태를 또 연습하더라도 '작가가 쓴 책' 다음엔 '요리사가 만든 요리' 말고 아예 다른 소재로)
 ` : '';
 
-            const prompt = `스페인어 단어 "${targetWord.word}" (뜻: "${targetWord.meaning}", 품사: ${targetWord.pos})를 스페인어로 번역할 때 이 단어를 자연스럽게 써야 하는, 짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
-            매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어("${targetWord.word}" 포함)나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 스페인어 철자를 한국어 문장 안에 노출하면 절대 안 됩니다.
-            ⚠️ 그렇다고 뜻까지 감추면 안 됩니다. 한국어 뜻("${targetWord.meaning}")은 문장 안에 그대로, 분명히 드러나야 합니다 — 학생은 그 한국어 낱말을 보고 스페인어를 떠올립니다. '그것 · 저것 · 그 맛있는 것 · 어떤 물건' 처럼 뭉뚱그리면 학생은 어떤 단어를 쓰라는 건지 알 길이 없고, 그건 실패한 문장입니다. 뜻이 여럿이면(쉼표로 나뉘어 있으면) 그중 하나를 골라 그 낱말을 문장에 쓰세요. 감출 것은 스페인어 철자이지 뜻이 아닙니다.
+            const prompt = `짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
+            매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 스페인어 철자를 한국어 문장 안에 노출하면 절대 안 됩니다.
+            뭉뚱그린 문장은 안 됩니다 — '그것 · 저것 · 어떤 물건' 처럼 소재를 흐리면 학생이 무엇을 옮겨야 할지 알 수 없습니다. 무엇을 말하는 문장인지 한국어만 읽고도 분명해야 합니다.
 ${recentBlock}${grammarContext ? `
 [이번에 같이 연습할 문법 — 학생이 직접 정리해 둔 노트입니다]
 제목: ${grammarNote.title || ''}
@@ -1532,7 +1528,7 @@ ${grammarDetail}
 
 문장은 짧고 자연스러운 게 최우선입니다.
             ${buildLearnerProfileSummary()}`;
-            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include the target Spanish word, any other Spanish words, or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
+            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include Spanish words or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
             const schema = {
                 type: "OBJECT",
                 properties: {
@@ -1551,7 +1547,7 @@ ${grammarDetail}
                     throw new Error("SENTENCE_CONTAINS_SPANISH");
                 }
 
-                aiCurrentWordForMission = targetWord;
+                aiCurrentWordForMission = null;   // 목표 단어는 이제 없다
                 aiCurrentKoreanSentence = candidateSentence;
                 // [냐냐 요청] 첨삭 때 근거로 쓰려고 이번 미션이 참고한 것들을 기억해 둔다
                 aiCurrentGrammarForMission = grammarNote || null;
@@ -1576,7 +1572,7 @@ ${grammarDetail}
         }
 
         async function submitAiTranslationKoEs() {
-            if (!aiCurrentWordForMission) {
+            if (!aiCurrentKoreanSentence) {
                 showToast("먼저 '✨ 랜덤 문장 생성'을 눌러서 미션을 받아주세요!", "error");
                 return;
             }
@@ -1617,14 +1613,11 @@ ${grammarDetail}
             const refWords = '';   // [냐냐 요청] 덧붙임 단어를 안 주므로 채점에도 알릴 게 없다
 
             const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
-            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
             Student's Spanish Answer: "${userText}"
 ${koEsNoteListText}${refGrammar}${refWords}
-            Note: the mission is either (a) a Korean sentence to translate, or (b) an instruction asking the student to freely write a Spanish sentence using the target word naturally.
             COMPLETENESS: the Spanish must carry EVERY piece of the Korean mission — each clause, each modifier, each object. If something in the Korean is missing from the answer (a dropped noun, a dropped "~하고 있는", a dropped reason), that is a mistranslation: set isCorrect=false, add the missing part in "correctedText", and say in "message" what was left out. Do not call a shortened answer "완벽" just because the Spanish it does contain is grammatical.
-            For (a): the target word above is CONTEXT ONLY — it is the word the mission was built around, not a requirement. NEVER mark the answer wrong, and never ask for that word, just because the student expressed the same meaning with a different word. Judge only whether the Spanish is grammatical and conveys the Korean sentence accurately. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error, not as "you must use the target word".)
-            For (b): the target word must actually appear and be used naturally, since the mission asked for it.
-            Either way, check the grammar is correct.
+            There is NO required vocabulary word. The mission is a Korean sentence to translate, and any wording that is grammatical and carries the same meaning is correct — never ask the student to have used some other word just because you would have picked it. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error.)
+            Check the grammar is correct.
             CRITICAL GRADING RULE: A translation is CORRECT (isCorrect=true) as long as it is grammatically correct AND accurately conveys the Korean meaning. There are MANY valid ways to translate one sentence. DO NOT mark the student wrong just because their wording differs from any reference sentence — e.g. "Él es muy amable y simpático" and "Él tiene un carácter muy amable" can BOTH be correct translations of the same Korean sentence. Only mark isCorrect=false if there is an ACTUAL grammar error, wrong word, or mistranslation. If the student's sentence is fully correct, set isCorrect=true, and in "correctedText" simply return the student's own correct sentence (optionally you may add a brief note in "tip" showing an alternative phrasing). For "correctedText": wrap ONLY the words you actually changed/added inside '<span class='text-red-600 font-extrabold underline'>...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". Write the tag with SINGLE quotes exactly as shown — a double quote inside a JSON string breaks the whole response, and the student then sees a sentence that stops mid-way. The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. When you EXTEND a sentence, tag only the words you actually added: for "Ayer vi una película." → "Ayer vi una película con mi amigo y cenamos juntos.", the tags go on "con mi amigo y cenamos juntos" alone — "vi una película" stayed exactly as the student wrote it and must stay plain. Split "changes" the same way, one row per piece that really differs; never write a row whose "from" repeats words that did not change. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class='line-through text-slate-400'>...</span>' tags; correct words stay plain.
             ${buildLearnerProfileSummary()}`;
             
@@ -1645,7 +1638,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
             }${AI_NATURAL_RULES_TEXT}
             IMPORTANT for "changes": list EVERY meaningful change between the student sentence and the corrected one — word-order (어순), articles (el/un/la), gender/number, added/removed words. If a whole phrase was reordered, describe it as ONE change item (original phrase -> reordered phrase) with a clear reason. If already correct, use empty array [].
-            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always use the target word's actual given meaning to disambiguate, never assume.${AI_SCORING_RULES_TEXT}
+            IMPORTANT for "breakdown": split correctedText into its individual words/particles (typically 3-7 items). Each item must be exactly ONE word, EXCEPT reflexive verbs where the reflexive pronoun stays attached to the verb (e.g. "me llamo" is ONE item, not two). Never a full phrase or sentence, and "mean" must never be omitted or empty. Do not repeat the same word twice. Note: Korean "눈" is ambiguous (can mean either "snow"=nieve or "eye"=ojo) — always disambiguate from the Korean mission sentence itself, never assume.${AI_SCORING_RULES_TEXT}
             Do not wrap JSON in markdown blockticks.`;
 
             const schema = {
@@ -1711,7 +1704,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
-                applyMissionTargetWordScore(feedback);            // 목표 단어를 안 쓰고 문장도 틀렸으면 −2
                 if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
                 grammarReviewLastNoteId = aiMissionReviewGrammarId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
@@ -1740,13 +1732,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
+                //   목표 단어가 없어졌으므로 품사별 오답 집계는 여기서 안 한다 (예문 연습 쪽은 그대로)
                 learnerProfile.totalAnswered++;
-                if (feedback.isCorrect) {
-                    learnerProfile.totalCorrect++;
-                } else if (aiCurrentWordForMission) {
-                    const pos = aiCurrentWordForMission.pos || 'etc';
-                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
-                }
+                if (feedback.isCorrect) learnerProfile.totalCorrect++;
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
@@ -2571,21 +2559,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   ⚠️ 문장 자체를 오답 처리하지는 않는다. 예전에 '지정 단어를 안 썼다' 는 이유로
         //      맞은 문장을 틀렸다고 하던 걸 고친 적이 있다 — 그 규칙은 그대로다.
         // ============================================================
-        function applyMissionTargetWordScore(feedback) {
-            const w = (typeof aiCurrentWordForMission !== 'undefined') ? aiCurrentWordForMission : null;
-            if (!w || typeof addWordScore !== 'function') return;
-            if ((aiLastEsKoWords || []).some(e => e.word && e.word.id === w.id)) return;   // 썼으면 이미 매겼다
-            if (feedback && feedback.isCorrect !== false) return;                          // 우회했지만 문장은 맞음 → 패스
-            const prev = snapshotWordScoreState(w);
-            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-            addWordScore(w, WORD_SPELL_BAD, { correct: false });
-            // [냐냐 지적] groupDelta 를 같이 박아둔다 (2026-09-07). 이 칩만 채점이 끝난 뒤에
-            //   붙어서 묶음 값이 비어 있었고, 그래서 점수를 바꾸면 지금 점수를 따라 딴 묶음으로
-            //   튀었다 — 다른 칩은 다 제자리인데 맨 끝 하나만 칸을 옮기는 것으로 보였다.
-            aiLastEsKoWords.push({ word: w, ok: false, noScore: false, delta: WORD_SPELL_BAD,
-                baseDelta: WORD_SPELL_BAD, groupDelta: WORD_SPELL_BAD,
-                prev, gradeBefore, missed: true, state: 'normal', undone: false });
-        }
+        // [냐냐 요청] '목표 단어를 안 쓰고 문장도 틀렸으면 −2' 는 없앴다 (2026-09-08).
+        //   목표 단어 자체가 사라져서 부를 데가 없다. applyMissionTargetWordScore 삭제.
 
         //   [냐냐 요청] 문법을 제대로 썼을 때 주는 점수는 모드마다 다르다.
         //     한→스 랜덤 미션 / 질문에 답하기 / 내 예문 연습 = +2
