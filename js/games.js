@@ -11,7 +11,7 @@
             if (menu) menu.classList.remove('hidden');
             if (playArea) { playArea.classList.add('hidden'); playArea.innerHTML = ''; }
             // 각 게임 최고기록 표시 (이번 주 / 역대)
-            ['rapidfire', 'falling'].forEach(g => {
+            ['rapidfire', 'falling', 'hangman'].forEach(g => {
                 const el = document.getElementById('hs-' + g);
                 if (el) {
                     const week = getGameWeekHighScore(g);
@@ -123,7 +123,7 @@
         // [냐냐 요청] 역대기록을 동기화 대상에 포함시키기 위한 수집/병합.
         //   기록은 원래 localStorage 에만 있어서 기기마다 따로 놀았다. 서버에 올려 합치되,
         //   합칠 때는 항상 '큰 값'을 남긴다 — 먼저 저장한 기기가 상대 기록을 지우면 안 되니까.
-        const GAME_TYPES = ['rapidfire', 'falling'];
+        const GAME_TYPES = ['rapidfire', 'falling', 'hangman'];
         function collectGameHighScores() {
             const out = {};
             GAME_TYPES.forEach(g => {
@@ -696,6 +696,233 @@
             }
         }
 
+
+
+        // ============================================================
+        // 게임 5: 행맨 (철자 맞히기)
+        //   [냐냐 요청] 시간에 쫓기지 않는 게임이 하나도 없어서 넣는다 (2026-09-08).
+        //   기록은 '살아 있는 동안 맞힌 개수'다 — 단어마다 목숨이 새로 차지 않고
+        //   판 전체에 여섯 칸뿐이다. 대신 한 개를 맞힐 때마다 한 칸을 지워준다.
+        //   ⚠️ 점수(망각곡선·단어 점수)에는 넣지 않는다. 듣기 받아쓰기와 같은 대접이다 —
+        //      글자를 하나씩 알려주는 게임이라 맞혔다고 그 단어를 아는 것이 아니다.
+        //   ⚠️ 악센트 글자는 따로 둔다. a 를 눌러도 á 는 안 열린다 (악센트도 철자다).
+        // ============================================================
+        const HANGMAN_LIVES = 6;
+        //   스페인어 알파벳 차례대로 (ñ 은 n 다음). 마지막 줄이 악센트 글자.
+        const HANGMAN_ROWS = [
+            ['a','b','c','d','e','f','g','h','i'],
+            ['j','k','l','m','n','ñ','o','p','q'],
+            ['r','s','t','u','v','w','x','y','z'],
+            ['á','é','í','ó','ú','ü']
+        ];
+        let hangmanMode = 'word';        // 'word' | 'idiom' | 'mix'
+        let hangmanKeysBound = false;
+
+        function hangmanUsable(text) {
+            const t = String(text || '').trim().toLowerCase();
+            if (!t || t.length > 24) return false;
+            if (!/^[a-záéíóúüñ ]+$/.test(t)) return false;      // 자리표시자·슬래시·숫자가 든 것은 뺀다
+            return t.replace(/ /g, '').length >= 3;
+        }
+        function hangmanPool(mode) {
+            const out = [];
+            const stripArt = (s) => String(s || '').replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '');
+            if (mode !== 'idiom') {
+                getGameWordPool().forEach(w => {
+                    const t = stripArt(w.word).trim().toLowerCase();
+                    if (hangmanUsable(t)) out.push({ text: t, hint: w.meaning || '', kind: 'word' });
+                });
+            }
+            if (mode !== 'word') {
+                (vocabulary || []).forEach(w => {
+                    const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                    list.forEach(it => {
+                        const t = String(it.idiom || '').trim().toLowerCase();
+                        if (hangmanUsable(t)) out.push({ text: t, hint: it.idiomMeaning || '', kind: 'idiom' });
+                    });
+                });
+            }
+            return out;
+        }
+
+        function bindHangmanKeys() {
+            if (hangmanKeysBound) return;
+            hangmanKeysBound = true;
+            //   한 번만 달아두고 게임 중일 때만 받는다 (판마다 달면 겹쳐 쌓인다)
+            document.addEventListener('keydown', (e) => {
+                if (!gameState || gameState.type !== 'hangman') return;
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                const k = String(e.key || '').toLowerCase();
+                if (k.length === 1 && /[a-záéíóúüñ]/.test(k)) { e.preventDefault(); hangmanGuess(k); }
+            });
+        }
+
+        function startHangman(mode) {
+            if (mode) hangmanMode = mode;
+            const pool = hangmanPool(hangmanMode);
+            if (pool.length < 1) {
+                showToast(hangmanMode === 'idiom' ? "맞힐 만한 관용구가 아직 없어요!" : "게임하려면 단어가 더 있어야 해요!", "error");
+                return;
+            }
+            stopCurrentGame();
+            bindHangmanKeys();
+            gameState = { type: 'hangman', pool, solved: 0, misses: 0, current: null, guessed: [], done: false };
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <button onclick="resetGamesMenu()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">맞힌 개수 <span id="hm-solved" class="text-purple-600 text-base">0</span></span>
+                    </div>
+                    <div id="hm-modes" class="flex justify-center gap-1.5"></div>
+                    <div class="flex items-center justify-center gap-5">
+                        <div id="hm-figure" class="text-slate-700"></div>
+                        <div class="text-left space-y-1">
+                            <p class="text-[11px] font-bold text-slate-400">남은 목숨</p>
+                            <p id="hm-lives" class="text-lg"></p>
+                            <p id="hm-kind" class="text-[11px] font-bold text-slate-400"></p>
+                        </div>
+                    </div>
+                    <div class="text-center space-y-1">
+                        <p id="hm-hint" class="text-sm font-bold text-slate-500"></p>
+                        <p id="hm-word" class="text-xl sm:text-2xl font-black text-slate-900 tracking-[0.15em] break-words"></p>
+                        <p id="hm-feedback" class="text-xs font-bold h-4"></p>
+                    </div>
+                    <div id="hm-keys" class="space-y-1.5"></div>
+                </div>
+            `);
+            hangmanNext();
+        }
+
+        function hangmanNext() {
+            if (!gameState) return;
+            const pool = gameState.pool;
+            let pick = pool[Math.floor(Math.random() * pool.length)];
+            //   바로 앞엣것이 또 나오면 한 번만 다시 뽑는다
+            if (gameState.current && pool.length > 1 && pick.text === gameState.current.text) {
+                pick = pool[Math.floor(Math.random() * pool.length)];
+            }
+            gameState.current = pick;
+            gameState.guessed = [];
+            gameState.done = false;
+            hangmanRender();
+        }
+
+        //   교수대는 늘 그려두고, 틀린 만큼 사람이 하나씩 그려진다
+        function hangmanFigure(misses) {
+            const on = (n) => misses >= n ? '' : ' opacity="0"';
+            return `<svg viewBox="0 0 110 140" class="w-24 h-32" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round">
+                <line x1="8" y1="134" x2="72" y2="134"/>
+                <line x1="26" y1="134" x2="26" y2="8"/>
+                <line x1="26" y1="8" x2="76" y2="8"/>
+                <line x1="76" y1="8" x2="76" y2="24"/>
+                <circle cx="76" cy="38" r="14"${on(1)}/>
+                <line x1="76" y1="52" x2="76" y2="90"${on(2)}/>
+                <line x1="76" y1="62" x2="58" y2="78"${on(3)}/>
+                <line x1="76" y1="62" x2="94" y2="78"${on(4)}/>
+                <line x1="76" y1="90" x2="60" y2="114"${on(5)}/>
+                <line x1="76" y1="90" x2="92" y2="114"${on(6)}/>
+            </svg>`;
+        }
+
+        function hangmanMasked() {
+            const g = gameState.guessed;
+            return gameState.current.text.split('').map(ch => {
+                if (ch === ' ') return '<span class="inline-block w-4"></span>';   // 낱말 사이는 빈 자리로
+                return g.indexOf(ch) >= 0 ? escapeHtml(ch) : '<span class="text-slate-300">_</span>';
+            }).join('');
+        }
+        function hangmanIsSolved() {
+            const g = gameState.guessed;
+            return gameState.current.text.split('').every(ch => ch === ' ' || g.indexOf(ch) >= 0);
+        }
+
+        function hangmanRender() {
+            if (!gameState || !gameState.current) return;
+            const cur = gameState.current;
+            const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+            set('hm-solved', String(gameState.solved));
+            set('hm-figure', hangmanFigure(gameState.misses));
+            set('hm-lives', '❤️'.repeat(Math.max(0, HANGMAN_LIVES - gameState.misses))
+                          + '<span class="opacity-25">' + '🤍'.repeat(gameState.misses) + '</span>');
+            set('hm-kind', cur.kind === 'idiom' ? '관용구' : '단어');
+            set('hm-hint', escapeHtml(cur.hint || '(뜻 없음)'));
+            set('hm-word', hangmanMasked());
+            const modes = [['word','단어'], ['idiom','관용구'], ['mix','섞어서']];
+            set('hm-modes', modes.map(m => {
+                const on = hangmanMode === m[0];
+                return `<button type="button" onclick="startHangman('${m[0]}')" title="바꾸면 판을 새로 시작해요"
+                    class="px-3 py-1 rounded-full border text-[11px] font-bold transition-all ${on ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}">${m[1]}</button>`;
+            }).join(''));
+            set('hm-keys', HANGMAN_ROWS.map(row => `<div class="flex justify-center gap-1">${row.map(k => {
+                const used = gameState.guessed.indexOf(k) >= 0;
+                const hit = used && cur.text.indexOf(k) >= 0;
+                const cls = !used ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-purple-50 hover:border-purple-300'
+                          : (hit ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-300');
+                return `<button type="button" onclick="hangmanGuess('${k}')" ${used || gameState.done ? 'disabled' : ''}
+                    class="w-8 h-9 rounded-lg border text-sm font-black transition-all ${cls}">${k}</button>`;
+            }).join('')}</div>`).join(''));
+        }
+
+        function hangmanGuess(letter) {
+            if (!gameState || gameState.type !== 'hangman' || !gameState.current || gameState.done) return;
+            const k = String(letter || '').toLowerCase();
+            if (!k || gameState.guessed.indexOf(k) >= 0) return;
+            gameState.guessed.push(k);
+            const fb = document.getElementById('hm-feedback');
+            if (gameState.current.text.indexOf(k) >= 0) {
+                if (hangmanIsSolved()) {
+                    gameState.solved++;
+                    gameState.misses = Math.max(0, gameState.misses - 1);   // 한 개 맞히면 한 칸 지워준다
+                    gameState.done = true;
+                    hangmanRender();
+                    if (fb) { fb.innerHTML = `🎉 맞혔어요! <span class="text-slate-400">목숨 한 칸 회복</span>`; fb.className = 'text-xs font-bold h-4 text-emerald-600'; }
+                    AudioFX.playSuccess();
+                    setTimeout(() => { if (gameState && gameState.type === 'hangman') hangmanNext(); }, 1100);
+                    return;
+                }
+                if (fb) { fb.innerText = '있어요!'; fb.className = 'text-xs font-bold h-4 text-emerald-600'; }
+                AudioFX.playPunch();
+            } else {
+                gameState.misses++;
+                AudioFX.playError();
+                if (gameState.misses >= HANGMAN_LIVES) {
+                    gameState.done = true;
+                    hangmanRender();
+                    setTimeout(hangmanEnd, 500);
+                    return;
+                }
+                if (fb) { fb.innerText = `없어요 (${HANGMAN_LIVES - gameState.misses}칸 남음)`; fb.className = 'text-xs font-bold h-4 text-rose-500'; }
+            }
+            hangmanRender();
+        }
+
+        function hangmanEnd() {
+            if (!gameState) return;
+            const solved = gameState.solved;
+            const answer = gameState.current ? gameState.current.text : '';
+            const hint = gameState.current ? gameState.current.hint : '';
+            stopCurrentGame();
+            try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
+            const isNewRecord = setGameHighScore('hangman', solved);
+            const highScore = getGameHighScore('hangman');
+            showGamePlayArea(`
+                <div class="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4">
+                    <div class="text-6xl">🪢</div>
+                    <h3 class="text-xl font-black text-slate-900">여기까지!</h3>
+                    <p class="text-4xl font-black text-purple-600">${solved}개</p>
+                    ${isNewRecord ? '<p class="text-sm font-black text-amber-500">🎉 최고 기록 갱신!</p>' : `<p class="text-xs font-bold text-slate-400">최고 기록: ${highScore}개</p>`}
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1">
+                        <p class="text-[11px] font-bold text-slate-400">못 맞힌 것</p>
+                        <p class="text-lg font-black text-slate-800">${escapeHtml(answer)}</p>
+                        <p class="text-xs font-semibold text-slate-500">${escapeHtml(hint || '')}</p>
+                    </div>
+                    <div class="flex gap-2 justify-center pt-2">
+                        <button onclick="startHangman()" class="bg-purple-500 hover:bg-purple-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all">다시 하기</button>
+                        <button onclick="resetGamesMenu()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-all">게임 목록</button>
+                    </div>
+                </div>
+            `);
+        }
 
         // ============================================================
         // 복습 탭 공통
