@@ -144,6 +144,57 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         // ============================================================
+        // [냐냐 요청] 시제가 비어 있는 동사를 단어장 맨 위에서 알려준다 (2026-09-08).
+        //   시제가 비면 첨삭이 그 활용형을 못 알아본다 — 'puedo' 를 poder 의 꼴로 못 보고
+        //   '아직 단어장에 없어요' 에 새 낱말로 띄웠다. 왜 종종 비는지는 아직 모른다.
+        //   ⚠️ 내가 쓰는 시제만 본다. 시제는 열 가지라 다 채우라고 하면 알림이 영영 안 없어진다.
+        //      '동사 과반이 채워둔 시제' 를 내가 쓰는 시제로 본다 — 새 시제를 배워 채워 나가면
+        //      절반을 넘는 순간부터 저절로 낀다. 목록을 손으로 관리할 필요가 없다.
+        //      (동사가 몇 개 없을 때 아무 시제나 끼지 않게 최소 개수도 같이 본다)
+        const TENSE_ALERT_MIN_VERBS = 3;
+        let tenseAlertHidden = false;   // 이번에 켜둔 동안만 접어둔다 — 저장하지 않는다
+        function tenseGapSummary() {
+            if (typeof vocabulary === 'undefined') return { rows: [], verbs: 0 };
+            const verbs = vocabulary.filter(v => v && v.pos === 'verb');
+            const rows = [];
+            if (verbs.length < TENSE_ALERT_MIN_VERBS) return { rows, verbs: verbs.length };
+            TENSE_TYPE_OPTIONS.forEach(o => {
+                const have = verbs.filter(v => getTenseConj(v, o.key)).length;
+                if (have < TENSE_ALERT_MIN_VERBS || have * 2 <= verbs.length) return;   // 안 쓰는 시제
+                const miss = verbs.length - have;
+                //   칩에는 짧은 이름을 쓴다 ('과거분사 (participio · 1칸)' → '과거분사')
+                if (miss > 0) rows.push({ key: o.key, label: o.label.replace(/\s*\(.*\)\s*$/, ''), miss });
+            });
+            rows.sort((a, b) => b.miss - a.miss);
+            return { rows, verbs: verbs.length };
+        }
+        function hideTenseGapAlert() { tenseAlertHidden = true; renderTenseGapAlert(); }
+        function renderTenseGapAlert() {
+            const box = document.getElementById('vocab-tense-alert');
+            if (!box) return;
+            const { rows, verbs } = tenseGapSummary();
+            if (tenseAlertHidden || !rows.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            const chip = (r) => `<button type="button" onclick="openBulkConj('${escapeAttr(r.key)}')"
+                title="${escapeAttr(r.label)} 비어 있는 ${r.miss}개를 AI로 채워요"
+                class="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-100 border border-amber-200 text-[11px] font-bold text-amber-800 transition-all active:scale-95">
+                ${escapeHtml(r.label)} <b class="text-amber-600">${r.miss}개</b></button>`;
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-2 flex items-start gap-3">
+                    <span class="text-base leading-none mt-0.5 shrink-0">⏰</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-black text-amber-800">시제가 비어 있는 동사가 있어요</p>
+                        <p class="text-[11px] font-semibold text-amber-700/80 mt-0.5">
+                            비어 있으면 첨삭이 그 활용형을 못 알아봐요 (puedo 를 poder 로 못 봐요). 동사 ${verbs}개 기준이에요.</p>
+                        <div class="flex flex-wrap gap-1.5 mt-2">${rows.map(chip).join('')}</div>
+                    </div>
+                    <button type="button" onclick="hideTenseGapAlert()" title="이번엔 접어두기"
+                        class="shrink-0 text-amber-400 hover:text-amber-700 transition-colors text-xs px-1">
+                        <i class="fa-solid fa-xmark"></i></button>
+                </div>`;
+        }
+
+        // ============================================================
         // [냐냐 요청] '불규칙'이라고 적혀 있지만 실제로는 규칙형인 시제를 걸러낸다.
         //   AI 가 단어를 채울 때, 다른 시제의 불규칙을 현재시제에 잘못 붙이는 일이 있었다.
         //   abrir 은 과거분사(abierto)가 불규칙인데 현재시제가 '1인칭 불규칙'으로 저장돼서
@@ -436,8 +487,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             openBulkConj();
         }
 
-        function openBulkConj() {
-            bulkConjState = { tense: 'gerundio', targets: [], rows: [], running: false, cancelled: false, failed: [] };
+        //   [냐냐 요청] 시제를 지정해서 열 수 있다 — 맨 위 알림의 칩이 그 시제로 바로 연다.
+        function openBulkConj(tense) {
+            const start = TENSE_TYPE_OPTIONS.some(o => o.key === tense) ? tense : 'gerundio';
+            bulkConjState = { tense: start, targets: [], rows: [], running: false, cancelled: false, failed: [] };
             const modal = document.getElementById('bulk-conj-modal');
             if (modal) modal.classList.remove('hidden');
             const sel = document.getElementById('bulk-conj-tense');
@@ -4366,6 +4419,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function renderWordList() {
             renderStreakBadge();
             renderTodayReview();
+            renderTenseGapAlert();
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const rawSearchVal = document.getElementById('search-bar').value.trim().toLowerCase();
