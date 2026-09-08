@@ -3385,24 +3385,29 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             writeTenses = on ? writeTenseOptions().map(o => o.key).filter(k => writeVerbsFor(k)) : [];
             renderWriteTenses();
         }
+        //   [냐냐 지적] 채워진 동사가 없는 시제는 아예 안 그린다 — 열 칸 중 일곱이 0 으로
+        //   흐려져 있으니 조잡했다. 남는 건 실제로 낼 수 있는 것뿐이라 칩 한 줄이면 된다.
+        //   짧은 이름으로 줄인다 ('현재분사 (gerundio · 1칸)' 은 칩에 넣기엔 길다).
+        const WRITE_TENSE_SHORT = { gerundio: '현재분사', participio: '과거분사' };
         function renderWriteTenses() {
             const box = document.getElementById('write-tense-list');
+            const live = writeTenseOptions().map(o => ({ o, n: writeVerbsFor(o.key) })).filter(x => x.n);
             if (box) {
-                box.innerHTML = writeTenseOptions().map(o => {
-                    const n = writeVerbsFor(o.key);
-                    const on = writeTenses.includes(o.key);
-                    const dim = n === 0;
-                    return `<button type="button" onclick="toggleWriteTense('${o.key}')" ${dim ? 'disabled' : ''}
-                        class="flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all ${dim ? 'border-slate-100 text-slate-300 cursor-default' : (on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}">
-                        <span class="truncate">${on ? '✓ ' : ''}${escapeHtml(o.label)}</span>
-                        <span class="shrink-0 ${dim ? 'text-slate-300' : 'text-slate-400'}">${n}</span>
-                    </button>`;
-                }).join('');
+                box.innerHTML = live.length
+                    ? live.map(({ o, n }) => {
+                        const on = writeTenses.includes(o.key);
+                        const label = WRITE_TENSE_SHORT[o.key] || o.label;
+                        return `<button type="button" onclick="toggleWriteTense('${o.key}')"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[11px] font-bold transition-all ${on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}">
+                            ${on ? '✓ ' : ''}${escapeHtml(label)}<span class="text-[10px] font-semibold ${on ? 'text-indigo-400' : 'text-slate-400'}">${n}</span>
+                        </button>`;
+                    }).join('')
+                    : '<span class="text-[11px] text-slate-400">활용을 채워둔 동사가 아직 없어요</span>';
             }
             const hint = document.getElementById('write-tense-hint');
             if (hint) hint.innerText = writeTenses.length
-                ? `고른 시제로만 물어봐요 (그 시제가 없는 동사는 원형으로)`
-                : `안 고르면 그 동사에 채워진 시제 중 아무거나 나와요`;
+                ? '고른 시제로만 물어봐요 (그 시제가 없는 동사는 원형으로)'
+                : '안 고르면 아무 시제나 나와요';
         }
 
         function selectWriteScope(scope) {
