@@ -4499,13 +4499,32 @@ ${noteListText}
                 }
                 // 3) 형용사: 남성형으로 등록됐어도 여성형/복수형이면 같은 단어로 취급
                 if (v.pos === 'adjective') {
+                    // [냐냐 지적] 'nueve'(9)를 'nuevo'(새로운)로 받아 점수를 줬다 (2026-09-08).
+                    //   어간(nuev)에 아무 형용사 어미나 붙여봐서 그랬다. 스페인어 형용사는
+                    //   갈래마다 바뀌는 어미가 정해져 있다 — -o 는 o/a/os/as 로만 가고 -e 로는 안 간다.
+                    //   갈래별로 만들 수 있는 꼴만 적어두고 글자가 그대로 맞을 때만 인정한다.
+                    //   (덤으로 'granda' 같은 없는 꼴이 떨어지고, 'felices' 가 새로 걸린다)
                     const base = normalizeSpanishAnswer(v.word);
-                    const stem = base.replace(/(o|a|os|as|e|es)$/, '');
-                    // 어간이 충분히 길고, 대상이 같은 어간으로 시작하며 형용사 어미로 끝나면 같은 단어
-                    //   어간만 보는 느슨한 추측이라 등급은 가장 낮다
-                    if (stem.length >= 2 && target.startsWith(stem) && /^(o|a|os|as|e|es)?$/.test(target.slice(stem.length))) {
-                        offer(v, FVBF_RANK.ADJ_STEM);
+                    const forms = new Set([base]);
+                    if (/[oa]s$/.test(base)) {
+                        const st = base.slice(0, -2);
+                        ['o', 'a', 'os', 'as'].forEach(sfx => forms.add(st + sfx));
+                    } else if (/[oa]$/.test(base)) {
+                        const st = base.slice(0, -1);
+                        ['o', 'a', 'os', 'as'].forEach(sfx => forms.add(st + sfx));
+                    } else if (/es$/.test(base)) {
+                        forms.add(base.slice(0, -1));           // grandes → grande
+                        forms.add(base.slice(0, -2));           // faciles → facil
+                    } else if (/e$/.test(base)) {
+                        forms.add(base + 's');                  // grande → grandes
+                    } else {
+                        //   자음으로 끝나는 것 — 여성형이 있는 갈래가 있다 (trabajador → trabajadora,
+                        //   español → española). 없는 갈래(fácil)에 'facila' 가 늘어봐야 진짜 낱말이
+                        //   아니라서 헛짚을 데가 없다.
+                        ['a', 'es', 'as'].forEach(sfx => forms.add(base + sfx));
+                        if (/z$/.test(base)) forms.add(base.slice(0, -1) + 'ces');   // feliz → felices
                     }
+                    if (forms.has(target)) offer(v, FVBF_RANK.ADJ_STEM);
                 }
                 // 4) 명사: 단수형 등록됐으면 복수형도 같은 단어로 취급 (그 반대도)
                 if (v.pos === 'noun') {
