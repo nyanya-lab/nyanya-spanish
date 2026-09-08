@@ -4518,10 +4518,16 @@ ${noteListText}
                     } else if (/e$/.test(base)) {
                         forms.add(base + 's');                  // grande → grandes
                     } else {
-                        //   자음으로 끝나는 것 — 여성형이 있는 갈래가 있다 (trabajador → trabajadora,
-                        //   español → española). 없는 갈래(fácil)에 'facila' 가 늘어봐야 진짜 낱말이
-                        //   아니라서 헛짚을 데가 없다.
-                        ['a', 'es', 'as'].forEach(sfx => forms.add(base + sfx));
+                        //   자음으로 끝나는 것은 복수 -es 만 붙고 여성형이 없는 게 보통이다
+                        //   (fácil·azul·gris·feliz·social — 'facila' 는 없는 낱말이다).
+                        //   여성형을 만드는 갈래는 -or 와 -án/-ón/-ín, 그리고 -ol(español)뿐이다.
+                        //   [냐냐 지적] 처음엔 자음 전부에 -a 를 열어뒀는데, 실제 형용사 222개 중
+                        //   자음으로 끝나는 30개를 세어보니 여성형이 있는 건 trabajador 하나였다.
+                        forms.add(base + 'es');
+                        if (/(or|ol|an|on|in)$/.test(base)) {
+                            forms.add(base + 'a');
+                            forms.add(base + 'as');
+                        }
                         if (/z$/.test(base)) forms.add(base.slice(0, -1) + 'ces');   // feliz → felices
                     }
                     if (forms.has(target)) offer(v, FVBF_RANK.ADJ_STEM);
