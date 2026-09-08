@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609081606">
+    <link rel="stylesheet" href="css/style.css?v=202609081618">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -2224,7 +2224,7 @@
 
     <!-- [냐냐 요청] 복습 배너 → 몇 번에 나눠 할지 먼저 고르기 -->
     <div id="review-split-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-5 text-center">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-5 text-center max-h-[90vh] overflow-y-auto">
             <div>
                 <div class="text-4xl">📖</div>
                 <h3 class="text-base font-bold text-slate-900 mt-2">몇 번에 나눠서 할까요?</h3>
@@ -2245,6 +2245,17 @@
             </div>
 
             <div id="review-split-list" class="flex flex-wrap justify-center gap-1.5"></div>
+
+            <!-- [냐냐 요청] 여기서도 동사를 어느 시제로 물을지 고른다 (renderWriteTenses).
+                 쓰기 연습 탭의 설정과 같은 값이라 어디서 고치든 따라오고, 저장·동기화도 그대로다. -->
+            <div class="pt-3 border-t border-slate-100 text-left">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">동사를 물어볼 시제</span>
+                    <button type="button" id="review-tense-toggle-all" class="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors">전체</button>
+                </div>
+                <div id="review-tense-list" class="flex flex-wrap gap-1.5"></div>
+                <p id="review-tense-hint" class="text-[10px] text-slate-400 font-semibold mt-1.5"></p>
+            </div>
 
             <div class="flex gap-2 pt-1">
                 <button onclick="closeReviewSplitModal()" class="flex-1 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
@@ -2324,13 +2335,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609081606"></script>
-    <script src="js/creatures.js?v=202609081606"></script>
-    <script src="js/core.js?v=202609081606"></script>
-    <script src="js/vocab.js?v=202609081606"></script>
-    <script src="js/flashcards.js?v=202609081606"></script>
-    <script src="js/quiz.js?v=202609081606"></script>
-    <script src="js/games.js?v=202609081606"></script>
-    <script src="js/ai-feedback.js?v=202609081606"></script>
+    <script src="js/dictionary-data.js?v=202609081618"></script>
+    <script src="js/creatures.js?v=202609081618"></script>
+    <script src="js/core.js?v=202609081618"></script>
+    <script src="js/vocab.js?v=202609081618"></script>
+    <script src="js/flashcards.js?v=202609081618"></script>
+    <script src="js/quiz.js?v=202609081618"></script>
+    <script src="js/games.js?v=202609081618"></script>
+    <script src="js/ai-feedback.js?v=202609081618"></script>
 </body>
 </html>

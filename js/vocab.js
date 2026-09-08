@@ -3475,10 +3475,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   흐려져 있으니 조잡했다. 개수도 뺐다 (고르는 데 쓰는 값이 아니다).
         //   짧은 이름으로 줄인다 ('현재분사 (gerundio · 1칸)' 은 칩에 넣기엔 길다).
         const WRITE_TENSE_SHORT = { gerundio: '현재분사', participio: '과거분사' };
+        //   [냐냐 요청] 같은 설정을 두 곳에서 만진다 (2026-09-08) — 쓰기 연습 탭의 설정과,
+        //   복습 배너를 눌렀을 때 뜨는 '몇 번에 나눠서 할까요?' 창. 값은 하나(writeTenses)라
+        //   어디서 고치든 같이 따라오고 저장·동기화도 그대로다. 그릴 자리만 둘로 늘렸다.
+        const WRITE_TENSE_BOXES = [
+            { list: 'write-tense-list', all: 'write-tense-toggle-all', hint: 'write-tense-hint' },
+            { list: 'review-tense-list', all: 'review-tense-toggle-all', hint: 'review-tense-hint' }
+        ];
         function renderWriteTenses() {
             const picked = ensureWriteTenses();
             const live = writeLiveTenseKeys();
-            const box = document.getElementById('write-tense-list');
+            WRITE_TENSE_BOXES.forEach(ids => renderWriteTenseBox(ids, picked, live));
+        }
+        function renderWriteTenseBox(ids, picked, live) {
+            const box = document.getElementById(ids.list);
             if (box) {
                 box.innerHTML = live.length
                     ? live.map(k => {
@@ -3494,13 +3504,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
             //   버튼 하나로 — 다 켜져 있으면 '모두 빼기', 아니면 '전체'
             const allOn = live.length > 0 && live.every(k => picked.includes(k));
-            const btn = document.getElementById('write-tense-toggle-all');
+            const btn = document.getElementById(ids.all);
             if (btn) {
                 btn.innerText = allOn ? '모두 빼기' : '전체';
                 btn.setAttribute('onclick', `setWriteTensesAll(${allOn ? 'false' : 'true'})`);
                 btn.classList.toggle('hidden', !live.length);
             }
-            const hint = document.getElementById('write-tense-hint');
+            const hint = document.getElementById(ids.hint);
             if (hint) hint.innerText = !picked.length
                 ? '다 뺐어요 — 동사도 원형으로 물어봐요'
                 : (allOn ? '등록된 시제에서 아무거나 나와요'

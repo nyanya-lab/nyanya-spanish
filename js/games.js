@@ -1191,6 +1191,8 @@
             const plus = document.getElementById('review-split-plus');
             if (minus) minus.disabled = todayReviewParts <= 1;
             if (plus) plus.disabled = todayReviewParts >= 5;
+            // [냐냐 요청] 시작하기 전에 여기서 시제를 고칠 수 있다 (쓰기 연습 탭과 같은 값)
+            if (typeof renderWriteTenses === 'function') renderWriteTenses();
         }
 
         function closeReviewSplitModal() {
