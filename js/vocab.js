@@ -10,11 +10,14 @@
         }
 
         // [냐냐 요청] 철자가 같고 품사가 다른 낱말(futuro 명사/형용사, presente, derecho…)을
-        //   등록할 때, 품사를 먼저 골라두면 AI 추천이 그 품사의 뜻으로 채워주게 한다 (2026-09-09).
-        //   ⚠️ 품사 칸은 기본값이 '명사' 라서 '골랐는지' 를 값만으로는 알 수 없다.
-        //      직접 바꿨을 때만 표시를 세운다. 수정 모드는 이미 정해진 품사라 처음부터 세워둔다.
-        let posUserPicked = false;
-        function onPosPicked() { posUserPicked = true; togglePosFields(); }
+        //   등록할 때, 품사를 먼저 골라두면 AI 추천이 그 품사의 뜻으로 채워준다 (2026-09-09).
+        //   새 단어의 품사 칸은 **비워둔 채로 시작한다** — 기본값이 '명사' 이던 때는 안 고른 것과
+        //   일부러 명사로 고른 것을 가릴 수가 없었다. 비어 있으면 AI 가 알아서 고르고,
+        //   골라뒀으면 그 품사로만 채운다. 수정 모드는 이미 품사가 있으니 저절로 '고른 것' 이 된다.
+        function pickedPosValue() {
+            const el = document.getElementById('input-pos');
+            return el ? el.value : '';
+        }
 
         function togglePosFields() {
             const pos = document.getElementById('input-pos').value;
@@ -864,7 +867,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 document.getElementById('input-word').value = w.word;
                 document.getElementById('input-meaning').value = w.meaning;
                 document.getElementById('input-pos').value = w.pos || 'noun';
-                posUserPicked = true;      // 수정 모드는 이미 정해진 품사다
                 document.getElementById('input-gender').value = w.gender || 'none';
                 document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
 
@@ -895,8 +897,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 document.getElementById('modal-word-id').value = '';
                 document.getElementById('input-word').value = '';
                 document.getElementById('input-meaning').value = '';
-                document.getElementById('input-pos').value = 'noun';
-                posUserPicked = false;     // 새로 등록하는 것은 아직 안 고른 상태
+                document.getElementById('input-pos').value = '';   // 안 고른 채로 시작
                 document.getElementById('input-gender').value = 'none';
                 document.getElementById('input-adj-agreement').value = 'full';
 
@@ -1665,7 +1666,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
             //   [냐냐 요청] 품사를 직접 골라뒀으면 그 품사의 뜻으로만 채우게 한다.
             //   futuro 는 명사(미래)이자 형용사(미래의)라, 안 알려주면 AI 가 제 마음대로 고른다.
-            const pickedPos = posUserPicked ? document.getElementById('input-pos').value : '';
+            const pickedPos = pickedPosValue();
             const pickedPosLine = pickedPos ? `
             ⚠️ 가장 중요: 이 단어를 **"${(typeof POS_LABELS !== 'undefined' && POS_LABELS[pickedPos]) || pickedPos}"(pos="${pickedPos}")로만** 분석하세요.
                철자가 같아도 품사에 따라 뜻이 다른 단어입니다 (futuro = 명사 '미래' / 형용사 '미래의').
@@ -1934,10 +1935,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function applyAutofillResult(result, forceOverwrite = false) {
             //   [냐냐 요청] 내가 고른 품사가 이긴다. 여기서 못박아야 아래의 성별·형용사·동사
             //   갈래도 그 품사를 따라간다 (AI 가 딴 품사를 보내면 칸이 엉뚱하게 열렸다).
-            if (result && posUserPicked) {
-                const picked = document.getElementById('input-pos').value;
-                if (picked) result.pos = picked;
-            }
+            const pickedNow = pickedPosValue();
+            if (result && pickedNow) result.pos = pickedNow;
             // 의문사 보정
             if (result && result.pos) {
                 const rawW = document.getElementById('input-word') ? document.getElementById('input-word').value : '';
@@ -1952,7 +1951,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             const posInput = document.getElementById('input-pos');
-            if (forceOverwrite || posInput.value === 'noun') {
+            //   비어 있을 때만 AI 가 준 품사를 넣는다 (골라둔 것은 위에서 이미 이겼다)
+            if (forceOverwrite || !posInput.value) {
                 posInput.value = result.pos || 'noun';
             }
             togglePosFields();
@@ -2470,6 +2470,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 showToast("단어 이름과 뜻은 필수입니다!", "error");
                 return;
             }
+            //   품사는 비워둔 채로 시작하므로 저장 전에 한 번 막는다 (AI 추천을 받으면 저절로 채워진다)
+            if (!pickedPosValue()) {
+                showToast("품사를 골라주세요!", "error");
+                const el = document.getElementById('input-pos');
+                if (el) el.focus();
+                return;
+            }
 
             const modalId = document.getElementById('modal-word-id').value;
 
@@ -2650,7 +2657,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             document.getElementById('modal-word-id').value = '';
             document.getElementById('input-word').value = '';
             document.getElementById('input-meaning').value = '';
-            document.getElementById('input-pos').value = 'noun';
+            document.getElementById('input-pos').value = '';   // 이어서 등록할 때도 비워둔다
             document.getElementById('input-gender').value = 'none';
             document.getElementById('input-adj-agreement').value = 'full';
             clearConjugationFields();
