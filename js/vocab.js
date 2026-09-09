@@ -9,6 +9,13 @@
             if (el) { el.value = ''; el.focus(); }
         }
 
+        // [냐냐 요청] 철자가 같고 품사가 다른 낱말(futuro 명사/형용사, presente, derecho…)을
+        //   등록할 때, 품사를 먼저 골라두면 AI 추천이 그 품사의 뜻으로 채워주게 한다 (2026-09-09).
+        //   ⚠️ 품사 칸은 기본값이 '명사' 라서 '골랐는지' 를 값만으로는 알 수 없다.
+        //      직접 바꿨을 때만 표시를 세운다. 수정 모드는 이미 정해진 품사라 처음부터 세워둔다.
+        let posUserPicked = false;
+        function onPosPicked() { posUserPicked = true; togglePosFields(); }
+
         function togglePosFields() {
             const pos = document.getElementById('input-pos').value;
             const nounDetails = document.getElementById('field-noun-details');
@@ -857,7 +864,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 document.getElementById('input-word').value = w.word;
                 document.getElementById('input-meaning').value = w.meaning;
                 document.getElementById('input-pos').value = w.pos || 'noun';
-                
+                posUserPicked = true;      // 수정 모드는 이미 정해진 품사다
                 document.getElementById('input-gender').value = w.gender || 'none';
                 document.getElementById('input-adj-agreement').value = w.adjAgreement || 'full';
 
@@ -889,6 +896,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 document.getElementById('input-word').value = '';
                 document.getElementById('input-meaning').value = '';
                 document.getElementById('input-pos').value = 'noun';
+                posUserPicked = false;     // 새로 등록하는 것은 아직 안 고른 상태
                 document.getElementById('input-gender').value = 'none';
                 document.getElementById('input-adj-agreement').value = 'full';
 
@@ -1655,7 +1663,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             showAiLoadingOverlay();
 
             // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
-            const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.
+            //   [냐냐 요청] 품사를 직접 골라뒀으면 그 품사의 뜻으로만 채우게 한다.
+            //   futuro 는 명사(미래)이자 형용사(미래의)라, 안 알려주면 AI 가 제 마음대로 고른다.
+            const pickedPos = posUserPicked ? document.getElementById('input-pos').value : '';
+            const pickedPosLine = pickedPos ? `
+            ⚠️ 가장 중요: 이 단어를 **"${(typeof POS_LABELS !== 'undefined' && POS_LABELS[pickedPos]) || pickedPos}"(pos="${pickedPos}")로만** 분석하세요.
+               철자가 같아도 품사에 따라 뜻이 다른 단어입니다 (futuro = 명사 '미래' / 형용사 '미래의').
+               meaning·example·exampleMeaning·notes·synonyms 를 전부 그 품사로 쓰이는 경우로 채우고,
+               pos 는 반드시 "${pickedPos}" 로 두세요. 다른 품사의 뜻은 섞지 마세요.` : '';
+            const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.${pickedPosLine}
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
@@ -1916,6 +1932,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function applyAutofillResult(result, forceOverwrite = false) {
+            //   [냐냐 요청] 내가 고른 품사가 이긴다. 여기서 못박아야 아래의 성별·형용사·동사
+            //   갈래도 그 품사를 따라간다 (AI 가 딴 품사를 보내면 칸이 엉뚱하게 열렸다).
+            if (result && posUserPicked) {
+                const picked = document.getElementById('input-pos').value;
+                if (picked) result.pos = picked;
+            }
             // 의문사 보정
             if (result && result.pos) {
                 const rawW = document.getElementById('input-word') ? document.getElementById('input-word').value : '';
