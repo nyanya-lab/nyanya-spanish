@@ -1173,7 +1173,7 @@
                         ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none">${num}</span>` : ''}
                         <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
-                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
+                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
                     </div>`;
                 }
                 html += '</div>';
