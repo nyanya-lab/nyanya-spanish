@@ -104,7 +104,10 @@
             // [냐냐 요청] 행맨도 점수에 넣는다 (2026-09-08). 글자를 하나씩 알려주는 게임이라
             //   맞힌 것은 조금만(+0.3) 쳐주고, 끝내 못 맞힌 그 하나만 -2 로 세게 물린다.
             //   -2 는 correct:false 로 들어가서 망각곡선에도 같이 들어간다.
-            hangman: { correct: 0.3, wrong: -2 }
+            hangman: { correct: 0.3, wrong: -2 },
+            // [냐냐 요청] 십자말풀이는 낱말 하나가 한 문제다. 악센트까지 맞으면 +1.5,
+            //   악센트만 틀리면 0(안 건드림), 비었거나 틀리면 -2.
+            crossword: { correct: 1.5, wrong: -2 }
         };
         function applyGameScore(wordId, isCorrect, gameType = 'rapid') {
             const rule = GAME_SCORE[gameType] || GAME_SCORE.rapid;
@@ -197,7 +200,10 @@
             });
             if (changed) { try { localStorage.setItem(CW_BEST_KEY, JSON.stringify(bests)); } catch (e) {} }
         }
-        function fmtSecs(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+        function fmtSecs(s) {
+            if (typeof s !== 'number' || !Number.isFinite(s)) return '—';   // 기록을 못 적었을 때 NaN:NaN 방지
+            return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        }
 
         function setGameHighScore(gameType, score) {
             let isNewAllTime = false;
@@ -1052,7 +1058,7 @@
             const put = (item, r, c, dir) => {
                 const dr = dir === 'down' ? 1 : 0, dc = dir === 'across' ? 1 : 0;
                 for (let i = 0; i < item.text.length; i++) cells.set(key(r + dr * i, c + dc * i), item.text[i]);
-                placed.push({ text: item.text, hint: item.hint, row: r, col: c, dir });
+                placed.push({ text: item.text, hint: item.hint, id: item.id, row: r, col: c, dir });
                 minR = Math.min(minR, r); maxR = Math.max(maxR, r + dr * (item.text.length - 1));
                 minC = Math.min(minC, c); maxC = Math.max(maxC, c + dc * (item.text.length - 1));
             };
@@ -1148,7 +1154,7 @@
                         <button onclick="cwReveal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">답 보기</button>
                         <button onclick="startCrossword()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95">새 격자</button>
                     </div>
-                    <p class="text-center text-[11px] text-slate-400 font-semibold">악센트는 없이 쳐도 맞아요 (á → a, ñ → n). 다 맞히면 제 꼴로 바뀌어요.</p>
+                    <p class="text-center text-[11px] text-slate-400 font-semibold">악센트는 없이 쳐도 칸은 맞아요 (á → a, ñ → n). 다만 점수는 <b>악센트까지 맞아야 +1.5</b>, 없이 쓰면 0점이에요.</p>
                     <div id="cw-clues" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100"></div>
                 </div>
             `);
@@ -1267,6 +1273,41 @@
             }
         }
 
+        //   [냐냐 요청] 십자말풀이도 점수에 넣는다 (2026-09-10). 낱말 하나가 한 문제다.
+        //     악센트까지 그대로 = +1.5 / 악센트만 틀림 = 0 (점수도 곡선도 안 건드림) / 비었거나 틀림 = -2.
+        //   -2 는 correct:false 라 망각곡선에도 들어간다.
+        //   ⚠️ 다 맞혀서 끝나면 -2 가 나올 일이 없다 — '확인' 이 악센트를 안 따지기 때문이다.
+        //      -2 는 '답 보기' 로 끝냈을 때 못 채운 낱말이 맞는다.
+        //   ⚠️ 칸을 정답으로 갈아치우기 '전' 에 불러야 한다.
+        function cwScoreAll() {
+            if (!gameState || gameState.scored) return { good: 0, meh: 0, bad: 0 };
+            gameState.scored = true;
+            const rule = GAME_SCORE.crossword;
+            let good = 0, meh = 0, bad = 0;
+            gameState.board.placed.forEach(p => {
+                let typed = '';
+                for (let i = 0; i < p.text.length; i++) {
+                    const el = cwCellAt(p.row + (p.dir === 'down' ? i : 0), p.col + (p.dir === 'across' ? i : 0));
+                    typed += (el ? String(el.value || '').trim() : '');
+                }
+                const exact = typed.toLowerCase() === p.text;
+                const loose = cwNorm(typed) === cwNorm(p.text);
+                if (exact) good++; else if (loose) meh++; else bad++;
+                if (!p.id || typeof addWordScore !== 'function') return;
+                if (exact) addWordScore(p.id, rule.correct, { correct: true });
+                else if (!loose) addWordScore(p.id, rule.wrong, { correct: false });
+            });
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            return { good, meh, bad };
+        }
+        function cwScoreLine(r) {
+            const bits = [];
+            if (r.good) bits.push(`<span class="text-emerald-600">+1.5 × ${r.good}</span>`);
+            if (r.meh) bits.push(`<span class="text-slate-400">악센트 0점 × ${r.meh}</span>`);
+            if (r.bad) bits.push(`<span class="text-rose-500">−2 × ${r.bad}</span>`);
+            return bits.join(' · ');
+        }
+
         //   맞았는지 본다. 다 맞으면 격자를 잠그고 악센트가 붙은 제 꼴로 바꿔준다.
         function cwCheck(silent) {
             if (!gameState || gameState.type !== 'crossword') return false;
@@ -1297,6 +1338,7 @@
             gameState.done = true;
             const secs = Math.floor((Date.now() - gameState.startedAt) / 1000);
             if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
+            const scored = cwScoreAll();          // 칸을 갈아치우기 전에 매긴다
             const b = gameState.board;
             Array.from(b.grid).forEach(e => {
                 const p = e[0].split(',');
@@ -1310,10 +1352,12 @@
             const isBest = setCrosswordBest(crosswordSize, secs);
             const msg = document.getElementById('cw-msg');
             if (msg) {
-                msg.innerHTML = isBest
+                const head = isBest
                     ? `🎉 다 맞혔어요! <span class="text-amber-500">${fmtSecs(secs)} — 이 크기 최고 기록!</span>`
                     : `🎉 다 맞혔어요! <span class="text-slate-400">${fmtSecs(secs)} · 최고 ${fmtSecs(getCrosswordBests()[crosswordSize])}</span>`;
-                msg.className = 'text-center text-xs font-bold h-4 text-emerald-600';
+                const line = cwScoreLine(scored);
+                msg.innerHTML = head + (line ? `<br><span class="font-semibold">${line}</span>` : '');
+                msg.className = 'text-center text-xs font-bold min-h-4 text-emerald-600';
             }
             AudioFX.playSuccess();
             try { if (typeof logAction === 'function') logAction('game'); } catch (e) {}
@@ -1321,6 +1365,7 @@
 
         function cwReveal() {
             if (!gameState || gameState.type !== 'crossword') return;
+            const scored = cwScoreAll();          // 답을 펴기 전에 매긴다 — 못 채운 낱말이 -2
             const b = gameState.board;
             Array.from(b.grid).forEach(e => {
                 const p = e[0].split(',');
@@ -1334,7 +1379,11 @@
             if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
             gameState.done = true;
             const msg = document.getElementById('cw-msg');
-            if (msg) { msg.innerText = '답을 폈어요. 새 격자로 다시 해볼까요?'; msg.className = 'text-center text-xs font-bold h-4 text-slate-400'; }
+            if (msg) {
+                const line = cwScoreLine(scored);
+                msg.innerHTML = '답을 폈어요. 새 격자로 다시 해볼까요?' + (line ? `<br><span class="font-semibold">${line}</span>` : '');
+                msg.className = 'text-center text-xs font-bold min-h-4 text-slate-400';
+            }
         }
 
         // ============================================================
