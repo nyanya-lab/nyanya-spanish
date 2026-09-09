@@ -1092,21 +1092,28 @@
             });
             placed.forEach(p => { p.row -= minR; p.col -= minC; });
 
-            //   번호 매기기 — 읽는 차례대로, 낱말이 시작하는 칸에만
+            //   [냐냐 요청] 번호는 낱말마다 다르게 매긴다 (2026-09-10). 보통 십자말풀이는 한 칸이
+            //   가로·세로를 같이 시작하면 번호 하나를 나눠 쓰는데, 같은 번호가 두 목록에 나오는 게
+            //   헷갈린다고 하셔서 1번부터 끝까지 안 겹치게 준다.
+            //   ⚠️ 그래서 한 칸에 번호가 둘 붙을 수 있다 — 가로는 왼쪽 위, 세로는 오른쪽 위에 그린다.
+            //   차례는 그대로 읽는 순서(위→아래, 왼→오른)이고, 같은 칸이면 가로를 먼저 준다.
             const rows = maxR - minR + 1, cols = maxC - minC + 1;
-            const nums = new Map();
+            const numsAcross = new Map(), numsDown = new Map();
             let n = 0;
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    if (!grid.has(r + ',' + c)) continue;
-                    const startsAcross = !grid.has(r + ',' + (c - 1)) && grid.has(r + ',' + (c + 1));
-                    const startsDown = !grid.has((r - 1) + ',' + c) && grid.has((r + 1) + ',' + c);
-                    if (startsAcross || startsDown) nums.set(r + ',' + c, ++n);
+                    const k = r + ',' + c;
+                    if (!grid.has(k)) continue;
+                    if (!grid.has(r + ',' + (c - 1)) && grid.has(r + ',' + (c + 1))) numsAcross.set(k, ++n);
+                    if (!grid.has((r - 1) + ',' + c) && grid.has((r + 1) + ',' + c)) numsDown.set(k, ++n);
                 }
             }
-            placed.forEach(p => { p.num = nums.get(p.row + ',' + p.col) || 0; });
+            placed.forEach(p => {
+                const m = (p.dir === 'across') ? numsAcross : numsDown;
+                p.num = m.get(p.row + ',' + p.col) || 0;
+            });
             placed.sort((a, b) => a.num - b.num);
-            return { grid, placed, nums, rows, cols };
+            return { grid, placed, numsAcross, numsDown, rows, cols };
         }
 
         function startCrossword(size) {
@@ -1172,10 +1179,13 @@
                 for (let c = 0; c < b.cols; c++) {
                     const k = r + ',' + c;
                     if (!b.grid.has(k)) { html += `<div class="${cellCls}"></div>`; continue; }
-                    const num = b.nums.get(k);
+                    //   가로 번호는 왼쪽 위, 세로 번호는 오른쪽 위. 색도 목록과 맞춘다
+                    const numA = b.numsAcross.get(k), numD = b.numsDown.get(k);
+                    const numCls = 'absolute top-[1px] leading-none text-[10px] sm:text-[11px] font-black pointer-events-none z-10';
                     //   focus-within 으로 상자째 위로 올려야 옆칸 테두리가 강조 테두리를 안 덮는다
                     html += `<div class="relative ${cellCls} focus-within:z-10">
-                        ${num ? `<span class="absolute left-[3px] top-[1px] leading-none text-[10px] sm:text-[11px] font-black text-slate-500 pointer-events-none z-10">${num}</span>` : ''}
+                        ${numA ? `<span class="${numCls} left-[3px] text-teal-600">${numA}</span>` : ''}
+                        ${numD ? `<span class="${numCls} right-[3px] text-indigo-500">${numD}</span>` : ''}
                         <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
                             class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 relative">
@@ -1191,18 +1201,20 @@
             const b = gameState.board;
             const box = document.getElementById('cw-clues');
             if (!box) return;
-            const list = (dir, title) => {
+            //   번호 색을 격자와 맞춘다 — 가로는 청록, 세로는 남색
+            const list = (dir, title, numCls, titleCls) => {
                 const items = b.placed.filter(p => p.dir === dir);
                 if (!items.length) return '';
                 return `<div class="text-left space-y-1">
-                    <p class="text-xs font-black text-slate-500">${title}</p>
+                    <p class="text-xs font-black ${titleCls}">${title}</p>
                     ${items.map(p => `<button type="button" onclick="cwGoto(${p.row},${p.col},'${p.dir}')"
                         class="block w-full text-left text-[11px] font-semibold text-slate-500 hover:text-teal-600 transition-colors">
-                        <b class="text-slate-700">${p.num}.</b> ${escapeHtml(p.hint)} <span class="text-slate-300">(${p.text.length})</span>
+                        <b class="${numCls}">${p.num}.</b> ${escapeHtml(p.hint)} <span class="text-slate-300">(${p.text.length})</span>
                     </button>`).join('')}
                 </div>`;
             };
-            box.innerHTML = list('across', '가로 →') + list('down', '세로 ↓');
+            box.innerHTML = list('across', '가로 →', 'text-teal-600', 'text-teal-700')
+                          + list('down', '세로 ↓', 'text-indigo-500', 'text-indigo-600');
         }
 
         function cwCellAt(r, c) { return document.getElementById('cw-' + r + '-' + c); }
