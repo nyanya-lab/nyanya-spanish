@@ -1162,23 +1162,29 @@
             const b = gameState.board;
             const box = document.getElementById('cw-grid');
             if (!box) return;
+            //   [냐냐 지적] 칸마다 테두리를 두르면 맞닿은 자리만 두 겹이 돼서 격자가 들쭉날쭉했다.
+            //   칸을 테두리 굵기(2px)만큼 서로 겹쳐 놓아서 어디든 두께가 같게 만든다.
+            //   빈 칸도 똑같이 당겨야 줄이 안 어긋나고, 바깥 테두리가 잘리지 않게 칸 상자에 여백을 준다.
+            const cellCls = 'w-8 h-8 sm:w-9 sm:h-9 -mr-0.5 -mb-0.5';
             let html = '';
             for (let r = 0; r < b.rows; r++) {
                 html += '<div class="flex">';
                 for (let c = 0; c < b.cols; c++) {
                     const k = r + ',' + c;
-                    if (!b.grid.has(k)) { html += '<div class="w-8 h-8 sm:w-9 sm:h-9"></div>'; continue; }
+                    if (!b.grid.has(k)) { html += `<div class="${cellCls}"></div>`; continue; }
                     const num = b.nums.get(k);
-                    html += `<div class="relative w-8 h-8 sm:w-9 sm:h-9">
-                        ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none">${num}</span>` : ''}
+                    //   focus-within 으로 상자째 위로 올려야 옆칸 테두리가 강조 테두리를 안 덮는다
+                    html += `<div class="relative ${cellCls} focus-within:z-10">
+                        ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none z-10">${num}</span>` : ''}
                         <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
-                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:z-10 relative">
+                            class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 relative">
                     </div>`;
                 }
                 html += '</div>';
             }
             box.innerHTML = html;
+            box.classList.add('pr-0.5', 'pb-0.5');
         }
 
         function cwRenderClues() {
