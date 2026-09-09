@@ -1175,7 +1175,7 @@
                     const num = b.nums.get(k);
                     //   focus-within 으로 상자째 위로 올려야 옆칸 테두리가 강조 테두리를 안 덮는다
                     html += `<div class="relative ${cellCls} focus-within:z-10">
-                        ${num ? `<span class="absolute left-0.5 top-0 text-[8px] font-black text-slate-400 pointer-events-none z-10">${num}</span>` : ''}
+                        ${num ? `<span class="absolute left-[3px] top-[1px] leading-none text-[10px] sm:text-[11px] font-black text-slate-500 pointer-events-none z-10">${num}</span>` : ''}
                         <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
                             class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 relative">
