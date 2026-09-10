@@ -6231,7 +6231,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     html += `<td class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${bi}, ${ri}, ${ci}, 'body')">
                         <div class="ge-cell flex items-center gap-1 ${cellBg} rounded-lg px-1">
                             <button type="button" onclick="toggleGeCellHighlight(${bi}, ${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
-                            <input value="${escapeAttr(val)}" data-ge-bi="${bi}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${bi}, ${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${bi}, ${ri}, ${ci})" title="${(mk[`${ri}-${ci}`] || []).length ? '형광펜: ' + escapeAttr((mk[`${ri}-${ci}`] || []).join(' · ')) : ''}" class="w-full min-w-[70px] bg-transparent border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400 ${(mk[`${ri}-${ci}`] || []).length ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200'}">
+                            <span class="relative flex-1 min-w-[70px] block">
+                                <span class="ge-cell-ov absolute inset-0 px-2 py-1.5 text-xs leading-4 border border-transparent rounded-lg whitespace-pre overflow-hidden text-transparent pointer-events-none">${markCellHtml(val, mk[`${ri}-${ci}`], true)}</span>
+                                <input value="${escapeAttr(val)}" data-ge-bi="${bi}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${bi}, ${ri}, ${ci}, this.value); geSyncCellOverlay(this)" onscroll="geSyncCellOverlay(this)" onkeydown="handleGeCellKey(event, ${bi}, ${ri}, ${ci})" class="relative w-full bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs leading-4 focus:outline-none focus:ring-1 focus:ring-violet-400">
+                            </span>
                         </div>
                     </td>`;
                 }
@@ -6247,6 +6250,22 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             });
             html += '</tbody></table>';
             grid.innerHTML = html;
+        }
+
+        // [냐냐 요청] 편집창에서도 진짜 형광펜이 보이게 한다 (2026-09-10).
+        //   입력칸은 글자 일부를 못 칠하니 같은 글자를 뒤에 깔고 색만 비치게 한다.
+        //   뒤에 깐 글자는 안 보여야 한다(text-transparent) — 안 그러면 두 겹으로 겹쳐 보인다.
+        //   글자가 칸보다 길어 옆으로 밀리면 스크롤도 같이 맞춘다.
+        function geSyncCellOverlay(el) {
+            if (!el) return;
+            const ov = el.parentElement ? el.parentElement.querySelector('.ge-cell-ov') : null;
+            if (!ov) return;
+            const st = grammarEditorState;
+            const bi = Number(el.dataset.geBi), ri = Number(el.dataset.geRi), ci = Number(el.dataset.geCi);
+            const b = st ? geBlock(bi) : null;
+            const marks = (st && b) ? (noteCellMarks(st.id, b.id)[`${ri}-${ci}`] || []) : [];
+            ov.innerHTML = markCellHtml(el.value, marks, true);
+            ov.scrollLeft = el.scrollLeft;
         }
 
         // [냐냐 요청] 칸에서 고른 글자에만 형광펜 (2026-09-10).
@@ -6286,12 +6305,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             saveToStorage();
             //   격자를 통째로 다시 그리면 고른 글자와 커서가 풀려서 바로 또 못 누른다.
-            //   그 칸 표시만 갈아끼우고 고른 상태는 그대로 둔다.
-            const now = noteCellMarks(st.id, b.id)[key] || [];
-            el.classList.toggle('border-amber-300', now.length > 0);
-            el.classList.toggle('bg-amber-50/60', now.length > 0);
-            el.classList.toggle('border-slate-200', now.length === 0);
-            el.title = now.length ? ('형광펜: ' + now.join(' · ')) : '';
+            //   뒤에 깐 글자만 새로 그리고 고른 상태는 그대로 둔다.
+            geSyncCellOverlay(el);
         }
 
         // ── 블록 추가 / 삭제 / 순서 ────────────────────────────────
@@ -7852,7 +7867,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         //   칸 글자에 형광펜을 입힌다. 겹치는 자리는 먼저 잡은 쪽이 이기고,
         //   긴 글자부터 찾아야 짧은 것이 긴 것을 잘라먹지 않는다 ('su' 가 'sus' 를 쪼개면 안 된다).
-        function markCellHtml(text, marks) {
+        //   flat = 좌우 여백 없는 꼴. 편집창에서 입력칸 뒤에 깔 때 쓴다 —
+        //   여백을 주면 글자가 밀려서 앞의 입력칸 글자와 어긋난다.
+        function markCellHtml(text, marks, flat) {
             const t = String(text || '');
             const list = (marks || []).filter(Boolean).slice().sort((a, b) => b.length - a.length);
             if (!t || !list.length) return escapeHtml(t);
@@ -7870,7 +7887,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             let out = '', at = 0;
             hits.forEach(h => {
                 out += escapeHtml(t.slice(at, h.start));
-                out += `<span class="bg-[#fef08a] rounded-sm px-0.5 box-decoration-clone">${escapeHtml(t.slice(h.start, h.end))}</span>`;
+                const cls = flat ? 'bg-[#fef08a]' : 'bg-[#fef08a] rounded-sm px-0.5 box-decoration-clone';
+                out += `<span class="${cls}">${escapeHtml(t.slice(h.start, h.end))}</span>`;
                 at = h.end;
             });
             return out + escapeHtml(t.slice(at));
