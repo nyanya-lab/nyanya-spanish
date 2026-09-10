@@ -1971,10 +1971,16 @@ let vocabulary = [];
         //   곡선 위의 한 줄을 갈래에 상관없이 같은 모양으로 넘겨준다.
         //   기록이 놓인 자리가 셋 다 달라서(단어는 제 몸에, 관용구·문법은 따로) 여기서 한 번만 가른다.
         function eachCurveRec(kind, fn) {
+            // [냐냐 요청] '한 번도 안 틀림' 을 둘로 가른다 (2026-09-10).
+            //   만나서 다 맞힌 것과 아직 한 번도 안 만난 것은 전혀 다른 이야기인데 한 칸에 섞여 있었다.
+            //   재보니 단어 1036개 중 만나본 건 117개뿐이고 919개는 아직 시작도 안 한 것이었다.
+            //   ⚠️ 관용구는 점수도 곡선도 안 남아서 '만난 날'(lastSeenDate)을 따로 적어둔다 —
+            //      markIdiomSeen 이 게임·퀴즈·쓰기에서 이미 그 일을 하고 있다.
             if (kind === 'word') {
                 (vocabulary || []).forEach(w => fn({
                     it: w, wrong: w.lastWrongDate, review: w.lastReviewDate,
-                    stage: w.reviewStage || 0, sort: getScore(w)
+                    stage: w.reviewStage || 0, sort: getScore(w),
+                    met: !!(w.lastWrongDate || w.lastReviewDate || (w.correctTotal || 0) || (w.wrongTotal || 0))
                 }));
             } else if (kind === 'idiom') {
                 (vocabulary || []).forEach(w => {
@@ -1982,7 +1988,10 @@ let vocabulary = [];
                     list.forEach(item => {
                         const rec = (idiomReview || {})[idiomKey(w.id, item.idiom)] || {};
                         fn({ it: { word: w, idiom: item }, wrong: rec.lastWrongDate, review: rec.lastReviewDate,
-                             stage: rec.stage || 0, sort: 0 });
+                             stage: rec.stage || 0, sort: 0,
+                             met: (typeof isUntouchedIdiom === 'function')
+                                 ? !isUntouchedIdiom(w.id, item.idiom)
+                                 : !!(rec.lastWrongDate || rec.lastReviewDate) });
                     });
                 });
             } else {
@@ -1990,7 +1999,9 @@ let vocabulary = [];
                 tables.forEach(t => {
                     const rec = (grammarReview || {})[t.id] || {};
                     fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, stage: rec.stage || 0,
-                         sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0 });
+                         sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0,
+                         met: !!(rec.lastWrongDate || rec.lastReviewDate)
+                             || ((typeof getGrammarScore === 'function' ? getGrammarScore(t.id) : 0) !== 0) });
                 });
             }
         }
@@ -2029,7 +2040,7 @@ let vocabulary = [];
             const out = [];
             const last = REVIEW_INTERVALS.length;
             eachCurveRec(kind, r => {
-                if (!r.wrong) { if (bucket === 'never') out.push({ it: r.it, due: false, sort: r.sort }); return; }
+                if (!r.wrong) { if (bucket === 'never') out.push({ it: r.it, due: false, sort: r.sort, met: !!r.met }); return; }
                 if (r.stage >= last) { if (bucket === 'graduated') out.push({ it: r.it, due: false, sort: r.sort }); return; }
                 const due = curveRecDue(r.review, r.wrong, r.stage);
                 if (bucket === 'inCurve') out.push({ it: r.it, due, sort: r.sort });
@@ -2059,7 +2070,7 @@ let vocabulary = [];
                 due: `곡선 차례가 된 ${meta.unit}${y}. 밀린 것도 다 들어 있어요.`,
                 inCurve: `한 번이라도 틀려서 곡선에 들어와 있는 ${meta.unit}${y}.`,
                 graduated: `${REVIEW_INTERVALS[REVIEW_INTERVALS.length - 1]}일까지 다 버틴 ${meta.unit}${y}.`,
-                never: `한 번도 안 틀려서 곡선에 들어온 적이 없는 ${meta.unit}${y}.`
+                never: `한 번도 안 틀려서 곡선에 들어온 적이 없는 ${meta.unit}${y}. 만나본 것과 아직 안 만난 것을 갈라 뒀어요.`
             };
             if (subEl) subEl.innerText = (SUB[bucket] || '')
                 + ((bucket !== 'due' && dueN) ? ` 빨간 점 ${dueN}개가 오늘 할 것이에요.` : '');
@@ -2072,14 +2083,32 @@ let vocabulary = [];
                     : `<div class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight text-slate-300 text-center">${b.label}<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
             </div></div>`;
 
-            const shown = rows.slice(0, CURVE_LIST_MAX);
-            const more = rows.length - shown.length;
-            bodyEl.innerHTML = tabs + (rows.length
-                ? `<div class="space-y-1.5">${shown.map(r => r.due
-                        ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
-                        : reviewPlanItemHtml(kind, r.it)).join('')}</div>`
-                    + (more ? `<p class="text-[11px] text-slate-400 text-center pt-2">…외 ${more}개는 안 그렸어요 (너무 많아서요)</p>` : '')
-                : '<p class="text-slate-400 text-center text-xs py-4">여기는 비어 있어요 ✨</p>');
+            const itemHtml = (r) => r.due
+                ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
+                : reviewPlanItemHtml(kind, r.it);
+            const listHtml = (list) => {
+                const shown = list.slice(0, CURVE_LIST_MAX);
+                const more = list.length - shown.length;
+                return `<div class="space-y-1.5">${shown.map(itemHtml).join('')}</div>`
+                    + (more ? `<p class="text-[11px] text-slate-400 text-center pt-2">…외 ${more}개는 안 그렸어요 (너무 많아서요)</p>` : '');
+            };
+            // [냐냐 요청] '한 번도 안 틀림' 은 칸을 늘리지 않고 목록 안에서 두 묶음으로 가른다 (2026-09-10).
+            //   냐냐님이 "표가 이뻐서 더 늘리고 싶진 않다" 고 하셔서 다섯째 칸을 안 만들었다.
+            //   단계 팝업이 이미 묶음 모양을 쓰고 있어서 낯설지 않다. 묶음마다 따로 잘라야
+            //   한쪽이 CURVE_LIST_MAX 를 다 먹고 다른 쪽이 안 보이는 일이 없다.
+            const group = (icon, label, list) => list.length
+                ? `<div class="space-y-1.5">
+                        <p class="text-[11px] font-black text-slate-500 pt-1">${icon} ${label} ${list.length}</p>
+                        ${listHtml(list)}
+                   </div>`
+                : '';
+            const empty = '<p class="text-slate-400 text-center text-xs py-4">여기는 비어 있어요 ✨</p>';
+            bodyEl.innerHTML = tabs + (!rows.length ? empty : (bucket === 'never'
+                ? `<div class="space-y-3">
+                        ${group('✅', `만나서 다 맞힌 ${meta.unit}`, rows.filter(r => r.met))}
+                        ${group('⬜', `아직 안 만난 ${meta.unit}`, rows.filter(r => !r.met))}
+                   </div>`
+                : listHtml(rows)));
             modal.classList.remove('hidden');
         }
 
@@ -2138,6 +2167,13 @@ let vocabulary = [];
                 </div>`;
 
             const half = (title, icon, s, unit, barColor, howto, kind) => {
+                // [냐냐 요청] '한 번도 안 틀림' 을 둘로 가른다 (2026-09-10). 칸은 그대로 넷이다 —
+                //   넷째 칸의 뜻을 '만나서 다 맞힘' 으로 좁히고, '아직 안 만난 것' 은 표 밑에 회색 한 줄로 둔다.
+                //   아직 안 만난 것은 곡선에 들어온 적이 없으니 곡선 표의 식구가 아니라는 뜻도 된다.
+                //   숫자는 팝업과 같은 곳(getCurveBucketItems)에서 뽑아 서로 어긋나지 않게 한다.
+                const neverRows = (typeof getCurveBucketItems === 'function') ? getCurveBucketItems(kind, 'never') : [];
+                const neverMet = neverRows.filter(r => r.met).length;
+                const neverNew = neverRows.length - neverMet;
                 // 단계 막대 — 곡선 안에서 가장 많은 칸을 기준으로 길이를 잡는다
                 //   [냐냐 요청] 누르면 그 칸에 뭐가 들었는지 본다 (빈 칸은 안 눌린다)
                 const maxStage = Math.max(1, ...s.byStage);
@@ -2165,8 +2201,12 @@ let vocabulary = [];
                         ${cell(s.overdue ? `오늘 복습할 것 (밀린 것 ${s.overdue})` : '오늘 복습할 것', s.due, s.due ? 'text-rose-500' : 'text-emerald-600', kind, 'due')}
                         ${cell(`곡선 안 ${unit}`, s.inCurve, 'text-amber-600', kind, 'inCurve')}
                         ${cell('곡선 졸업', s.graduated, 'text-emerald-600', kind, 'graduated')}
-                        ${cell('한 번도 안 틀림', s.never, 'text-slate-500', kind, 'never')}
+                        ${cell('만나서 다 맞힘', neverMet, 'text-slate-500', kind, 'never')}
                     </div>
+                    ${neverNew ? `<button type="button" onclick="openCurveBucketModal('${kind}', 'never')" title="여기 든 것 보기"
+                            class="-mt-1 w-full text-left text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                            ⬜ 아직 안 만난 ${unit} <span class="font-black">${neverNew}</span>개
+                        </button>` : ''}
                     <div class="space-y-1.5 mt-auto">
                         <p class="text-[10px] font-bold text-slate-500">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                         ${bars}
