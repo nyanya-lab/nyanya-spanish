@@ -8604,8 +8604,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const go = async () => {
                 try { if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
                 try {
-                    const urls = Array.from(document.querySelectorAll('script[src], link[rel="stylesheet"]'))
-                        .map(el => el.src || el.href).filter(Boolean);
+                    //   태그에 걸린 것 + 이 페이지가 실제로 받아온 것 전부 (글꼴·그림까지).
+                    //   performance 기록에는 스타일시트가 끌어온 글꼴 파일처럼 태그에 안 보이는 것도 들어 있다.
+                    const seen = new Set();
+                    Array.from(document.querySelectorAll('script[src], link[href], img[src], source[src], video[src], audio[src]'))
+                        .forEach(el => { const u = el.src || el.href; if (u) seen.add(u); });
+                    try {
+                        performance.getEntriesByType('resource').forEach(e => {
+                            //   API 호출은 다시 부르면 안 된다 (Gemini 를 공짜로 한 번 더 때리는 셈이다)
+                            if (['fetch', 'xmlhttprequest', 'beacon'].indexOf(e.initiatorType) >= 0) return;
+                            if (e.name) seen.add(e.name);
+                        });
+                    } catch (e) {}
+                    const urls = Array.from(seen)
+                        .filter(u => /^https?:/.test(u) && u.indexOf('generativelanguage') < 0);
                     await Promise.all(urls.map(u => {
                         const same = u.indexOf(location.origin) === 0;
                         return fetch(u, { cache: 'reload', mode: same ? 'same-origin' : 'no-cors' }).catch(() => {});
