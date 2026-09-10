@@ -3181,6 +3181,41 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         extra.push({ note, ok: false, ev: `${from} → ${word}` });
                     });
                 });
+                // ============================================================
+                // [냐냐 지적] 'esta' 를 지시형용사로 잘못 읽고 +2 를 줬다 (2026-09-10).
+                //   냐냐님이 '¿Dónde esta la casa…?' 라고 쓰셨다 — 'está'(estar)를 악센트 없이 쓰신 것인데,
+                //   지시사 노트 표에 'esta'(이~) 칸이 있어서 그 노트가 걸렸다. 글자만 보면 못 가른다.
+                //   냐냐님이 짚으셨다 — "왜 몰라? 오타로 수정을 했잖아 AI 가."
+                //   맞는 말씀이다. changes 에 'esta → está' 가 그대로 있다.
+                //   그래서 이렇게 가른다:
+                //     내 근거 낱말이 고쳐졌고, 고친 낱말이 그 노트 것이 아니면 → 그 노트를 쓴 게 아니다 (뺀다)
+                //     고친 낱말도 그 노트 것이면                          → 쓰려다 틀린 것 (위에서 −2, 그대로 둔다)
+                //   'esta → está' 는 'está' 가 지시사 노트에 없으니 빠지고,
+                //   'esa → esta' 는 둘 다 지시사라 −2 로 남는다.
+                //   ⚠️ 근거가 딱 그 고쳐진 낱말일 때만 뺀다. 같은 노트가 문장 딴 데서
+                //      멀쩡한 낱말로도 걸렸으면 그건 진짜 근거다.
+                //   ⚠️ +2 든 −2 든 똑같이 뺀다 — 안 쓴 문법은 잘 쓴 것도 틀린 것도 아니다.
+                // ============================================================
+                const evNorm = (x) => String(x || '').toLowerCase().normalize('NFC')
+                    .replace(/[^a-záéíóúüñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+                ((feedback && feedback.changes) || []).forEach(ch => {
+                    const to = String((ch && ch.to) || '').replace(/<[^>]*>/g, ' ').trim();
+                    const from = String((ch && ch.from) || '').replace(/<[^>]*>/g, ' ').trim();
+                    if (!to || !from) return;
+                    if (from.split(/\s+/).filter(Boolean).length !== 1) return;   // 한 낱말 고침만
+                    const fromHits = detectNoteCellsInText(from, notes);
+                    if (!fromHits.size) return;
+                    const toHits = detectNoteCellsInText(to, notes);
+                    fromHits.forEach((word, noteId) => {
+                        if (toHits.has(noteId)) return;                  // 고친 것도 그 노트 것 → 쓰려다 틀린 것
+                        if (evNorm(word) !== evNorm(from)) return;       // 근거가 딴 낱말이면 진짜 근거다
+                        const drop = (arr) => {
+                            const i = arr.findIndex(e => e.note.id === noteId && evNorm(e.ev) === evNorm(from));
+                            if (i >= 0) arr.splice(i, 1);
+                        };
+                        drop(extra); drop(parsed);
+                    });
+                });
                 extra.slice(0, 4).forEach(e => parsed.push(e));
             }
 
