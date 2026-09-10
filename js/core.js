@@ -8597,9 +8597,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const el = document.getElementById(id);
                 return el && String(el.value || '').trim();
             });
-            const go = () => {
-                //   서비스워커나 캐시가 있으면 같이 비운다 (지금은 없지만 나중에 붙어도 안전하게)
-                try { if (window.caches && caches.keys) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
+            //   [냐냐 요청] Ctrl+Shift+R 을 대신하는 자리라 js·css 까지 확실히 새로 받아야 한다.
+            //   주소에 시각을 붙이면 index.html 은 새로 오지만, js·css 는 그 안의 ?v= 를 따라간다 —
+            //   ?v= 가 그대로면 브라우저가 캐시 것을 계속 쓴다 (훅이 늘 올려주긴 하지만 그때뿐이다).
+            //   그래서 지금 걸려 있는 파일들을 cache:'reload' 로 한 번 당겨 캐시를 갈아치운 뒤에 넘어간다.
+            const go = async () => {
+                try { if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+                try {
+                    const urls = Array.from(document.querySelectorAll('script[src], link[rel="stylesheet"]'))
+                        .map(el => el.src || el.href).filter(Boolean);
+                    await Promise.all(urls.map(u => {
+                        const same = u.indexOf(location.origin) === 0;
+                        return fetch(u, { cache: 'reload', mode: same ? 'same-origin' : 'no-cors' }).catch(() => {});
+                    }));
+                } catch (e) {}
                 try {
                     const u = new URL(location.href);
                     u.searchParams.set('r', String(Date.now()));
