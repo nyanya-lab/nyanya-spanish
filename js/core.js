@@ -267,6 +267,7 @@ let vocabulary = [];
                 grammarReview: grammarReview,             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
+                grammarCellMarks: grammarCellMarks,
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
@@ -445,6 +446,7 @@ let vocabulary = [];
                 grammarReview = payload.grammarReview || {};             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
+                grammarCellMarks = payload.grammarCellMarks || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 //   [냐냐 요청] 쓰기 복습 동사 시제 (없으면 null 로 둔다 — ensureWriteTenses 가 정한다)
                 if (typeof writeTenses !== 'undefined') {
@@ -481,6 +483,7 @@ let vocabulary = [];
                 grammarReview = {};
                 hiddenQuestionTopics = [];
                 grammarCellHighlights = {};
+                grammarCellMarks = {};
                 grammarCellWords = {};
                 eggState = defaultEggState();
             }
@@ -4883,6 +4886,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록
         let hiddenQuestionTopics = []; // [냐냐 PATCH] 질문 주제 드롭다운에서 숨긴 목록
         let grammarCellHighlights = {}; // [냐냐 PATCH] 문법표 칸별 강조 {tableId: {"ri-ci": true}}
+        // [냐냐 요청] 칸 안의 '글씨 일부' 형광펜 (2026-09-10). 칸 통째 강조와 따로 논다.
+        //   {tableId: {"블록id:행-열": ["su", "sus"]}} — 자리(숫자)가 아니라 글자를 적어둔다.
+        //   그래야 칸 내용을 조금 고쳐도 형광펜이 안 어긋난다. 그 글자가 사라지면 저절로 안 그려진다.
+        //   ⚠️ 칸 값 자체는 여전히 맨 글자다 — 표 낱말 훑기·단어 연결·AI 가 전부 글자로 읽기 때문에
+        //      칸에 표시를 섞어 넣으면 안 된다. 그래서 색은 따로 적어두고 그릴 때만 입힌다.
+        let grammarCellMarks = {};
 
         // [냐냐 요청] 표 칸 ↔ 단어장 연결 {tableId: {"블록id:행-열": 단어id}}
         //   칸 강조와 같은 방식으로 노트 바깥에 둔다 — 표를 편집해도 안 날아가고 동기화도 따라감.
@@ -5327,6 +5336,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function renderNoteTableBlock(t, b) {
             if (!tableBlockHasContent(b)) return '';   // 빈 표는 안 그림
             const cellHl = noteCellHighlights(t.id, b.id);   // {"행-열": true}
+            const cellMk = noteCellMarks(t.id, b.id);        // {"행-열": ["형광펜 칠한 글자", …]}
             const hlCols = b.highlightCols || [0];           // 열 강조 (글씨체)
             // 헤더 줄끼리 색 차이는 두지 않는다 — 전부 같은 파랑 + 흰 글씨, 층은 칸 테두리로만 구분
             const hMerges = b.headerMerges || {};
@@ -5357,7 +5367,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const cellBg = cellHl[`${ri}-${ci}`] ? 'bg-[#ffe0ec]' : '';
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                     // 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
-                    const cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
+                    //   단어 찾기 모드에서는 형광펜을 쉰다 (그 모드는 낱말마다 밑줄을 그어야 해서 겹친다)
+                    const cellContent = grammarWordLookupMode
+                        ? buildLookupCellHtml(c || '')
+                        : markCellHtml(c || '', cellMk[`${ri}-${ci}`]);
                     // [냐냐 요청] 표 안에는 연결 표시를 하지 않는다 (밑줄도 점도 없앰).
                     //   노트 카드의 연결 아이콘으로 상태를 보고, 어느 칸인지는 연결창의 표
                     //   미리보기가 색으로 보여준다. 표 자체는 깔끔하게 둔다.
@@ -6101,6 +6114,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     <div class="flex justify-end gap-1">
                         <!-- [냐냐 요청] 이 표의 칸을 단어장 단어에 이어두는 화면 (이어둔 칸만 빈칸 채점에서 단어 점수를 받음) -->
                         <button type="button" onclick="openGrammarWordLink(${bi})" title="표 칸을 단어장 단어와 이어두기 — 단어 시험처럼 외우는 표에 쓰세요" class="mr-auto text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-link"></i> 단어 연결</button>
+                        <!-- [냐냐 요청] 칸 안의 글씨 일부에만 형광펜. 칸에서 글자를 드래그한 채로 누른다.
+                             onmousedown 을 막아야 입력칸이 포커스를 안 잃어서 고른 글자가 살아 있다. -->
+                        <button type="button" onmousedown="event.preventDefault()" onclick="geMarkSelection(${bi})" title="칸에서 글자를 드래그한 뒤 누르면 그 글자에만 형광펜 (아무것도 안 고르고 누르면 그 칸의 형광펜을 지웁니다)" class="text-[11px] font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded-lg hover:bg-amber-100"><i class="fa-solid fa-highlighter"></i> 형광펜</button>
                         <button type="button" onclick="addGeHeaderRow(${bi})" title="헤더 줄을 맨 위에 추가 (최대 3줄)" class="text-[11px] font-bold bg-[#e8f2fb] text-[#2c5578] px-2 py-1 rounded-lg hover:bg-[#d8e9f7]"><i class="fa-solid fa-plus"></i> 헤더줄</button>
                         <button type="button" onclick="addGeColumn(${bi})" class="text-[11px] font-bold bg-violet-50 text-violet-600 px-2 py-1 rounded-lg hover:bg-violet-100"><i class="fa-solid fa-plus"></i> 열</button>
                         <button type="button" onclick="removeGeColumn(${bi})" class="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg hover:bg-slate-200"><i class="fa-solid fa-minus"></i> 열</button>
@@ -6152,6 +6168,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const grid = document.getElementById('ge-grid-' + bi);
             if (!s || !b || !grid) return;
             const hl = noteCellHighlights(s.id, b.id);   // 이 표 블록의 칸 강조 {"행-열": true}
+            const mk = noteCellMarks(s.id, b.id);        // 칸 안 글씨 형광펜 {"행-열": ["글자", …]}
             const colCount = geColCount(bi);
             // ① 열 조작줄 — 열 이동 ◀▶ 과 열 강조는 따로 빼둔다
             //    (헤더를 가로로 병합해도 열마다 버튼이 그대로 남아 있어야 열을 옮길 수 있음)
@@ -6214,7 +6231,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     html += `<td class="p-1 align-middle"${spanAttr} oncontextmenu="openGeCellMenu(event, ${bi}, ${ri}, ${ci}, 'body')">
                         <div class="ge-cell flex items-center gap-1 ${cellBg} rounded-lg px-1">
                             <button type="button" onclick="toggleGeCellHighlight(${bi}, ${ri}, ${ci})" title="칸 강조" class="${starColor} transition-colors shrink-0"><i class="fa-solid fa-star text-[10px]"></i></button>
-                            <input value="${escapeAttr(val)}" data-ge-bi="${bi}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${bi}, ${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${bi}, ${ri}, ${ci})" class="w-full min-w-[70px] bg-transparent border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400">
+                            <input value="${escapeAttr(val)}" data-ge-bi="${bi}" data-ge-ri="${ri}" data-ge-ci="${ci}" oninput="updateGeCell(${bi}, ${ri}, ${ci}, this.value)" onkeydown="handleGeCellKey(event, ${bi}, ${ri}, ${ci})" title="${(mk[`${ri}-${ci}`] || []).length ? '형광펜: ' + escapeAttr((mk[`${ri}-${ci}`] || []).join(' · ')) : ''}" class="w-full min-w-[70px] bg-transparent border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400 ${(mk[`${ri}-${ci}`] || []).length ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200'}">
                         </div>
                     </td>`;
                 }
@@ -6230,6 +6247,51 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             });
             html += '</tbody></table>';
             grid.innerHTML = html;
+        }
+
+        // [냐냐 요청] 칸에서 고른 글자에만 형광펜 (2026-09-10).
+        //   칸은 입력칸이라 서식을 못 담는다. 그래서 '어느 글자를 칠했나' 만 따로 적어두고
+        //   조회 화면에서 그 글자를 찾아 칠한다 (markCellHtml). 칸 값은 맨 글자 그대로 남는다.
+        //   같은 글자를 또 고르면 지운다. 아무것도 안 고르고 누르면 그 칸을 통째로 지운다.
+        function geMarkSelection(bi) {
+            const st = grammarEditorState;
+            const b = geBlock(bi);
+            if (!st || !b) return;
+            const el = document.activeElement;
+            if (!el || el.tagName !== 'INPUT' || el.dataset.geBi === undefined) {
+                showToast("표 칸을 누르고 칠할 글자를 드래그한 뒤에 눌러주세요", "info");
+                return;
+            }
+            const ri = Number(el.dataset.geRi), ci = Number(el.dataset.geCi);
+            if (Number(el.dataset.geBi) !== bi || !Number.isFinite(ri) || !Number.isFinite(ci)) {
+                showToast("이 표의 칸을 골라주세요", "info");
+                return;
+            }
+            const map = noteCellMarks(st.id, b.id);
+            const key = `${ri}-${ci}`;
+            const cur = (map[key] || []).slice();
+            const text = String(el.value || '');
+            const sel = text.slice(el.selectionStart || 0, el.selectionEnd || 0).trim();
+            if (!sel) {
+                if (!cur.length) { showToast("칠할 글자를 드래그해서 골라주세요", "info"); return; }
+                delete map[key];
+                setNoteCellMarks(st.id, b.id, map);
+                showToast("이 칸의 형광펜을 지웠어요", "success");
+            } else {
+                const at = cur.indexOf(sel);
+                if (at >= 0) { cur.splice(at, 1); showToast(`"${sel}" 형광펜을 지웠어요`, "info"); }
+                else { cur.push(sel); showToast(`"${sel}" 에 형광펜을 칠했어요 🖍️`, "success"); }
+                if (cur.length) map[key] = cur; else delete map[key];
+                setNoteCellMarks(st.id, b.id, map);
+            }
+            saveToStorage();
+            //   격자를 통째로 다시 그리면 고른 글자와 커서가 풀려서 바로 또 못 누른다.
+            //   그 칸 표시만 갈아끼우고 고른 상태는 그대로 둔다.
+            const now = noteCellMarks(st.id, b.id)[key] || [];
+            el.classList.toggle('border-amber-300', now.length > 0);
+            el.classList.toggle('bg-amber-50/60', now.length > 0);
+            el.classList.toggle('border-slate-200', now.length === 0);
+            el.title = now.length ? ('형광펜: ' + now.join(' · ')) : '';
         }
 
         // ── 블록 추가 / 삭제 / 순서 ────────────────────────────────
@@ -6400,7 +6462,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             // [냐냐 요청] 병합·칸강조 좌표도 열 위치 반영
             b.merges = remapMerges(b.merges || {}, { swapCols: [ci, nc] });
-            if (s.id) setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), { swapCols: [ci, nc] }));
+            if (s.id) remapCellExtras(s, b, { swapCols: [ci, nc] });
             renderGeTableGrid(bi);
         }
 
@@ -6444,7 +6506,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             [b.rows[ri], b.rows[nr]] = [b.rows[nr], b.rows[ri]];
             b.merges = remapMerges(b.merges || {}, { swapRows: [ri, nr] });
-            if (s.id) setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), { swapRows: [ri, nr] }));
+            if (s.id) remapCellExtras(s, b, { swapRows: [ri, nr] });
             renderGeTableGrid(bi);
         }
 
@@ -6463,7 +6525,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 b.rows.splice(ri, 1);
                 // [냐냐 요청] 병합·칸강조 좌표도 같이 당겨줌 (안 하면 엉뚱한 칸이 합쳐져 보임)
                 b.merges = remapMerges(b.merges || {}, { removeRow: ri });
-                if (s.id) setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), { removeRow: ri }));
+                if (s.id) remapCellExtras(s, b, { removeRow: ri });
                 renderGeTableGrid(bi);
             };
             // [냐냐 요청] 내용이 있을 때만 물어봄 (빈 행은 그냥 지움)
@@ -6500,7 +6562,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (b.highlightCols) b.highlightCols = b.highlightCols.filter(ci => ci !== lastIdx);
                 // [냐냐 요청] 병합·칸강조도 삭제된 열 반영
                 b.merges = remapMerges(b.merges || {}, { removeCol: lastIdx });
-                if (s.id) setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), { removeCol: lastIdx }));
+                if (s.id) remapCellExtras(s, b, { removeCol: lastIdx });
                 renderGeTableGrid(bi);
             };
             // [냐냐 요청] 마지막 열의 헤더 제목·본문 내용이 있으면 물어봄 (빈 열은 그냥 지움)
@@ -7591,6 +7653,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // 칸 강조도 같은 규칙으로 따라 옮김 (기존에 안 되어 있어서 행 삭제 시 강조가 어긋났음)
+        //   [냐냐 요청] 칸 강조와 칸 안 형광펜은 같은 좌표를 쓰므로 줄·열이 움직이면 같이 옮긴다.
+        //   한 곳으로 모아서 한쪽만 옮기고 다른 쪽을 잊는 일이 없게 한다.
+        function remapCellExtras(s, b, opts) {
+            if (!s || !s.id || !b) return;
+            setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), opts));
+            setNoteCellMarks(s.id, b.id, remapCellHighlights(noteCellMarks(s.id, b.id), opts));
+        }
+
         function remapCellHighlights(hl, opts) {
             const out = {};
             Object.keys(hl || {}).forEach(k => {
@@ -7611,7 +7681,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const [a, b] = opts.swapRows;
                     if (r === a) r = b; else if (r === b) r = a;
                 }
-                out[`${r}-${c}`] = true;
+                out[`${r}-${c}`] = hl[k];   // 값을 그대로 옮긴다 (칸 강조는 true, 형광펜은 글자 목록)
             });
             return out;
         }
@@ -7757,6 +7827,53 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 else if (k.slice(0, i) === blockId) out[k.slice(i + 1)] = true;
             });
             return out;
+        }
+
+        //   칸 안 형광펜 — 칸 강조와 같은 열쇠 모양을 쓰되 값이 '글자 목록' 이다
+        function noteCellMarks(tableId, blockId) {
+            const all = grammarCellMarks[tableId] || {};
+            const out = {};
+            Object.keys(all).forEach(k => {
+                const i = k.indexOf(':');
+                if (i >= 0 && k.slice(0, i) === blockId) out[k.slice(i + 1)] = all[k];
+            });
+            return out;
+        }
+        function setNoteCellMarks(tableId, blockId, map) {
+            const all = grammarCellMarks[tableId] || {};
+            Object.keys(all).forEach(k => { if (k.indexOf(blockId + ':') === 0) delete all[k]; });
+            Object.keys(map || {}).forEach(k => {
+                const list = (map[k] || []).filter(x => String(x || '').trim());
+                if (list.length) all[`${blockId}:${k}`] = list;
+            });
+            if (Object.keys(all).length) grammarCellMarks[tableId] = all;
+            else delete grammarCellMarks[tableId];
+        }
+
+        //   칸 글자에 형광펜을 입힌다. 겹치는 자리는 먼저 잡은 쪽이 이기고,
+        //   긴 글자부터 찾아야 짧은 것이 긴 것을 잘라먹지 않는다 ('su' 가 'sus' 를 쪼개면 안 된다).
+        function markCellHtml(text, marks) {
+            const t = String(text || '');
+            const list = (marks || []).filter(Boolean).slice().sort((a, b) => b.length - a.length);
+            if (!t || !list.length) return escapeHtml(t);
+            const hits = [];
+            list.forEach(m => {
+                let from = 0, i;
+                while ((i = t.indexOf(m, from)) >= 0) {
+                    const end = i + m.length;
+                    if (!hits.some(h => i < h.end && end > h.start)) hits.push({ start: i, end });
+                    from = end;
+                }
+            });
+            if (!hits.length) return escapeHtml(t);
+            hits.sort((a, b) => a.start - b.start);
+            let out = '', at = 0;
+            hits.forEach(h => {
+                out += escapeHtml(t.slice(at, h.start));
+                out += `<span class="bg-[#fef08a] rounded-sm px-0.5 box-decoration-clone">${escapeHtml(t.slice(h.start, h.end))}</span>`;
+                at = h.end;
+            });
+            return out + escapeHtml(t.slice(at));
         }
 
         // ── 칸 ↔ 단어 연결: 노트id → { "블록id:행-열": 단어id } ─────
@@ -8374,7 +8491,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     if (hasText || rowsCoveredByMerge().has(ri)) continue;
                     b.rows.splice(ri, 1);
                     b.merges = remapMerges(b.merges || {}, { removeRow: ri });
-                    if (s.id) setNoteCellHighlights(s.id, b.id, remapCellHighlights(noteCellHighlights(s.id, b.id), { removeRow: ri }));
+                    if (s.id) remapCellExtras(s, b, { removeRow: ri });
                 }
                 if (b.rows.length === 0) { b.rows = [new Array(geColCount(bi)).fill('')]; b.merges = {}; }
                 b.headerRows = b.headerRows.map(hr => hr.map(h => (h == null ? '' : h.toString())));
