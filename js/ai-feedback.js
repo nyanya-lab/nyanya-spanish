@@ -2534,18 +2534,39 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   ⚠️ 기능어는 뺀다. AI 는 문장을 손볼 때마다 con·de·a 를 넣고 빼는데,
             //      그걸 '못 떠올린 단어' 로 치면 첨삭마다 −2 가 줄줄이 붙는다.
             const FUNC_POS = new Set(['preposition', 'article', 'pronoun', 'conjunction', 'determiner']);
-            fixedToks.forEach(tok => {
-                const k = norm(tok);
+            //   [냐냐 요청] 어느 낱말인지는 AI 에게 대놓고 묻는다 — wordsAdded (2026-09-10).
+            //     예전엔 고친 문장의 토막을 훑어 짐작했는데 두 가지가 샜다:
+            //     ① 내가 쓴 낱말의 성 변형까지 딴 낱말로 봤다 — 'caro'(비싼)를 'cara' 로 고쳐준 것을
+            //        'la cara'(얼굴)로 잡아 −2 를 줬다. 정작 caro 는 따로 0점이 매겨져 있었다.
+            //     ② 같은 철자로 품사만 다르게 등록된 낱말이 23개인데 품사를 안 넘겨서 동전 던지기였다
+            //        ('complejo' 는 el complejo(단지·명사)와 complejo(복잡한·형용사)가 둘 다 있다).
+            //     AI 목록에는 품사가 붙어 오고, '내 낱말의 변형인지 진짜 새 낱말인지' 도 AI 가 가른다.
+            //   ⚠️ 옛 응답에는 이 칸이 없다 — 그때만 예전 훑기로 돌아간다. 빈 배열은 '없다' 로 믿는다.
+            const missedOne = (name, pos) => {
+                const k = norm(name);
                 if (!k || k.length < 3) return;
                 if (mineFlat.includes(' ' + k + ' ')) return;      // 내가 쓴 것은 위에서 매겼다
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k)) return;
-                const w = resolve(tok, '');
+                const w = resolve(name, pos);
                 if (!w || done.has(w.id)) return;
                 if (FUNC_POS.has(String(w.pos || '').toLowerCase())) return;
                 push(w, false, true);                              // −2
                 const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
                 if (e && e.word.id === w.id) e.missed = true;
-            });
+            };
+            const added = (feedback && Array.isArray(feedback.wordsAdded)) ? feedback.wordsAdded : null;
+            if (added) {
+                added.forEach(raw => {
+                    const cut = String(raw || '').split('|');
+                    const name = cut[0].trim();
+                    if (!name) return;
+                    //   지어낸 낱말은 버린다 — 고친 문장에 진짜로 있어야 한다
+                    if (!fixedFlat.includes(' ' + norm(name) + ' ')) return;
+                    missedOne(name, (cut[1] || '').trim().toLowerCase());
+                });
+            } else {
+                fixedToks.forEach(tok => missedOne(tok, ''));
+            }
             // [냐냐 요청] 점수 묶음으로 보여준다 — +2 쫙, 0 쫙, −2 쫙 (2026-09-04).
             //   묶음과 순서는 여기서 한 번만 정한다(groupDelta). 칩을 눌러 점수를 바꿔도
             //   자리를 안 옮긴다 — 옮기면 누를 때마다 줄이 튀어서 서식이 이랬다저랬다 한다.
@@ -3582,7 +3603,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                "grammarBad": ["for each note this sentence uses INCORRECTLY: \"EXACT note title >> the exact Spanish fragment that proves it\""],
                "wordsOk": ["each content word the student spelled CORRECTLY, written as \\"dictionary form|part of speech\\""],
                "wordsForm": ["each content word spelled correctly but put in the WRONG FORM, written as \\"dictionary form|part of speech\\""],
-               "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""]`;
+               "wordsBad": ["each content word the student MISSPELLED, written as \\"dictionary form|part of speech\\""],
+               "wordsAdded": ["each content word that is in YOUR correctedText but NOT in the student's sentence, written as \\"dictionary form|part of speech\\""]`;
         //   [냐냐 지적] 팁에는 terceira, 고친 문장에는 tercera 처럼 같은 낱말을 다르게 적어 보낸 적이 있다.
         //   어느 쪽이 맞는지 알 수 없으니 배우는 사람만 헷갈린다. 네 모드 프롬프트가 같이 쓴다.
         const AI_SPELLING_CONSISTENCY_RULE = `
@@ -3595,6 +3617,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             Concretely, this is the failure to avoid: message says "반복되는 단어를 대명사로 바꾸면 더 자연스러워집니다", naturalWhy says "지시대명사를 활용해 자연스럽게 표현했어요", and tip says "'esa ropa' 대신 'esta'처럼 지시대명사를 사용해보세요" — three sentences, one idea, and the student's eye slides off all of them. When "moreNatural" is filled, ONLY "naturalWhy" may discuss that rephrasing; "message" and "tip" must then talk about something else — the grammar the student actually used, or the rule behind the correction you made.`;
         const AI_SCORING_RULES_TEXT = `
             IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" ONLY when the student misspelled it — the letters they typed are not a real Spanish word (put the dictionary form of the word they were CLEARLY trying to write). A correctly spelled real word can NEVER go in "wordsBad", however wrong it was for this sentence; if you replaced it, it belongs in "wordsForm"; "wordsForm" when the word is spelled correctly but you did NOT leave it as it was — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos), or a word you had to swap for a different one (es → está, Cuál → Qué, el pie → mis pies). The student knew the word but did not place it right here, so it earns nothing either way; "wordsOk" only for words that survive into correctedText exactly as the student wrote them. Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
+            IMPORTANT for "wordsAdded": REQUIRED - always output it, using [] when empty. This is the MIRROR of the three lists above: every content word that appears in YOUR "correctedText" but NOT in the student's original sentence - the words YOU chose for them. Same format and same dictionary-form rules, "dictionary form|part of speech". By itself it neither earns nor loses points; the app needs it because the same spelling can be two different words ("complejo" is both the adjective 복잡한 and the noun 단지) and only you know which one you meant. Keep two things OUT of it: (a) a word that is merely another FORM of a word the student wrote - they wrote "caro" and you wrote "cara", that is their word re-inflected and belongs in "wordsForm", not here; (b) articles, bare one-word prepositions and pronouns.
             IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title.
             WALK SENTENCE BY SENTENCE. The student may write one sentence or a whole paragraph. Take the sentences ONE AT A TIME, in order, and ask of each: which of my notes does THIS sentence use? A long text is not one judgement - it is that question repeated. Notes found in a later sentence matter exactly as much as ones in the first, and the same note may be exercised by several sentences (list it once, with the clearest fragment). It is a failure to answer for the first sentence and stop: a five-sentence text that returns two notes is almost always a text you stopped reading. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. A single structure often belongs to TWO notes at once — "Estoy buscando" is BOTH the gerundio note (the -ando ending itself) AND the present-progressive note (estar + gerundio); list both, never just the one that feels most specific. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. Concretely: a note titled "위치를 나타내는 표현" whose hint is about "del / al" and "encima de, cerca de, al lado de" is NOT used by a sentence that just says "sobre el pie" — no contraction, none of its phrases — so that note belongs in NEITHER list, not in "grammarOk" and not in "grammarBad". Read the hint, not the title: the title is a topic, the hint is the rule. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
             DECIDING which of the two lists a note goes in: ask whether THE NOTE'S OWN RULE was applied wrongly.
@@ -3609,14 +3632,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
             EVIDENCE IS MANDATORY. Every entry of "grammarOk"/"grammarBad" is written as "TITLE >> FRAGMENT", where FRAGMENT is 1-5 Spanish words COPIED VERBATIM from the student's sentence or from your corrected sentence - the very words this note's rule is about. Copy them letter for letter; do not paraphrase, do not translate, do not name the rule again. Use "..." for a gap when the rule spans words (e.g. "mas ... que"). A fragment that does not appear in either sentence is thrown away by the app together with its note, so the student loses the point - and a fragment you cannot find is proof the note was not really used, which is exactly when you must leave the note out.${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
         //   빼두면 모델이 항목을 통째로 생략해서 점수가 조용히 안 붙는다 (실제로 그랬다).
-        const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsForm", "wordsBad"];
+        const AI_SCORING_REQUIRED = ["grammarOk", "grammarBad", "wordsOk", "wordsForm", "wordsBad", "wordsAdded"];
         function aiScoringSchemaProps() {
             return {
                 grammarOk: { type: "ARRAY", items: { type: "STRING" }, description: "제대로 쓴 문법 노트 — '제목 >> 문장에서 베낀 근거 조각'" },
                 grammarBad: { type: "ARRAY", items: { type: "STRING" }, description: "틀리게 쓴 문법 노트 — '제목 >> 문장에서 베낀 근거 조각'" },
                 wordsOk: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링도 형태도 맞은 낱말의 사전형들" },
                 wordsForm: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링은 맞지만 활용·성수 형태를 틀린 낱말의 사전형들 (점수 없음)" },
-                wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" }
+                wordsBad: { type: "ARRAY", items: { type: "STRING" }, description: "스펠링이 틀린 낱말의 사전형들" },
+                wordsAdded: { type: "ARRAY", items: { type: "STRING" }, description: "AI 가 새로 넣은 낱말의 사전형들 (내가 안 쓴 것) — 품사까지" }
             };
         }
         // [냐냐 요청] 문법은 맞는데 원어민은 다르게 말하는 경우를 짚어준다.
