@@ -8585,6 +8585,39 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             setTimeout(() => logo.classList.remove('punch-effect-right'), 200);
         }
 
+        // [냐냐 요청] 로고를 누르면 강력 새로고침 (2026-09-10).
+        //   그냥 새로고침으로는 브라우저가 index.html 을 캐시에서 꺼내 쓸 수 있고, 그러면
+        //   그 안의 ?v= 도 옛것이라 js·css 까지 통째로 옛 판이 돈다. 주소에 시각을 붙여
+        //   '처음 보는 주소' 로 만들어서 index.html 부터 새로 받아오게 한다.
+        //   ⚠️ 쓰던 글이 있으면 한 번 묻는다 — 헤더는 늘 보이는 자리라 잘못 눌릴 수 있다.
+        function hardReloadApp() {
+            const boxes = ['ai-user-input', 'ai-free-input-es', 'ai-example-input', 'ai-question-input',
+                           'input-word', 'input-meaning', 'write-answer-input', 'fill-answer-input'];
+            const typing = boxes.some(id => {
+                const el = document.getElementById(id);
+                return el && String(el.value || '').trim();
+            });
+            const go = () => {
+                //   서비스워커나 캐시가 있으면 같이 비운다 (지금은 없지만 나중에 붙어도 안전하게)
+                try { if (window.caches && caches.keys) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
+                try {
+                    const u = new URL(location.href);
+                    u.searchParams.set('r', String(Date.now()));
+                    location.replace(u.toString());
+                } catch (e) { location.reload(); }
+            };
+            if (typing && typeof showConfirm === 'function') {
+                showConfirm("새로고침할까요?", "쓰던 글이 있어요. 새로고침하면 사라져요.", go,
+                    { okLabel: '새로고침', cancelLabel: '아니요', okStyle: 'primary', icon: 'happy' });
+                return;
+            }
+            go();
+        }
+        function logoClicked() {
+            triggerPunchLogo();
+            setTimeout(hardReloadApp, 180);   // 펀치 효과를 잠깐 보여주고 새로고침
+        }
+
         function updateStats() {
             const total = vocabulary.length;
             const mastered = vocabulary.filter(w => w.mastered).length;
