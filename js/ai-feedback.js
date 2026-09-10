@@ -2979,7 +2979,24 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   구는 길수록 헛짚기 어려워 같은 걱정이 없다. 대신 낱말 2~5개·글자 6자 이상으로 막는다
             //   ('a las'·'en la' 같은 토막은 떨어진다). 주인이 둘 이상이면 버리는 것은 낱말과 같다.
             const phraseOwner = new Map();
+            // ============================================================
+            // [냐냐 지적] '¿Cuándo tiempo llevas…?' 에 tener 노트가 걸렸다 (2026-09-10).
+            //   'tiempo' 가 tener 표 칸이라서인데, 그 표가 가르치는 건 'tener tiempo'(시간이 있다)
+            //   라는 짝이지 'tiempo' 라는 낱말이 아니다. tener 가 없으면 그냥 흔한 명사다.
+            //   (같은 이유로 'Hace buen tiempo hoy' 도 tener 노트에 걸리고 있었다)
+            //   **노트 제목이 동사를 말하면**('tener'와 같이 쓰이는 명사) 그 노트의 칸은
+            //   옛 색인에서 빼고, 동사가 함께 있을 때만 인정하는 칸(vWords)으로만 둔다.
+            //   ⚠️ 제목이 주제인 노트(날씨)는 안 건드린다 — 'lluvia'·'nublado' 는 낱말 자체가
+            //      그 주제라 동사 없이도 근거가 된다. 'Llueve mucho' 도 그대로 잡힌다.
+            //   재보니 이 규칙에 걸리는 노트는 tener 하나뿐이다.
+            // ============================================================
+            const verbTitled = new Set();
             (notes || []).forEach(t => {
+                const bare = String(t.title || '').replace(/['"‘’“”]/g, ' ');
+                if (cellCaptionVerb(bare)) verbTitled.add(t.id);
+            });
+            (notes || []).forEach(t => {
+                if (verbTitled.has(t.id)) return;     // 제목이 동사를 말하는 노트는 vWords 로만 본다
                 const seen = new Set();
                 (typeof noteSpanishCells === 'function' ? noteSpanishCells(t) : []).forEach(c => {
                     const k = nz(c);
