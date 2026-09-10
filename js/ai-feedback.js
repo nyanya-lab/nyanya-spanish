@@ -3104,6 +3104,21 @@ ${koEsNoteListText}${refGrammar}${refWords}
 
             // '제목 >> 근거 조각' 을 갈라서, 근거가 문장에 실제로 있는 것만 남긴다
             const hay = grammarEvidenceHaystack(feedback);
+            // ============================================================
+            // [냐냐 지적] 잘 썼다(+2)는 근거가 '내 문장' 에 있어야 한다 (2026-09-10).
+            //   냐냐님이 'tengo que es silantro leyendo un libro' 라고 쓰셨고 AI 가 통째로
+            //   'hay que leer libros en silencio' 로 고쳤는데, 의무 표현 노트가 +2 를 받았다.
+            //   AI 가 근거를 제 고친 문장에서 떠왔기 때문이다 — 'hay que leer' 는 AI 가 쓴 말이다.
+            //   냐냐님 말씀 그대로다 — "나 의무 나타내는 표현 틀렸는디".
+            //   그래서 +2 쪽만 내 문장으로 근거를 좁힌다. 틀렸다(−2)는 지금처럼 양쪽 다 본다:
+            //   무엇으로 고쳤는지를 근거로 대는 게 자연스럽고, 그건 벌이라 후하게 봐도 손해가 없다.
+            //   ⚠️ 악센트·대소문자는 grammarEvidenceNorm 이 이미 걷어내므로,
+            //      악센트만 고쳐준 경우까지 여기서 떨어지지는 않는다.
+            //   ⚠️ 못 찾으면 그냥 버린다(0). −2 로 바꾸지는 않는다 — 우리가 아는 건
+            //      'AI 주장에 근거가 없다' 지 '냐냐님이 시도했다가 틀렸다' 가 아니다.
+            // ============================================================
+            const mineHayOnly = [feedback && feedback.originalMarked, feedback && feedback.userText]
+                .map(x => grammarEvidenceNorm(aiStripTags(x))).filter(Boolean);
             const useEvidence = list.some(it => String(it.name || '').includes('>>'));
             const parsed = [];
             list.forEach(item => {                       // AI 가 짚은 만큼 다 반영한다 (개수 제한 없음)
@@ -3112,7 +3127,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const ev = cut.slice(1).join('>>').trim();
                 const note = byTitle.get(norm(title));
                 if (!note) return;                       // 지어낸 제목은 버린다
-                if (useEvidence && !grammarEvidenceFound(ev, hay)) return;   // 근거를 못 대면 점수도 없다
+                //   잘 썼다는 내 문장에서, 틀렸다는 어느 쪽에서든 근거를 대야 한다
+                const where = (item.ok === true) ? mineHayOnly : hay;
+                if (useEvidence && !grammarEvidenceFound(ev, where)) return;   // 근거를 못 대면 점수도 없다
                 parsed.push({ note, ok: item.ok, ev });
             });
             // [냐냐 요청] AI 가 빠뜨린 '동사 꼴 노트' 를 코드가 채운다 (2026-09-04).
