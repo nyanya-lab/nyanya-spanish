@@ -1475,6 +1475,17 @@ let vocabulary = [];
             </div>`;
         }
 
+        // [냐냐 지적] 팝업 탭줄 위로 목록이 지나가는 게 다 보였다 (2026-09-10).
+        //   본문(#review-plan-body)에 p-5 가 있어서 붙박이 탭줄 위쪽 20px 이 빈 채로 남았다.
+        //   탭줄을 흰 바탕으로 감싸 그 틈까지 덮는다 (-mt-5 로 올려붙이고 pt-5 로 그만큼 되돌린다).
+        //   옆 여백까지 덮어야 한다(-mx-5 px-5) — '오늘 할 것' 빨간 점이 -left-1 로 밀려 있어서
+        //   가로로 안 늘리면 그 점만 왼쪽 여백으로 새어 나온다. 너비는 여백 안쪽에 딱 맞아 가로줄은 안 생긴다.
+        //   ⚠️ 붙박이 줄이 둘이면 한 옷 안에 같이 넣는다. 따로 top-0 을 주면 서로 겹쳐 뒤엣것이 가려진다.
+        //   ⚠️ top 은 0 이 아니라 -20px 이다. 붙박이는 '테두리 상자'가 아니라 '여백까지 친 상자'를
+        //      기준으로 붙는데 위쪽 여백이 -20px 이라, top-0 으로 두면 딱 그만큼 아래로 밀려서
+        //      틈이 그대로 남는다 (재보니 20px 어긋났다). -top-5 로 그만큼 되돌린다.
+        const STICKY_TABS_WRAP = 'sticky -top-5 z-10 -mt-5 pt-5 -mx-5 px-5 pb-1.5 bg-white';
+
         function openReviewPlanModal(ds, kind, mode) {
             const isWrong = (mode === 'wrong');
             const plan = isWrong
@@ -1512,7 +1523,7 @@ let vocabulary = [];
                     : ((typeof getAllWrongOn === 'function' ? getAllWrongOn(ds) : null) || {}).total)
                 : null;
             const modeTab = (isToday && (plan.total || otherTotal))
-                ? `<div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-20 mb-1.5">
+                ? `<div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 mb-1.5">
                     ${[['plan', '📅 복습 예정', isWrong ? otherTotal : plan.total],
                        ['wrong', '⚠️ 틀린 것', isWrong ? plan.total : otherTotal]].map(([m, label, n]) =>
                         `<button onclick="openReviewPlanModal('${ds}', '${cur.key}', '${m}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${((m === 'wrong') === isWrong) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${label} ${n || 0}</button>`).join('')}
@@ -1520,11 +1531,11 @@ let vocabulary = [];
                 : '';
 
             // 셋을 오가는 줄. 0개인 것은 눌러도 볼 게 없으니 흐리게 둔다.
-            const tabs = modeTab + `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+            const tabs = `<div class="${STICKY_TABS_WRAP}">` + modeTab + `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                 ${KINDS.map(k => k.list.length
                     ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}', '${isWrong ? 'wrong' : 'plan'}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
                     : `<div class="py-2 rounded-xl text-[11px] font-black text-slate-300 text-center">${k.icon} ${k.label} 0</div>`).join('')}
-            </div>`;
+            </div></div>`;
 
             // 단계는 셋 다 같은 자리에 들어 있지만 꺼내는 길이 다르다
             const stageOf = (it) => cur.key === 'word' ? (it.reviewStage || 0)
@@ -2055,11 +2066,11 @@ let vocabulary = [];
 
             const counts = {};
             CURVE_BUCKETS.forEach(b => { counts[b.key] = getCurveBucketItems(kind, b.key).length; });
-            const tabs = `<div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+            const tabs = `<div class="${STICKY_TABS_WRAP}"><div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                 ${CURVE_BUCKETS.map(b => counts[b.key]
                     ? `<button onclick="openCurveBucketModal('${kind}', '${b.key}')" class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight transition-all ${b.key === bucket ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${b.label}<br><span class="text-[10px] font-bold">${counts[b.key]}</span></button>`
                     : `<div class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight text-slate-300 text-center">${b.label}<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
-            </div>`;
+            </div></div>`;
 
             const shown = rows.slice(0, CURVE_LIST_MAX);
             const more = rows.length - shown.length;
@@ -2092,11 +2103,11 @@ let vocabulary = [];
 
             // 칸 사이를 오간다 — 빈 칸은 눌러도 볼 게 없으니 흐리게 둔다
             const counts = REVIEW_INTERVALS.map((d, i) => getCurveStageItems(kind, i).length);
-            const tabs = `<div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 sticky top-0 z-10">
+            const tabs = `<div class="${STICKY_TABS_WRAP}"><div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                 ${REVIEW_INTERVALS.map((d, i) => counts[i]
                     ? `<button onclick="openCurveStageModal('${kind}', ${i})" class="py-1.5 rounded-xl text-[11px] font-black leading-tight transition-all ${i === stage ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${d}일<br><span class="text-[10px] font-bold">${counts[i]}</span></button>`
                     : `<div class="py-1.5 rounded-xl text-[11px] font-black leading-tight text-slate-300 text-center">${d}일<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
-            </div>`;
+            </div></div>`;
 
             bodyEl.innerHTML = tabs + (rows.length
                 ? `<div class="space-y-1.5">${rows.map(r => r.due
