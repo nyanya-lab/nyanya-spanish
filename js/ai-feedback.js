@@ -2830,7 +2830,36 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //     ③ 그 노트에만 있는 낱말   — 두 노트가 나눠 가진 낱말은 어느 쪽인지 못 가른다
         //     ④ 악센트까지 똑같이       — esta(이것) 와 está(estar) 는 다른 말이다
         // ============================================================
-        let _noteCellIndex = null;   // { words: 낱말→노트id, phrases: 구→노트id } · 노트 목록이 바뀌면 다시 만든다
+        // 표 이름이 '<동사>와 같이 쓰이는 …' 이면 그 동사를 돌려준다 (없으면 빈 글자).
+        //   냐냐님이 표 이름을 그렇게 적으신다: 'hacer 와 같이 쓰이는 명사' · 'tener와 같이 쓰이는 명사'
+        //   · 'estar 와 같이 쓰이는 형용사'. 한글로 적힌 '동사와 함께 쓰이는…' 은 안 걸린다 (원형이 아니라서).
+        function cellCaptionVerb(caption) {
+            const m = String(caption || '')
+                .match(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:ar|er|ir))\s*(?:와|과)?\s*(?:같이|함께)\s*쓰이는/);
+            //   원형은 악센트를 떼고 맞춘다 — 문장 쪽 원형(sentenceVerbLemmas)도 뗀 꼴이라서다 (oír → oir)
+            return m ? m[1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') : '';
+        }
+        // 문장에 나온 동사들의 원형 (활용표 역추적 + 심한 불규칙 넷은 글자로)
+        function sentenceVerbLemmas(raws) {
+            const set = new Set();
+            const nzs = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            const bare = (x) => String(x).normalize('NFD').replace(/[̀-ͯ]/g, '');
+            let lemma = null;
+            try { lemma = buildVerbFormIndex().lemma; } catch (e) { lemma = null; }
+            (raws || []).forEach(raw => {
+                const t = nzs(raw);
+                if (!t) return;
+                const l = lemma && lemma.get(t);
+                if (l) set.add(l);
+                const b = bare(t);
+                if (ESTAR_FORMS.has(b)) set.add('estar');
+                if (HABER_FORMS.has(b)) set.add('haber');
+                if (SER_IR_FORMS.has(b)) { set.add('ser'); set.add('ir'); }
+            });
+            return set;
+        }
+        let _noteCellIndex = null;   // { words: 낱말→노트id, phrases: 구→노트id, vWords/vPhrases: 동사가 있어야 인정하는 칸 }
         function buildNoteCellIndex(notes) {
             const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
             const owner = new Map();    // 낱말 → 노트id (둘 이상이면 null 로 눌러둔다)
@@ -2863,7 +2892,42 @@ ${koEsNoteListText}${refGrammar}${refWords}
             owner.forEach((id, k) => { if (id) words.set(k, id); });
             const phrases = new Map();
             phraseOwner.forEach((id, k) => { if (id) phrases.set(k, id); });
-            return { words, phrases };
+            // ============================================================
+            // [냐냐 지적] 'Hace mucho calor hoy.' 가 날씨 노트를 안 짚었다 (2026-09-10).
+            //   왜: 'calor'·'frío' 가 날씨 노트와 tener 노트에 둘 다 적혀 있어서 ③(그 노트에만
+            //   있는 낱말)에 걸려 버려졌다. 'sol' 은 세 글자라 ②에 걸렸다. 하필 가장 흔한 셋이다.
+            //   그런데 이건 애매한 낱말이 아니다 — 'hace calor' 면 날씨, 'tengo calor' 면 tener 다.
+            //   가르는 열쇠를 냐냐님이 이미 표 이름에 적어두셨다:
+            //     날씨 노트 → 'hacer 와 같이 쓰이는 명사'  ·  tener 노트 → 'tener와 같이 쓰이는 명사'
+            //   그 동사가 문장에 같이 있을 때만 인정하는 칸으로 따로 색인한다. 동사가 다르니
+            //   더는 안 겹치고, 겹칠 걱정이 없으니 짧은 낱말(sol)도 받을 수 있다.
+            //   ⚠️ 위의 색인은 손대지 않는다 — 이건 순수하게 '더하기' 다. 지금 잡히는 것은 그대로 잡힌다.
+            // ============================================================
+            const vWords = new Map(), vPhrases = new Map();
+            const vSeen = new Map();     // '원형칸' → 노트id (둘 이상이면 null)
+            (notes || []).forEach(t => {
+                const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
+                blocks.forEach(b => {
+                    if (!b || b.type !== 'table') return;
+                    const verb = cellCaptionVerb(b.caption);
+                    if (!verb) return;
+                    noteSpanishCells({ blocks: [b] }).forEach(c => {
+                        const k = nz(c);
+                        const parts = k.split(/[^a-záéíóúüñ]+/).filter(Boolean);
+                        if (!parts.length || parts.length > 5) return;
+                        //   한 낱말은 두 글자부터 받는다 (동사가 함께 있어야 하니 헛짚을 일이 없다)
+                        const key = parts.join(' ');
+                        if (key.replace(/ /g, '').length < 2) return;
+                        const vk = verb + '::' + (parts.length > 1 ? '~' : '') + key;
+                        vSeen.set(vk, vSeen.has(vk) ? null : t.id);
+                    });
+                });
+            });
+            vSeen.forEach((id, vk) => {
+                if (!id) return;
+                (vk.indexOf('::~') >= 0 ? vPhrases : vWords).set(vk, id);
+            });
+            return { words, phrases, vWords, vPhrases };
         }
         // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
         function detectNoteCellsInText(text, notes) {
@@ -2889,6 +2953,27 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const id = _noteCellIndex.words.get(k);
                 if (id && !out.has(id)) out.set(id, raw);
             });
+            // 표 이름이 동사를 말하는 칸 — 그 동사가 문장에 같이 있을 때만 인정한다.
+            //   'hace calor' 는 날씨, 'tengo calor' 는 tener 노트. 겹치는 낱말을 이렇게 가른다.
+            const vW = _noteCellIndex.vWords, vP = _noteCellIndex.vPhrases;
+            if ((vW && vW.size) || (vP && vP.size)) {
+                const verbs = sentenceVerbLemmas(raws);
+                if (verbs.size) {
+                    const hay = ' ' + raws.map(nz).join(' ') + ' ';
+                    vP.forEach((id, vk) => {
+                        if (out.has(id)) return;
+                        const cut = vk.split('::~');
+                        if (!verbs.has(cut[0])) return;
+                        if (hay.indexOf(' ' + cut[1] + ' ') >= 0) out.set(id, cut[1]);
+                    });
+                    vW.forEach((id, vk) => {
+                        if (out.has(id)) return;
+                        const cut = vk.split('::');
+                        if (!verbs.has(cut[0])) return;
+                        if (hay.indexOf(' ' + cut[1] + ' ') >= 0) out.set(id, cut[1]);
+                    });
+                }
+            }
             return out;
         }
 
