@@ -5354,15 +5354,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const cs = mg ? Math.max(1, mg.cs || 1) : 1;
                     const rs = mg ? Math.max(1, mg.rs || 1) : 1;
                     const spanAttr = `${cs > 1 ? ` colspan="${cs}"` : ''}${rs > 1 ? ` rowspan="${rs}"` : ''}`;
-                    // [냐냐 요청] 칸 강조는 칸을 통째로 칠하지 않고 '글씨에만' 형광펜을 긋는다 (2026-09-10).
-                    //   칸 배경을 칠하면 줄무늬·병합과 겹쳐서 표가 얼룩덜룩해진다. 글씨 뒤에만 색을 깐다.
-                    const isCellHl = !!cellHl[`${ri}-${ci}`];
+                    const cellBg = cellHl[`${ri}-${ci}`] ? 'bg-[#ffe0ec]' : '';
                     const colHl = hlCols.includes(ci) ? 'text-violet-600 font-extrabold' : 'text-slate-800 font-bold';
                     // 🔍 단어 찾기 모드: 셀 안의 스페인어 단어마다 밑줄 + 클릭 가능
-                    const rawContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
-                    const cellContent = (isCellHl && String(c || '').trim())
-                        ? `<span class="bg-[#ffe0ec] rounded px-1 py-0.5 box-decoration-clone">${rawContent}</span>`
-                        : rawContent;
+                    const cellContent = grammarWordLookupMode ? buildLookupCellHtml(c || '') : escapeHtml(c || '');
                     // [냐냐 요청] 표 안에는 연결 표시를 하지 않는다 (밑줄도 점도 없앰).
                     //   노트 카드의 연결 아이콘으로 상태를 보고, 어느 칸인지는 연결창의 표
                     //   미리보기가 색으로 보여준다. 표 자체는 깔끔하게 둔다.
@@ -5374,7 +5369,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         const tip = `단어장 연결: ${linked.word}${linked.meaning ? ' — ' + linked.meaning : ''}`;
                         cellTitle = ` title="${escapeHtml(tip).replace(/"/g, '&quot;')}"`;
                     }
-                    return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl}"${spanAttr}${cellTitle}>${cellContent}</td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle border border-[#c3d9ec] ${colHl} ${cellBg}"${spanAttr}${cellTitle}>${cellContent}</td>`;
                 }).join('');
                 return `<tr class="${rowBg} hover:bg-[#fff8dd] transition-colors">${cells}</tr>`;
             }).join('');
