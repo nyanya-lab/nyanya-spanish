@@ -255,14 +255,17 @@
             const prev = sel.value;
             const allTopics = [...new Set(customQuestions.map(q => q.topic).filter(Boolean))];
             const visible = allTopics.filter(t => !hiddenQuestionTopics.includes(t));
-            let html = '';
+            // [냐냐 요청] '새 주제 입력' 을 맨 위로 (2026-09-10). 목록이 길면 끝까지 내려가야 했다.
+            //   ⚠️ 맨 위에 두면 저절로 골라지므로, 처음 열 때는 첫 주제로 되돌려 놓는다 —
+            //      안 그러면 창을 열 때마다 새 주제 입력칸이 펼쳐진다.
+            let html = `<option value="__new__">➕ 새 주제 입력...</option>`;
             if (visible.length > 0) {
                 html += visible.map(t => `<option value="${t.replace(/"/g, '&quot;')}">${t}</option>`).join('');
             }
-            html += `<option value="__new__">➕ 새 주제 입력...</option>`;
             sel.innerHTML = html;
-            // 이전 선택 유지 (있으면)
+            // 이전 선택 유지 (있으면), 없으면 첫 주제
             if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+            else if (visible.length > 0) sel.value = visible[0];
             onTopicSelectChange();
         }
         // 드롭다운에서 '새 주제'를 고르면 텍스트 입력칸 표시
