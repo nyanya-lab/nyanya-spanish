@@ -2645,19 +2645,62 @@ ${koEsNoteListText}${refGrammar}${refWords}
             imperativo:    ['명령법', 'imperativo'],
             gerundio:      ['현재분사', 'gerundio'],
             participio:    ['과거분사', 'participio'],
-            // 두 조각짜리 — 앱의 시제 목록에는 없다 (estar+현재분사, haber+과거분사라 따로 안 둔다)
-            progresivo:    ['현재진행', '진행형'],
-            perfecto:      ['현재완료', '완료시제', 'perfecto']
+            // [냐냐 요청] 두 조각짜리는 이름을 넓게 잡는다 (2026-09-10).
+            //   앱의 시제 목록에는 없다 (estar+현재분사, haber+과거분사라 따로 안 둔다).
+            //   예전엔 '현재진행'·'현재완료' 만 적어놔서, 과거완료·미래진행 노트를 만드시면
+            //   여기 이름을 손으로 더해야 걸렸다. '진행'·'완료' 만 보면 저절로 걸린다 —
+            //   어느 시제인지는 아래 noteAuxTense 가 노트에 적힌 구조로 가른다.
+            //   ⚠️ '불완료과거' 에 든 '완료' 는 빼야 한다. 그래서 앞 글자가 '불' 이면 안 친다.
+            progresivo:    [/진행/, 'progresivo'],
+            perfecto:      [/(^|[^불])완료/, 'perfecto']
         };
         // 그 꼴을 '가르치는' 노트. 제목과 표 제목만 본다.
-        function notesTeachingVerbForm(key, notes) {
+        //   auxTenses 를 주면 '보조동사가 무슨 시제로 왔나' 까지 맞아야 인정한다 (noteAuxTense 참고).
+        function notesTeachingVerbForm(key, notes, auxTenses) {
             const names = VERB_FORM_NOTE_NAMES[key] || [];
             if (!names.length) return [];
             return (notes || []).filter(t => {
                 const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
                 const head = ((t.title || '') + ' ' + blocks.map(b => (b && b.caption) || '').join(' ')).toLowerCase();
-                return names.some(n => head.includes(n.toLowerCase()));
+                const hit = names.some(n => (n instanceof RegExp) ? n.test(head) : head.includes(String(n).toLowerCase()));
+                if (!hit) return false;
+                if (!auxTenses) return true;
+                const need = noteAuxTense(t);
+                if (!need) return true;                       // 구조를 안 적어두셨으면 예전처럼 다 인정
+                const got = auxTenses[need.verb];
+                return !got || got === need.tense;            // 시제를 못 알아냈으면 벌하지 않는다
             });
+        }
+        // ============================================================
+        // [냐냐 요청] 노트에 적어둔 구조에서 '보조동사의 시제' 를 읽는다 (2026-09-10).
+        //   냐냐님이 짚으셨다 — "내용에 estar(현재) haber(현재) 이렇게 썼는데도 안 돼?"
+        //   맞는 말씀이다. 노트 글에 이렇게 적혀 있다:
+        //     현재완료 → '1. 구조 : Haber(현재) + P.P'
+        //     현재진행 → '구조 : estar(현재) + gerundio(현재분사)'
+        //   예전엔 코드가 활용표만 보고 이 줄을 안 읽어서, 'Estaba comiendo'(과거진행) 도
+        //   'Había comido'(과거완료) 도 현재진행·현재완료 노트로 잡혔다.
+        //   이제 이 줄을 읽어 보조동사 시제가 맞을 때만 인정한다.
+        //   ⚠️ 보는 원형은 estar·haber 둘뿐이다 — 짜임을 만드는 게 이 둘이라서다.
+        //      그래야 'gerundio(현재분사)' 같은 딴 괄호를 구조로 오해하지 않는다.
+        //   새 시제를 배워 노트를 만들 땐 구조만 적으면 된다 — 코드는 안 고쳐도 된다.
+        //     ej. 과거완료 노트에 'Haber(불완료과거) + P.P' 라고 적으면 había 일 때만 걸린다.
+        // ============================================================
+        const AUX_TENSE_WORDS = [        // 긴 것부터 — '불완료과거' 가 '과거' 에 먼저 먹히면 안 된다
+            ['접속법 불완료과거', 'subjImperfecto'], ['접속법 현재', 'subjPresente'],
+            ['불완료과거', 'imperfecto'], ['부정과거', 'indefinido'], ['단순과거', 'indefinido'],
+            ['조건법', 'condicional'], ['현재', 'presente'], ['미래', 'futuro']
+        ];
+        function noteAuxTense(note) {
+            if (!note) return null;
+            const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(note) : (note.blocks || []);
+            const text = blocks.filter(b => b && b.type !== 'table' && b.html)
+                .map(b => (typeof richTextToPlain === 'function') ? richTextToPlain(b.html) : '')
+                .join(' ');
+            const m = text.match(/\b(haber|estar)\s*\(\s*([^)]{1,20}?)\s*\)/i);
+            if (!m) return null;
+            const inside = m[2];
+            const found = AUX_TENSE_WORDS.find(([w]) => inside.indexOf(w) >= 0);
+            return found ? { verb: m[1].toLowerCase(), tense: found[1] } : null;
         }
         // ============================================================
         // [냐냐 지적] 시제 노트는 표 칸으로 판단하지 않는다 (2026-09-10).
@@ -2754,13 +2797,33 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   ⚠️ 네 동사(estar·haber·ser·ir)뿐이다 — 늘어나지 않는다.
         //   두 군데가 같이 쓴다: 동사 꼴 알아보기, 그리고 '아직 단어장에 없어요' 추천에서 빼기
         //   ('fue' 를 등록하라고 권한 적이 있다 — ser 의 부정과거가 활용표에 없어서 낱말로 보였다).
-        const ESTAR_FORMS = new Set(['estoy','estas','esta','estamos','estais','estan',
-            'estaba','estabas','estabamos','estabais','estaban',
-            'estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron',
-            'estare','estaras','estara','estaremos','estareis','estaran','estaria','estarian']);
-        const HABER_FORMS = new Set(['he','has','ha','hemos','habeis','han',
-            'habia','habias','habiamos','habiais','habian',
-            'habre','habras','habra','habremos','habreis','habran','habria','habrian']);
+        // [냐냐 요청] 시제별로 갈라 둔다 (2026-09-10). 짜임을 만드는 두 동사는 '어느 시제로 왔나' 가
+        //   곧 무슨 짜임인가를 말해준다 — estoy+분사는 현재진행, estaba+분사는 과거진행이다.
+        //   합쳐 놓으면 둘을 못 가른다. 아래 두 벌은 이 표에서 뽑아 쓴다 (내용은 예전과 같다).
+        const AUX_TENSE_FORMS = {
+            estar: {
+                presente:   ['estoy','estas','esta','estamos','estais','estan'],
+                imperfecto: ['estaba','estabas','estabamos','estabais','estaban'],
+                indefinido: ['estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron'],
+                futuro:     ['estare','estaras','estara','estaremos','estareis','estaran'],
+                condicional:['estaria','estarian']
+            },
+            haber: {
+                presente:   ['he','has','ha','hemos','habeis','han'],
+                imperfecto: ['habia','habias','habiamos','habiais','habian'],
+                futuro:     ['habre','habras','habra','habremos','habreis','habran'],
+                condicional:['habria','habrian']
+            }
+        };
+        //   꼴 → 시제키 (보조동사별). 'esta' 처럼 겹치는 꼴이 있어도 예전과 똑같이 다룬다.
+        const AUX_FORM_TENSE = { estar: new Map(), haber: new Map() };
+        Object.keys(AUX_TENSE_FORMS).forEach(v => {
+            Object.keys(AUX_TENSE_FORMS[v]).forEach(tk => {
+                AUX_TENSE_FORMS[v][tk].forEach(f => { if (!AUX_FORM_TENSE[v].has(f)) AUX_FORM_TENSE[v].set(f, tk); });
+            });
+        });
+        const ESTAR_FORMS = new Set(AUX_FORM_TENSE.estar.keys());
+        const HABER_FORMS = new Set(AUX_FORM_TENSE.haber.keys());
         //   ser 와 ir 은 부정과거가 글자까지 똑같다 (fui/fue/fueron …)
         const SER_IR_FORMS = new Set(['soy','eres','es','somos','sois','son',
             'era','eras','eramos','erais','eran',
@@ -2780,6 +2843,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const { idx, lemma, nonVerb } = buildVerbFormIndex();
             const mark = (key, ev) => { if (!out.has(key)) out.set(key, ev); };
             let estarTok = '', haberTok = '', gerTok = '', partTok = '';
+            //   [냐냐 요청] 보조동사가 '무슨 시제로 왔나' 를 같이 담는다 - 현재진행/과거진행을 가르는 열쇠다
+            const auxTenses = {};
             // 진행·완료를 만드는 두 동사는 어느 시제로 와도 알아봐야 한다 (estaba/había …).
             //   둘 다 심한 불규칙이고 활용표에 다 채워져 있으리란 보장이 없어서 글자로도 받아둔다.
             //   ⚠️ 이 목록은 estar·haber 두 동사만이다 — 짜임을 만드는 게 이 둘뿐이라 늘어나지 않는다.
@@ -2807,15 +2872,16 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     || (!nounish && keys && keys.has('participio'));
                 if (isPart) { mark('participio', raw); if (!partTok) partTok = raw; }
                 const lem = lemma.get(t);
-                if (lem === 'estar' || ESTAR_FORMS.has(b)) estarTok = estarTok || raw;
+                if ((lem === 'estar' || ESTAR_FORMS.has(b)) && !estarTok) { estarTok = raw; auxTenses.estar = AUX_FORM_TENSE.estar.get(b) || ''; }
                 const isHaber = (lem === 'haber' || HABER_FORMS.has(b));
-                if (isHaber) haberTok = haberTok || raw;
+                if (isHaber && !haberTok) { haberTok = raw; auxTenses.haber = AUX_FORM_TENSE.haber.get(b) || ''; }
                 prevWasHaber = isHaber;
                 prevWasArticle = ARTICLES.has(b);
             });
             // 두 조각이 다 있을 때만 — 'estoy en casa' 는 현재진행이 아니다
             if (estarTok && gerTok) mark('progresivo', `${estarTok} ${gerTok}`);
             if (haberTok && partTok) mark('perfecto', `${haberTok} ${partTok}`);
+            out.auxTenses = auxTenses;      // 목록을 도는 데는 안 끼어든다 (Map 에 얹어 둔 곁가지)
             return out;
         }
 
@@ -3036,9 +3102,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const fixedForms = detectVerbFormsInText(feedback && feedback.correctedText);
                 const already = new Set(parsed.map(x => x.note.id));
                 const extra = [];
-                detectVerbFormsInText(feedback && feedback.originalMarked).forEach((ev, key) => {
+                const mineForms = detectVerbFormsInText(feedback && feedback.originalMarked);
+                //   보조동사 시제까지 넘긴다 - 'Estaba comiendo'(과거진행)가 현재진행 노트로 새지 않게
+                const auxT = mineForms.auxTenses || null;
+                mineForms.forEach((ev, key) => {
                     const ok = COMPOUND.has(key) ? fixedForms.has(key) : wordSurvived(ev);
-                    notesTeachingVerbForm(key, notes).forEach(note => {
+                    notesTeachingVerbForm(key, notes, auxT).forEach(note => {
                         if (extra.some(e => e.note.id === note.id)) return;
                         if (already.has(note.id)) {
                             // [냐냐 지적] 동사 꼴은 코드가 기계적으로 안다 — 내가 쓴 그 낱말이 고친 문장에
@@ -4115,9 +4184,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const mine = (aiLastFeedbackForAdd && aiLastFeedbackForAdd.originalMarked) || '';
             let ev = '';
             if (mine && typeof detectVerbFormsInText === 'function') {
-                detectVerbFormsInText(mine).forEach((word, key) => {
+                const mf = detectVerbFormsInText(mine);
+                mf.forEach((word, key) => {
                     if (ev) return;
-                    if ((notesTeachingVerbForm(key, notes) || []).some(x => x.id === noteId)) ev = word;
+                    if ((notesTeachingVerbForm(key, notes, mf.auxTenses || null) || []).some(x => x.id === noteId)) ev = word;
                 });
             }
             if (!ev && mine && typeof detectNoteCellsInText === 'function') {
