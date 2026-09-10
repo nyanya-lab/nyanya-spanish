@@ -2659,6 +2659,24 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return names.some(n => head.includes(n.toLowerCase()));
             });
         }
+        // ============================================================
+        // [냐냐 지적] 시제 노트는 표 칸으로 판단하지 않는다 (2026-09-10).
+        //   냐냐님이 현재완료 노트에 'este fin de semana'·'hace mucho' 같은 시간부사구를 적어두셨다.
+        //   그런데 그 부사구는 현재완료 전용이 아니다 — 어느 시제에나 붙는 곁다리다.
+        //   실데이터로 재보니 현재완료를 한 번도 안 쓴 문장 여섯이 현재완료 노트에 걸렸다:
+        //     'Este fin de semana voy a pasear.'(현재) · 'Hace mucho calor hoy.'(날씨)
+        //   칸 훑기는 원래 '닫힌 목록' 노트를 위한 장치다 — 지시사·숫자·요일·날씨처럼
+        //   그 낱말이 나오면 곧 그 문법인 것들. 시제 노트는 그런 목록이 아니고,
+        //   대신 동사 꼴 잇기라는 더 확실한 장치를 이미 갖고 있다. 그쪽만 믿는다.
+        //   ⚠️ 색인 자체(buildNoteCellIndex)는 그대로 둔다 — '단어 등록 추천에서 빼기'가 같은
+        //      색인을 쓰는데, 거기선 노트 표에 적힌 낱말이면 시제 노트든 아니든 익히는 중인 게 맞다.
+        //      그래서 빼는 것은 '이 문장이 이 노트를 썼나' 를 보는 채점 자리에서만 한다.
+        // ============================================================
+        function isVerbFormNote(note) {
+            if (!note) return false;
+            return Object.keys(VERB_FORM_NOTE_NAMES)
+                .some(k => (notesTeachingVerbForm(k, [note]) || []).length > 0);
+        }
 
         // 단어장의 동사 활용형을 '꼴 → 시제키' 로 한 번에 펴둔다 (등록된 것 + 규칙형 계산)
         function buildVerbFormIndex() {
@@ -2956,6 +2974,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 detectNoteCellsInText(feedback && feedback.originalMarked, notes).forEach((ev, noteId) => {
                     const note = (notes || []).find(t => t.id === noteId);
                     if (!note || extra.some(e => e.note.id === noteId)) return;
+                    if (isVerbFormNote(note)) return;          // 시제 노트는 동사 꼴로만 본다
                     const ok = wordSurvived(ev);
                     if (already.has(noteId)) {
                         // 표 낱말도 같은 잣대 — 그 낱말이 살아남았으면 그 노트는 제대로 쓴 것이다
@@ -2979,7 +2998,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     const hitMap = detectNoteCellsInText(to, notes);
                     hitMap.forEach((word, noteId) => {
                         const note = (notes || []).find(t => t.id === noteId);
-                        if (!note) return;
+                        if (!note || isVerbFormNote(note)) return;   // 시제 노트는 동사 꼴로만 본다
                         const inExtra = extra.find(e => e.note.id === noteId);
                         if (inExtra) { inExtra.ok = false; inExtra.ev = `${from} → ${word}`; return; }
                         const hit = parsed.find(x => x.note.id === noteId);
@@ -3000,7 +3019,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (typeof aiMissionReviewGrammarId !== 'undefined' && aiMissionReviewGrammarId
                 && typeof detectNoteCellsInText === 'function'
                 && !parsed.some(x => x.note.id === aiMissionReviewGrammarId)) {
-                const note = notes.find(t => t.id === aiMissionReviewGrammarId);
+                //   ⚠️ 시제 노트는 여기서도 뺀다 (2026-09-10). 현재완료 복습에서 'esta semana' 만
+                //      보고 −2 를 주면, 시간부사구를 쓴 것이지 현재완료를 쓴 게 아니다.
+                //      대신 못 잡는 것 = '시제를 안 쓰고 문장도 틀림' 인데, 그건 원래
+                //      일부러 보류해 둔 경우다 (2026-09-04 결정). 그대로 안 준다.
+                const found = notes.find(t => t.id === aiMissionReviewGrammarId);
+                const note = isVerbFormNote(found) ? null : found;
                 const inFixed = note && detectNoteCellsInText(feedback && feedback.correctedText, notes).get(note.id);
                 const inMine = note && detectNoteCellsInText(feedback && feedback.originalMarked, notes).get(note.id);
                 if (note && inFixed && !inMine) parsed.push({ note, ok: false, ev: inFixed });
