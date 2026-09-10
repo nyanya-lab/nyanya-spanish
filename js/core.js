@@ -2203,12 +2203,13 @@ let vocabulary = [];
                         ${cell('곡선 졸업', s.graduated, 'text-emerald-600', kind, 'graduated')}
                         ${cell('만나서 다 맞힘', neverMet, 'text-slate-500', kind, 'never')}
                     </div>
-                    ${neverNew ? `<button type="button" onclick="openCurveBucketModal('${kind}', 'never')" title="여기 든 것 보기"
+                    ${neverNew
+                        ? `<button type="button" onclick="openCurveBucketModal('${kind}', 'never')" title="여기 든 것 보기"
                             class="-mt-1 w-full text-left text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">
                             ⬜ 아직 안 만난 ${unit} <span class="font-black">${neverNew}</span>개
-                        </button>` : ''}
+                        </button>`
+                        : `<p class="-mt-1 text-[10px] font-bold text-slate-300">⬜ 아직 안 만난 ${unit} 0개</p>`}
                     <div class="space-y-1.5 mt-auto">
-                        <p class="text-[10px] font-bold text-slate-500">곡선 안 ${s.inCurve}개가 어느 칸에 있나</p>
                         ${bars}
                     </div>
                 </div>`;
