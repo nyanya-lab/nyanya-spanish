@@ -2946,6 +2946,28 @@ ${koEsNoteListText}${refGrammar}${refWords}
             });
             return set;
         }
+        // ============================================================
+        // [냐냐 지적] 소유형용사가 안 따라왔다 (2026-09-10).
+        //   'con tu perro' 를 쓰셨는데 소유형용사 노트가 안 걸렸다. tu·mi·su 가 두세 글자라
+        //   ②(네 글자 이상)에 걸려 색인에서 통째로 빠져 있었다. nuestro·vuestro 만 걸렸다.
+        //   ②는 dar·por·las 가 아무 문장에나 걸려서 둔 규칙이라 그냥 낮출 수는 없다 —
+        //   낮추면 es·son(시간) · en·con·por·sin(전치사) · dar(역구조) 까지 딸려온다.
+        //   그래서 짧은 칸만 조건 둘을 더 넘게 한다:
+        //     ③′ 단어장에 어떤 꼴로도 안 닿을 것 — 어휘로 익히는 낱말은 아무 문장에나 나온다.
+        //        en·con·por·sin·dar·sed·sol·mes·ya 가 걸러지고, es·son 도 ser 로 역추적돼 걸러진다.
+        //     ④′ 관사·인칭대명사가 아닐 것 — los(관사)·yo·tú 는 표의 축 이름이지 그 문법의 표지가 아니다.
+        //   남는 것은 열둘뿐이다: mi mis mío tu tus su sus · ese esa eso · dos mil.
+        //   실문장 14개로 재보니 제대로 여섯 개 잡히고 헛짚음 0.
+        //   ⚠️ 기능어 목록(AI_FUNCTION_WORDS)으로는 못 가른다 — tu·mi 도, en·con 도 다 기능어다.
+        // ============================================================
+        const SHORT_CELL_SKIP = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'lo', 'al', 'del',
+            'yo', 'tú', 'él', 'ella', 'usted', 'ustedes',
+            'nosotros', 'nosotras', 'vosotros', 'vosotras', 'ellos', 'ellas']);
+        function shortCellOk(k) {
+            if (k.length >= 4) return true;
+            if (SHORT_CELL_SKIP.has(k)) return false;
+            return !(typeof findVocabWordByForm === 'function' && findVocabWordByForm(k));
+        }
         let _noteCellIndex = null;   // { words: 낱말→노트id, phrases: 구→노트id, vWords/vPhrases: 동사가 있어야 인정하는 칸 }
         function buildNoteCellIndex(notes) {
             const nz = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
@@ -2961,7 +2983,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const seen = new Set();
                 (typeof noteSpanishCells === 'function' ? noteSpanishCells(t) : []).forEach(c => {
                     const k = nz(c);
-                    if (/^[a-záéíóúüñ]{4,}$/.test(k)) {
+                    if (/^[a-záéíóúüñ]{2,}$/.test(k)) {
+                        if (!shortCellOk(k)) return;      // 짧은 칸은 조건 둘을 더 넘어야 한다
                         if (seen.has(k)) return;
                         seen.add(k);
                         owner.set(k, owner.has(k) ? null : t.id);
