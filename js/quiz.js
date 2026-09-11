@@ -234,8 +234,12 @@ let quizSession = null;
                 const wantPromotion = document.getElementById('scope-promotion')?.checked;
                 // [냐냐 요청] 아직 한 번도 안 만난 단어만 골라 볼 수 있게
                 const wantUntouched = document.getElementById('scope-untouched')?.checked;
+                // [냐냐 요청] 곡선을 졸업한 단어 (2026-09-11). 졸업하면 어디에도 안 잡혀서 사라진다 —
+                //   오늘의 복습엔 안 나오고(졸업했으니), 마스터 범위도 안 덮는다
+                //   (재보니 30일차 대기 61개 중 85%가 마스터가 아니다).
+                const wantGraduated = document.getElementById('scope-graduated')?.checked;
 
-                if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion && !wantUntouched) {
+                if (!wantNotMastered && !wantMastered && !wantWeak && !wantPromotion && !wantUntouched && !wantGraduated) {
                     showToast("출제 범위를 최소 하나는 선택해 주세요!", "error");
                     return;
                 }
@@ -258,6 +262,10 @@ let quizSession = null;
                 if (wantWeak) vocabulary.filter(w => w.weak).forEach(w => poolSet.set(w.id, w));
                 if (wantNotMastered) vocabulary.filter(w => !w.mastered).forEach(w => poolSet.set(w.id, w));
                 if (wantMastered) vocabulary.filter(w => w.mastered).forEach(w => poolSet.set(w.id, w));
+                if (wantGraduated) {
+                    vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length)
+                        .forEach(w => poolSet.set(w.id, w));
+                }
                 if (wantUntouched && typeof isUntouchedWord === 'function') {
                     vocabulary.filter(isUntouchedWord).forEach(w => poolSet.set(w.id, w));
                 }

@@ -3567,6 +3567,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (writeScope === 'untouched') {
                 return vocabulary.filter(w => (typeof isUntouchedWord === 'function') && isUntouchedWord(w));
             }
+            // [냐냐 요청] 곡선을 졸업한 단어 (2026-09-11).
+            //   졸업하면 어디에도 안 잡혀서 레이더에서 사라진다 — 오늘의 복습엔 안 나오고(졸업했으니),
+            //   마스터 범위도 안 덮는다(재보니 30일차 대기 61개 중 85%가 마스터가 아니다).
+            //   '안 외운'·'전체' 에는 들어가지만 1200개 속에 묻힌다.
+            //   ⚠️ 곡선을 돌린 지 얼마 안 돼서 지금은 한 개뿐이다. 30일차가 넘어오면서 찬다.
+            if (writeScope === 'graduated') {
+                return vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length);
+            }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
