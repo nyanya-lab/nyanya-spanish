@@ -3853,12 +3853,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const conjBack = (w._isConjTask && w._conjSlot)
                     ? `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`
                     : '';
+                //   [냐냐 요청] 관용구는 어느 낱말에서 나온 표현인지 밑에 같이 보여준다 (2026-09-11).
+                //   표현만 덩그러니 있으면 뿌리가 안 보인다. 활용형 과제에 원형을 보여주는 것과 같은 결이다.
+                //   ⚠️ 익히기 바퀴(2)에서만 낸다. 1·3바퀴는 가리고 쓰는 자리라 알려주면 힌트가 된다.
+                const idiomBack = (w._isIdiomTask && w._idiomOf && w._idiomOf.word)
+                    ? `<p class="text-[11px] font-bold text-violet-500 break-words">📘 <b>${escapeHtml(w._idiomOf.word)}</b>${w._idiomOf.meaning ? `(${escapeHtml(w._idiomOf.meaning)})` : ''}에서 나온 표현이에요</p>`
+                    : '';
                 cardHtml = `
                     <div class="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-1 max-h-[42vh] overflow-y-auto no-scrollbar">
                         <div class="text-left space-y-1">
                             <p class="text-2xl font-extrabold text-slate-900 break-words">${escapeHtml(learnWord)}</p>
                             <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(learnMean)}</p>
                             ${conjBack}
+                            ${idiomBack}
                         </div>
                         ${badges && badges.trim() ? '<div class="border-t border-slate-200 my-2"></div>' + badges : ''}
                         <div id="write-conj-box" class="hidden"></div>
