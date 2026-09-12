@@ -3652,6 +3652,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   복습 표시도 통째로 건너뛰었다. 복습 표시가 안 되니 계속 '오늘 할 것' 으로
                 //   남아서 같은 단어가 회차마다 되풀이됐다. 이번 판 안에서만 기억한다.
                 failedOnce: {},           // { '단어id::과제글자': true }
+                // [냐냐 지적] 1바퀴에서 −2 를 적기 '직전' 의 등급을 여기 적어둔다 (2026-09-12).
+                //   결과 화면의 등급 변화는 이 판에서 실제로 움직인 폭(−2 → +1, 합 −1)을 봐야 한다.
+                //   3바퀴에서 돌려주는 +1 만 재면 점수가 내려간 단어가 '약점에서 벗어났어요' 로 뜬다.
+                gradeAtFail: {},          // { '단어id::과제글자': '등급' }
                 results: [],              // [냐냐 요청] 결과 화면용 — {word, meaning, correct, firstTry}
                 // [냐냐 요청] '다음 N개 이어서'가 처음 시작한 개수를 그대로 따라가도록 기억
                 //   배너로 시작 → 5개 / 쓰기연습 탭에서 시작 → 내가 고른 개수
@@ -4185,15 +4189,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const idiomTask = !!w._isIdiomTask;
             // [냐냐 지적] 1바퀴에서 틀린 순간 −2 와 곡선을 이미 적었다. 여기서는 차액만 반영한다:
             //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
-            const already = !!s.failedOnce[writeFailKey(w)];
+            const failKey3 = writeFailKey(w);
+            const already = !!s.failedOnce[failKey3];
+            // [냐냐 지적] 등급 변화는 1바퀴 −2 까지 넣어서 재야 한다 (2026-09-12).
+            //   여기서 withGradeShift 가 재는 건 3바퀴에서 돌려주는 +1 뿐이라, 이 판에서
+            //   점수가 −1 만큼 내려간 단어가 '약점에서 벗어났어요' 로 뜨고 있었다
+            //   (−3 → 1바퀴 −5(약점) → 3바퀴 −4). 반대로 이 판에 약점이 된 것도 조용했다.
+            const fromFail = (sh) => {
+                const g = s.gradeAtFail && s.gradeAtFail[failKey3];
+                return g ? { ...sh, gradeBefore: g } : sh;
+            };
             if (isMatch) {
-                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
+                const shift = fromFail(withGradeShift(w._idiomOf || w._conjOf || w, () => {
                     if (typeof addWordScore !== 'function') return;
                     // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
                     if (already) addWordScore(w.id, 1, { correctCount: 0, wrongCount: 0, skipReviewDate: true });
                     else addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
-                });
+                }));
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
@@ -4203,9 +4216,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
+                //   끝내 틀린 것도 마찬가지다 — 여기서는 더할 점수가 없어서 아무 변화도 안
+                //   잡히지만, 1바퀴 −2 로 약점이 된 것은 알려줘야 한다.
+                const shift = fromFail(withGradeShift(w._idiomOf || w._conjOf || w, () => {
                     if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
-                });
+                }));
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
@@ -4266,6 +4281,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const failKey = writeFailKey(w);
             if (!s.failedOnce[failKey]) {
                 s.failedOnce[failKey] = true;
+                // ⚠️ −2 를 적기 '전' 의 등급을 남겨둔다 — 3바퀴 결과에서 여기서부터 재야 한다
+                s.gradeAtFail = s.gradeAtFail || {};
+                if (typeof getWordGrade === 'function') {
+                    s.gradeAtFail[failKey] = getWordGrade(w._idiomOf || w._conjOf || w);
+                }
                 if (typeof addWordScore === 'function') {
                     addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
                 }
