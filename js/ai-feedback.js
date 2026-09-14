@@ -3344,13 +3344,19 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   냐냐님 말씀 — "앞에 문법 복습에서 했어. 그럼 거기에서 복습 횟수 인정해주는 건
                 //   어때? 너무 많이 하는 느낌이야." 한 문장이 노트를 두셋씩 건드리는 일이 흔한데,
                 //   지금은 배너가 지목한 그 노트만 칸이 나가서 이미 제대로 쓴 문법을 또 문제로 냈다.
-                //   ⚠️ 세 조건을 다 넘을 때만이다:
+                //   ⚠️ 두 조건을 다 넘을 때만이다:
                 //     ① 복습 줄 안에서 (aiMissionReviewGrammarId 가 살아 있을 때)
-                //     ② 제대로 쓴 것만 (틀린 건 덤으로 물리지 않는다 — 그 문법을 내준 문제가 아니었다)
-                //     ③ 오늘 복습 대상으로 줄에 남아 있는 것만
+                //     ② 오늘 복습 대상으로 줄에 남아 있는 것만
                 //   랜덤 미션에서까지 열어주면 아무 데서나 한꺼번에 졸업한다 (2026-09-07 규칙).
-                // ============================================================
-                const inQueue = (item.ok === true) && !!aiMissionReviewGrammarId
+                //   [냐냐 지적] 틀리게 썼어도 줄에서 뺀다 (2026-09-14).
+                //     처음엔 '제대로 쓴 것만' 으로 뒀는데 냐냐님이 짚으셨다 —
+                //     "복습에서 틀리게 써도 복습에서 빼야 되는 거 아닐까." 맞는 말씀이다.
+                //     이미 오늘 그 문법을 만났고, 틀렸으면 곡선이 한 칸 뒤로 가 있다(아래 applyGrammarCurve).
+                //     그 상태로 같은 날 또 문제를 내는 건 처음에 줄이려던 바로 그것이다.
+                //     곡선이 뒤로 갔으니 어차피 곧 다시 나온다 — 그게 곡선이 할 일이다.
+                //   ⚠️ 칸이 앞으로 나가는 건 여전히 '제대로 썼을 때만' 이다 (applyGrammarCurve 의 ok).
+                //     여기서 넓힌 건 '오늘 줄에서 빼는가' 하나뿐이다.
+                const inQueue = !!aiMissionReviewGrammarId
                     && note.id !== aiMissionReviewGrammarId
                     && typeof grammarReviewQueue !== 'undefined'
                     && grammarReviewQueue.indexOf(note.id) >= 0;
@@ -4221,9 +4227,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
             // [냐냐 요청] 덤으로 쳐준 복습은 점수를 내리면 줄로 되돌린다 (2026-09-14).
             //   'AI 가 잘못 짚었다'(0) 로 바꿨는데 복습만 끝난 걸로 남으면 그 문법을 오늘 못 보게 된다.
             if (e.alsoReviewed && typeof grammarReviewQueue !== 'undefined' && grammarReviewTotal) {
+                //   0 은 'AI 가 잘못 짚었다' 는 뜻이라 오늘 만난 것으로 치지 않는다 — 줄로 되돌린다.
+                //   ±2 는 둘 다 '만났다' 라서 줄에서 빠진 채로 둔다 (틀린 것도 오늘 몫은 끝).
                 const at = grammarReviewQueue.indexOf(id);
-                if (!ok && at < 0) { grammarReviewQueue.push(id); grammarReviewDone = Math.max(0, grammarReviewDone - 1); }
-                else if (ok && at >= 0) { grammarReviewQueue.splice(at, 1); grammarReviewDone++; }
+                if (delta === 0 && at < 0) { grammarReviewQueue.push(id); grammarReviewDone = Math.max(0, grammarReviewDone - 1); }
+                else if (delta !== 0 && at >= 0) { grammarReviewQueue.splice(at, 1); grammarReviewDone++; }
                 if (typeof renderGrammarReviewBar === 'function') renderGrammarReviewBar('graded');
             }
             if (delta === 0) removeAiNoteGram(_lastAiNoteKey, id);
@@ -4413,7 +4421,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
                     </button>
                     ${/* [냐냐 요청] 복습 줄을 푸는 김에 제대로 써서 오늘 몫으로 쳐준 문법 (2026-09-14) */''}
-                    ${g.alsoReviewed && g.delta > 0
+                    ${g.alsoReviewed && g.delta !== 0
                         ? `<span title="이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
                         : ''}
                     ${cycleBtn('cycleGrammarEntry', i)}
