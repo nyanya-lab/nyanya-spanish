@@ -2401,6 +2401,12 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 .replace(/\[[^\]]*\]/g, ' ')
                 .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
                 .replace(/\s+/g, ' ').trim();
+            // [냐냐 지적] 관사를 안 뗀 '글자 그대로' 도 따로 둔다 (2026-09-14).
+            //   norm 은 앞 관사를 떼는데, 그 바람에 두 가지가 어긋났다:
+            //     'un poco'(조금) → 'poco' 가 되어 'poco'(거의 ~않은)와 한 칸에 섞였다
+            //     'el este'(동쪽) → 'este' 가 되어 지시형용사 Este 에 갖다 붙었다
+            const rawNorm = (x) => String(x || '').toLowerCase().trim().normalize('NFC')
+                .replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
             // 같은 철자가 품사만 다르게 등록된 단어가 11개 있다 (solo 부사/형용사, joven 명사/형용사 …).
             const byWord = new Map();
             vocabulary.forEach(w => {
@@ -2418,12 +2424,19 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const resolve = (raw, pos) => {
                 const k = norm(raw);
                 if (!k) return null;
-                const hit = pickByPos(byWord.get(k), pos);
-                if (hit) return hit;
                 // [냐냐 지적] 기능어는 '정확히 등록돼 있을 때' 만 인정한다 — 변형도 역추적도 안 한다.
                 //   'me' 에 s 를 붙이면 'mes'(달) 가 되어, Me diverte… 를 쓴 문장에 el mes 가 잡혔다.
                 //   (se → saber 같은 옛 사고도 같은 자리다)
-                if (AI_FUNCTION_WORDS.has(k)) return null;
+                // [냐냐 지적] '정확히' 는 **관사까지 그대로** 라는 뜻이다 (2026-09-14).
+                //   'el este'(동쪽)는 관사를 떼면 'este' 가 되는데, 그걸 지시형용사 Este 로 쳐서
+                //   "Este fin de semana…" 를 쓴 문장에 '동쪽' 이 잡혔다.
+                //   지금 이 규칙에 걸리는 건 este 하나뿐이다 (para·por·en 처럼 글자 그대로 등록된 것은 그대로 잡힌다).
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k)) {
+                    const exact = (byWord.get(k) || []).filter(w => rawNorm(w.word) === k);
+                    return exact.length ? pickByPos(exact, pos) : null;
+                }
+                const hit = pickByPos(byWord.get(k), pos);
+                if (hit) return hit;
                 // 짧은 낱말은 한 글자만 붙여도 다른 낱말이 된다 — 네 글자부터 변형을 본다
                 if (k.length >= 4) {
                     for (const v of spanishFormVariants(k)) {
@@ -2538,14 +2551,43 @@ ${koEsNoteListText}${refGrammar}${refWords}
             }
 
             // ① 여러 낱말짜리 항목 먼저 (토막으로는 안 잡힌다)
+            // [냐냐 지적] 두 가지를 같이 고친다 (2026-09-14).
+            //   ㉠ 관사가 붙은 채로 여러 낱말인 항목을 놓쳤다 — 'un poco' 는 norm 이 관사를 떼면
+            //      'poco' 라 한 낱말이 되어 이 줄을 그냥 지나갔고, 아래 토막 훑기에서
+            //      'poco'(거의 ~않은)로 잡혔다. 이제 관사를 안 뗀 꼴로도 찾는다.
+            //   ㉡ 여기서 잡힌 낱말의 **토막은 아래에서 다시 세지 않는다.** 예전엔
+            //      'el fin de semana' 를 잡아놓고 그 안의 'de' 와 'la semana' 까지 따로 점수를 줬다.
+            //      한 번 쓴 자리는 한 번만 센다. 긴 것부터 자리를 잡는다.
+            const usedTok = new Array(mineToks.length).fill(false);
+            const findSpan = (words) => {
+                for (let i = 0; i + words.length <= mineToks.length; i++) {
+                    let ok = true;
+                    for (let j = 0; j < words.length; j++) {
+                        if (usedTok[i + j] || norm(mineToks[i + j]) !== words[j]) { ok = false; break; }
+                    }
+                    if (ok) return i;
+                }
+                return -1;
+            };
+            const phrases = [];
             vocabulary.forEach(w => {
-                const k = norm(w.word);
-                if (!k || !k.includes(' ')) return;
-                if (!mineFlat.includes(' ' + k + ' ')) return;
-                push(w, fixedFlat.includes(' ' + k + ' '));
+                new Set([rawNorm(w.word), norm(w.word)]).forEach(k => {
+                    if (k && k.includes(' ')) phrases.push({ w, words: k.split(' ') });
+                });
             });
-            // ② 내가 쓴 낱말을 하나씩
-            mineToks.forEach(tok => push(resolveHere(tok), fixedSet.has(norm(tok))));
+            phrases.sort((a, b) => b.words.length - a.words.length);
+            phrases.forEach(({ w, words }) => {
+                if (done.has(w.id)) return;
+                const at = findSpan(words);
+                if (at < 0) return;
+                for (let j = 0; j < words.length; j++) usedTok[at + j] = true;
+                push(w, fixedFlat.includes(' ' + words.join(' ') + ' '));
+            });
+            // ② 내가 쓴 낱말을 하나씩 (위에서 이미 먹은 토막은 건너뛴다)
+            mineToks.forEach((tok, i) => {
+                if (usedTok[i]) return;
+                push(resolveHere(tok), fixedSet.has(norm(tok)));
+            });
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
             //   'lemones' 라고 쓰면 'el limón' 에 못 닿는다 — 토막으로도, 성·수 변형으로도, 활용형 역추적으로도.
             //   그래서 반대편에서 본다: 고친 문장의 낱말이 단어장 단어이고, 내가 그 자리에 쓴 낱말이
