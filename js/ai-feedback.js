@@ -2638,19 +2638,54 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
                 if (e && e.word.id === w.id) e.missed = true;
             };
+            //   [냐냐 지적] 고친 문장에 활용형으로 들어간 동사를 놓쳤다 (2026-09-14).
+            //     ponerse 를 vestirse 로 고쳐줬는데 vestirse 가 화면에 아예 안 나왔다.
+            //     AI 는 원형(vestirse)으로 알려주는데 문장에 있는 건 활용형(vistiéndose)이라,
+            //     아래 '지어낸 낱말인가' 검사(글자 그대로 있나)에 걸려 통째로 버려지고 있었다.
+            //     그래서 고친 문장의 토막이 가리키는 단어장 항목을 미리 모아두고 그것도 같이 본다.
+            const fixedWordIds = new Set();
+            fixedToks.forEach(tok => { const w = resolve(tok, ''); if (w) fixedWordIds.add(w.id); });
+            const reallyInFixed = (name, pos) => {
+                if (fixedFlat.includes(' ' + norm(name) + ' ')) return true;
+                const w = resolve(name, pos);
+                return !!(w && fixedWordIds.has(w.id));
+            };
             const added = (feedback && Array.isArray(feedback.wordsAdded)) ? feedback.wordsAdded : null;
             if (added) {
                 added.forEach(raw => {
                     const cut = String(raw || '').split('|');
                     const name = cut[0].trim();
                     if (!name) return;
-                    //   지어낸 낱말은 버린다 — 고친 문장에 진짜로 있어야 한다
-                    if (!fixedFlat.includes(' ' + norm(name) + ' ')) return;
-                    missedOne(name, (cut[1] || '').trim().toLowerCase());
+                    const pos = (cut[1] || '').trim().toLowerCase();
+                    //   지어낸 낱말은 버린다 — 고친 문장에 진짜로 있어야 한다 (활용형까지 본다)
+                    if (!reallyInFixed(name, pos)) return;
+                    missedOne(name, pos);
                 });
             } else {
                 fixedToks.forEach(tok => missedOne(tok, ''));
             }
+            // ④-b [냐냐 요청] AI 가 고친 문장에 넣은 **기능어**도 0 점으로 보여준다 (2026-09-14).
+            //   냐냐님 말씀 — "내가 안 쓰고 ai가 문장 수정해줄 때 쓴 단어들 0점으로 일단 다 넣어줄래?
+            //   예를들면 para, vestirse". 화면에 por → para 로 고쳐줬는데 por 만 0 점으로 남고
+            //   para 는 아무 데도 없었다.
+            //   기능어를 빼둔 건 −2 를 줄줄이 붙이지 않으려던 것이라, 점수를 안 주는 지금은 뺄 이유가 없다.
+            //   ⚠️ 점수는 0 이다 — 내용어(−2)와 달리 '알면서 못 꺼낸 것' 으로 치지 않는다 (냐냐님 결정).
+            //   ⚠️ AI 목록(wordsAdded)으로는 못 받는다. 지시문이 '관사·전치사·대명사는 빼라' 고
+            //      못박아 뒀기 때문이다. 그래서 여기서만 코드가 고친 문장을 직접 훑는다.
+            //   ⚠️ 단어장에 등록된 것만 나온다 — 칩을 누르면 그 단어가 열려야 하기 때문이다.
+            fixedToks.forEach(tok => {
+                const k = norm(tok);
+                if (!k) return;
+                if (mineFlat.includes(' ' + k + ' ')) return;   // 내가 쓴 것은 위에서 매겼다
+                const w = resolve(tok, '');
+                if (!w || done.has(w.id)) return;
+                const isFunc = (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k))
+                    || FUNC_POS.has(String(w.pos || '').toLowerCase());
+                if (!isFunc) return;                            // 내용어는 위 missedOne 이 맡는다
+                push(w, false, false);                          // 0 — 보여만 준다
+                const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
+                if (e && e.word.id === w.id) e.added = true;
+            });
             // [냐냐 요청] 점수 묶음으로 보여준다 — +2 쫙, 0 쫙, −2 쫙 (2026-09-04).
             //   묶음과 순서는 여기서 한 번만 정한다(groupDelta). 칩을 눌러 점수를 바꿔도
             //   자리를 안 옮긴다 — 옮기면 누를 때마다 줄이 튀어서 서식이 이랬다저랬다 한다.
