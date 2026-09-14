@@ -3319,9 +3319,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
 
             const done = new Set();
-            //   [냐냐 요청] 복습을 푸는 김에 오늘 몫의 다른 문법도 제대로 썼으면 쳐준다 (2026-09-14).
-            //   덤으로 나간 노트 이름을 모아 뒀다가 끝나고 한 번에 알려준다.
-            const alsoReviewed = [];
             parsed.forEach(item => {
                 const note = item.note;
                 if (done.has(note.id)) return;           // 중복은 버린다
@@ -3362,16 +3359,13 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (inQueue) {
                     grammarReviewQueue.splice(grammarReviewQueue.indexOf(note.id), 1);
                     if (grammarReviewTotal) grammarReviewDone++;
-                    alsoReviewed.push(note.title || '');
                 }
-                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, ev: item.ev, state: 'normal', undone: false });
+                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, alsoReviewed: inQueue, ev: item.ev, state: 'normal', undone: false });
             });
             // 단어와 같이 점수순(낮은 것부터). 한 번만 정하고 점수를 바꿔도 자리는 안 옮긴다.
             aiLastEsKoGrammar.sort((a, b) => (a.delta - b.delta) || String(a.note.title || '').localeCompare(String(b.note.title || ''), 'ko'));
-            //   덤으로 복습이 된 게 있으면 알려준다 — 안 그러면 줄이 왜 줄었는지 알 수가 없다
-            if (alsoReviewed.length && typeof showToast === 'function') {
-                showToast(`${alsoReviewed.join(', ')} 도 제대로 써서 오늘 복습으로 쳐드렸어요 ✅`, 'success');
-            }
+            //   [냐냐 요청] 덤으로 복습이 된 건 토스트 말고 결과 카드에 '🔁 오늘 복습' 칩으로 단다
+            //   (2026-09-14). 토스트는 지나가 버려서, 줄이 왜 줄었는지 나중에 다시 볼 수가 없다.
         }
 
         // [냐냐 요청] AI 가 잘못 알아들어 붙은 점수를 한 건씩 해제한다.
@@ -4224,6 +4218,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
             // [냐냐 지적] 0 은 'AI 가 잘못 짚었다' 는 뜻이라 첨삭 노트에서도 뺀다 (2026-09-04).
             //   빼지 않으면 ok=false 로 남아서, 없앤 그 문법이 '약한 문법' 순위에 틀린 것으로
             //   오히려 계속 잡혔다.
+            // [냐냐 요청] 덤으로 쳐준 복습은 점수를 내리면 줄로 되돌린다 (2026-09-14).
+            //   'AI 가 잘못 짚었다'(0) 로 바꿨는데 복습만 끝난 걸로 남으면 그 문법을 오늘 못 보게 된다.
+            if (e.alsoReviewed && typeof grammarReviewQueue !== 'undefined' && grammarReviewTotal) {
+                const at = grammarReviewQueue.indexOf(id);
+                if (!ok && at < 0) { grammarReviewQueue.push(id); grammarReviewDone = Math.max(0, grammarReviewDone - 1); }
+                else if (ok && at >= 0) { grammarReviewQueue.splice(at, 1); grammarReviewDone++; }
+                if (typeof renderGrammarReviewBar === 'function') renderGrammarReviewBar('graded');
+            }
             if (delta === 0) removeAiNoteGram(_lastAiNoteKey, id);
             else setAiNoteGramOk(_lastAiNoteKey, id, ok, e.note.title);
 
@@ -4410,6 +4412,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         title="이 문법 노트 들춰보기" class="flex-1 text-left min-w-0">
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
                     </button>
+                    ${/* [냐냐 요청] 복습 줄을 푸는 김에 제대로 써서 오늘 몫으로 쳐준 문법 (2026-09-14) */''}
+                    ${g.alsoReviewed && g.delta > 0
+                        ? `<span title="이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
+                        : ''}
                     ${cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
 
