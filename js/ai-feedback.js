@@ -4386,6 +4386,80 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast(`"${note.title}" ${fmtDelta(delta)}`, delta > 0 ? "success" : "info");
         }
 
+        // ============================================================
+        // [냐냐 요청] 첨삭이 놓친 단어를 손으로 더한다 (2026-09-14). 문법 더하기와 같은 모양.
+        //   냐냐님 말씀 — "못 잡는 단어들이 생각보다 좀 있어서, 특히 재귀동사랑 일반동사."
+        //   실제로 재보니 못 잡는 까닭이 셋이었다:
+        //     ① 단어장에 아예 없는 동사 (vivir·sentir) — 이건 더하기로도 못 넣는다. 등록이 먼저다
+        //     ② 활용표에 안 채워진 칸 ('me lavo' — lavarse 는 있는데 1인칭이 비어 있다)
+        //     ③ 같은 철자가 품사만 다르게 등록됨 ('como' 가 접속사 como 에 먹혀 comer 를 놓친다)
+        //   ②③ 은 이 더하기로 그 자리에서 메운다.
+        // ============================================================
+        function openAddWordPicker() {
+            const modal = document.getElementById('add-word-modal');
+            if (!modal) return;
+            const box = document.getElementById('add-word-search');
+            if (box) box.value = '';
+            renderAddWordPicker();
+            modal.classList.remove('hidden');
+            if (box) setTimeout(() => box.focus(), 30);
+        }
+        function closeAddWordPicker() {
+            document.getElementById('add-word-modal')?.classList.add('hidden');
+        }
+        function renderAddWordPicker() {
+            const list = document.getElementById('add-word-list');
+            if (!list) return;
+            const q = String((document.getElementById('add-word-search') || {}).value || '').trim().toLowerCase();
+            const already = new Set((aiLastEsKoWords || []).map(e => e.word.id));
+            //   [냐냐 요청] 검색 전에는 목록을 안 낸다 — 단어가 1300개라 다 그리면 느리고 볼 수도 없다.
+            if (!q) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">찾을 단어를 적어주세요</p>'; return; }
+            const hits = (vocabulary || []).filter(w =>
+                String(w.word || '').toLowerCase().includes(q) || String(w.meaning || '').toLowerCase().includes(q)
+            ).slice(0, 40);
+            if (!hits.length) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">단어장에 없어요 — 먼저 등록해 주세요</p>'; return; }
+            list.innerHTML = hits.map(w => {
+                const has = already.has(w.id);
+                return `<button type="button" ${has ? 'disabled' : `onclick="addWordEntryManually('${escapeAttr(w.id)}')"`}
+                    class="w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${has ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 hover:bg-violet-50 hover:border-violet-200'}">
+                    <span class="min-w-0 flex-1">
+                        <span class="block text-sm font-extrabold text-slate-800 truncate">${escapeHtml(w.word || '')}</span>
+                        <span class="block text-[10px] font-bold text-slate-400 truncate">${escapeHtml(w.meaning || '')}</span>
+                    </span>
+                    <span class="shrink-0 text-[10px] font-black ${has ? 'text-slate-400' : 'text-violet-500'}">${has ? '이미 있음' : '더하기'}</span>
+                </button>`;
+            }).join('');
+        }
+        function addWordEntryManually(wordId) {
+            const w = (vocabulary || []).find(v => String(v.id) === String(wordId));
+            if (!w) return;
+            if ((aiLastEsKoWords || []).some(e => e.word.id === w.id)) { showToast("이미 목록에 있어요", "info"); return; }
+            // [냐냐 요청] 판정은 다른 항목과 똑같은 잣대다 — 내가 쓴 그 낱말이 고친 문장에 살아남았나.
+            //   내 문장에서 못 찾으면 '썼다' 는 냐냐님 말을 믿고 +2 로 넣는다. 점수는 ↺ 로 바꾸면 된다.
+            //   ⚠️ AI 를 더 부르지 않는다 (문법 더하기와 같은 이유).
+            const norm = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            const fb = aiLastFeedbackForAdd || {};
+            const flat = (t) => ' ' + String(aiStripTags(t) || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(norm).join(' ') + ' ';
+            const mineFlat = flat(fb.originalMarked), fixedFlat = flat(fb.correctedText);
+            const k = norm(w.word);
+            const inMine = !!k && mineFlat.includes(' ' + k + ' ');
+            const survived = !!k && fixedFlat.includes(' ' + k + ' ');
+            const ok = inMine ? survived : true;      // 내 문장에서 찾았으면 살아남았나로, 못 찾았으면 믿고 +2
+            const delta = ok ? WORD_SPELL_OK : 0;     // 고쳐졌으면 0 (철자 오류 −2 는 ↺ 로 고른다)
+            const prev = snapshotWordScoreState(w);
+            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+            if (delta) addWordScore(w, delta, { correct: true });
+            aiLastEsKoWords.push({ word: w, ok, noScore: !delta, delta, baseDelta: WORD_SPELL_OK,
+                prev, gradeBefore, groupDelta: delta, state: 'normal', undone: false, manual: true });
+            if (typeof saveToStorage === 'function') saveToStorage();
+            closeAddWordPicker();
+            renderEsKoGrammarRefs();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof updateStats === 'function') updateStats();
+            showToast(`"${w.word}" ${fmtDelta(delta)}`, delta > 0 ? "success" : "info");
+        }
+
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
         function renderEsKoGrammarRefs() {
             const box = document.getElementById('ai-mission-refs');
@@ -4484,10 +4558,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 ${grammarHtml
                     ? `<div class="space-y-1.5">${grammarHtml}</div>`
                     : '<p class="text-[11px] text-slate-400 py-1.5">걸린 문법이 없어요 — 쓴 게 있으면 위에서 더해 주세요.</p>'}
-                ${wordHtml ? `<div class="text-xs font-bold text-slate-500 mb-1.5 mt-${grammarHtml ? '3' : '0'} flex items-center gap-1.5">
+                ${/* [냐냐 요청] 문법과 같이, 하나도 안 걸렸을 때도 이 줄은 낸다 — 그때가 더해야 할 때다 */''}
+                <div class="text-xs font-bold text-slate-500 mb-1.5 mt-3 flex items-center gap-1.5">
                     <i class="fa-solid fa-spell-check text-violet-500"></i><span>스펠링 점수</span>
+                    <button type="button" onclick="openAddWordPicker()" title="첨삭이 놓친 단어를 내가 더해요" class="ml-auto shrink-0 px-2 py-0.5 rounded-lg bg-white border border-violet-200 hover:bg-violet-50 text-violet-600 text-[10px] font-bold transition-colors"><i class="fa-solid fa-magnifying-glass mr-0.5"></i> 단어 더하기</button>
                 </div>
-                <div class="space-y-1.5">${wordHtml}</div>` : ''}
+                ${wordHtml
+                    ? `<div class="space-y-1.5">${wordHtml}</div>`
+                    : '<p class="text-[11px] text-slate-400 py-1.5">걸린 단어가 없어요 — 쓴 게 있으면 위에서 더해 주세요.</p>'}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
                 ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 · 이름을 누르면 열려요</p>` : ''}`;
