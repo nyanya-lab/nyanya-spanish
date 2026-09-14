@@ -2022,7 +2022,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // [냐냐 요청] 스→한 자유 문장 첨삭에서도 문법표 점수를 반영한다.
         //   한→스는 문법을 정해주고 그 문법이 필요한 미션을 내지만,
         //   여기는 냐냐가 아무 문장이나 쓰므로 'AI 가 짚어준 노트'를 근거로 삼는다.
-        //   점수는 제대로 씀 +1 / 틀리게 씀 −2 (한→스는 +2 — 거긴 그 문법을 써야만 풀리는 미션이다).
+        //   점수는 네 모드 모두 같다 — 제대로 씀 +1(GRAMMAR_TRANS_OK) / 틀리게 씀 −2.
+        //   (자유 작문만 절반이던 규칙은 2026-09-14 에 없앴다)
         //   AI 가 짚은 노트는 개수 제한 없이 다 반영한다 (한 문장이 문법 세 개를 쓰면 세 개 다).
         //   대신 AI 가 없는 제목을 지어낼 수 있으니 실제 노트와 이름이 맞는 것만 반영한다.
         // ============================================================
@@ -2088,7 +2089,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return out;
         }
 
-        //   okDelta 를 안 주면 +2. 스→한 자유 작문만 +1 을 넘긴다 (문법과 같은 규칙).
+        //   okDelta 를 안 주면 +2 (단어 기본값 WORD_SPELL_OK). 네 모드 모두 같은 값을 쓴다.
         // [냐냐 요청] 엉뚱한 단어에 점수가 붙는 일이 있었다.
         //   AI 가 "se"(재귀대명사)나 "nada"(아무것도) 같은 기능어를 보내면, 역추적이 그걸
         //   동사 활용형으로 알아들었다 — se → saber(sé), nada → nadar(3인칭 단수).
@@ -4330,16 +4331,21 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
         }
 
-        // [냐냐 요청] 버튼 하나로 점수만 돌린다 — +2 → 0 → −2 → +2 (2026-09-04).
+        // [냐냐 요청] 버튼 하나로 점수만 돌린다 — 양수 → 0 → −2 → 양수 (2026-09-04).
         //   예전엔 '그대로 / 찾아보고 씀 / 해제' 세 상태였는데, 이름이 붙으니 화면이 시끄럽고
         //   정작 하고 싶은 건 '이 점수 아닌데' 를 고치는 것뿐이었다. 이제 숫자만 돈다.
-        //   ⚠️ 양수 칸은 그 모드가 주는 값이다 (스→한 자유 작문은 +1).
-        function entryRing(e) {
-            const pos = (e && e.baseDelta > 0) ? e.baseDelta : 2;
+        //   ⚠️ 양수 칸은 '제대로 썼을 때 주는 값' 이다 — 문법 +1, 단어 +2 로 서로 다르다.
+        // [냐냐 지적] 틀리게 짚힌 항목(baseDelta −2)을 ↺ 로 돌리면 문법도 +2 가 됐다 (2026-09-14).
+        //   양수로 돌아갈 자리를 몰라서 2 로 때웠기 때문이다. 문법이 +1 로 내려간 뒤에도
+        //   여기만 그대로라, ↺ 한 번이면 하루 상한(+2)을 한 방에 채워버렸다.
+        //   이제 부르는 쪽이 제 값을 넘긴다 (okDelta).
+        function entryRing(e, okDelta) {
+            const fallback = (typeof okDelta === 'number') ? okDelta : 2;
+            const pos = (e && e.baseDelta > 0) ? e.baseDelta : fallback;
             return [pos, 0, -2];
         }
-        function nextEntryDelta(e) {
-            const ring = entryRing(e);
+        function nextEntryDelta(e, okDelta) {
+            const ring = entryRing(e, okDelta);
             const i = ring.indexOf(e ? e.delta : 0);
             return ring[(i < 0 ? 0 : i + 1) % ring.length];
         }
@@ -4348,7 +4354,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function cycleGrammarEntry(i) {
             const e = aiLastEsKoGrammar[i];
             if (!e) return;
-            const to = nextEntryDelta(e);
+            const to = nextEntryDelta(e, GRAMMAR_TRANS_OK);
             setGrammarEntryDelta(i, to);
             showToast(`"${e.note.title}" · ${fmtDelta(to)}`, "info");
         }
@@ -4373,7 +4379,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function cycleWordEntry(i) {
             const e = aiLastEsKoWords[i];
             if (!e) return;
-            const to = nextEntryDelta(e);
+            const to = nextEntryDelta(e, WORD_SPELL_OK);
             setWordEntryDelta(i, to);
             showToast(`"${e.word.word}" · ${fmtDelta(to)}`, "info");
         }
@@ -4381,7 +4387,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // ============================================================
         // [냐냐 요청] 첨삭이 놓친 문법을 내가 더한다 (2026-09-04).
         //   AI 도 코드도 못 짚는 문법이 있다. 그때 손으로 넣을 길이 없어서 그냥 넘어가야 했다.
-        //   더하면 +2 로 들어가고, 점수는 다른 항목과 똑같이 ↺ 로 바꾼다.
+        //   더하면 +1(GRAMMAR_TRANS_OK)로 들어가고, 점수는 다른 항목과 똑같이 ↺ 로 바꾼다.
         //   근거는 코드가 찾아본다 — 동사 꼴이나 노트 표의 낱말이 문장에 있으면 그 낱말을 적어둔다.
         //   ⚠️ 네 모드(미션·줄글·질문답하기·예문 연습)가 이 결과 칸을 같이 쓴다. 한 곳만 고치면 다 된다.
         // ============================================================
@@ -4443,7 +4449,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     ? JSON.parse(JSON.stringify(grammarReview[noteId])) : undefined
             };
             // [냐냐 요청] 근거를 찾았으면 판정까지 한다 — 그 낱말이 고친 문장에 살아남았나.
-            //   다른 항목과 똑같은 잣대다. 근거를 못 찾으면 '썼다' 는 냐냐님 말을 믿고 +2.
+            //   다른 항목과 똑같은 잣대다. 근거를 못 찾으면 '썼다' 는 냐냐님 말을 믿고 +1(GRAMMAR_TRANS_OK).
             //   ⚠️ AI 를 더 부르지 않는다. 수기 추가가 느려지면 그때부터 본선이 되어버린다.
             let ok = true;
             if (ev) {
@@ -4559,7 +4565,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             }
 
             // [냐냐 요청] 점수 배지 하나로 말한다 (2026-09-04). 멘트('찾아보고 썼어요' 같은)는 다 뺐다.
-            //   ↺ 를 누르면 +2 → 0 → −2 로 돌기만 한다. 자리는 점수순으로 한 번만 정해져 있어서
+            //   ↺ 를 누르면 점수만 돈다 (문법 +1 / 단어 +2 → 0 → −2). 자리는 점수순으로 한 번만 정해져 있어서
             //   점수를 바꿔도 줄이 안 뛴다.
             const badge = (d) => {
                 const cls = d > 0 ? 'bg-emerald-100 text-emerald-700'
