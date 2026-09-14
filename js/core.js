@@ -493,6 +493,11 @@ let vocabulary = [];
             // [냐냐 PATCH-0배치] 통합 점수(score)로 1회 마이그레이션 (기존 약점/마스터 점수 합산)
             //   백업 가져오기로 예전 형식이 들어와도 여기서 같이 걸리게 안쪽에 둔다.
             if (typeof migrateWordScores === 'function') migrateWordScores();
+            // [냐냐 요청] 곡선에 들어온 날을 옛 기록에도 한 번 채운다 (2026-09-14).
+            //   이미 곡선 안에 있던 것은 진짜 진입일을 알 길이 없어서 '마지막으로 틀린 날' 로 채운다.
+            //   실제보다 짧거나 같은 값이라 '적어도 이만큼' 이 된다. 오늘 이후로는 정확하게 자란다.
+            if (typeof migrateCurveEnteredDates === 'function' && migrateCurveEnteredDates()
+                && typeof saveToStorage === 'function') saveToStorage();
             // [냐냐 요청] 관용구마다 고유 id — 표현 글자를 고쳐도 망각곡선이 따라오게.
             //   ⚠️ 붙였으면 바로 저장한다. 저장을 안 하면 다음에 열 때 다른 id 가 새로 붙어서,
             //      그 사이에 쌓인 곡선 기록이 짝을 잃는다.
@@ -1445,12 +1450,45 @@ let vocabulary = [];
         //   [냐냐 요청] mode 'wrong' 이면 '그 날 틀린 것' 을 같은 창으로 본다 (2026-09-04).
         // 목록 한 줄. 복습 예정 팝업과 곡선 칸 팝업이 같은 모양을 쓴다.
         //   단어·문법은 그 자리에서 펼쳐 더 본다 (팝업 위에 팝업을 또 띄우지 않는다).
+        // ============================================================
+        // [냐냐 요청] 곡선 위에서 얼마나 오래 붙잡고 있는지 (2026-09-14).
+        //   곡선 안이면 'N일째', 졸업했으면 'N일 만에 졸업'.
+        //   ⚠️ 졸업일은 lastReviewDate 를 쓴다 — 졸업하면 복습에 안 나오므로 그날에 멈춰 있다.
+        //   ⚠️ 옛 기록은 들어온 날을 '마지막 틀린 날' 로 채웠다(migrateCurveEnteredDates).
+        //      실제보다 짧게 나올 수 있는데, 냐냐님이 그냥 표시하기로 하셨다 — 곧 새 졸업이 쌓인다.
+        // ============================================================
+        function curveAgeHtml(kind, it) {
+            let rec = null, stage = 0;
+            if (kind === 'word') { rec = it; stage = it.reviewStage || 0; }
+            else if (kind === 'idiom') {
+                rec = (idiomReview || {})[idiomKey(it.word.id, it.idiom.idiom)];
+                stage = (rec && rec.stage) || 0;
+            } else {
+                rec = (grammarReview || {})[it.id];
+                stage = (rec && rec.stage) || 0;
+            }
+            if (!rec || !rec.lastWrongDate) return '';          // 곡선에 들어온 적이 없다
+            const entered = rec.curveEnteredDate || rec.lastWrongDate;
+            const chip = (text, cls) => `<span class="shrink-0 text-[10px] font-black ${cls} rounded-full px-2 py-0.5">${text}</span>`;
+            if (stage >= REVIEW_INTERVALS.length) {
+                if (!rec.lastReviewDate) return '';
+                const n = Math.round((new Date(rec.lastReviewDate) - new Date(entered)) / 86400000);
+                return (isNaN(n) || n < 0) ? '' : chip(`${n}일 만에 졸업`, 'text-emerald-600 bg-emerald-50');
+            }
+            return chip(`${daysSince(entered)}일째`, 'text-amber-700 bg-amber-100');
+        }
+
         function reviewPlanItemHtml(kind, it) {
+            const age = curveAgeHtml(kind, it);
             if (kind === 'word') {
+                //   [냐냐 요청] 품사도 같이 낸다 (단어 더하기 창과 같은 이유 — 같은 철자가 둘 있다)
+                const pos = (typeof POS_LABELS !== 'undefined' && POS_LABELS[it.pos]) ? POS_LABELS[it.pos] : (it.pos || '');
                 return `<div class="border border-slate-200 rounded-xl overflow-hidden">
                     <button onclick="toggleReviewPlanWord('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
                         <span class="font-bold text-slate-800 text-sm">${escapeHtml(it.word)}</span>
+                        ${pos ? `<span class="shrink-0 text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5">${escapeHtml(pos)}</span>` : ''}
                         <span class="text-[11px] text-slate-400 truncate flex-1">${escapeHtml(it.meaning || '')}</span>
+                        ${age}
                         <i id="rpw-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300"></i>
                     </button>
                     <div id="rpw-${it.id}" class="hidden px-3 pb-3"></div>
@@ -1463,6 +1501,7 @@ let vocabulary = [];
                     <div class="flex items-center gap-2">
                         <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(text)}</span>
                         <span class="ml-auto shrink-0 text-[10px] font-bold text-violet-500 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5">${escapeHtml((it.word && it.word.word) || '')}</span>
+                        ${age}
                     </div>
                     ${mean ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(mean)}</p>` : ''}
                 </div>`;
@@ -1471,6 +1510,7 @@ let vocabulary = [];
                 <button onclick="toggleReviewPlanGrammar('${it.id}')" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left transition-colors">
                     <span class="font-bold text-slate-800 text-sm min-w-0 truncate">${escapeHtml(it.icon || '📋')} ${escapeHtml(it.title || '')}</span>
                     <span class="ml-auto shrink-0 text-[10px] font-bold text-slate-400">${(typeof getGrammarScore === 'function') ? getGrammarScore(it.id).toFixed(1) + '점' : ''}</span>
+                    ${age}
                     <i id="rpgm-icon-${it.id}" class="fa-solid fa-chevron-down text-[10px] text-slate-300 shrink-0"></i>
                 </button>
                 <div id="rpgm-${it.id}" class="hidden px-3 pb-3"></div>
@@ -1918,6 +1958,20 @@ let vocabulary = [];
             return daysSince(base) >= REVIEW_INTERVALS[stage]; // 지났으면 계속 대상(밀린 복습)
         }
 
+        function migrateCurveEnteredDates() {
+            let changed = false;
+            (vocabulary || []).forEach(w => {
+                if (w.lastWrongDate && !w.curveEnteredDate) { w.curveEnteredDate = w.lastWrongDate; changed = true; }
+            });
+            [idiomReview, grammarReview].forEach(book => {
+                Object.keys(book || {}).forEach(k => {
+                    const rec = book[k];
+                    if (rec && rec.lastWrongDate && !rec.curveEnteredDate) { rec.curveEnteredDate = rec.lastWrongDate; changed = true; }
+                });
+            });
+            return changed;
+        }
+
         function getReviewDueWords() {
             return vocabulary.filter(w => w.lastWrongDate
                 && curveIsDue(w.lastReviewDate, w.lastWrongDate, w.reviewStage || 0, w.keepDueDate)
@@ -2000,6 +2054,7 @@ let vocabulary = [];
             if (kind === 'word') {
                 (vocabulary || []).forEach(w => fn({
                     it: w, wrong: w.lastWrongDate, review: w.lastReviewDate, keep: w.keepDueDate,
+                    entered: w.curveEnteredDate || w.lastWrongDate,
                     stage: w.reviewStage || 0, sort: getScore(w),
                     met: !!(w.lastWrongDate || w.lastReviewDate || (w.correctTotal || 0) || (w.wrongTotal || 0))
                 }));
@@ -2009,7 +2064,8 @@ let vocabulary = [];
                     list.forEach(item => {
                         const rec = (idiomReview || {})[idiomKey(w.id, item.idiom)] || {};
                         fn({ it: { word: w, idiom: item }, wrong: rec.lastWrongDate, review: rec.lastReviewDate,
-                             keep: rec.keepDueDate, stage: rec.stage || 0, sort: 0,
+                             keep: rec.keepDueDate, entered: rec.curveEnteredDate || rec.lastWrongDate,
+                             stage: rec.stage || 0, sort: 0,
                              met: (typeof isUntouchedIdiom === 'function')
                                  ? !isUntouchedIdiom(w.id, item.idiom)
                                  : !!(rec.lastWrongDate || rec.lastReviewDate) });
@@ -2019,7 +2075,8 @@ let vocabulary = [];
                 const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
                 tables.forEach(t => {
                     const rec = (grammarReview || {})[t.id] || {};
-                    fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, keep: rec.keepDueDate, stage: rec.stage || 0,
+                    fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, keep: rec.keepDueDate,
+                         entered: rec.curveEnteredDate || rec.lastWrongDate, stage: rec.stage || 0,
                          sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0,
                          met: !!(rec.lastWrongDate || rec.lastReviewDate)
                              || ((typeof getGrammarScore === 'function' ? getGrammarScore(t.id) : 0) !== 0) });
@@ -2027,15 +2084,22 @@ let vocabulary = [];
             }
         }
 
+        //   [냐냐 요청] 곡선 목록은 **오래 붙잡고 있는 것부터** 낸다 (2026-09-14).
+        //   들어온 날이 없는 것(곡선 밖 = '한 번도 안 틀림')은 뒤로 보내고 예전처럼 약한 순으로 둔다.
+        function curveSortByAge(list) {
+            const at = (x) => x.entered ? new Date(x.entered).getTime() : Infinity;
+            list.sort((a, b) => (at(a) - at(b)) || (a.sort - b.sort));
+            return list;
+        }
+
         function getCurveStageItems(kind, stage) {
             const out = [];
             if (stage < 0 || stage >= REVIEW_INTERVALS.length) return out;
             eachCurveRec(kind, r => {
                 if (!r.wrong || r.stage !== stage) return;
-                out.push({ it: r.it, due: curveRecDue(r.review, r.wrong, stage, r.keep), sort: r.sort });
+                out.push({ it: r.it, due: curveRecDue(r.review, r.wrong, stage, r.keep), sort: r.sort, entered: r.entered });
             });
-            // 오늘 할 것 먼저, 그 안에서는 약한 것부터 — 다른 목록과 같은 순서
-            out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
+            curveSortByAge(out);
             return out;
         }
 
@@ -2062,12 +2126,12 @@ let vocabulary = [];
             const last = REVIEW_INTERVALS.length;
             eachCurveRec(kind, r => {
                 if (!r.wrong) { if (bucket === 'never') out.push({ it: r.it, due: false, sort: r.sort, met: !!r.met }); return; }
-                if (r.stage >= last) { if (bucket === 'graduated') out.push({ it: r.it, due: false, sort: r.sort }); return; }
+                if (r.stage >= last) { if (bucket === 'graduated') out.push({ it: r.it, due: false, sort: r.sort, entered: r.entered }); return; }
                 const due = curveRecDue(r.review, r.wrong, r.stage, r.keep);
-                if (bucket === 'inCurve') out.push({ it: r.it, due, sort: r.sort });
-                else if (bucket === 'due' && due) out.push({ it: r.it, due: true, sort: r.sort });
+                if (bucket === 'inCurve') out.push({ it: r.it, due, sort: r.sort, entered: r.entered });
+                else if (bucket === 'due' && due) out.push({ it: r.it, due: true, sort: r.sort, entered: r.entered });
             });
-            out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
+            curveSortByAge(out);
             return out;
         }
 
@@ -2094,7 +2158,7 @@ let vocabulary = [];
                 never: `한 번도 안 틀려서 곡선에 들어온 적이 없는 ${meta.unit}${y}. 만나본 것과 아직 안 만난 것을 갈라 뒀어요.`
             };
             if (subEl) subEl.innerText = (SUB[bucket] || '')
-                + ((bucket !== 'due' && dueN) ? ` 빨간 점 ${dueN}개가 오늘 할 것이에요.` : '');
+                + ((bucket !== 'due' && dueN) ? ` 이 중 ${dueN}개가 오늘 할 것이에요.` : '');
 
             const counts = {};
             CURVE_BUCKETS.forEach(b => { counts[b.key] = getCurveBucketItems(kind, b.key).length; });
@@ -2104,9 +2168,10 @@ let vocabulary = [];
                     : `<div class="py-1.5 px-1 rounded-xl text-[10px] font-black leading-tight text-slate-300 text-center">${b.label}<br><span class="text-[10px] font-bold">0</span></div>`).join('')}
             </div></div>`;
 
-            const itemHtml = (r) => r.due
-                ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
-                : reviewPlanItemHtml(kind, r.it);
+            //   [냐냐 요청] 빨간 점은 뺐다 (2026-09-14). '오늘 복습할 것' 칸이 따로 있어서 겹치고,
+            //   점 때문에 '오늘 할 것 먼저' 로 줄을 세우느라 오래된 순으로 못 보고 있었다.
+            //   개수는 아래 설명 줄에 그대로 남긴다.
+            const itemHtml = (r) => reviewPlanItemHtml(kind, r.it);
             const listHtml = (list) => {
                 const shown = list.slice(0, CURVE_LIST_MAX);
                 const more = list.length - shown.length;
@@ -2149,7 +2214,7 @@ let vocabulary = [];
             if (subEl) subEl.innerText = (stage === 0
                 ? `아직 첫 복습을 못 넘긴 ${meta.unit}${yeyo}.`
                 : `${stage}번 복습하고 ${days}일을 기다리는 ${meta.unit}${yeyo}.`)
-                + (dueN ? ` 빨간 점 ${dueN}개가 오늘 할 것이에요.` : '');
+                + (dueN ? ` 이 중 ${dueN}개가 오늘 할 것이에요.` : '');
 
             // 칸 사이를 오간다 — 빈 칸은 눌러도 볼 게 없으니 흐리게 둔다
             const counts = REVIEW_INTERVALS.map((d, i) => getCurveStageItems(kind, i).length);
@@ -2160,9 +2225,7 @@ let vocabulary = [];
             </div></div>`;
 
             bodyEl.innerHTML = tabs + (rows.length
-                ? `<div class="space-y-1.5">${rows.map(r => r.due
-                    ? `<div class="relative">${reviewPlanItemHtml(kind, r.it)}<span class="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-400"></span></div>`
-                    : reviewPlanItemHtml(kind, r.it)).join('')}</div>`
+                ? `<div class="space-y-1.5">${rows.map(r => reviewPlanItemHtml(kind, r.it)).join('')}</div>`
                 : '<p class="text-slate-400 text-center text-xs py-4">이 칸은 비어 있어요 ✨</p>');
             modal.classList.remove('hidden');
         }
@@ -2327,6 +2390,7 @@ let vocabulary = [];
                 && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate)) {
                 rec.keepDueDate = today;
             }
+            if (!rec.lastWrongDate) rec.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만
             if (rec.lastDemoteDate === today) {         // 하루에 한 번만 (단어·문법과 같은 규칙)
                 if (fromReview) rec.lastReviewDate = today;   // 칸은 안 밀어도 오늘 몫은 끝났다
                 return;
@@ -2441,6 +2505,7 @@ let vocabulary = [];
             if (!id) return;
             const rec = getGrammarReviewRec(id);
             const today = getLocalDateString();
+            if (!rec.lastWrongDate) rec.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만
             if (rec.lastDemoteDate === today) return;   // 하루에 한 번만 (단어와 같은 규칙)
             rec.lastDemoteDate = today;
             const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
@@ -2916,6 +2981,9 @@ let vocabulary = [];
                     if (w.lastWrongDate && curveIsDue(w.lastReviewDate, w.lastWrongDate, w.reviewStage || 0, w.keepDueDate)) {
                         w.keepDueDate = getLocalDateString();
                     }
+                    //   [냐냐 요청] 곡선에 들어온 날 (2026-09-14). 곡선 밖 → 안, 그 한 번만 찍는다.
+                    //   lastWrongDate 는 틀릴 때마다 덮어써져서 '얼마나 오래 붙잡고 있나' 를 못 센다.
+                    if (!w.lastWrongDate) w.curveEnteredDate = getLocalDateString();
                     w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
                     // [냐냐 요청] 퀴즈·게임·복습 어디서 틀리든 곡선을 한 단계 뒤로 (처음으로 되돌리지 않음)
                     demoteReviewStage(w);
