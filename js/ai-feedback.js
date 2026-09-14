@@ -4534,20 +4534,40 @@ ${koEsNoteListText}${refGrammar}${refWords}
         function renderAddWordPicker() {
             const list = document.getElementById('add-word-list');
             if (!list) return;
-            const q = String((document.getElementById('add-word-search') || {}).value || '').trim().toLowerCase();
+            const typed = String((document.getElementById('add-word-search') || {}).value || '').trim();
             const already = new Set((aiLastEsKoWords || []).map(e => e.word.id));
             //   [냐냐 요청] 검색 전에는 목록을 안 낸다 — 단어가 1300개라 다 그리면 느리고 볼 수도 없다.
-            if (!q) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">찾을 단어를 적어주세요</p>'; return; }
-            const hits = (vocabulary || []).filter(w =>
-                String(w.word || '').toLowerCase().includes(q) || String(w.meaning || '').toLowerCase().includes(q)
-            ).slice(0, 40);
+            if (!typed) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">찾을 단어를 적어주세요</p>'; return; }
+            // [냐냐 요청] 단어장 검색창과 같은 순서로 낸다 (2026-09-14) —
+            //   ① 단어나 뜻이 정확히 일치 → ② 검색어로 시작 → ③ 그냥 포함. 묶음 안에서는 ABC 순.
+            //   악센트는 무시하고, 관사는 떼고 본다 ('la casa' 를 'casa' 로 찾는다). 단어장 검색과 같은 잣대다.
+            const flat = (x) => (typeof stripAccents === 'function' ? stripAccents(String(x || '')) : String(x || ''))
+                .toLowerCase().trim();
+            const bare = (x) => flat(x).replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/, '');
+            const q = flat(typed);
+            const rank = (w) => {
+                const word = bare(w.word), mean = flat(w.meaning);
+                if (word === q || mean === q) return 0;     // 정확히 일치 → 맨 위
+                if (word.startsWith(q)) return 1;           // 검색어로 시작
+                return 2;                                   // 그냥 포함
+            };
+            const hits = (vocabulary || [])
+                .filter(w => bare(w.word).includes(q) || flat(w.word).includes(q) || flat(w.meaning).includes(q))
+                .sort((a, b) => (rank(a) - rank(b)) || bare(a.word).localeCompare(bare(b.word)))
+                .slice(0, 40);
             if (!hits.length) { list.innerHTML = '<p class="py-8 text-center text-xs text-slate-400 font-bold">단어장에 없어요 — 먼저 등록해 주세요</p>'; return; }
             list.innerHTML = hits.map(w => {
                 const has = already.has(w.id);
+                //   [냐냐 요청] 품사를 같이 낸다 — 같은 철자가 품사만 다르게 등록된 낱말이 있어서
+                //   (el complejo 단지 / complejo 복잡한) 이름만 보고는 어느 쪽인지 못 고른다.
+                const pos = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
                 return `<button type="button" ${has ? 'disabled' : `onclick="addWordEntryManually('${escapeAttr(w.id)}')"`}
                     class="w-full flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${has ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 hover:bg-violet-50 hover:border-violet-200'}">
                     <span class="min-w-0 flex-1">
-                        <span class="block text-sm font-extrabold text-slate-800 truncate">${escapeHtml(w.word || '')}</span>
+                        <span class="flex items-baseline gap-1.5 min-w-0">
+                            <span class="text-sm font-extrabold text-slate-800 truncate">${escapeHtml(w.word || '')}</span>
+                            ${pos ? `<span class="shrink-0 text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5">${escapeHtml(pos)}</span>` : ''}
+                        </span>
                         <span class="block text-[10px] font-bold text-slate-400 truncate">${escapeHtml(w.meaning || '')}</span>
                     </span>
                     <span class="shrink-0 text-[10px] font-black ${has ? 'text-slate-400' : 'text-violet-500'}">${has ? '이미 있음' : '더하기'}</span>
@@ -4558,30 +4578,22 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const w = (vocabulary || []).find(v => String(v.id) === String(wordId));
             if (!w) return;
             if ((aiLastEsKoWords || []).some(e => e.word.id === w.id)) { showToast("이미 목록에 있어요", "info"); return; }
-            // [냐냐 요청] 판정은 다른 항목과 똑같은 잣대다 — 내가 쓴 그 낱말이 고친 문장에 살아남았나.
-            //   내 문장에서 못 찾으면 '썼다' 는 냐냐님 말을 믿고 +2 로 넣는다. 점수는 ↺ 로 바꾸면 된다.
+            // [냐냐 요청] 손으로 더한 단어는 0 점으로 시작한다 (2026-09-14).
+            //   예전엔 '내 문장에 있나 / 고친 문장에 살아남았나' 로 판정해서 +2 를 주기도 했는데,
+            //   애초에 첨삭이 못 잡아서 손으로 넣는 자리라 그 판정의 근거가 약했다.
+            //   0 으로 넣어두고 점수는 ↺ 로 고른다 (+2 / 0 / −2).
             //   ⚠️ AI 를 더 부르지 않는다 (문법 더하기와 같은 이유).
-            const norm = (x) => (typeof normalizeSpanishAnswer === 'function')
-                ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
-            const fb = aiLastFeedbackForAdd || {};
-            const flat = (t) => ' ' + String(aiStripTags(t) || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(norm).join(' ') + ' ';
-            const mineFlat = flat(fb.originalMarked), fixedFlat = flat(fb.correctedText);
-            const k = norm(w.word);
-            const inMine = !!k && mineFlat.includes(' ' + k + ' ');
-            const survived = !!k && fixedFlat.includes(' ' + k + ' ');
-            const ok = inMine ? survived : true;      // 내 문장에서 찾았으면 살아남았나로, 못 찾았으면 믿고 +2
-            const delta = ok ? WORD_SPELL_OK : 0;     // 고쳐졌으면 0 (철자 오류 −2 는 ↺ 로 고른다)
+            const delta = 0;
             const prev = snapshotWordScoreState(w);
             const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-            if (delta) addWordScore(w, delta, { correct: true });
-            aiLastEsKoWords.push({ word: w, ok, noScore: !delta, delta, baseDelta: WORD_SPELL_OK,
+            aiLastEsKoWords.push({ word: w, ok: false, noScore: true, delta, baseDelta: WORD_SPELL_OK,
                 prev, gradeBefore, groupDelta: delta, state: 'normal', undone: false, manual: true });
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddWordPicker();
             renderEsKoGrammarRefs();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof updateStats === 'function') updateStats();
-            showToast(`"${w.word}" ${fmtDelta(delta)}`, delta > 0 ? "success" : "info");
+            showToast(`"${w.word}" 0점으로 넣었어요 — ↺ 로 바꿀 수 있어요`, "info");
         }
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
