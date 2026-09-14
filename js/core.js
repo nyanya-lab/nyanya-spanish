@@ -264,6 +264,7 @@ let vocabulary = [];
                 masteredGrammar: masteredGrammar,
                 grammarScores: grammarScores,             // [냐냐 요청] 문법표 점수
                 grammarTransUsed: grammarTransUsed,       // [냐냐 요청] 번역에서 써본 문법 (마스터 자격)
+                grammarDayGain: grammarDayGain,           // [냐냐 요청] 문법 점수 하루 상한 장부
                 grammarReview: grammarReview,             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics: hiddenQuestionTopics,
                 grammarCellHighlights: grammarCellHighlights,
@@ -443,6 +444,7 @@ let vocabulary = [];
                 masteredGrammar = payload.masteredGrammar || {};
                 grammarScores = payload.grammarScores || {};             // [냐냐 요청] 문법표 점수
                 grammarTransUsed = payload.grammarTransUsed || {};       // [냐냐 요청] 번역에서 써본 문법
+                grammarDayGain = payload.grammarDayGain || {};            // [냐냐 요청] 문법 점수 하루 상한 장부
                 grammarReview = payload.grammarReview || {};             // [냐냐 요청] 문법 망각곡선
                 hiddenQuestionTopics = payload.hiddenQuestionTopics || [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
@@ -2894,15 +2896,20 @@ let vocabulary = [];
 
         // ============================================================
         // [냐냐 요청] 문법표 점수 — 단어와 같은 척도(-10~+10)·같은 등급을 그대로 쓴다
-        //   빈칸 복습:  delta = 1.5 × clamp((정답률 − 0.7) / 0.3, −1, +1)   ← 표 하나당 한 번
-        //   번역 미션:  제대로 씀 +2 / 썼는데 틀림 −2 / 안 쓰고 문장 맞음 0 / 안 쓰고 문장도 틀림 −2
+        //   빈칸 복습:  delta = 2 × clamp((정답률 − 0.7) / 0.3, −1, +1)   ← 표 하나당 한 번
+        //   번역 미션:  제대로 씀 +1 / 썼는데 틀림 −2 / 안 쓰고 문장 맞음 0 / 안 쓰고 문장도 틀림 −2
+        //   ⚠️ 플러스는 노트당 하루 +2 까지만 (GRAMMAR_DAY_CAP). 빈칸과 첨삭이 같은 주머니를 쓴다.
         //   ⚠️ 마스터·완벽은 점수만으로는 안 붙는다. 번역 미션에서 그 문법을 한 번이라도
         //      제대로 써봐야(grammarTransUsed) 열린다 — 단어의 subjectivePassed 와 같은 장치.
         // ============================================================
         // [냐냐 요청] 1.5 → 2. 표 하나당 한 번만 붙는 점수라 너무 안 올랐다
         //   (문법 노트 24개 평균이 1.31점, 완벽 구간은 0개였다)
         const GRAMMAR_FILL_MAX = 2;     // 빈칸 복습 만점/최저점
-        const GRAMMAR_TRANS_OK = 2;     // 한→스 미션에서 문법을 제대로 씀
+        // [냐냐 요청] +2 → +1 (2026-09-14). 하루 상한(+2)과 짝이다 —
+        //   하루에 한 번 쓰면 +1, 두 번 이상 쓰면 +2 에서 멈춘다. 상한 +10 까지 닷새.
+        //   틀린 건 −2 그대로라 맞히는 것보다 틀리는 것이 두 배로 무겁다. 그래야 약점이 드러난다
+        //   (실기록 112건으로 재보니 지금 규칙은 약점 0개, 이 규칙은 약점 2개가 잡혔다).
+        const GRAMMAR_TRANS_OK = 1;     // 한→스 미션에서 문법을 제대로 씀
         const GRAMMAR_TRANS_BAD = -2;   // 번역에서 문법을 틀리게 씀 / 안 쓰고 문장도 틀림
         // [냐냐 요청] 자유 작문만 절반(+1)이던 걸 없앤다. 절반이었던 이유는 '찾아보고 쓸 수
         //   있어서' 였는데, 이제 결과 카드에서 '찾아보고 씀(−2)' 을 직접 표시할 수 있다.
@@ -2986,10 +2993,41 @@ let vocabulary = [];
             return clampScore(GRAMMAR_FILL_MAX * Math.max(-1, Math.min(1, t)));
         }
 
+        // ============================================================
+        // [냐냐 요청] 문법 점수에 하루 상한을 둔다 — 노트당 하루 +2 까지 (2026-09-14).
+        //   냐냐님이 "문법은 점수가 금방 도달하는 것 같다" 고 하셔서 첨삭 기록 112건을 세어봤다:
+        //   하루 평균 첨삭 10.2번, 한 노트가 하루에 평균 4.83번(최대 18번) 걸렸다.
+        //   건당 +2 라 한 노트가 하루에 +9.7 — 상한 +10 을 하루 만에 찍을 수 있었다.
+        //   실제로 노트 32개 중 22%가 +10 에 붙어 있고 약점은 0개였다 (단어는 3.3% / 11개).
+        //   ⚠️ 상한은 **플러스에만** 건다. 틀린 건 건당 −2 그대로다 (냐냐님 결정) —
+        //      지금 문제는 점수가 너무 오르는 것이지 너무 내리는 것이 아니다.
+        //   ⚠️ 빈칸 복습(정답률 곡선 ±2)도 같은 장부를 쓴다 (냐냐님 결정). 상한은
+        //      '그 문법이 하루에 받을 수 있는 양' 이라, 어디서 받았든 한 주머니로 센다.
+        //   ⚠️ 수동으로 마스터 박기(setGrammarScore)는 상한을 안 탄다 — 그건 더하기가 아니라 못박기다.
+        // ============================================================
+        const GRAMMAR_DAY_CAP = 2;      // 노트 하나가 하루에 받을 수 있는 플러스의 총량
+
+        //   되돌리기(setGrammarEntryDelta)가 장부까지 되돌려야 해서 읽고 쓰는 길을 따로 둔다
+        function getGrammarDayGain(id) {
+            const rec = grammarDayGain[id];
+            const today = getLocalDateString();
+            return (rec && rec.d === today) ? (rec.up || 0) : 0;
+        }
+        function setGrammarDayGain(id, up) {
+            if (!up) delete grammarDayGain[id];
+            else grammarDayGain[id] = { d: getLocalDateString(), up };
+        }
+
         function addGrammarScore(id, delta, opts = {}) {
             if (!id) return 0;
             const before = getGrammarScore(id);
-            grammarScores[id] = clampScore(before + (delta || 0));
+            let d = delta || 0;
+            if (d > 0) {
+                const got = getGrammarDayGain(id);
+                d = Math.min(d, Math.max(0, GRAMMAR_DAY_CAP - got));   // 오늘 남은 몫만큼만
+                if (d > 0) setGrammarDayGain(id, got + d);
+            }
+            grammarScores[id] = clampScore(before + d);
             if (opts.transUsed) grammarTransUsed[id] = true;   // 번역에서 제대로 써봤음 = 마스터 자격
             syncGrammarMastered(id, before);
             return grammarScores[id];
@@ -3248,8 +3286,8 @@ let vocabulary = [];
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.3 / +0.7</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 <b>70%</b></td><td class="py-2 px-3 font-bold text-slate-400">0 (본전)</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.7 / −2</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">번역 미션에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 질문에 답하기 · 내 예문 연습</span></td><td class="py-2 px-3 font-black text-emerald-600">+2</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600"><b>스→한 자유 작문</b>에서 제대로 씀<br><span class="text-[10px] font-semibold text-slate-400">아는 문법을 골라 쓰는 거라 절반</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">첨삭에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 질문에 답하기 · 내 예문 연습 · 스→한 자유 작문</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
+                        <tr class="border-b border-slate-100 bg-amber-50/60"><td class="py-2 px-3 font-black text-slate-700">한 문법이 <b>하루에 받는 플러스</b>는 여기까지<br><span class="text-[10px] font-semibold text-slate-400">빈칸이든 첨삭이든 한 주머니로 세요 · 마이너스는 상한 없음</span></td><td class="py-2 px-3 font-black text-amber-600">+2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">번역에서 그 문법을 <b>틀리게 씀</b></td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장은 맞음</td><td class="py-2 px-3 font-bold text-slate-400">0</td></tr>
                         <tr><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장도 틀림</td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
@@ -3298,7 +3336,7 @@ let vocabulary = [];
                     단어는 천 개가 넘어서 한 단어를 만나는 일 자체가 드물거든요.
                 </p>
                 <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                    첨삭에서 그 문법을 제대로 썼으면 <b>점수(+2)만</b> 올라가고 칸은 그대로예요.
+                    첨삭에서 그 문법을 제대로 썼으면 <b>점수(+1)만</b> 올라가고 칸은 그대로예요.
                     문법 노트의 <b>'이 문법으로 번역 연습'</b> 버튼도 마찬가지 — 내가 골라서 하는 연습이라 칸을 안 움직여요.
                     문법표 빈칸은 <b>70% 미만</b>일 때 곡선에 들여놓기만 해요.
                 </p>
@@ -4933,6 +4971,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         // [냐냐 요청] 문법표 점수 — 단어와 같은 척도(-10~+10)·같은 등급을 쓴다
         let grammarScores = {};        // {tableId: -10~+10}
         let grammarTransUsed = {};     // {tableId: true} 번역 미션에서 그 문법을 제대로 써본 적 있음 (마스터 자격)
+        // [냐냐 요청] 문법 점수가 너무 빨리 찬다 (2026-09-14). {tableId: {d:'날짜', up:그날 받은 플러스}}
+        let grammarDayGain = {};
         // [냐냐 요청] 문법 망각곡선 {tableId: {stage, lastWrongDate, lastReviewDate, lastDemoteDate}}
         let grammarReview = {};
         let hiddenDefaultGrammar = []; // [냐냐 PATCH] 삭제(숨김)한 기본 문법 표 id 목록

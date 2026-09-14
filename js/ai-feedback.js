@@ -3329,6 +3329,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 // [냐냐 요청] 망각곡선까지 담아야 '다 돌릴 수 있다'. 예전엔 점수만 담아서
                 //   해제해도 곡선에 들어간 건 그대로 남았다.
                 const prev = {
+                    dayGain: (typeof getGrammarDayGain === 'function') ? getGrammarDayGain(note.id) : 0,
                     score: (typeof grammarScores !== 'undefined') ? grammarScores[note.id] : undefined,
                     transUsed: (typeof grammarTransUsed !== 'undefined') ? grammarTransUsed[note.id] : undefined,
                     mastered: (typeof masteredGrammar !== 'undefined') ? masteredGrammar[note.id] : undefined,
@@ -4191,6 +4192,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   새 상태를 처음부터 다시 매긴다. 그래야 점수가 겹쳐 쌓이지 않는다.
         function restoreGrammarPrev(e) {
             const id = e.note.id;
+            //   [냐냐 요청] 하루 상한 장부도 되돌린다 (2026-09-14). 안 되돌리면 점수를 껐다 켤 때
+            //   그날 몫이 이미 쓰인 것으로 남아, 다시 켜도 0 점이 붙는다.
+            if (typeof setGrammarDayGain === 'function') setGrammarDayGain(id, e.prev.dayGain || 0);
             if (typeof grammarScores !== 'undefined') {
                 if (e.prev.score === undefined) delete grammarScores[id]; else grammarScores[id] = e.prev.score;
             }
@@ -4405,7 +4409,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                           : (d < 0 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400');
                 return `<span class="shrink-0 w-9 text-center rounded-lg py-0.5 text-[11px] font-black tabular-nums ${cls}">${fmtDelta(d)}</span>`;
             };
-            const cycleBtn = (fn, i) => `<button type="button" onclick="${fn}(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`;
+            const cycleBtn = (fn, i) => `<button type="button" onclick="${fn}(${i})" title="점수 바꾸기 (+1 → 0 → −2)" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`;
 
             const grammarHtml = aiLastEsKoGrammar.map((g, i) => `
                 <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
@@ -4486,7 +4490,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 <div class="space-y-1.5">${wordHtml}</div>` : ''}
                 ${shiftHtml}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
-                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 (+2 → 0 → −2) · 이름을 누르면 열려요</p>` : ''}`;
+                ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 · 이름을 누르면 열려요</p>` : ''}`;
             box.classList.remove('hidden');
         }
 
@@ -4605,7 +4609,7 @@ ${noteListText}
                 const coachIcon = document.getElementById('ai-coach-icon');
 
                 // [냐냐 요청] 이 문장이 쓴 내 문법 노트·단어에 점수를 반영하고 결과에 보여준다
-                // 스→한 자유 작문만 단어·문법 점수를 절반(+1)으로 준다 — 아는 걸 골라 쓰는 거라
+                //   (자유 작문만 절반이던 규칙은 이미 없앴다 — 네 모드 모두 같은 값을 쓴다)
                 applyAiWritingScores(feedback, scoreNotes);
 
                 resultBox.classList.remove('hidden');
