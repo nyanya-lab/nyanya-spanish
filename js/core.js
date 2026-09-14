@@ -1893,16 +1893,35 @@ let vocabulary = [];
                 && !w.mastered && !w.perfect && !w.weak && !w.subjectivePassed;
         }
 
-        function getReviewDueWords() {
+        // ============================================================
+        // [냐냐 요청] 오늘 차례인 것이 **복습 밖에서** 틀려도 오늘 줄에 남긴다 (2026-09-14).
+        //   냐냐님 말씀 — "내가 어떤 단어를 다른 데서 맨날 틀려. 근데 그럼 그 단어는
+        //   복습으로 복습할 수가 없어서."  재보니 진짜로 그랬다:
+        //     곡선에 들어온 단어 290개 중 쓰기 복습을 한 번도 못 받은 것이 26개,
+        //     그 중 estar 는 다섯 번 틀리는 동안 복습에 한 번도 안 올라왔다.
+        //   까닭은 이렇다 — 첨삭에서 틀리면 lastWrongDate 가 오늘로 덮어써지면서
+        //   셈이 오늘부터 다시 시작돼 그날 줄에서 빠진다. 냐냐님은 하루에 첨삭을 열 번쯤 하고
+        //   복습은 몰아서 한 번 하시니, 자주 틀리는 낱말일수록 첨삭이 먼저 와서 복습을 못 받는다.
+        //   자주 틀린다는 건 제일 복습이 필요하다는 뜻인데 바로 그것이 빠지니 거꾸로 돌던 셈이다.
+        //   ⚠️ 곡선은 손대지 않는다 — 한 칸 뒤로 가는 것도, 날짜도 하던 그대로다.
+        //      바뀌는 건 '오늘 줄에 남는가' 하나뿐이다.
+        //   ⚠️ **복습에서** 틀린 것은 그대로 빠진다 (문법과 같은 기준) — 오늘 몫은 이미 푼 것이다.
+        //      복습 경로는 답이 맞든 틀리든 lastReviewDate 를 오늘로 적으므로 저절로 갈린다.
+        //   ⚠️ 오늘 줄에 남길지는 **틀리는 그 순간에** 잰다. 날짜를 덮어쓰고 나면 알 수 없다.
+        // ============================================================
+        function curveIsDue(lastReviewDate, lastWrongDate, stage, keepDueDate) {
             const today = getLocalDateString();
-            return vocabulary.filter(w => {
-                if (!w.lastWrongDate) return false;
-                if (w.lastReviewDate === today) return false; // 오늘 이미 복습함
-                const stage = w.reviewStage || 0;
-                if (stage >= REVIEW_INTERVALS.length) return false; // 복습 주기 다 마침
-                const base = w.lastReviewDate || w.lastWrongDate; // 복습했으면 그날부터 다시 셈
-                return daysSince(base) >= REVIEW_INTERVALS[stage]; // 지났으면 계속 대상(밀린 복습)
-            }).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
+            if (lastReviewDate === today) return false;        // 오늘 이미 복습함
+            if (keepDueDate === today) return true;            // 밖에서 틀렸어도 오늘 몫은 남아 있다
+            if (stage >= REVIEW_INTERVALS.length) return false; // 복습 주기 다 마침
+            const base = lastReviewDate || lastWrongDate;      // 복습했으면 그날부터 다시 셈
+            return daysSince(base) >= REVIEW_INTERVALS[stage]; // 지났으면 계속 대상(밀린 복습)
+        }
+
+        function getReviewDueWords() {
+            return vocabulary.filter(w => w.lastWrongDate
+                && curveIsDue(w.lastReviewDate, w.lastWrongDate, w.reviewStage || 0, w.keepDueDate)
+            ).sort((a, b) => getScore(a) - getScore(b)); // [냐냐 PATCH-0배치] 점수 낮은(=약한) 순
         }
 
         // [냐냐 요청] 망각곡선 전체 그림 — 내 단어들이 지금 어느 칸에 흩어져 있나.
@@ -1942,9 +1961,10 @@ let vocabulary = [];
                 if (w.mastered) stats.masteredInCurve++;
                 if (w.lastReviewDate === today) { stats.waiting++; return; }
                 const gap = daysSince(w.lastReviewDate || w.lastWrongDate);
-                if (gap >= REVIEW_INTERVALS[stage]) {
+                const kept = (w.keepDueDate === today);   // 밖에서 틀렸어도 남겨둔 오늘 몫
+                if (kept || gap >= REVIEW_INTERVALS[stage]) {
                     stats.due++;
-                    if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                    if (!kept && gap > REVIEW_INTERVALS[stage]) stats.overdue++;
                 } else {
                     stats.waiting++;
                 }
@@ -1965,9 +1985,8 @@ let vocabulary = [];
         };
 
         //   그 칸이 오늘 할 차례인가 (목록에서 앞으로 올리는 데 쓴다)
-        function curveRecDue(lastReviewDate, lastWrongDate, stage) {
-            if (lastReviewDate === getLocalDateString()) return false;
-            return daysSince(lastReviewDate || lastWrongDate) >= REVIEW_INTERVALS[stage];
+        function curveRecDue(lastReviewDate, lastWrongDate, stage, keepDueDate) {
+            return curveIsDue(lastReviewDate, lastWrongDate, stage, keepDueDate);
         }
 
         //   곡선 위의 한 줄을 갈래에 상관없이 같은 모양으로 넘겨준다.
@@ -1980,7 +1999,7 @@ let vocabulary = [];
             //      markIdiomSeen 이 게임·퀴즈·쓰기에서 이미 그 일을 하고 있다.
             if (kind === 'word') {
                 (vocabulary || []).forEach(w => fn({
-                    it: w, wrong: w.lastWrongDate, review: w.lastReviewDate,
+                    it: w, wrong: w.lastWrongDate, review: w.lastReviewDate, keep: w.keepDueDate,
                     stage: w.reviewStage || 0, sort: getScore(w),
                     met: !!(w.lastWrongDate || w.lastReviewDate || (w.correctTotal || 0) || (w.wrongTotal || 0))
                 }));
@@ -1990,7 +2009,7 @@ let vocabulary = [];
                     list.forEach(item => {
                         const rec = (idiomReview || {})[idiomKey(w.id, item.idiom)] || {};
                         fn({ it: { word: w, idiom: item }, wrong: rec.lastWrongDate, review: rec.lastReviewDate,
-                             stage: rec.stage || 0, sort: 0,
+                             keep: rec.keepDueDate, stage: rec.stage || 0, sort: 0,
                              met: (typeof isUntouchedIdiom === 'function')
                                  ? !isUntouchedIdiom(w.id, item.idiom)
                                  : !!(rec.lastWrongDate || rec.lastReviewDate) });
@@ -2000,7 +2019,7 @@ let vocabulary = [];
                 const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
                 tables.forEach(t => {
                     const rec = (grammarReview || {})[t.id] || {};
-                    fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, stage: rec.stage || 0,
+                    fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, keep: rec.keepDueDate, stage: rec.stage || 0,
                          sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0,
                          met: !!(rec.lastWrongDate || rec.lastReviewDate)
                              || ((typeof getGrammarScore === 'function' ? getGrammarScore(t.id) : 0) !== 0) });
@@ -2013,7 +2032,7 @@ let vocabulary = [];
             if (stage < 0 || stage >= REVIEW_INTERVALS.length) return out;
             eachCurveRec(kind, r => {
                 if (!r.wrong || r.stage !== stage) return;
-                out.push({ it: r.it, due: curveRecDue(r.review, r.wrong, stage), sort: r.sort });
+                out.push({ it: r.it, due: curveRecDue(r.review, r.wrong, stage, r.keep), sort: r.sort });
             });
             // 오늘 할 것 먼저, 그 안에서는 약한 것부터 — 다른 목록과 같은 순서
             out.sort((a, b) => (b.due - a.due) || (a.sort - b.sort));
@@ -2044,7 +2063,7 @@ let vocabulary = [];
             eachCurveRec(kind, r => {
                 if (!r.wrong) { if (bucket === 'never') out.push({ it: r.it, due: false, sort: r.sort, met: !!r.met }); return; }
                 if (r.stage >= last) { if (bucket === 'graduated') out.push({ it: r.it, due: false, sort: r.sort }); return; }
-                const due = curveRecDue(r.review, r.wrong, r.stage);
+                const due = curveRecDue(r.review, r.wrong, r.stage, r.keep);
                 if (bucket === 'inCurve') out.push({ it: r.it, due, sort: r.sort });
                 else if (bucket === 'due' && due) out.push({ it: r.it, due: true, sort: r.sort });
             });
@@ -2296,16 +2315,27 @@ let vocabulary = [];
         }
 
         // 진입(곡선 밖이었으면) 또는 한 칸 뒤로
-        function idiomReviewDemote(wordId, idiomText) {
+        //   [냐냐 요청] fromReview = 오늘의 복습(쓰기)에서 틀린 것 (2026-09-14).
+        //     단어는 markWordReviewedToday 가 '오늘 몫 끝' 을 적어주는데 관용구엔 그 자리가 없었다.
+        //     그게 없으면 오늘 줄에 남긴 표현이 복습에서 틀려도 계속 줄에 남아 하루 종일 돈다.
+        function idiomReviewDemote(wordId, idiomText, fromReview) {
             const key = idiomKey(wordId, idiomText);
             const rec = getIdiomReviewRec(key);
             const today = getLocalDateString();
-            if (rec.lastDemoteDate === today) return;   // 하루에 한 번만 (단어·문법과 같은 규칙)
+            //   오늘 차례였는데 복습 밖에서 틀렸으면 오늘 줄에 남긴다 (날짜를 덮어쓰기 전에 잰다)
+            if (!fromReview && rec.lastWrongDate
+                && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate)) {
+                rec.keepDueDate = today;
+            }
+            if (rec.lastDemoteDate === today) {         // 하루에 한 번만 (단어·문법과 같은 규칙)
+                if (fromReview) rec.lastReviewDate = today;   // 칸은 안 밀어도 오늘 몫은 끝났다
+                return;
+            }
             rec.lastDemoteDate = today;
             const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
             rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;
             rec.lastWrongDate = today;
-            rec.lastReviewDate = null;
+            rec.lastReviewDate = fromReview ? today : null;
         }
 
         // 한 칸 앞으로 (곡선 안에 있을 때만)
@@ -2356,9 +2386,10 @@ let vocabulary = [];
                     stats.byStage[stage]++;
                     if (rec.lastReviewDate === today) { stats.waiting++; return; }
                     const gap = daysSince(rec.lastReviewDate || rec.lastWrongDate);
-                    if (gap >= REVIEW_INTERVALS[stage]) {
+                    const kept = (rec.keepDueDate === today);   // 밖에서 틀렸어도 남겨둔 오늘 몫
+                    if (kept || gap >= REVIEW_INTERVALS[stage]) {
                         stats.due++;
-                        if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                        if (!kept && gap > REVIEW_INTERVALS[stage]) stats.overdue++;
                     } else {
                         stats.waiting++;
                     }
@@ -2369,16 +2400,12 @@ let vocabulary = [];
 
         // 오늘 복습할 관용구 — [{ word, idiom, key, stage }]
         function getIdiomDueList() {
-            const today = getLocalDateString();
             const out = [];
             Object.keys(idiomReview || {}).forEach(key => {
                 const rec = idiomReview[key];
                 if (!rec || !rec.lastWrongDate) return;
-                if (rec.lastReviewDate === today) return;
                 const stage = rec.stage || 0;
-                if (stage >= REVIEW_INTERVALS.length) return;            // 졸업
-                const base = rec.lastReviewDate || rec.lastWrongDate;
-                if (daysSince(base) < REVIEW_INTERVALS[stage]) return;
+                if (!curveIsDue(rec.lastReviewDate, rec.lastWrongDate, stage, rec.keepDueDate)) return;
                 const sep = key.indexOf('::');
                 if (sep < 0) return;
                 const wid = key.slice(0, sep), part = key.slice(sep + 2);
@@ -2882,6 +2909,13 @@ let vocabulary = [];
                 // [냐냐 요청] skipReviewDate가 true면 망각곡선 복습 대상에서 제외
                 //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
                 if (!opts.skipReviewDate) {
+                    // [냐냐 요청] 오늘 차례였으면 오늘 줄에 남긴다 (2026-09-14).
+                    //   아래에서 날짜를 덮어쓰기 **전에** 재야 한다 — 덮어쓰고 나면 알 수 없다.
+                    //   복습에서 틀린 것이면 뒤이어 markWordReviewedToday 가 lastReviewDate 를
+                    //   오늘로 적어서 이 표시를 덮는다 (curveIsDue 가 그쪽을 먼저 본다).
+                    if (w.lastWrongDate && curveIsDue(w.lastReviewDate, w.lastWrongDate, w.reviewStage || 0, w.keepDueDate)) {
+                        w.keepDueDate = getLocalDateString();
+                    }
                     w.lastWrongDate = getLocalDateString(); // '오늘 복습' 목록에 자동 등장
                     // [냐냐 요청] 퀴즈·게임·복습 어디서 틀리든 곡선을 한 단계 뒤로 (처음으로 되돌리지 않음)
                     demoteReviewStage(w);

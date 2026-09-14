@@ -4256,7 +4256,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   '다시 만나기' 는 그 곡선이 맡으므로 따로 표시해 둘 필요가 없다.
             if (w._isIdiomTask && w._idiomOf) {
                 if (typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
-                if (typeof idiomReviewDemote === 'function') idiomReviewDemote(w._idiomOf.id, w.word);
+                //   오늘의 관용구 복습으로 시작한 것이면 '복습에서 푼 것' 으로 넘긴다 —
+                //   그래야 밖에서 틀려 오늘 줄에 남겨둔 표현이 여기서 줄에서 빠진다 (2026-09-14)
+                if (typeof idiomReviewDemote === 'function') idiomReviewDemote(w._idiomOf.id, w.word, !!s.idiomReview);
             }
             // [냐냐 지적] 틀리는 '그 순간' 에 적는다 (2026-09-03). 예전엔 3바퀴까지 다 돌아야
             //   점수·곡선이 붙어서, 중간에 그만두면 틀린 기록이 통째로 사라졌다.
