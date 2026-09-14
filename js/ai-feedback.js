@@ -2195,6 +2195,51 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return hit ? String(hit.mean || '').trim() : '';
             };
 
+            // ============================================================
+            // [냐냐 지적] 재귀동사를 썼는데 비재귀 원형이 추천에 떴다 (2026-09-14).
+            //   'Me lavo las manos' 를 쓰면 AI 가 사전형을 'lavarse' 로 줄 때도 'lavar' 로 줄 때도 있다.
+            //   'lavar' 로 오면 단어장에 없으니(냐냐님은 lavarse 만 등록해 두셨다) 새 낱말로 권하게 된다.
+            //   프롬프트에도 못박았지만, AI 말만 믿지 않고 여기서 한 번 더 막는다.
+            //   ⚠️ 짝을 통째로 막지는 않는다 — 냐냐님은 levantar/levantarse·sentar/sentarse 처럼
+            //      둘 다 따로 등록해 두신 짝이 있다. 앞으로 비재귀형을 새로 배우실 때 추천이 막히면 안 된다.
+            //      그래서 '이 문장이 그 동사를 재귀로 썼을 때' 만 비재귀형 추천을 접는다.
+            // ============================================================
+            //   ⚠️ 활용표 역추적만으로는 안 된다 — lavarse 는 등록돼 있는데 1인칭 칸('me lavo')이
+            //      비어 있어서 못 찾는다. 그래서 어간과 재귀대명사의 자리로 본다.
+            const REFL_PRON = new Set(['me', 'te', 'se', 'nos', 'os']);
+            const reflexiveUsedHere = (inf) => {
+                if (typeof vocabulary === 'undefined') return false;
+                if (!/[aei]r$/i.test(inf)) return false;                     // 원형이 아니면 볼 것 없다
+                const refl = vocabulary.find(v => norm(v.word) === norm(inf + 'se'));
+                if (!refl) return false;                                     // 재귀형이 단어장에 없으면 그대로 권한다
+                const stem = norm(inf).slice(0, -2);                         // lavar → lav
+                const raws = String((feedback && feedback.originalMarked) || '')
+                    .replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+                const ts = raws.map(norm);
+                //   ① 재귀형의 활용표로 역추적 — 어간이 바뀌는 동사(acostar → acuesto)는 이쪽만 잡는다
+                if (typeof findVocabWordByForm === 'function') {
+                    for (let i = 0; i < raws.length; i++) {
+                        const a = findVocabWordByForm(raws[i]);
+                        if (a && a.id === refl.id) return true;
+                        if (i + 1 < raws.length) {
+                            const b = findVocabWordByForm(raws[i] + ' ' + raws[i + 1]);
+                            if (b && b.id === refl.id) return true;
+                        }
+                    }
+                }
+                //   ② 어간 + 재귀대명사의 자리 — 활용표에 칸이 비어 있는 동사(lavarse 의 1인칭)는 이쪽이 잡는다
+                if (stem.length < 3) return false;
+                for (let i = 0; i < ts.length; i++) {
+                    const t = ts[i];
+                    if (!t || !t.startsWith(stem)) continue;
+                    //   앞에 재귀대명사가 떨어져 있는 꼴 — 'me lavo' · 'me las lavo'
+                    for (let j = Math.max(0, i - 2); j < i; j++) if (REFL_PRON.has(ts[j])) return true;
+                    //   뒤에 붙여 쓴 꼴 — 'lavarme' · 'lavandose'
+                    if (t.length > stem.length + 2 && /(?:me|te|se|nos|os)$/.test(t)) return true;
+                }
+                return false;
+            };
+
             const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
             const seen = new Set();
             list.forEach(item => {
@@ -2208,6 +2253,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
                 if (looksConjugatedWord(key)) return;                          // 활용형 (불규칙 과거형 포함)
+                if (reflexiveUsedHere(key)) return;                            // 재귀로 쓴 동사의 비재귀 원형
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -2236,6 +2282,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   역추적이 못 찾고, 어미 규칙에도 안 걸린다. 네 보조동사는 글자로 막는다.
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;
                 if (inGrammarNoteTable(raw)) return;
+                if (reflexiveUsedHere(key)) return;                            // 재귀로 쓴 동사의 비재귀 원형
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
@@ -3736,7 +3783,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             - "tip": the RULE behind it — why Spanish works that way, so the student can apply it next time. Not a repeat of the verdict, not a repeat of the natural phrasing.
             Concretely, this is the failure to avoid: message says "반복되는 단어를 대명사로 바꾸면 더 자연스러워집니다", naturalWhy says "지시대명사를 활용해 자연스럽게 표현했어요", and tip says "'esa ropa' 대신 'esta'처럼 지시대명사를 사용해보세요" — three sentences, one idea, and the student's eye slides off all of them. When "moreNatural" is filled, ONLY "naturalWhy" may discuss that rephrasing; "message" and "tip" must then talk about something else — the grammar the student actually used, or the rule behind the correction you made.`;
         const AI_SCORING_RULES_TEXT = `
-            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" ONLY when the student misspelled it — the letters they typed are not a real Spanish word (put the dictionary form of the word they were CLEARLY trying to write). A correctly spelled real word can NEVER go in "wordsBad", however wrong it was for this sentence; if you replaced it, it belongs in "wordsForm"; "wordsForm" when the word is spelled correctly but you did NOT leave it as it was — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos), or a word you had to swap for a different one (es → está, Cuál → Qué, el pie → mis pies). The student knew the word but did not place it right here, so it earns nothing either way; "wordsOk" only for words that survive into correctedText exactly as the student wrote them. Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
+            IMPORTANT for "wordsOk"/"wordsForm"/"wordsBad": all three are REQUIRED — always output them, using [] when empty. Output plain strings only, never objects. Walk through the student's ORIGINAL sentence and place each content word they actually wrote (nouns, verbs, adjectives, adverbs), in its dictionary form, into exactly one of the three lists. Dictionary form = verbs as infinitive (es → ser, tengo → tener), nouns as singular with article (libros → el libro), adjectives as masculine singular (bonita → bonito). A verb used REFLEXIVELY keeps the "-se": "me lavo las manos" is "lavarse", never "lavar"; "me acuesto" is "acostarse"; "se llama" is "llamarse". The reflexive and the plain verb are two different dictionary entries, so giving the wrong one credits the wrong word. Skip articles, bare one-word prepositions and pronouns. DO include multi-word set phrases and connectors as a single entry (e.g. "antes de", "después de", "al lado de", "a la derecha de", "tener ganas de") — these are vocabulary items too, so never split or drop them. Accents count — año and ano are different words. Which list a word goes in: "wordsBad" ONLY when the student misspelled it — the letters they typed are not a real Spanish word (put the dictionary form of the word they were CLEARLY trying to write). A correctly spelled real word can NEVER go in "wordsBad", however wrong it was for this sentence; if you replaced it, it belongs in "wordsForm"; "wordsForm" when the word is spelled correctly but you did NOT leave it as it was — a wrong conjugation (es → son), a wrong gender or number ending (caros → caro, aquel → aquellos), or a word you had to swap for a different one (es → está, Cuál → Qué, el pie → mis pies). The student knew the word but did not place it right here, so it earns nothing either way; "wordsOk" only for words that survive into correctedText exactly as the student wrote them. Never list a word the student did not write. BEFORE OUTPUT, walk the three lists once more and delete any entry whose word does not literally appear in the student's ORIGINAL sentence — words YOU added in "correctedText" are yours, not theirs, and must never earn or lose the student points. ALWAYS append "|" and the part of speech the word has IN THIS SENTENCE — exactly one of noun, verb, adjective, adverb, preposition, pronoun, conjunction, interrogative, phrase. The same spelling can be different parts of speech ("vivo solo|adverb" but "un café solo|adjective"; "el joven|noun" but "un chico joven|adjective"), so decide from how it is actually used here, never from the word alone. Never omit the "|part of speech".
             IMPORTANT for "wordsAdded": REQUIRED - always output it, using [] when empty. This is the MIRROR of the three lists above: every content word that appears in YOUR "correctedText" but NOT in the student's original sentence - the words YOU chose for them. Same format and same dictionary-form rules, "dictionary form|part of speech". By itself it neither earns nor loses points; the app needs it because the same spelling can be two different words ("complejo" is both the adjective 복잡한 and the noun 단지) and only you know which one you meant. Keep two things OUT of it: (a) a word that is merely another FORM of a word the student wrote - they wrote "caro" and you wrote "cara", that is their word re-inflected and belongs in "wordsForm", not here; (b) articles, bare one-word prepositions and pronouns.
             IMPORTANT for "grammarOk"/"grammarBad": both are REQUIRED — always output them, using [] when empty. Output the note titles exactly as given in the list above, and never invent a title.
             WALK SENTENCE BY SENTENCE. The student may write one sentence or a whole paragraph. Take the sentences ONE AT A TIME, in order, and ask of each: which of my notes does THIS sentence use? A long text is not one judgement - it is that question repeated. Notes found in a later sentence matter exactly as much as ones in the first, and the same note may be exercised by several sentences (list it once, with the clearest fragment). It is a failure to answer for the first sentence and stop: a five-sentence text that returns two notes is almost always a text you stopped reading. Be STRICT: before listing a note, point to the exact word or structure in the student's sentence that matches the note's hint. If you cannot point to one, leave the note out. A single structure often belongs to TWO notes at once — "Estoy buscando" is BOTH the gerundio note (the -ando ending itself) AND the present-progressive note (estar + gerundio); list both, never just the one that feels most specific. List EVERY note you can point to concretely — one sentence often exercises three or four of them at once (e.g. "tu tercera gorra se mancha" uses the ordinal note, the possessive-adjective note AND the reflexive-verb note). Leaving out a note the student really used costs them the points and the review they earned, so do not hold back when you can point to the word. What you must NOT do is list a note merely because its topic feels related, because the sentence is in the present tense, or because it contains some noun — the note's own rule must be visibly used. Concretely: a note titled "위치를 나타내는 표현" whose hint is about "del / al" and "encima de, cerca de, al lado de" is NOT used by a sentence that just says "sobre el pie" — no contraction, none of its phrases — so that note belongs in NEITHER list, not in "grammarOk" and not in "grammarBad". Read the hint, not the title: the title is a topic, the hint is the rule. A note whose hint lists specific words (e.g. months, weekdays, possessives) counts only if one of those actual words appears in the sentence.
