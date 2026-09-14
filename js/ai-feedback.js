@@ -3319,6 +3319,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const badIds = new Set(parsed.filter(x => x.ok === false).map(x => x.note.id));
 
             const done = new Set();
+            //   [냐냐 요청] 복습을 푸는 김에 오늘 몫의 다른 문법도 제대로 썼으면 쳐준다 (2026-09-14).
+            //   덤으로 나간 노트 이름을 모아 뒀다가 끝나고 한 번에 알려준다.
+            const alsoReviewed = [];
             parsed.forEach(item => {
                 const note = item.note;
                 if (done.has(note.id)) return;           // 중복은 버린다
@@ -3339,12 +3342,36 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 // [냐냐 기준] 곡선에 들어오는 건 어디서든, 칸이 움직이는 건 복습 배너로 시작한 미션에서만.
                 //   그래야 아무 데서나 한 칸씩 나가서 너무 빨리 졸업하는 일이 없다.
                 //   여기 밖에서 제대로 쓴 것은 점수(+2)로만 쳐준다 — 단어의 wordsOk 와 같은 대접.
-                const canMove = (note.id === aiMissionReviewGrammarId);
+                // ============================================================
+                // [냐냐 요청] 복습 줄을 푸는 김에 쓴 '오늘 몫의 다른 문법' 도 쳐준다 (2026-09-14).
+                //   냐냐님 말씀 — "앞에 문법 복습에서 했어. 그럼 거기에서 복습 횟수 인정해주는 건
+                //   어때? 너무 많이 하는 느낌이야." 한 문장이 노트를 두셋씩 건드리는 일이 흔한데,
+                //   지금은 배너가 지목한 그 노트만 칸이 나가서 이미 제대로 쓴 문법을 또 문제로 냈다.
+                //   ⚠️ 세 조건을 다 넘을 때만이다:
+                //     ① 복습 줄 안에서 (aiMissionReviewGrammarId 가 살아 있을 때)
+                //     ② 제대로 쓴 것만 (틀린 건 덤으로 물리지 않는다 — 그 문법을 내준 문제가 아니었다)
+                //     ③ 오늘 복습 대상으로 줄에 남아 있는 것만
+                //   랜덤 미션에서까지 열어주면 아무 데서나 한꺼번에 졸업한다 (2026-09-07 규칙).
+                // ============================================================
+                const inQueue = (item.ok === true) && !!aiMissionReviewGrammarId
+                    && note.id !== aiMissionReviewGrammarId
+                    && typeof grammarReviewQueue !== 'undefined'
+                    && grammarReviewQueue.indexOf(note.id) >= 0;
+                const canMove = (note.id === aiMissionReviewGrammarId) || inQueue;
                 applyGrammarCurve(note.id, item.ok, canMove);
+                if (inQueue) {
+                    grammarReviewQueue.splice(grammarReviewQueue.indexOf(note.id), 1);
+                    if (grammarReviewTotal) grammarReviewDone++;
+                    alsoReviewed.push(note.title || '');
+                }
                 aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, ev: item.ev, state: 'normal', undone: false });
             });
             // 단어와 같이 점수순(낮은 것부터). 한 번만 정하고 점수를 바꿔도 자리는 안 옮긴다.
             aiLastEsKoGrammar.sort((a, b) => (a.delta - b.delta) || String(a.note.title || '').localeCompare(String(b.note.title || ''), 'ko'));
+            //   덤으로 복습이 된 게 있으면 알려준다 — 안 그러면 줄이 왜 줄었는지 알 수가 없다
+            if (alsoReviewed.length && typeof showToast === 'function') {
+                showToast(`${alsoReviewed.join(', ')} 도 제대로 써서 오늘 복습으로 쳐드렸어요 ✅`, 'success');
+            }
         }
 
         // [냐냐 요청] AI 가 잘못 알아들어 붙은 점수를 한 건씩 해제한다.
