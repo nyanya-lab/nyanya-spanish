@@ -19,6 +19,10 @@
         let grammarReviewTotal = 0;
         let grammarReviewDone = 0;
         let grammarReviewLastNoteId = null;   // 방금 푼 문법 — 채점 뒤에 이름을 밝히는 데 쓴다
+        // [냐냐 요청] 지금 복습 중인 문법 (2026-09-14). '✨ 랜덤 문장 생성' 을 눌러도
+        //   복습을 깨지 않고 이 문법 안에서 새 문장을 낸다.
+        let grammarReviewCurrentId = null;
+        let grammarReviewSlotGraded = false;   // 그 문법에 이미 답을 냈나 — 칸은 한 번만 움직인다
 
         function startGrammarReviewQueue(ids) {
             grammarReviewQueue = (ids || []).slice();
@@ -31,6 +35,8 @@
         function nextGrammarReviewMission() {
             const id = grammarReviewQueue.shift();
             if (!id) { renderGrammarReviewBar(); return; }
+            grammarReviewCurrentId = id;
+            grammarReviewSlotGraded = false;
             renderGrammarReviewBar();
             startTranslationWithGrammar(id, true);
         }
@@ -39,6 +45,8 @@
             grammarReviewQueue = [];
             grammarReviewTotal = 0;
             grammarReviewDone = 0;
+            grammarReviewCurrentId = null;
+            grammarReviewSlotGraded = false;
             renderGrammarReviewBar();
         }
 
@@ -46,14 +54,18 @@
         function renderGrammarReviewBar(state) {
             const box = document.getElementById('ai-grammar-review-bar');
             if (!box) return;
+            //   복습 중에는 '랜덤 문장 생성' 이 이 문법 안에서 다시 낸다 — 버튼에 귀띔해 둔다
+            const genBtn = document.getElementById('ai-generate-mission-btn');
+            if (genBtn) genBtn.title = grammarReviewTotal ? '복습 중인 문법으로 새 문장을 냅니다' : '';
             if (!grammarReviewTotal) { box.classList.add('hidden'); box.innerHTML = ''; return; }
             const left = grammarReviewQueue.length;
-            const at = Math.min(grammarReviewDone + (state === 'graded' ? 0 : 1), grammarReviewTotal);
+            //   이미 답을 낸 칸을 다시 푸는 중이면(랜덤 문장 생성) 번호를 올리지 않는다
+            const at = Math.min(grammarReviewDone + ((state === 'graded' || grammarReviewSlotGraded) ? 0 : 1), grammarReviewTotal);
             //   [냐냐 요청] 복습에서는 무슨 문법인지 푸는 중에도 알려준다 (2026-09-04).
             //   예전엔 감췄다 — '알면 짐작해서 쓰게 된다' 는 이유였는데, 그건 랜덤 미션 기준이다.
             //   복습은 어떤 문법인지 맞히는 게 아니라 그 문법을 다시 써보는 것이 목적이라,
             //   모르고 우회해 버리면 복습 자체가 헛돈다. 이름을 누르면 노트를 들춰볼 수 있다.
-            const noteId = (state === 'graded') ? grammarReviewLastNoteId : aiMissionReviewGrammarId;
+            const noteId = (state === 'graded') ? grammarReviewLastNoteId : (aiMissionReviewGrammarId || grammarReviewCurrentId);
             const note = (typeof getAllGrammarTables === 'function' && noteId)
                 ? getAllGrammarTables().find(t => t.id === noteId) : null;
             box.classList.remove('hidden');
@@ -62,8 +74,8 @@
                     <span class="text-xs font-black text-amber-700 shrink-0">📋 문법 복습 ${state === 'graded' ? grammarReviewDone : at} / ${grammarReviewTotal}</span>
                     ${note ? `<button type="button" onclick="openGrammarPeek('${escapeAttr(note.id)}')" title="이 노트를 들춰봐요" class="text-[11px] font-bold text-amber-700 truncate min-w-0 underline decoration-amber-300 underline-offset-2 hover:text-amber-900 transition-colors">${escapeHtml(note.icon || '')} ${escapeHtml(note.title || '')}</button>` : ''}
                     <div class="ml-auto shrink-0">
-                        ${state === 'graded'
-                            ? (left
+                        ${(state === 'graded' || grammarReviewSlotGraded)
+                            ? (left   //   답을 낸 칸이면 문장을 다시 뽑아도 '다음 문법' 을 계속 띄운다
                                 ? `<button onclick="nextGrammarReviewMission()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95">다음 문법 <i class="fa-solid fa-arrow-right"></i> <span class="opacity-80">${left}개 남음</span></button>`
                                 : `<button onclick="endGrammarReviewQueue()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95">오늘 문법 복습 끝! 🎉</button>`)
                             : `<button onclick="endGrammarReviewQueue()" title="복습을 여기서 그만둡니다" class="text-[11px] font-bold text-amber-500 hover:text-amber-700 px-2 py-1">그만하기</button>`}
@@ -1440,14 +1452,30 @@
 
             // [냐냐 요청] 문법표 1개를 골라 그 문법으로만 문장을 만든다
             //   노트에서 '이 문법으로 번역 연습'을 눌러 들어왔으면 그 문법을 쓴다 (한 번만)
-            const forced = aiForcedGrammarId
-                ? (typeof getAllGrammarTables === 'function' ? getAllGrammarTables().find(t => t.id === aiForcedGrammarId) : null)
-                : null;
+            const manualId = aiForcedGrammarId;            // 노트에서 눌러 들어온 것
+            const manualFromReview = aiForcedFromReview;
             aiForcedGrammarId = null;
-            aiMissionReviewGrammarId = (forced && aiForcedFromReview) ? forced.id : null;
             aiForcedFromReview = false;
-            if (!aiMissionReviewGrammarId && grammarReviewTotal) endGrammarReviewQueue();  // 랜덤 미션을 뽑으면 복습 줄은 끝난 것
-            else renderGrammarReviewBar();
+            // [냐냐 요청] 복습 중에 '✨ 랜덤 문장 생성' 을 누르면 (2026-09-14).
+            //   예전엔 복습 줄을 통째로 끝내고 아무 문법으로 가버렸다 — 복습하다 문장 하나가
+            //   마음에 안 들어 다시 뽑으면 복습이 날아갔다. 이제는 지금 복습 중인 그 문법으로
+            //   새 문장을 낸다. 대목(pickGrammarNoteDetail)은 매번 다시 뽑히니 같은 노트라도
+            //   문장은 달라진다. 복습을 그만두려면 복습 줄의 '그만하기' 를 쓴다.
+            //   ⚠️ 마지막 칸까지 답을 낸 뒤라면 복습은 끝난 것이니 그때는 진짜 랜덤으로 간다.
+            const reviewOver = grammarReviewSlotGraded && !grammarReviewQueue.length;
+            let forcedId = manualId, fromReview = manualFromReview;
+            if (!forcedId && grammarReviewCurrentId && !reviewOver) {
+                forcedId = grammarReviewCurrentId;
+                fromReview = true;
+            }
+            //   복습 밖의 문법으로 갈아탔거나, 다 끝내고 랜덤을 누른 것이면 복습 줄을 접는다
+            if (grammarReviewTotal && !fromReview) endGrammarReviewQueue();
+            const forced = forcedId
+                ? (typeof getAllGrammarTables === 'function' ? getAllGrammarTables().find(t => t.id === forcedId) : null)
+                : null;
+            //   칸은 한 문법에 한 번만 — 다시 내서 또 맞혀도 두 칸 나가지 않는다
+            aiMissionReviewGrammarId = (forced && fromReview && !grammarReviewSlotGraded) ? forced.id : null;
+            renderGrammarReviewBar();
             const grammarNote = forced || pickMissionGrammarNote();
             const grammarContext = grammarNote ? buildGrammarContextForMission(grammarNote) : '';
             // 노트 안에서 이번에 연습할 대목 하나 (매번 다른 줄이 걸리게)
@@ -1707,8 +1735,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
                 applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
-                if (aiMissionReviewGrammarId && grammarReviewTotal) grammarReviewDone++;
-                grammarReviewLastNoteId = aiMissionReviewGrammarId;
+                if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
+                grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
                 renderGrammarReviewBar('graded');
                 resultBox.classList.remove('hidden');   // ⚠️ 847d5ce 에서 이 줄이 지워져 결과 카드가 안 보였다
