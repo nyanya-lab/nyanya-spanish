@@ -2216,12 +2216,20 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const raws = String((feedback && feedback.originalMarked) || '')
                     .replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
                 const ts = raws.map(norm);
-                //   ① 재귀형의 활용표로 역추적 — 어간이 바뀌는 동사(acostar → acuesto)는 이쪽만 잡는다
+                //   ① 재귀형의 활용표로 역추적 — 어간이 바뀌는 동사(acostar → acuesto)는 이쪽만 잡는다.
+                //   ⚠️ 재귀대명사가 실제로 붙어 있을 때만 본다. findVocabWordByForm 은 대명사를 떼고도
+                //      맞춰줘서, 비재귀로 쓴 'Lavo la ropa' 의 'Lavo' 까지 lavarse 로 돌려준다.
+                //      그대로 두면 진짜 새 낱말인 lavar 를 영영 안 권하게 된다.
                 if (typeof findVocabWordByForm === 'function') {
                     for (let i = 0; i < raws.length; i++) {
-                        const a = findVocabWordByForm(raws[i]);
-                        if (a && a.id === refl.id) return true;
-                        if (i + 1 < raws.length) {
+                        const cur = ts[i] || '';
+                        //   붙여 쓴 꼴 — 'lavarme' · 'lavandose'
+                        if (cur.length > 4 && /(?:me|te|se|nos|os)$/.test(cur)) {
+                            const a = findVocabWordByForm(raws[i]);
+                            if (a && a.id === refl.id) return true;
+                        }
+                        //   떨어뜨려 쓴 꼴 — 'me lavo'
+                        if (i + 1 < raws.length && REFL_PRON.has(cur)) {
                             const b = findVocabWordByForm(raws[i] + ' ' + raws[i + 1]);
                             if (b && b.id === refl.id) return true;
                         }
@@ -2432,7 +2440,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             vocabulary.forEach(v => {
                 if (!aiIds.has(v.id) || v.pos !== 'verb') return;
                 const add = (f) => { const k = formKey(f); if (k && !aiVerbForm.has(k)) aiVerbForm.set(k, v); };
-                const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                const tenses = verbTensesOf(v);
                 for (const tk in tenses) {
                     const forms = tenses[tk];
                     if (!forms) continue;
@@ -2827,7 +2835,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             vocabulary.forEach(v => {
                 if (v.pos !== 'verb') return;
                 const inf = String(v.word || '').trim();
-                const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                const tenses = verbTensesOf(v);
                 Object.keys(tenses).forEach(tk => {
                     const forms = tenses[tk] || {};
                     Object.keys(forms).forEach(pk => {
@@ -4848,6 +4856,25 @@ ${noteListText}
             return out;
         }
 
+        // ============================================================
+        // [냐냐 지적] 재귀동사를 잘 못 잡는다 (2026-09-14). 원인은 재귀가 아니라 '옛 기록' 이었다.
+        //   활용은 conjugationsByTense 에 시제별로 들어가는데, 그 칸이 생기기 전에 등록한 동사는
+        //   옛 conjugations 에만 있다. 읽는 줄이 이랬다:
+        //       v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {})
+        //   conjugationsByTense 가 '객체로는 있는데 안이 빈' 동사는 || 가 그쪽을 골라버려서
+        //   옛 칸을 영영 안 봤다. 그런 동사가 267개 중 16개였고 절반이 재귀동사였다:
+        //     lavarse · ducharse · levantarse · sentarse · afeitarse · peinarse · dedicarse
+        //     llover · nevar · morir · nacer · crecer · oir · lucir · odiar · pasear
+        //   'me lavo' 가 여섯 칸 다 채워져 있는데도 하나도 안 걸리던 게 이것 때문이다.
+        //   ⚠️ 고르는 게 아니라 합친다. 새 칸에 현재시제가 있으면 그쪽이 이기고, 비었을 때만 옛 칸을 쓴다.
+        // ============================================================
+        function verbTensesOf(v) {
+            const byTense = (v && v.conjugationsByTense) || {};
+            const filled = (o) => !!o && Object.keys(o).some(k => o[k]);
+            if (filled(byTense.presente) || !filled(v && v.conjugations)) return byTense;
+            return Object.assign({}, byTense, { presente: v.conjugations });
+        }
+
         function findVocabWordByForm(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return null;
@@ -4878,7 +4905,7 @@ ${noteListText}
                 }
                 // 2) 동사: 등록된 모든 시제/인칭 변형과 대조
                 if (v.pos === 'verb') {
-                    const tenses = v.conjugationsByTense || (v.conjugations ? { presente: v.conjugations } : {});
+                    const tenses = verbTensesOf(v);
                     for (const tk in tenses) {
                         const forms = tenses[tk];
                         if (!forms) continue;
