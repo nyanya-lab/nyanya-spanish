@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609141746">
+    <link rel="stylesheet" href="css/style.css?v=202609142042">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1109,6 +1109,11 @@
                                 <h4 class="font-bold text-slate-900">AI 첨삭 결과</h4>
                                 <p id="ai-coach-verdict" class="text-xs font-semibold text-slate-500">분석 완료!</p>
                             </div>
+                            <!-- [냐냐 요청] 이 첨삭의 점수를 통째로 0 으로. 한 번 더 누르면 누르기 직전으로 -->
+                            <button type="button" id="ai-zero-all-btn" onclick="toggleAiZeroAll()"
+                                class="hidden ml-auto shrink-0 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 text-[11px] font-bold transition-colors active:scale-95">
+                                <i class="fa-solid fa-circle-half-stroke mr-1"></i><span id="ai-zero-all-label">전부 0점</span>
+                            </button>
                         </div>
 
                         <!-- [냐냐 요청] AI 코멘트 흰 박스를 없애고 추정 해석만 한 줄로 (자리를 너무 많이 먹었음).
@@ -2376,13 +2381,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609141746"></script>
-    <script src="js/creatures.js?v=202609141746"></script>
-    <script src="js/core.js?v=202609141746"></script>
-    <script src="js/vocab.js?v=202609141746"></script>
-    <script src="js/flashcards.js?v=202609141746"></script>
-    <script src="js/quiz.js?v=202609141746"></script>
-    <script src="js/games.js?v=202609141746"></script>
-    <script src="js/ai-feedback.js?v=202609141746"></script>
+    <script src="js/dictionary-data.js?v=202609142042"></script>
+    <script src="js/creatures.js?v=202609142042"></script>
+    <script src="js/core.js?v=202609142042"></script>
+    <script src="js/vocab.js?v=202609142042"></script>
+    <script src="js/flashcards.js?v=202609142042"></script>
+    <script src="js/quiz.js?v=202609142042"></script>
+    <script src="js/games.js?v=202609142042"></script>
+    <script src="js/ai-feedback.js?v=202609142042"></script>
 </body>
 </html>

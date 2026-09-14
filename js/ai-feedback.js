@@ -4298,6 +4298,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'이 남아 있으면 안 된다
             aiLastEsKoGrammar = [];
             aiLastEsKoWords = [];
+            aiZeroAllSnapshot = null;   // [냐냐 요청] '전부 0점' 은 그 첨삭 한 번에만 걸린다
             aiLastSuggest = { idioms: [], newWords: [] };
             const box = document.getElementById('ai-mission-refs');
             if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
@@ -4330,7 +4331,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
         }
 
         //   [냐냐 요청] 점수를 직접 정한다 (+2 / 0 / −2). 반영 전 상태로 되돌린 뒤 그 점수로 다시 붙인다.
-        function setGrammarEntryDelta(i, delta) {
+        //   quiet = 저장과 다시 그리기를 건너뛴다. 한 번에 여러 개를 바꿀 때 쓴다 —
+        //   항목마다 renderWordList(단어 1300개)를 다시 그리면 버튼 한 번에 화면이 멎는다.
+        function setGrammarEntryDelta(i, delta, quiet) {
             const e = aiLastEsKoGrammar[i];
             if (!e || e.delta === delta) return;
             const id = e.note.id;
@@ -4360,6 +4363,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (delta === 0) removeAiNoteGram(_lastAiNoteKey, id);
             else setAiNoteGramOk(_lastAiNoteKey, id, ok, e.note.title);
 
+            if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
             if (typeof renderGrammarTables === 'function') renderGrammarTables();
@@ -4394,7 +4398,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             showToast(`"${e.note.title}" · ${fmtDelta(to)}`, "info");
         }
 
-        function setWordEntryDelta(i, delta) {
+        function setWordEntryDelta(i, delta, quiet) {
             const e = aiLastEsKoWords[i];
             if (!e || e.delta === delta) return;
             restoreWordScoreState(e.word, e.prev);
@@ -4405,8 +4409,57 @@ ${koEsNoteListText}${refGrammar}${refWords}
             e.undone = (delta === 0);
             if (delta) addWordScore(e.word, delta, { correct: delta > 0 });
 
+            if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        // ============================================================
+        // [냐냐 요청] 이 첨삭의 점수를 통째로 0 으로 (2026-09-14). 결과 카드 제목 줄의 버튼.
+        //   한 번 더 누르면 **누르기 직전** 점수로 돌아온다 — AI 가 처음 매긴 값이 아니라.
+        //   손으로 몇 개를 고쳐둔 뒤에 0 을 눌렀다면 그 고친 값까지 그대로 살아나야 한다.
+        //   ⚠️ 항목마다 되돌리기(↺)를 거는 것과 똑같은 길을 쓴다 — 점수도 곡선도 하루 상한 장부도
+        //      setGrammarEntryDelta / setWordEntryDelta 가 이미 다 되돌린다.
+        //   ⚠️ 0 으로 둔 채 손으로 더한 항목은 되돌려도 0 그대로다 (더할 때부터 0 이었다).
+        // ============================================================
+        let aiZeroAllSnapshot = null;   // { g: [점수…], w: [점수…] } — 0 으로 만들기 직전
+
+        function renderAiZeroAllBtn() {
+            const btn = document.getElementById('ai-zero-all-btn');
+            const label = document.getElementById('ai-zero-all-label');
+            if (!btn || !label) return;
+            const n = (aiLastEsKoGrammar || []).length + (aiLastEsKoWords || []).length;
+            btn.classList.toggle('hidden', !n);
+            const zeroed = !!aiZeroAllSnapshot;
+            label.innerText = zeroed ? '점수 되돌리기' : '전부 0점';
+            btn.title = zeroed
+                ? '0 으로 만들기 직전의 점수로 되돌려요'
+                : '이 첨삭이 준 점수를 전부 0 으로 만들어요 (한 번 더 누르면 되돌아와요)';
+            btn.classList.toggle('border-violet-300', zeroed);
+            btn.classList.toggle('text-violet-600', zeroed);
+        }
+
+        function toggleAiZeroAll() {
+            const G = aiLastEsKoGrammar || [], W = aiLastEsKoWords || [];
+            if (!G.length && !W.length) return;
+            if (aiZeroAllSnapshot) {
+                aiZeroAllSnapshot.g.forEach((d, i) => { if (G[i]) setGrammarEntryDelta(i, d, true); });
+                aiZeroAllSnapshot.w.forEach((d, i) => { if (W[i]) setWordEntryDelta(i, d, true); });
+                aiZeroAllSnapshot = null;
+                showToast("점수를 되돌렸어요", "info");
+            } else {
+                aiZeroAllSnapshot = { g: G.map(e => e.delta), w: W.map(e => e.delta) };
+                G.forEach((e, i) => setGrammarEntryDelta(i, 0, true));
+                W.forEach((e, i) => setWordEntryDelta(i, 0, true));
+                showToast("이 첨삭의 점수를 전부 0 으로 했어요", "info");
+            }
+            //   한 번에 몰아서 저장하고 다시 그린다 (항목마다 하면 화면이 멎는다)
+            if (typeof saveToStorage === 'function') saveToStorage();
+            renderEsKoGrammarRefs();
+            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            if (typeof renderAiNoteList === 'function') renderAiNoteList();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof updateStats === 'function') updateStats();
         }
@@ -4706,6 +4759,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 ${(typeof aiSuggestHtml === 'function') ? aiSuggestHtml() : ''}
                 ${(grammarHtml || wordHtml) ? `<p class="text-[10px] text-slate-400 mt-2">↺ 눌러서 점수 바꾸기 · 이름을 누르면 열려요</p>` : ''}`;
             box.classList.remove('hidden');
+            renderAiZeroAllBtn();   // [냐냐 요청] '전부 0점' 버튼의 이름·노출도 같이 맞춘다
         }
 
         async function submitAiTranslationEsKo() {
