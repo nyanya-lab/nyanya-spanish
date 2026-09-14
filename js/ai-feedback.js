@@ -2118,6 +2118,20 @@ ${koEsNoteListText}${refGrammar}${refWords}
             'mil','miles','millon','millones','billon','billones'
         ]);
 
+        // [냐냐 요청] 낱말 앞에 올 수 있는 한정사 (2026-09-14).
+        //   'la tarde'(오후)처럼 관사를 달고 등록된 명사인지, 'tarde'(늦게)처럼 관사가 없는
+        //   다른 품사인지를 문장에서 가려내는 데 쓴다. 앞에 이런 말이 있으면 명사 쪽이다.
+        const AI_DETERMINERS = new Set([
+            'el','la','los','las','un','una','unos','unas','al','del',
+            'mi','tu','su','mis','tus','sus','nuestro','nuestra','nuestros','nuestras',
+            'este','esta','estos','estas','ese','esa','esos','esas',
+            'aquel','aquella','aquellos','aquellas',
+            'otro','otra','otros','otras','cada','todo','toda','todos','todas',
+            'algun','alguna','algunos','algunas','ningun','ninguna'
+        ]);
+        //   ⚠️ poco·mucho 무리는 일부러 뺐다 — 한정사로도 쓰이지만('poco tiempo')
+        //      부사로도 쓰여서('un poco tarde'), 넣으면 바로 그 경우를 놓친다.
+
         const AI_FUNCTION_WORDS = new Set([
             'el','la','los','las','un','una','uno','unos','unas','al','del','lo',
             'a','de','en','con','por','para','sin','sobre','entre','hasta','desde','hacia','tras',
@@ -2507,13 +2521,37 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   토막 하나를 '이 문장에서의' 단어장 항목으로.
             //   ① 글자 그대로 등록된 것 중 AI 가 짚은 것  ①′ 없으면 AI 가 짚은 동사의 활용형
             //   ② 둘 다 안 맞으면 예전대로 (AI 가 목록을 빼먹었거나 품사를 안 붙였을 때의 안전망)
-            const resolveHere = (raw) => {
+            //   관사를 달고 등록된 항목인가 ('la tarde' 는 예, 'tarde' 는 아니오)
+            const hasArticle = (w) => /^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s/i
+                .test(String((w && w.word) || '').trim());
+            const resolveHere = (raw, idx) => {
                 const k = norm(raw);
                 if (!k) return null;
-                const hit = (byWord.get(k) || []).find(w => aiIds.has(w.id));
+                let cands = byWord.get(k) || [];
+                //   기능어는 글자 그대로 등록된 것만 본다 (resolve 와 같은 규칙 —
+                //   'el este'(동쪽)의 관사를 떼어 지시형용사 Este 에 갖다 붙이지 않는다)
+                if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k)) {
+                    cands = cands.filter(w => rawNorm(w.word) === k);
+                }
+                // [냐냐 지적] 앞에 관사·지시사가 없으면 '관사를 달고 등록된 명사' 는 아니다 (2026-09-14).
+                //   'un poco tarde' 의 tarde 는 la tarde(오후)가 아니라 부사다. AI 가 명사로 짚어도 그렇다 —
+                //   실제로 AI 가 'la tarde|noun' 을 보내는 바람에 오후가 잡혔다.
+                //   같은 철자가 '관사 붙은 명사 / 관사 없는 다른 품사' 로 갈려 등록된 것이 11개 있다
+                //   (el complejo↔complejo · el derecho↔derecho · el futuro↔futuro · el joven↔joven …).
+                //   ⚠️ 한쪽이 남을 때만 걸러낸다. 후보가 죄다 관사를 달고 있으면 가릴 수가 없으니 그냥 둔다.
+                if (cands.length > 1 && typeof idx === 'number') {
+                    const prev = (idx > 0) ? norm(mineToks[idx - 1]) : '';
+                    if (!AI_DETERMINERS.has(prev)) {
+                        const noArt = cands.filter(w => !hasArticle(w));
+                        if (noArt.length) cands = noArt;
+                    }
+                }
+                const hit = cands.find(w => aiIds.has(w.id));
                 if (hit) return hit;
                 const verb = aiVerbForm.get(k);
                 if (verb) return verb;
+                //   위에서 걸러낸 후보가 있으면 그 안에서 고른다 (resolve 는 거르기 전 목록을 본다)
+                if (cands.length) { const p = pickByPos(cands, ''); if (p) return p; }
                 return resolve(raw, '');
             };
 
@@ -2586,7 +2624,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             // ② 내가 쓴 낱말을 하나씩 (위에서 이미 먹은 토막은 건너뛴다)
             mineToks.forEach((tok, i) => {
                 if (usedTok[i]) return;
-                push(resolveHere(tok), fixedSet.has(norm(tok)));
+                push(resolveHere(tok, i), fixedSet.has(norm(tok)));
             });
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
             //   'lemones' 라고 쓰면 'el limón' 에 못 닿는다 — 토막으로도, 성·수 변형으로도, 활용형 역추적으로도.
