@@ -2821,17 +2821,28 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let activeFilterMastery = 'not-mastered';
         let activeFilterWeak = 'all';
         let activeFilterSort = 'weak-score';
+        //   [냐냐 요청] DELE 레벨로도 거른다 ([] = 전체, 'none' = 아직 레벨이 없는 것)
+        let activeFilterDele = [];
+        let pendingFilterDele = [];
         // 패널에서 선택 중인 임시 상태
         let pendingFilterPos = [];
         let pendingFilterMastery = 'not-mastered';
         let pendingFilterWeak = 'all';
         let pendingFilterSort = 'weak-score';
 
+        function toggleFilterDele(btn) {
+            const lv = btn.dataset.deleLv;
+            const i = pendingFilterDele.indexOf(lv);
+            if (i >= 0) pendingFilterDele.splice(i, 1); else pendingFilterDele.push(lv);
+            styleFilterPill(btn, i < 0);
+        }
+
         // [냐냐 PATCH] 필터/정렬 저장·복원 (localStorage)
         function saveFilterPrefs() {
             try {
                 localStorage.setItem('nyanya_word_filters', JSON.stringify({
-                    pos: activeFilterPos, mastery: activeFilterMastery, weak: activeFilterWeak, sort: activeFilterSort
+                    pos: activeFilterPos, mastery: activeFilterMastery, weak: activeFilterWeak, sort: activeFilterSort,
+                    dele: activeFilterDele
                 }));
             } catch (e) {}
         }
@@ -2841,6 +2852,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (!raw) return; // 첫 방문 = 기본값 유지
                 const f = JSON.parse(raw);
                 if (Array.isArray(f.pos)) activeFilterPos = f.pos;
+                if (Array.isArray(f.dele)) activeFilterDele = f.dele;
                 if (f.mastery) activeFilterMastery = f.mastery;
                 if (f.weak) activeFilterWeak = f.weak;
                 if (f.sort) activeFilterSort = f.sort;
@@ -3095,6 +3107,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // 패널 열 때 현재 '적용된' 값으로 임시상태 초기화 (최근 선택값 유지)
         function syncFilterPanelUI() {
             pendingFilterPos = activeFilterPos.length === 0 ? [...ALL_POS_LIST] : [...activeFilterPos];
+            pendingFilterDele = [...activeFilterDele];
+            document.querySelectorAll('.filter-dele-btn').forEach(b => styleFilterPill(b, pendingFilterDele.includes(b.dataset.deleLv)));
             pendingFilterMastery = activeFilterMastery;
             pendingFilterWeak = activeFilterWeak;
             pendingFilterSort = activeFilterSort;
@@ -3110,6 +3124,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             activeFilterMastery = pendingFilterMastery;
             activeFilterWeak = pendingFilterWeak;
             activeFilterSort = pendingFilterSort;
+            activeFilterDele = [...pendingFilterDele];
             const masterySel = document.getElementById('mastery-filter-select');
             const weakSel = document.getElementById('weak-filter-select');
             const sortSel = document.getElementById('sort-select');
@@ -3127,6 +3142,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             pendingFilterMastery = 'not-mastered';
             pendingFilterWeak = 'all';
             pendingFilterSort = 'weak-score';
+            pendingFilterDele = [];
+            activeFilterDele = [];
             // [냐냐 PATCH] 활성 필터도 기본값으로 적용하고, 목록도 갱신 (단 패널은 열어둬서 확인 가능)
             activeFilterPos = [];
             activeFilterMastery = 'not-mastered';
@@ -3148,6 +3165,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 chips.push(activeFilterPos.map(p => POS_LABELS[p] || p).join('·'));
             }
             // 마스터 상태 (기본 미마스터가 아닐 때만 표시... 은 아니고 항상 상태 보여주되 '전체'는 생략)
+            if (activeFilterDele.length) chips.push('DELE ' + activeFilterDele.map(x => x === 'none' ? '미정' : x).join('·'));
             if (activeFilterMastery !== 'all') chips.push(MASTERY_LABELS[activeFilterMastery]);
             // 약점 (전체가 아니면)
             if (activeFilterWeak !== 'all') chips.push(WEAK_LABELS[activeFilterWeak]);
@@ -4489,6 +4507,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const masteryFilter = isSearching ? 'all' : activeFilterMastery;
             const weakFilter = isSearching ? 'all' : activeFilterWeak;
             const posFilterActive = isSearching ? [] : activeFilterPos;
+            const deleFilter = isSearching ? [] : activeFilterDele;
             // 검색 중이면 결과를 펼쳐서 보여주고, 아니면 전체 펼침 상태를 따름(기본 접힘)
             const expandedAll = (searchVal.length > 0 || todayWrongFilterActive) ? true : wordListExpandedAll;
             
@@ -4502,6 +4521,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     || stripAccents(String(it.idiomMeaning).toLowerCase()).includes(searchVal));
                 const matchesSearch = queryInWord || queryInMeaning || queryInIdiom; // 메모는 여전히 제외
                 const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
+                //   [냐냐 요청] DELE 레벨 — 아무것도 안 고르면 전체, 'none' 은 아직 레벨이 없는 것
+                const matchesDele = deleFilter.length === 0
+                    || deleFilter.includes(((typeof normDeleLevel === 'function') ? normDeleLevel(w.deleLevel) : w.deleLevel) || 'none');
                 // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
                 const matchesMastery = masteryFilter === 'all'
                     || (masteryFilter === 'mastered' && w.mastered)
@@ -4512,13 +4534,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     || (weakFilter === 'not-weak' && !w.weak);
                 // [냐냐 요청] '오늘 틀린 단어'는 말 그대로 오늘 틀린 것만. (복습 주기는 헤더 배너가 담당)
                 const matchesTodayWrong = !todayWrongFilterActive || (!w.mastered && w.lastWrongDate && daysSince(w.lastWrongDate) === 0);
-                return matchesSearch && matchesPos && matchesMastery && matchesWeak && matchesTodayWrong;
+                return matchesSearch && matchesPos && matchesDele && matchesMastery && matchesWeak && matchesTodayWrong;
             });
 
             // [냐냐 PATCH] 필터/정렬 요약 한 줄 + 활성 표시점
             renderFilterSummary();
             const sortModeForBadge = activeFilterSort;
-            const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered' || activeFilterWeak !== 'all' || sortModeForBadge !== 'weak-score';
+            const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered' || activeFilterWeak !== 'all' || activeFilterDele.length > 0 || sortModeForBadge !== 'weak-score';
             // [냐냐 PATCH] 점 배지 대신 버튼 자체의 배경색을 바꿔서 표시
             const ON = "w-10 h-10 bg-violet-100 hover:bg-violet-200 rounded-xl border border-violet-400 text-sm text-violet-700 transition-all flex items-center justify-center";
             const OFF = "w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center";

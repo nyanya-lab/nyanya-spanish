@@ -3968,6 +3968,7 @@ let vocabulary = [];
         let deleResult = null;   // { date, overall, vocab, tense, acc, comment }
         let deleBusy = false;
         let deleAutoTried = false;   // 자동 갱신은 이 페이지에서 한 번만 (기간 버튼마다 AI를 부르면 안 된다)
+        let _deleFillTried = false;  // 빈 레벨 채우기도 이 페이지에서 한 번만
 
         function deleIndex(lv) { const i = DELE_LEVELS.indexOf(lv); return i < 0 ? 0 : i; }
 
@@ -4336,6 +4337,24 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (!deleAutoTried && (!deleResult || deleResult.date !== getLocalDateString())) {
                 deleAutoTried = true;
                 setTimeout(() => refreshDeleLevel(false), 300);
+            }
+            //   [냐냐 지적] 레벨 채우기는 DELE 가늠과 따로 돈다 (2026-09-15).
+            //   가늠은 오늘 이미 돌았으면 안 도는데, 그러면 레벨도 영영 안 채워진다.
+            //   학습기록을 열 때 빈 것이 있으면 이 화면에서 한 번 채운다 (한 번만).
+            if (!_deleFillTried) {
+                _deleFillTried = true;
+                setTimeout(async () => {
+                    try {
+                        const got = await fillMissingDeleLevels();
+                        if (got.words || got.notes) {
+                            const bits = [];
+                            if (got.words) bits.push(`단어 ${got.words}개`);
+                            if (got.notes) bits.push(`문법 ${got.notes}개`);
+                            if (typeof showToast === 'function') showToast(`${bits.join(' · ')}에 DELE 레벨을 채웠어요 🏷️`, "success");
+                            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+                        }
+                    } catch (e) { console.warn('DELE 레벨 채우기 실패', e); }
+                }, 900);
             }
             //   [냐냐 지적] 접혀 있던 아래쪽(추정 수준·정답률·자주 틀리는 품사/문법)은 통째로 뺐다
             //   (2026-09-08). 제목을 눌러야 펴지는 자리라 정작 보고 싶은 숫자가 거기 숨어 있었고,
@@ -5576,6 +5595,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
 
             // [냐냐 PATCH] 마스터 상태 필터
+            if (grammarFilterDele.length) {
+                tables = tables.filter(t => grammarFilterDele.includes(normDeleLevel(grammarDeleLevels[t.id]) || 'none'));
+            }
             if (grammarFilterMastery === 'mastered') tables = tables.filter(t => masteredGrammar[t.id]);
             else if (grammarFilterMastery === 'not-mastered') tables = tables.filter(t => !masteredGrammar[t.id]);
             // [냐냐 요청] 약점 문법표만 보기 (단어장의 약점 필터와 같은 기준)
@@ -5663,7 +5685,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             // [냐냐 요청] 점수를 접은 상태에서도 보이게 — 마스터 체크 바로 왼쪽에.
                             //   펼치면 아래쪽(빈칸 채우기 옆)에도 같은 배지가 있지만, 목록만 훑을 때 점수가 안 보였다
                             const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
-                            return `<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} select-none shrink-0" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
+                            return `${deleLevelBadgeHtml(grammarDeleLevels[t.id])}<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} select-none shrink-0" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
                         })()}
                         ${(() => {
                             // [냐냐 요청] 마스터 버튼 3단계 (단어장과 같은 색): 일반 → 마스터 → 완벽
@@ -5731,7 +5753,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                                 <!-- [냐냐 요청] 이 노트의 점수 — 단어 카드의 점수 배지와 같은 색·같은 척도 -->
                                 ${(() => {
                                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
-                                    return `<span class="shrink-0 px-2.5 py-2 rounded-xl text-[11px] font-black ${gi.badge} select-none" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
+                                    return `${deleLevelBadgeHtml(grammarDeleLevels[t.id])}<span class="shrink-0 px-2.5 py-2 rounded-xl text-[11px] font-black ${gi.badge} select-none" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
                                 })()}
                             </div>
                         </div>
@@ -6104,6 +6126,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         // ============================================================
         let grammarFilterTopics = [];       // [] = 전체, 아니면 아이콘 문자열(또는 '__other__') 목록
         let grammarFilterMastery = 'all';   // all | mastered | not-mastered
+        //   [냐냐 요청] DELE 레벨로도 거른다 ([] = 전체, 'none' = 아직 레벨이 없는 것)
+        let grammarFilterDele = [];
+        let pendingGrammarDele = [];
+        function toggleGrammarFilterDele(btn) {
+            const lv = btn.dataset.gdele;
+            const i = pendingGrammarDele.indexOf(lv);
+            if (i >= 0) pendingGrammarDele.splice(i, 1); else pendingGrammarDele.push(lv);
+            styleFilterPill(btn, i < 0);
+        }
         // 정렬은 기존 grammarSortMode('newest'|'oldest') 재사용
         let pendingGrammarTopics = [];
         let pendingGrammarMastery = 'all';
@@ -6193,6 +6224,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function syncGrammarFilterPanelUI() {
             pendingGrammarTopics = [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
+            pendingGrammarDele = [...grammarFilterDele];
+            document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             pendingGrammarSort = grammarSortMode;
             renderGrammarTopicFilterButtons();
             document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.gmastery === pendingGrammarMastery));
@@ -6211,6 +6244,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function applyGrammarFilters() {
             grammarFilterTopics = [...pendingGrammarTopics];
             grammarFilterMastery = pendingGrammarMastery;
+            grammarFilterDele = [...pendingGrammarDele];
             grammarSortMode = pendingGrammarSort;
             saveGrammarFilterPrefs();
             closeGrammarFilterPanel();
@@ -6219,9 +6253,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function resetGrammarFilters() {
             pendingGrammarTopics = [];
             pendingGrammarMastery = 'all';
+            pendingGrammarDele = [];
             pendingGrammarSort = 'newest';
             grammarFilterTopics = [];
             grammarFilterMastery = 'all';
+            grammarFilterDele = [];
             grammarSortMode = 'newest';
             syncGrammarFilterPanelUI();
             saveGrammarFilterPrefs();
@@ -6230,7 +6266,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function updateGrammarFilterBadge() {
             const badge = document.getElementById('grammar-filter-badge');
             if (!badge) return;
-            const active = grammarFilterTopics.length > 0 || grammarFilterMastery !== 'all' || grammarSortMode !== 'newest';
+            const active = grammarFilterTopics.length > 0 || grammarFilterMastery !== 'all'
+                || grammarFilterDele.length > 0 || grammarSortMode !== 'newest';
             badge.classList.toggle('hidden', !active);
         }
         function renderGrammarFilterSummary() {
@@ -6238,6 +6275,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (!box) return;
             const chips = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
+            if (grammarFilterDele.length) chips.push('DELE ' + grammarFilterDele.map(x => x === 'none' ? '미정' : x).join('·'));
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
             else if (grammarFilterMastery === 'weak') chips.push('약점만');
