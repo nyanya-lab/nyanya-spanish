@@ -3901,6 +3901,70 @@ let vocabulary = [];
             } catch (e) { console.warn('DELE 레벨 물어보기 실패', e); }
         }
 
+        // ============================================================
+        // [냐냐 요청] DELE 가늠을 돌릴 때 비어 있는 레벨을 같이 채운다 (2026-09-15).
+        //   밖에서 올리면 앱이 열려 있을 때 그 화면 메모리로 덮여서 지워진다 (실제로 겪었다).
+        //   앱 안에서 돌면 그 화면이 값을 들고 저장하므로 지워질 일이 없다.
+        //   ⚠️ 문법 노트도 같이 본다. DELE 호출은 '맞게 써본 노트' 만 분류해서, 안 써본 노트는
+        //      레벨이 비어 있다. 남은 것만 한 번 더 물어본다 (노트는 많아야 서른 몇 개다).
+        // ============================================================
+        async function fillMissingDeleLevels() {
+            const out = { words: 0, notes: 0 };
+            if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return out;
+            if (typeof callGemini !== 'function') return out;
+            const BATCH = 150;
+            const bare = (x) => String(x || '').replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/i, '').trim();
+            const ask = async (head, lines) => {
+                const res = await callGemini(
+                    `${head}\nReturn "levels": exactly ${lines.length} entries, each written as "<number>|<LEVEL>" using the numbers below.\n\n`
+                    + lines.map((t, i) => `${i + 1}. ${t}`).join('\n'),
+                    'Output strictly valid JSON matching the schema. No explanation.',
+                    { type: 'OBJECT', properties: { levels: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['levels'] },
+                    'low',
+                    (typeof GEMINI_MODEL_FLASH_LITE !== 'undefined') ? GEMINI_MODEL_FLASH_LITE : undefined
+                );
+                const arr = (extractAndParseJson(res) || {}).levels || [];
+                const got = new Map();
+                arr.forEach(raw => {
+                    const m = String(raw || '').match(/^\s*(\d+)\s*\|\s*([A-Ca-c][12])\s*$/);
+                    if (m) got.set(parseInt(m[1], 10) - 1, normDeleLevel(m[2]));
+                });
+                return got;
+            };
+
+            //   ① 단어
+            const todo = (vocabulary || []).filter(w => w && w.word && !normDeleLevel(w.deleLevel));
+            for (let i = 0; i < todo.length; i += BATCH) {
+                const chunk = todo.slice(i, i + BATCH);
+                try {
+                    const got = await ask(
+                        `Here are ${chunk.length} Spanish words or phrases a Korean learner has in their vocabulary list.\n`
+                        + `Classify EVERY one into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common and basic it is in Spanish.`,
+                        chunk.map(w => bare(w.word)));
+                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].deleLevel) { chunk[j].deleLevel = lv; out.words++; } });
+                } catch (e) { console.warn('[DELE] 단어 레벨 묶음 실패', e); }
+            }
+
+            //   ② 문법 노트 — 남은 것만
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            const left = tables.filter(t => t && t.id && t.title && !normDeleLevel(grammarDeleLevels[t.id]));
+            if (left.length) {
+                try {
+                    const got = await ask(
+                        `Here are ${left.length} Spanish grammar note titles (Korean, sometimes with Spanish in parentheses) kept by a Korean learner.\n`
+                        + `Classify EVERY note into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by when that grammar point is normally taught.`,
+                        left.map(t => String(t.title).replace(/\s+/g, ' ').trim()));
+                    got.forEach((lv, j) => { if (lv && left[j]) { grammarDeleLevels[left[j].id] = lv; out.notes++; } });
+                } catch (e) { console.warn('[DELE] 문법 레벨 묶음 실패', e); }
+            }
+
+            if (out.words || out.notes) {
+                if (typeof saveToStorage === 'function') await saveToStorage(true);
+                if (typeof renderWordList === 'function') renderWordList();
+            }
+            return out;
+        }
+
         let deleResult = null;   // { date, overall, vocab, tense, acc, comment }
         let deleBusy = false;
         let deleAutoTried = false;   // 자동 갱신은 이 페이지에서 한 번만 (기간 버튼마다 AI를 부르면 안 된다)
@@ -4169,6 +4233,18 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             });
             renderDeleCard();
             saveToStorage();
+
+            //   [냐냐 요청] 같은 걸음에 비어 있는 단어·문법 레벨도 채운다 (2026-09-15)
+            try {
+                const got = await fillMissingDeleLevels();
+                if (got.words || got.notes) {
+                    const bits = [];
+                    if (got.words) bits.push(`단어 ${got.words}개`);
+                    if (got.notes) bits.push(`문법 ${got.notes}개`);
+                    if (typeof showToast === 'function') showToast(`${bits.join(' · ')}에 DELE 레벨을 채웠어요 🏷️`, "success");
+                    renderDeleCard();
+                }
+            } catch (e) { console.warn('DELE 레벨 채우기 실패', e); }
         }
 
         // 어느 축이 발목을 잡는지
