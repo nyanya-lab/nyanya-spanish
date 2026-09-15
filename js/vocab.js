@@ -2821,9 +2821,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let activeFilterMastery = 'not-mastered';
         let activeFilterWeak = 'all';
         let activeFilterSort = 'weak-score';
-        //   [냐냐 요청] DELE 레벨로도 거른다 ([] = 전체, 'none' = 아직 레벨이 없는 것)
+        //   [냐냐 요청] DELE 레벨로도 거른다. 품사와 같은 규칙 — 패널에서는 전부 켜진 채로 시작하고,
+        //   전부 켜져 있으면 '전체' 로 쳐서 안 거른다 ([] 로 저장). 'none' 은 아직 레벨이 없는 것.
+        const ALL_DELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'none'];
         let activeFilterDele = [];
-        let pendingFilterDele = [];
+        let pendingFilterDele = [...ALL_DELE_LIST];
         // 패널에서 선택 중인 임시 상태
         let pendingFilterPos = [];
         let pendingFilterMastery = 'not-mastered';
@@ -3107,7 +3109,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // 패널 열 때 현재 '적용된' 값으로 임시상태 초기화 (최근 선택값 유지)
         function syncFilterPanelUI() {
             pendingFilterPos = activeFilterPos.length === 0 ? [...ALL_POS_LIST] : [...activeFilterPos];
-            pendingFilterDele = [...activeFilterDele];
+            pendingFilterDele = activeFilterDele.length === 0 ? [...ALL_DELE_LIST] : [...activeFilterDele];
             document.querySelectorAll('.filter-dele-btn').forEach(b => styleFilterPill(b, pendingFilterDele.includes(b.dataset.deleLv)));
             pendingFilterMastery = activeFilterMastery;
             pendingFilterWeak = activeFilterWeak;
@@ -3124,7 +3126,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             activeFilterMastery = pendingFilterMastery;
             activeFilterWeak = pendingFilterWeak;
             activeFilterSort = pendingFilterSort;
-            activeFilterDele = [...pendingFilterDele];
+            activeFilterDele = (pendingFilterDele.length === 0 || pendingFilterDele.length === ALL_DELE_LIST.length) ? [] : [...pendingFilterDele];
             const masterySel = document.getElementById('mastery-filter-select');
             const weakSel = document.getElementById('weak-filter-select');
             const sortSel = document.getElementById('sort-select');
@@ -3142,7 +3144,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             pendingFilterMastery = 'not-mastered';
             pendingFilterWeak = 'all';
             pendingFilterSort = 'weak-score';
-            pendingFilterDele = [];
+            pendingFilterDele = [...ALL_DELE_LIST];
             activeFilterDele = [];
             // [냐냐 PATCH] 활성 필터도 기본값으로 적용하고, 목록도 갱신 (단 패널은 열어둬서 확인 가능)
             activeFilterPos = [];
@@ -4509,6 +4511,30 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // ============================================================
         let vocabMode = 'word';   // 'word' | 'idiom'
 
+        //   [냐냐 요청] 품사마다 다른 색 (2026-09-15). 단어 카드의 품사 뱃지와 같은 색을 쓴다.
+        //   명사는 성에 따라 갈린다 (M. 파랑 / F. 분홍 / N. 회색).
+        const POS_CHIP_COLOR = {
+            verb: 'bg-orange-100 text-orange-600', adjective: 'bg-amber-100 text-amber-700',
+            adverb: 'bg-emerald-100 text-emerald-700', preposition: 'bg-teal-100 text-teal-700',
+            conjunction: 'bg-cyan-100 text-cyan-700', pronoun: 'bg-pink-100 text-pink-700',
+            interrogative: 'bg-indigo-100 text-indigo-700', phrase: 'bg-purple-100 text-purple-600'
+        };
+        function posChipColor(w) {
+            if (!w) return 'bg-slate-100 text-slate-600';
+            if (w.pos === 'noun') {
+                if (w.gender === 'masculine') return 'bg-blue-100 text-blue-600';
+                if (w.gender === 'feminine') return 'bg-rose-100 text-rose-600';
+                return 'bg-slate-100 text-slate-600';
+            }
+            return POS_CHIP_COLOR[w.pos] || 'bg-slate-100 text-slate-600';
+        }
+        function posChipLabel(w) {
+            if (!w) return '';
+            if (w.pos === 'interrogative') return 'Int.';
+            return (typeof getPosAbbreviation === 'function') ? getPosAbbreviation(w.pos, w.gender) : (w.pos || '');
+        }
+
+
         function renderVocabModeBtn() {
             const btn = document.getElementById('vocab-mode-btn');
             if (!btn) return;
@@ -4592,12 +4618,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const cr = (idiomReview || {})[idiomKey(r.owner.id, idRef)];
                 const due = cr && cr.lastWrongDate && typeof curveIsDue === 'function'
                     && curveIsDue(cr.lastReviewDate, cr.lastWrongDate, cr.stage || 0, cr.keepDueDate);
+                //   [냐냐 요청] 주인 단어 줄은 품사·단어·뜻·그 단어 점수를 한 줄로 (2026-09-15).
+                //   사전 아이콘 대신 품사를 쓰고, 품사마다 색이 다르다.
+                const ow = r.owner;
+                const owGi = GRADE_INFO[getWordGrade(ow)] || GRADE_INFO.normal;
+                const owMean = String(ow.meaning || '').split(/[,;/·]/)[0].trim();
                 return `
                 <div class="rounded-3xl p-5 bg-white border border-slate-200 flex flex-col justify-between hover:shadow-md transition-all duration-300 relative gap-3">
-                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
-                        ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
-                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
-                    </div>
                     <div class="space-y-2.5">
                         <div class="flex items-start justify-between gap-2">
                             <span class="min-w-0 leading-tight" style="word-break:break-word;">
@@ -4605,11 +4632,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 ${due ? '<span class="ml-1 align-middle text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">오늘 복습</span>' : ''}
                                 <span class="block text-sm text-slate-500 font-semibold mt-0.5">${escapeHtml(r.meaning)}</span>
                             </span>
-                            <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                            ${/* [냐냐 요청] 관용구 점수는 스피커 옆에 */''}
+                            <span class="flex items-center gap-1.5 shrink-0">
+                                ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
+                                <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
+                                <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                            </span>
                         </div>
-                        <button onclick="openWordModal('${escapeAttr(String(r.owner.id))}')" title="이 표현이 딸린 단어를 열어요"
-                            class="inline-flex items-center gap-1.5 text-[11px] font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 border border-violet-100 rounded-lg px-2 py-1 transition-colors">
-                            <i class="fa-solid fa-book-bookmark text-[10px]"></i>${escapeHtml(String(r.owner.word || ''))}
+                        <button onclick="openWordModal('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
+                            class="w-full flex items-center gap-1.5 text-left rounded-lg px-1.5 py-1 hover:bg-slate-50 transition-colors">
+                            <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
+                            <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
+                            <span class="text-[11px] text-slate-400 truncate min-w-0 flex-1">${escapeHtml(owMean)}</span>
+                            <span class="shrink-0 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${owGi.badge}" title="${owGi.label} · 그 단어의 점수">${formatScore(ow)}</span>
                         </button>
                     </div>
                 </div>`;
@@ -4830,12 +4865,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-3">
                     <!-- [냐냐 PATCH] 우측 하단: [정답률] [점수] -->
-                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
-                        ${accHtml}
-                        ${/* [냐냐 요청] DELE 레벨은 점수 바로 옆에 (2026-09-15). 글자 없이 뱃지만 */''}
-                        <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
-                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
-                    </div>
                     <div class="space-y-2.5">
                         <div class="flex items-start justify-between gap-2">
                             <button onclick="toggleWordCard('${w.id}')" class="flex items-start gap-2 min-w-0 text-left flex-1">
@@ -4847,6 +4876,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
+                                ${/* [냐냐 요청] 정답률·DELE·점수를 위로 올린다 (2026-09-15).
+                                     관용구 사전과 문법 노트는 다 위쪽에 있는데 단어 카드만 아래라 어긋났다. */''}
+                                <span class="flex items-center gap-1 mr-0.5 select-none">
+                                    ${accHtml}
+                                    <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
+                                    <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
+                                </span>
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
                                 <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시 (약점 → 치명적 약점 → 해제)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${grade === 'critical' ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : (grade === 'weak' ? 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300')}">
                                     <i class="fa-solid fa-star text-xs"></i>
@@ -4996,7 +5032,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 const ref = item.iid || item.idiom;
                                 const gi = GRADE_INFO[getIdiomGrade(w.id, ref)] || GRADE_INFO.normal;
                                 return `
-                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''} flex items-start gap-2">
+                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''} flex items-center gap-2">
                                     <span class="min-w-0 flex-1">
                                         <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
                                         <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>

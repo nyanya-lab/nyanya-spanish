@@ -6177,8 +6177,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         let grammarFilterTopics = [];       // [] = 전체, 아니면 아이콘 문자열(또는 '__other__') 목록
         let grammarFilterMastery = 'all';   // all | mastered | not-mastered
         //   [냐냐 요청] DELE 레벨로도 거른다 ([] = 전체, 'none' = 아직 레벨이 없는 것)
+        const ALL_GDELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'none'];
         let grammarFilterDele = [];
-        let pendingGrammarDele = [];
+        let pendingGrammarDele = [...ALL_GDELE_LIST];
         function toggleGrammarFilterDele(btn) {
             const lv = btn.dataset.gdele;
             const i = pendingGrammarDele.indexOf(lv);
@@ -6274,7 +6275,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function syncGrammarFilterPanelUI() {
             pendingGrammarTopics = [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
-            pendingGrammarDele = [...grammarFilterDele];
+            pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             pendingGrammarSort = grammarSortMode;
             renderGrammarTopicFilterButtons();
@@ -6294,7 +6295,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function applyGrammarFilters() {
             grammarFilterTopics = [...pendingGrammarTopics];
             grammarFilterMastery = pendingGrammarMastery;
-            grammarFilterDele = [...pendingGrammarDele];
+            grammarFilterDele = (pendingGrammarDele.length === 0 || pendingGrammarDele.length === ALL_GDELE_LIST.length) ? [] : [...pendingGrammarDele];
             grammarSortMode = pendingGrammarSort;
             saveGrammarFilterPrefs();
             closeGrammarFilterPanel();
@@ -6303,7 +6304,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function resetGrammarFilters() {
             pendingGrammarTopics = [];
             pendingGrammarMastery = 'all';
-            pendingGrammarDele = [];
+            pendingGrammarDele = [...ALL_GDELE_LIST];
             pendingGrammarSort = 'newest';
             grammarFilterTopics = [];
             grammarFilterMastery = 'all';
