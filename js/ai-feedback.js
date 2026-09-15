@@ -3393,8 +3393,20 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const mineForms = detectVerbFormsInText(feedback && feedback.originalMarked);
                 //   보조동사 시제까지 넘긴다 - 'Estaba comiendo'(과거진행)가 현재진행 노트로 새지 않게
                 const auxT = mineForms.auxTenses || null;
+                //   [냐냐 지적] 두 조각짜리는 **보조동사 조각만** 본다 (2026-09-15).
+                //     예전엔 '고친 문장에도 그 짜임이 있나' 로만 봐서, 'Yo ha comido' 를
+                //     'Yo he comido' 로 고쳐줘도 짜임(haber+p.p.)은 남았다며 통과시켰다.
+                //     현재완료 노트의 핵심이 바로 Haber 활용인데 그걸 틀린 것을 못 잡았다.
+                //     분사만 틀린 경우를 봐주려던 원래 뜻은 그대로다 — 'Estoy pediendo' 를
+                //     'Estoy pidiendo' 로 고쳐도 보조동사 Estoy 는 살아남으니 현재진행은 통과한다
+                //     (틀린 분사 철자는 현재분사 노트가 따로 −2 를 받는다).
+                //   ⚠️ ev 의 첫 낱말이 늘 보조동사다. 재귀대명사는 애초에 안 들어온다
+                //      ('Se está lavando' → progresivo: 'está lavando').
+                const auxOf = (ev) => String(ev || '').trim().split(/\s+/)[0] || '';
                 mineForms.forEach((ev, key) => {
-                    const ok = COMPOUND.has(key) ? fixedForms.has(key) : wordSurvived(ev);
+                    const ok = COMPOUND.has(key)
+                        ? (fixedForms.has(key) && wordSurvived(auxOf(ev)))
+                        : wordSurvived(ev);
                     notesTeachingVerbForm(key, notes, auxT).forEach(note => {
                         if (extra.some(e => e.note.id === note.id)) return;
                         if (already.has(note.id)) {
