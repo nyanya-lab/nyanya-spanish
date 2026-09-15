@@ -1408,6 +1408,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (target.pos === 'noun') target.gender = r.gender || 'none';
                     vocabulary.unshift(target);
                     newIds.push(target.id);
+                    //   [냐냐 요청] 등록하는 그 자리에서 DELE 레벨도 채운다 (유의어 자동 등록도 같이)
+                    if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(target.id);
                     logAction('new-word'); // 자동 등록도 오늘 신규등록 카운트에 포함
                 }
                 if (target.id === wordObj.id) return; // 자기 자신은 링크 안 함
@@ -2574,6 +2576,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             } else {
                 wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
                 vocabulary.unshift(wordObj);
+                //   [냐냐 요청] 등록하는 그 순간 DELE 레벨을 물어서 채운다 (2026-09-15).
+                //   기다리지 않는다 — 오는 대로 단어에 적히고 카드에 뱃지가 끼워진다.
+                if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(wordObj.id);
                 // 등록도 끝낼 때 한 번만 알린다 (아래 토스트 또는 '계속 등록?' 확인창이 이미 말해준다)
                 logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
@@ -4681,6 +4686,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <!-- [냐냐 PATCH] 우측 하단: [정답률] [점수] -->
                     <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
                         ${accHtml}
+                        ${/* [냐냐 요청] DELE 레벨은 점수 바로 옆에 (2026-09-15). 글자 없이 뱃지만 */''}
+                        <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
                         <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
                     </div>
                     <div class="space-y-2.5">
@@ -4820,9 +4827,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   펼칠 때(toggleWordCard) 그때 채운다 → 750개 카드도 처음엔 헤더만 그려서 훨씬 가벼움
         function buildCardBody(w) {
             const isVerb = w.pos === 'verb';
-            //   [냐냐 요청] DELE 레벨은 펼친 카드 안에만 낸다 (2026-09-15).
-            //   아직 안 물어본 단어는 '…' 로 두고, 펼치는 그 순간 물어본다 (toggleWordCard).
-            const deleHtml = (typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : '';
             return `
                         <!-- Meaning section -->
                         <div class="space-y-1">
@@ -4830,10 +4834,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 <span class="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
                                 <span>뜻:</span>
                                 <strong class="text-slate-800 font-bold">${w.meaning}</strong>
-                                <span class="ml-auto flex items-center gap-1 shrink-0">
-                                    <span class="text-[10px] font-black text-slate-300">DELE</span>
-                                    <span data-dele="${w.id}">${deleHtml || '<span class="text-[10px] font-bold text-slate-300">…</span>'}</span>
-                                </span>
                             </p>
                         </div>
 
