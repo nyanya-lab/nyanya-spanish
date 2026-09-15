@@ -1425,7 +1425,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     let gain = isProductionC ? 2 : 0.5;
                     if (q._retryReason === 'typo') gain = 1;
                     else if (q._retryReason === 'synonym') gain = 2;
-                    addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective') });
+                    //   [냐냐 요청] 관용구 문제는 그 표현에 점수를 준다 (2026-09-15)
+                    const idiomQC = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
+                    addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective'),
+                        idiom: idiomQC ? { wordId: vocabItemC.id, text: quizIdiomText(q) } : null });
                     // [냐냐 기준] 퀴즈에서 맞힌 건 점수만 준다. 곡선을 앞으로 미는 건 관용구 복습에서만
                     //   (단어·문법도 '오늘의 복습' 을 해냈을 때만 한 칸 나간다)
                     if (!wasMasteredC && vocabItemC.mastered) {
@@ -1453,7 +1456,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     if (idiomQ && typeof idiomReviewDemote === 'function') {
                         idiomReviewDemote(vocabItem.id, quizIdiomText(q));
                     }
-                    addWordScore(vocabItem, -2, { correct: false, skipReviewDate: idiomQ });
+                    addWordScore(vocabItem, -2, { correct: false, skipReviewDate: idiomQ,
+                        idiom: idiomQ ? { wordId: vocabItem.id, text: quizIdiomText(q) } : null });
                     if (!wasWeak && vocabItem.weak) {
                         if (!quizSession.newlyWeakIds) quizSession.newlyWeakIds = [];
                         if (!quizSession.newlyWeakIds.includes(vocabItem.id)) quizSession.newlyWeakIds.push(vocabItem.id);

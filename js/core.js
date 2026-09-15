@@ -274,6 +274,7 @@ let vocabulary = [];
                 eggState: eggState,
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
                 idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
+                idiomScores: idiomScores,                 // [냐냐 요청] 관용구 점수
                 deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
                 grammarDeleLevels: grammarDeleLevels,     // [냐냐 요청] 문법 노트별 DELE 레벨
                 //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
@@ -436,6 +437,7 @@ let vocabulary = [];
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
                 idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
+                idiomScores = payload.idiomScores || {};                             // [냐냐 요청] 관용구 점수
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
                 grammarDeleLevels = payload.grammarDeleLevels || {};                 // [냐냐 요청] 문법 노트별 DELE 레벨
                 customQuestions = payload.customQuestions || [];
@@ -475,6 +477,7 @@ let vocabulary = [];
                 learnerProfile = { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 aiNotes = [];
                 idiomReview = {};
+                idiomScores = {};
                 deleResult = null;
                 grammarDeleLevels = {};
                 customQuestions = [];
@@ -3004,7 +3007,54 @@ let vocabulary = [];
             return hit ? ` <span class="text-emerald-600">${escapeHtml(hit.word)} 에 +${SYNONYM_AWARD} 드렸어요.</span>` : '';
         }
 
+        // ============================================================
+        // [냐냐 요청] 관용구도 저마다 점수를 갖는다 (2026-09-15).
+        //   곡선(idiomReview)은 이미 표현마다 따로 돌고 있었는데 점수만 주인 단어로 갔다.
+        //   'centro comercial' 을 맞힌 게 'comercial' 을 안다는 뜻은 아니라, 점수도 갈라놓는다.
+        //   ⚠️ 이미 단어에 쌓인 점수는 그대로 둔다 — 지난 것 중 어느 몫이 관용구였는지 알 수 없다.
+        //   ⚠️ 잣대는 단어와 똑같다 (-10 ~ +10, 같은 등급선). 마스터·완벽은 주관식 통과가
+        //      필요한데 관용구엔 그 장치가 없어서, 점수만으로 등급을 매긴다.
+        // ============================================================
+        let idiomScores = {};   // { '단어id::표현id': { score, correctTotal, wrongTotal } }
+
+        function getIdiomRec(wordId, idiomTextOrId) {
+            const key = idiomKey(wordId, idiomTextOrId);
+            if (!idiomScores[key]) idiomScores[key] = { score: 0, correctTotal: 0, wrongTotal: 0 };
+            return idiomScores[key];
+        }
+        function getIdiomScore(wordId, idiomTextOrId) {
+            const r = idiomScores[idiomKey(wordId, idiomTextOrId)];
+            return (r && typeof r.score === 'number') ? r.score : 0;
+        }
+        function getIdiomGrade(wordId, idiomTextOrId) {
+            const s = getIdiomScore(wordId, idiomTextOrId);
+            if (s >= SCORE_PERFECT) return 'perfect';
+            if (s >= SCORE_MASTER) return 'mastered';
+            if (s <= SCORE_CRITICAL) return 'critical';
+            if (s <= SCORE_WEAK) return 'weak';
+            return 'normal';
+        }
+        function formatIdiomScore(wordId, idiomTextOrId) {
+            const s = getIdiomScore(wordId, idiomTextOrId);
+            return (s > 0 ? '+' : '') + (Math.round(s * 10) / 10);
+        }
+        function addIdiomScore(wordId, idiomTextOrId, delta, opts = {}) {
+            if (!wordId || !idiomTextOrId) return null;
+            const r = getIdiomRec(wordId, idiomTextOrId);
+            const cCount = (typeof opts.correctCount === 'number') ? opts.correctCount : (opts.correct === true ? 1 : 0);
+            const wCount = (typeof opts.wrongCount === 'number') ? opts.wrongCount : (opts.correct === false ? 1 : 0);
+            if (cCount) r.correctTotal = (r.correctTotal || 0) + cCount;
+            if (wCount) r.wrongTotal = (r.wrongTotal || 0) + wCount;
+            r.score = clampScore((r.score || 0) + (delta || 0));
+            return r.score;
+        }
+
         function addWordScore(wordOrId, delta, opts = {}) {
+            //   [냐냐 요청] 관용구 과제면 점수를 그 표현으로 보낸다 (2026-09-15).
+            //   부르는 쪽이 opts.idiom = { wordId, text } 를 넘겨주면 여기서 갈라진다.
+            if (opts.idiom && opts.idiom.wordId && opts.idiom.text) {
+                return addIdiomScore(opts.idiom.wordId, opts.idiom.text, delta, opts);
+            }
             const w = (typeof wordOrId === 'string')
                 ? vocabulary.find(v => v.id === wordOrId)
                 : wordOrId;

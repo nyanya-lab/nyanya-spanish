@@ -4214,8 +4214,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (typeof addWordScore !== 'function') return;
                     // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
-                    if (already) addWordScore(w.id, 1, { correctCount: 0, wrongCount: 0, skipReviewDate: true });
-                    else addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask });
+                    const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
+                    if (already) addWordScore(w.id, 1, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
+                    else addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
@@ -4227,7 +4228,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
-                    if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
+                    if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
+                        idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
                 });
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
@@ -4259,7 +4261,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (s.idiomReview && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
             }
             const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
-                if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true });
+                if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true,
+                    idiom: w._isIdiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
             });
             // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
             if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
@@ -4292,7 +4295,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!s.failedOnce[failKey]) {
                 s.failedOnce[failKey] = true;
                 if (typeof addWordScore === 'function') {
-                    addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask });
+                    addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
+                        idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
                 }
                 // 관용구 과제는 단어 곡선을 건드리지 않는다 (그 표현의 곡선은 위에서 이미 밀었다)
                 if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);

@@ -958,7 +958,8 @@
             if (!item || !item.wordId || typeof addWordScore !== 'function') return;
             const rule = GAME_SCORE.hangman;
             const isIdiom = item.kind === 'idiom';
-            addWordScore(item.wordId, ok ? rule.correct : rule.wrong, { correct: !!ok, skipReviewDate: isIdiom });
+            addWordScore(item.wordId, ok ? rule.correct : rule.wrong, { correct: !!ok, skipReviewDate: isIdiom,
+                idiom: isIdiom ? { wordId: item.wordId, text: item.idiomText } : null });
             if (!isIdiom) return;
             if (typeof markIdiomSeen === 'function') markIdiomSeen(item.wordId, item.idiomText);
             if (!ok && typeof idiomReviewDemote === 'function') idiomReviewDemote(item.wordId, item.idiomText);
