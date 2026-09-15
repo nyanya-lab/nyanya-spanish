@@ -3491,6 +3491,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
 
+        //   [냐냐 지적] 관용구 과제의 등급 변화는 그 표현 것으로 재야 한다 (2026-09-15).
+        //   예전엔 원단어 등급을 쟀다 — 관용구가 제 점수를 갖기 전에 쓰던 코드다. 그래서
+        //   표현이 약점이 되어도 결과 화면이 조용했고, 대신 점수가 안 움직인 원단어를 짚었다.
+        function withTaskGradeShift(w, apply) {
+            if (w && w._isIdiomTask && w._idiomOf && typeof getIdiomGrade === 'function') {
+                const id = w._idiomOf.id, text = w.word;
+                const before = getIdiomGrade(id, text);
+                apply();
+                return { gradeBefore: before, gradeAfter: getIdiomGrade(id, text) };
+            }
+            return withGradeShift((w && (w._idiomOf || w._conjOf)) || w, apply);
+        }
+
         // [냐냐 요청] 동사는 원형이 아니라 활용형으로 묻는다 (2026-09-02).
         //   원형은 활용형을 쓰려면 어차피 알아야 하니, 활용형으로 물으면 둘 다 시험된다.
         //   ⚠️ 시제를 먼저 고르고 그 안에서 인칭을 고른다. 칸을 통째로 섞으면 현재시제가
@@ -3928,8 +3941,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <div class="-m-0.5">${arr.map(r => (tone === 'text-amber-600' ? chipAmber(r) : chip(r, ok))).join('')}</div>
                     </div>` : '';
                 // [냐냐 요청] 이번 복습으로 등급이 바뀐 단어들 (core.js 의 공용 표시를 쓴다)
-                //   관용구 문제였어도 점수는 그 단어에 붙으므로, 여기선 단어 이름으로 보여준다
-                const shiftRows = res.map(r => ({ ...r, word: r.baseWord || r.word, meaning: r.baseMeaning || r.meaning }));
+                //   [냐냐 지적] 관용구는 제 점수를 가지니 표현 이름 그대로 짚는다 (2026-09-15).
+                //   활용형 문제만 원형으로 바꿔 보여준다 (점수가 그 단어에 붙으므로).
+                const shiftRows = res.map(r => r.isIdiom ? { ...r }
+                    : { ...r, word: r.baseWord || r.word, meaning: r.baseMeaning || r.meaning });
                 const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
                 const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
 
@@ -3981,7 +3996,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // [냐냐 요청] 바퀴별 카드 — 테스트(1·3): 가림(뜻만) / 익히기(2): 전체 정보 / 3바퀴 틀림: 정답 공개
             let cardHtml, inputLabel, placeholder;
             if (s.phase === 2) {
-                const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
+                const badges = (typeof buildWordBadgesHtml === 'function')
+                    ? buildWordBadgesHtml(w, { align: 'left', idiom: (w._isIdiomTask && w._idiomOf) ? { wordId: w._idiomOf.id, text: w.word } : null })
+                    : '';
                 //   [냐냐 요청] 예문은 맨 밑으로 — 위쪽은 낱말·활용을 먼저 보는 자리로 둔다
                 const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { skipExample: true }) : '';
                 const exampleOf = (w._isConjTask && w._conjOf) ? w._conjOf : w;
@@ -4331,7 +4348,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
             const already = !!s.failedOnce[writeFailKey(w)];
             if (isMatch) {
-                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
+                const shift = withTaskGradeShift(w, () => {
                     if (typeof addWordScore !== 'function') return;
                     // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
@@ -4348,7 +4365,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.wrongCount++;
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
-                const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
+                const shift = withTaskGradeShift(w, () => {
                     if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
                         idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
                 });
@@ -4381,7 +4398,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
                 if (s.idiomReview && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
             }
-            const shift = withGradeShift(w._idiomOf || w._conjOf || w, () => {
+            const shift = withTaskGradeShift(w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true,
                     idiom: w._isIdiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
             });

@@ -837,6 +837,32 @@ let quizSession = null;
             const chips = [];
             const B = (cls, txt) => `<span class="px-2.5 py-0.5 text-[10px] font-black rounded-full ${cls} shadow-sm">${txt}</span>`;
 
+            //   [냐냐 지적] 관용구 문제일 때 이 뱃지들이 원단어 것을 보여주고 있었다 (2026-09-15).
+            //   관용구가 제 점수를 갖기 전에 쓰던 코드라, 표현을 묻고 있는데 성별·활용·졸업·점수는
+            //   전부 그 표현이 딸린 단어 것이었다. 이제 표현 제 것을 본다.
+            //     opts.idiom = { wordId, text }  (쓰기 복습은 과제에 박힌 _idiomOf 로도 알아챈다)
+            const idiomRef = opts.idiom
+                || ((word._isIdiomTask && word._idiomOf) ? { wordId: word._idiomOf.id, text: word.word } : null);
+            if (idiomRef && typeof getIdiomGrade === 'function') {
+                chips.push(B('bg-violet-100 text-violet-600', '📘 관용구'));
+                if (typeof deleLevelBadgeHtml === 'function' && typeof wordIdiomList === 'function') {
+                    const owner = (vocabulary || []).find(v => v.id === idiomRef.wordId);
+                    const norm = (t) => String(t || '').trim().toLowerCase();
+                    const it = (owner ? wordIdiomList(owner) : []).find(x => norm(x.idiom) === norm(idiomRef.text));
+                    const dl = it && deleLevelBadgeHtml(it.dele);
+                    if (dl) chips.push(`<span class="inline-flex items-center">${dl}</span>`);
+                }
+                //   졸업도 표현 제 곡선으로 본다
+                const rec = (typeof getIdiomRec === 'function') ? getIdiomRec(idiomRef.wordId, idiomRef.text) : null;
+                if (rec && typeof REVIEW_INTERVALS !== 'undefined' && (rec.stage || 0) >= REVIEW_INTERVALS.length) {
+                    chips.push(B('bg-emerald-100 text-emerald-700 border border-emerald-300', '🎓 졸업'));
+                }
+                const gi = GRADE_INFO[getIdiomGrade(idiomRef.wordId, idiomRef.text)];
+                chips.push(`<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(idiomRef.wordId, idiomRef.text)}</span>`);
+                const justifyI = (opts.align === 'left') ? '' : ' justify-center';
+                return `<div class="flex items-center${justifyI} gap-1.5 flex-wrap">${chips.join('')}</div>`;
+            }
+
             if (word.pos === 'noun') {
                 if (word.gender === 'masculine') chips.push(B('bg-blue-100 text-blue-600', 'M.'));
                 else if (word.gender === 'feminine') chips.push(B('bg-rose-100 text-rose-600', 'F.'));
@@ -1514,7 +1540,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 document.getElementById('quiz-review-meaning').innerText = q.word.meaning;
             }
 
-            const badges = buildWordBadgesHtml(q.word);
+            const badges = buildWordBadgesHtml(q.word, isIdiomQ ? { idiom: { wordId: q.word.id, text: quizIdiomText(q) } } : {});
             const notes = buildNotesHtml(q.word, { idiomIntro: isIdiomQ });
 
             // [냐냐 PATCH] 유의어 문제여도 상단 안내는 안 띄움
