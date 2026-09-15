@@ -2352,7 +2352,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const chip = (x) => {
                 const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(x.word) : null;
                 if (hit) {
-                    return `<button type="button" onclick="openWordModal('${escapeAttr(hit.id)}')" title="등록했어요 — 눌러서 열어보기" class="inline-flex items-center gap-1 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
+                    return `<button type="button" onclick="openWordView('${escapeAttr(hit.id)}')" title="등록했어요 — 눌러서 열어보기" class="inline-flex items-center gap-1 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
                         <i class="fa-solid fa-check text-[9px] text-emerald-500"></i><b class="line-through">${escapeHtml(x.word)}</b>
                         <span class="text-[10px] text-slate-300">${escapeHtml(x.mean)}</span>
                     </button>`;
@@ -4839,7 +4839,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                             if (mean.indexOf('(') >= 0 && mean.indexOf(')') < 0) mean = mean.slice(0, mean.indexOf('(')).trim();
                             if (mean.length > 12) mean = mean.slice(0, 12).trim() + '…';
                             return `<span class="inline-flex items-center gap-1 border rounded-lg pl-2 pr-1 py-0.5 ${moved ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-white'}" title="${escapeAttr(fullMean)}">
-                                <button type="button" onclick="openWordModal('${w.word.id}')" class="min-w-0 text-left hover:opacity-70 transition-opacity">
+                                <button type="button" onclick="openWordView('${w.word.id}')" class="min-w-0 text-left hover:opacity-70 transition-opacity">
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}

@@ -102,6 +102,9 @@ let vocabulary = [];
                 if (e.key === 'Escape') {
                     const peek = document.getElementById('grammar-peek-modal');
                     if (peek && !peek.classList.contains('hidden')) { closeGrammarPeek(); return; }
+                    //   [냐냐 요청] 단어 조회 창도 ESC 로 닫힌다 (2026-09-16)
+                    const wv = document.getElementById('word-view-modal');
+                    if (wv && !wv.classList.contains('hidden')) { closeWordView(); return; }
                 }
                 if (activeTab === 'cards') {
                     if (e.key === 'ArrowRight') nextFlashcard();
@@ -3834,7 +3837,9 @@ let vocabulary = [];
             // [냐냐 PATCH] 퀴즈/복습/게임 중이면 탭을 옮기지 않음 (진행 기록이 날아가버림)
             //   → 그 자리에서 단어 창(오버레이)만 띄우고, 닫으면 하던 거 그대로
             if (typeof activeTab !== 'undefined' && ['quiz', 'review', 'games'].includes(activeTab)) {
-                if (typeof openWordModal === 'function') openWordModal(wordId);
+                //   [냐냐 요청] 보러 여는 자리라 조회창으로 (2026-09-16)
+                if (typeof openWordView === 'function') openWordView(wordId);
+                else if (typeof openWordModal === 'function') openWordModal(wordId);
                 return;
             }
 

@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609152333">
+    <link rel="stylesheet" href="css/style.css?v=202609160815">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1915,6 +1915,35 @@
     </div>
 
     <!-- [냐냐 PATCH-3차] 중복 단어 반반 비교 편집창 (PC: 좌우 / 모바일: 위아래) -->
+    <!-- [냐냐 요청] 단어 조회 창 (2026-09-16).
+         관용구 사전의 원단어, 첨삭에서 나온 단어처럼 '보러 여는' 자리는 수정창 대신 여기로 온다.
+         고칠 일이 생기면 아래 '수정하기' 로 넘어간다. -->
+    <div id="word-view-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onclick="if(event.target===this) closeWordView()">
+        <div class="bg-white w-full max-w-lg rounded-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-5 border-b border-slate-100 shrink-0">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h3 id="word-view-word" class="text-xl font-black text-slate-900 break-words"></h3>
+                            <button id="word-view-speak" type="button" title="발음 듣기" class="shrink-0 w-7 h-7 rounded-full text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                        </div>
+                        <p id="word-view-meaning" class="text-sm font-bold text-slate-500 mt-0.5 break-words"></p>
+                    </div>
+                    <button onclick="closeWordView()" class="w-8 h-8 shrink-0 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="word-view-badges" class="mt-2.5 flex items-center gap-1.5 flex-wrap"></div>
+            </div>
+            <div class="p-5 overflow-y-auto space-y-3">
+                <div id="word-view-body" class="space-y-3 text-left"></div>
+                <div id="word-view-conj-box" class="hidden"></div>
+            </div>
+            <div class="p-4 border-t border-slate-100 flex items-center gap-2 shrink-0">
+                <button type="button" onclick="goToWordFromView()" class="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold transition-colors"><i class="fa-solid fa-book-open mr-1.5"></i>단어장에서 보기</button>
+                <button type="button" onclick="editFromWordView()" class="ml-auto px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1.5"></i>수정하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- [냐냐 요청] 한글 뜻으로 찾았을 때 후보가 여럿이면 나란히 펼쳐 비교하고 고른다 (2026-09-15) -->
     <div id="ai-cand-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" onclick="if(event.target===this) closeAiCandidates()">
         <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
@@ -2468,13 +2497,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609152333"></script>
-    <script src="js/creatures.js?v=202609152333"></script>
-    <script src="js/core.js?v=202609152333"></script>
-    <script src="js/vocab.js?v=202609152333"></script>
-    <script src="js/flashcards.js?v=202609152333"></script>
-    <script src="js/quiz.js?v=202609152333"></script>
-    <script src="js/games.js?v=202609152333"></script>
-    <script src="js/ai-feedback.js?v=202609152333"></script>
+    <script src="js/dictionary-data.js?v=202609160815"></script>
+    <script src="js/creatures.js?v=202609160815"></script>
+    <script src="js/core.js?v=202609160815"></script>
+    <script src="js/vocab.js?v=202609160815"></script>
+    <script src="js/flashcards.js?v=202609160815"></script>
+    <script src="js/quiz.js?v=202609160815"></script>
+    <script src="js/games.js?v=202609160815"></script>
+    <script src="js/ai-feedback.js?v=202609160815"></script>
 </body>
 </html>

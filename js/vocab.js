@@ -850,6 +850,55 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             target.focus();
         }
 
+        // ============================================================
+        // [냐냐 요청] 단어 조회 창 (2026-09-16).
+        //   여태 '보러 여는' 자리도 전부 수정창(openWordModal)이었다. 칸마다 입력칸이라
+        //   내용을 읽기 어렵고, 잘못 건드리면 값이 바뀐다. 읽는 자리는 읽는 창으로 가른다.
+        //   양식은 퀴즈 정답 화면과 같은 것을 그대로 쓴다 (buildWordBadgesHtml / buildNotesHtml /
+        //   renderQuizConjugation) — 이미 한 단어를 통째로 펼쳐 보여주는 그림이다.
+        // ============================================================
+        let _wordViewId = null;
+        function openWordView(wordId) {
+            const w = (vocabulary || []).find(v => v.id === wordId);
+            if (!w) { showToast("그 단어를 찾을 수 없어요", "error"); return; }
+            const modal = document.getElementById('word-view-modal');
+            if (!modal) { openWordModal(wordId); return; }   // 창이 없으면 예전처럼
+            _wordViewId = wordId;
+
+            document.getElementById('word-view-word').innerText = w.word || '';
+            document.getElementById('word-view-meaning').innerText = w.meaning || '';
+            const sp = document.getElementById('word-view-speak');
+            if (sp) sp.onclick = (e) => { if (typeof speakText === 'function') speakText(e, w.word); };
+
+            const dele = (typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : '';
+            const badges = (typeof buildWordBadgesHtml === 'function') ? buildWordBadgesHtml(w, { align: 'left' }) : '';
+            document.getElementById('word-view-badges').innerHTML =
+                badges + (dele ? `<span class="inline-flex items-center">${dele}</span>` : '');
+
+            const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+            document.getElementById('word-view-body').innerHTML = (notes && notes.trim())
+                ? notes : '<p class="text-xs text-slate-400 font-semibold">적어둔 정보가 없어요.</p>';
+            if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'word-view-conj-box');
+
+            modal.classList.remove('hidden');
+        }
+        function closeWordView() {
+            const m = document.getElementById('word-view-modal');
+            if (m) m.classList.add('hidden');
+            _wordViewId = null;
+        }
+        //   조회창에서 바로 고치러 넘어간다
+        function editFromWordView() {
+            const id = _wordViewId;
+            closeWordView();
+            if (id) openWordModal(id);
+        }
+        function goToWordFromView() {
+            const id = _wordViewId;
+            closeWordView();
+            if (id && typeof goToWord === 'function') goToWord(id);
+        }
+
         function openWordModal(wordId = null) {
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
@@ -4819,7 +4868,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         ${/* [냐냐 요청] 원단어 줄을 박스로 가둔다 — 단어장에서 관용구를 가두는 것과 같은 모양 */''}
                         <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5">
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Palabra (원단어)</span>
-                            <button onclick="openWordModal('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
+                            <button onclick="openWordView('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
                                 class="w-full flex items-center gap-1.5 text-left rounded-lg hover:opacity-70 transition-opacity">
                                 <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
                                 <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
