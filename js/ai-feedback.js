@@ -1734,7 +1734,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 // [냐냐 요청] '이번 미션이 참고한 내용' 카드는 없앴다 (2026-09-02).
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
-                applyAiWritingScores(feedback, koEsScoreNotes);   // 점수 카드는 그 아래에 이어 붙는다
+                applyAiWritingScores(feedback, koEsScoreNotes, true);   // 점수 카드는 그 아래에 이어 붙는다
+                //   ⚠️ true = 한→스 미션의 답. 이 한 군데만 복습으로 쳐준다 (다른 세 탭은 안 넘긴다)
                 if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
                 grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
@@ -3303,7 +3304,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return out;
         }
 
-        function applyEsKoGrammarScores(feedback, notes, okDelta) {
+        // [냐냐 지적] 복습으로 쳐주는 건 **한→스 미션의 답** 에서만이다 (2026-09-15).
+        //   냐냐님 말씀 — "스→한에서 오늘의 복습 문법을 맞추면 복습 개수에서 빠진다."
+        //   재현해 보니 정말 그랬다. aiMissionReviewGrammarId 는 한→스 답을 채점할 때만 지워지는데,
+        //   복습 미션을 받아놓고 **답을 안 한 채** 다른 탭으로 가면 그 플래그가 살아 있었다.
+        //   그 상태로 스→한·질문·예문 어디서 채점하든 복습 줄에 든 문법이 '오늘 복습 끝' 으로
+        //   빠지고 칸까지 앞으로 나갔다. 복습을 한 적이 없는데도.
+        //   그래서 이 함수를 부르는 쪽이 '이건 한→스 미션의 답이다' 라고 알려줘야만 복습으로 친다.
+        function applyEsKoGrammarScores(feedback, notes, okDelta, isMission) {
+            const reviewId = isMission
+                ? ((typeof aiMissionReviewGrammarId !== 'undefined') ? aiMissionReviewGrammarId : null)
+                : null;
             const gainOk = (typeof okDelta === 'number') ? okDelta : GRAMMAR_TRANS_OK;
             aiLastEsKoGrammar = [];
             const list = flattenScoredList(feedback, 'grammarOk', 'grammarBad', 'usedGrammar', 'title', 'usage');
@@ -3482,14 +3493,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //      고친 문장에는 그 노트의 표현이 들어갔는데 내 문장에는 없으면 '쓰려다 틀린 것' 이다.
             //      근거가 없어서 안 건드린다는 9/7 규칙과 어긋나지 않는다 — 고친 문장이 근거다.
             //      랜덤 미션·자유 작문에는 안 쓴다. AI 가 제 마음대로 넣은 표현일 수 있다.
-            if (typeof aiMissionReviewGrammarId !== 'undefined' && aiMissionReviewGrammarId
+            if (reviewId
                 && typeof detectNoteCellsInText === 'function'
-                && !parsed.some(x => x.note.id === aiMissionReviewGrammarId)) {
+                && !parsed.some(x => x.note.id === reviewId)) {
                 //   ⚠️ 시제 노트는 여기서도 뺀다 (2026-09-10). 현재완료 복습에서 'esta semana' 만
                 //      보고 −2 를 주면, 시간부사구를 쓴 것이지 현재완료를 쓴 게 아니다.
                 //      대신 못 잡는 것 = '시제를 안 쓰고 문장도 틀림' 인데, 그건 원래
                 //      일부러 보류해 둔 경우다 (2026-09-04 결정). 그대로 안 준다.
-                const found = notes.find(t => t.id === aiMissionReviewGrammarId);
+                const found = notes.find(t => t.id === reviewId);
                 const note = isVerbFormNote(found) ? null : found;
                 const inFixed = note && detectNoteCellsInText(feedback && feedback.correctedText, notes).get(note.id);
                 const inMine = note && detectNoteCellsInText(feedback && feedback.originalMarked, notes).get(note.id);
@@ -3507,10 +3518,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //      는 costar 를 잘못 썼을 뿐 'hace mucho frío' 는 완벽한데, 날씨 노트가 −2 를 맞았다.
             //      아무도 안 짚었으면 그 문법이 왜 틀렸는지 댈 근거가 없다는 뜻이므로 건드리지 않는다.
             //      (그러면 곡선도 그대로 남아서 다음에 다시 복습으로 나온다 — 그게 맞다)
-            if (typeof aiMissionReviewGrammarId !== 'undefined' && aiMissionReviewGrammarId
+            if (reviewId
                 && feedback && feedback.isCorrect
-                && !parsed.some(x => x.note.id === aiMissionReviewGrammarId)) {
-                const note = notes.find(t => t.id === aiMissionReviewGrammarId);
+                && !parsed.some(x => x.note.id === reviewId)) {
+                const note = notes.find(t => t.id === reviewId);
                 if (note) parsed.push({ note, ok: true, ev: '' });
             }
 
@@ -3556,17 +3567,34 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //     곡선이 뒤로 갔으니 어차피 곧 다시 나온다 — 그게 곡선이 할 일이다.
                 //   ⚠️ 칸이 앞으로 나가는 건 여전히 '제대로 썼을 때만' 이다 (applyGrammarCurve 의 ok).
                 //     여기서 넓힌 건 '오늘 줄에서 빼는가' 하나뿐이다.
-                const inQueue = !!aiMissionReviewGrammarId
-                    && note.id !== aiMissionReviewGrammarId
+                const inQueue = !!reviewId
+                    && note.id !== reviewId
                     && typeof grammarReviewQueue !== 'undefined'
                     && grammarReviewQueue.indexOf(note.id) >= 0;
-                const canMove = (note.id === aiMissionReviewGrammarId) || inQueue;
+                // ============================================================
+                // [냐냐 요청] 어느 탭에서든 **오늘 차례인 문법을 제대로 쓰면** 복습으로 친다 (2026-09-15).
+                //   2026-09-07 에는 '복습 미션에서만 칸이 나간다' 로 뒀다. 아무 데서나 나가면
+                //   너무 빨리 졸업한다는 이유였는데, 세어보니 그 걱정이 틀렸다 —
+                //   칸 사이 간격(1·3·7·14·30일)은 날짜가 정하므로 하루에 스무 번 써도 칸은 하루 한 번만
+                //   나간다. 졸업까지 최소 55일은 그대로다. 달라지는 건 '복습을 빼먹어서 밀리는 것' 뿐이다.
+                //   냐냐님은 하루 8.4번 첨삭을 하시고 한 번에 문법 1.9개가 걸린다. 거기서 제대로 쓴 것을
+                //   안 쳐주면 이미 쓸 줄 아는 문법을 또 문제로 내게 된다.
+                //   ⚠️ '오늘 차례' 는 날짜로만 판단한다(isGrammarDueToday). 복습 배너를 눌렀는지와
+                //      상관없다 — 눌렀느냐로 갈리면 같은 행동이 어떤 날은 쳐지고 어떤 날은 안 쳐진다.
+                //   ⚠️ **제대로 썼을 때만** 이다. 틀리게 쓴 건 지금처럼 칸만 뒤로 간다.
+                //   ⚠️ 안 쓰는 문법은 어차피 여기 안 걸린다 — 그건 복습 미션으로만 풀린다.
+                // ============================================================
+                const dueToday = item.ok && (typeof isGrammarDueToday === 'function')
+                    && isGrammarDueToday(note.id);
+                const canMove = (note.id === reviewId) || inQueue || dueToday;
                 applyGrammarCurve(note.id, item.ok, canMove);
                 if (inQueue) {
                     grammarReviewQueue.splice(grammarReviewQueue.indexOf(note.id), 1);
                     if (grammarReviewTotal) grammarReviewDone++;
                 }
-                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove, alsoReviewed: inQueue, ev: item.ev, state: 'normal', undone: false });
+                //   '🔁 오늘 복습' 표는 배너 줄에서 뺀 것과 오늘 차례를 채운 것 둘 다에 붙인다
+                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove,
+                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), ev: item.ev, state: 'normal', undone: false });
             });
             // 단어와 같이 점수순(낮은 것부터). 한 번만 정하고 점수를 바꿔도 자리는 안 옮긴다.
             aiLastEsKoGrammar.sort((a, b) => (a.delta - b.delta) || String(a.note.title || '').localeCompare(String(b.note.title || ''), 'ko'));
@@ -4366,9 +4394,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   자유 작문만 절반이던 건 '찾아보고 쓸 수 있어서' 였는데, 이제 찾아본 건 내가
         //   결과 카드에서 표시하면 되므로(−2) 미리 깎아둘 이유가 없다.
         let aiLastFeedbackForAdd = null;   // 손으로 문법을 더할 때 근거를 찾으려고 마지막 첨삭을 들고 있는다
-        function applyAiWritingScores(feedback, notes) {
+        //   isMission = 한→스 미션의 답인가. 복습으로 쳐주는 건 그때뿐이다 (2026-09-15)
+        function applyAiWritingScores(feedback, notes, isMission) {
             aiLastFeedbackForAdd = feedback || null;
-            applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK);
+            applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK, isMission);
             applyEsKoWordScores(feedback, WORD_SPELL_OK);
             aiLastSuggest = buildAiSuggestions(feedback);   // [냐냐 요청] 추천은 점수 다음에 (쓴 관용구를 알아야 뺀다)
             renderEsKoGrammarRefs();

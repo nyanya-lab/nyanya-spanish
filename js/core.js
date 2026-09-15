@@ -2529,6 +2529,15 @@ let vocabulary = [];
             }
         }
 
+        //   [냐냐 요청] 그 문법 하나가 오늘 차례인가 (2026-09-15).
+        //   첨삭 어디서든 '오늘 줄에 있는 문법을 제대로 썼나' 를 물어보는 데 쓴다.
+        //   getGrammarDueList 와 같은 잣대를 써야 해서 curveIsDue 하나로 묶는다.
+        function isGrammarDueToday(id) {
+            const rec = (typeof grammarReview !== 'undefined') ? grammarReview[id] : null;
+            if (!rec || !rec.lastWrongDate) return false;      // 곡선 밖이면 복습할 것도 없다
+            return curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate);
+        }
+
         // 오늘 복습할 문법 노트 (약한 것부터)
         function getGrammarDueList() {
             const today = getLocalDateString();
