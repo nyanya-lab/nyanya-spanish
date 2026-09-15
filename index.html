@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609152251">
+    <link rel="stylesheet" href="css/style.css?v=202609152301">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1446,16 +1446,21 @@
                             <button id="grammar-expand-all-btn" onclick="toggleExpandAllGrammar()" title="전체 펼치기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                 <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
                             </button>
-                            <!-- [냐냐 요청] 주제별 묶기 ↔ 그냥 목록 전환 -->
-                            <button id="grammar-view-btn" onclick="toggleGrammarViewMode()" title="주제별 묶기 / 목록으로 보기" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
-                                <i id="grammar-view-icon" class="fa-solid fa-layer-group"></i>
-                            </button>
+                            <!-- [냐냐 요청] '주제별 묶기 / 목록' 은 필터 패널 안으로 옮겼다 (2026-09-15) -->
                             <div class="relative">
                                 <button onclick="event.stopPropagation(); toggleGrammarFilterPanel()" title="필터 & 정렬" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
                                     <i class="fa-solid fa-sliders"></i>
                                     <span id="grammar-filter-badge" class="hidden absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                                 </button>
                                 <div id="grammar-filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-4 space-y-4 w-72 max-h-[70vh] overflow-y-auto">
+                                    <!-- [냐냐 요청] 보기 방식 — 맨 윗줄이 복잡해서 여기로 옮겼다 -->
+                                    <div class="space-y-1.5">
+                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">보기</label>
+                                        <div id="grammar-view-box" class="flex flex-wrap gap-1.5">
+                                            <button type="button" data-gview="group" onclick="setGrammarViewMode(this)" class="grammar-view-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">주제별 묶기</button>
+                                            <button type="button" data-gview="list" onclick="setGrammarViewMode(this)" class="grammar-view-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">그냥 목록</button>
+                                        </div>
+                                    </div>
                                     <!-- 주제 (아이콘, 여러 개 선택) -->
                                     <div class="space-y-1.5">
                                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">주제 <span class="text-slate-300 normal-case">(여러 개)</span></label>
@@ -1502,10 +1507,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- [냐냐 요청] 단어 찾기 — 전체 표에 걸리는 모드라 카드가 아니라 여기에 둔다 -->
-                            <button id="grammar-lookup-btn" onclick="toggleGrammarWordLookup()" title="🔍 단어 찾기 (표 안의 단어를 눌러 단어장으로)" class="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
+                            <!-- [냐냐 요청] '단어 찾기' 버튼은 뺐다 (2026-09-15) — 안 쓰신다고 하셨다 -->
                             <!-- [냐냐 요청] 주제 관리 버튼은 맨 윗줄이 복잡해져서 노트 편집기의 '주제' 옆으로 옮겼다 -->
                             <!-- 새로 만들기 (단어장의 + 등록과 같은 자리·모양) -->
                             <button onclick="openGrammarEditor()" title="새로 만들기" class="flex-1 sm:flex-initial sm:w-10 h-10 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-100 active:scale-95">
@@ -2440,13 +2442,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609152251"></script>
-    <script src="js/creatures.js?v=202609152251"></script>
-    <script src="js/core.js?v=202609152251"></script>
-    <script src="js/vocab.js?v=202609152251"></script>
-    <script src="js/flashcards.js?v=202609152251"></script>
-    <script src="js/quiz.js?v=202609152251"></script>
-    <script src="js/games.js?v=202609152251"></script>
-    <script src="js/ai-feedback.js?v=202609152251"></script>
+    <script src="js/dictionary-data.js?v=202609152301"></script>
+    <script src="js/creatures.js?v=202609152301"></script>
+    <script src="js/core.js?v=202609152301"></script>
+    <script src="js/vocab.js?v=202609152301"></script>
+    <script src="js/flashcards.js?v=202609152301"></script>
+    <script src="js/quiz.js?v=202609152301"></script>
+    <script src="js/games.js?v=202609152301"></script>
+    <script src="js/ai-feedback.js?v=202609152301"></script>
 </body>
 </html>

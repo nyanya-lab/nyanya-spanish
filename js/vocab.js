@@ -2718,6 +2718,22 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         // [냐냐 PATCH] 약점 단어(별표) 수동 토글
+        //   [냐냐 요청] 마스터·약점을 한 버튼으로 (2026-09-15). 다섯 자리를 돈다.
+        function cycleWordGrade(wordId, event) {
+            if (event) event.stopPropagation();
+            const w = vocabulary.find(item => item.id === wordId);
+            if (!w) return;
+            const to = nextGradeInCycle(getWordGrade(w));
+            const master = (to === 'mastered' || to === 'perfect');
+            setWordScore(w, GRADE_CYCLE_SCORE[to], master ? { subjectivePassed: true } : {});
+            if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
+            showToast(gradeCycleToast(w.word, to), to === 'normal' ? 'info' : 'success');
+            logAction('snapshot');
+            renderWordList();
+            updateStats();
+            saveToStorage();
+        }
+
         function toggleWeakWord(wordId, event) {
             if (event) event.stopPropagation();
             const w = vocabulary.find(item => item.id === wordId);
@@ -4638,6 +4654,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 ${deleLevelBadgeHtml(r.it.dele)}
                                 <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
                                 <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                                ${gradeCycleBtnHtml(grade, `cycleIdiomGrade('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}
                             </span>
                         </div>
                         ${/* [냐냐 요청] 원단어 줄을 박스로 가둔다 — 단어장에서 관용구를 가두는 것과 같은 모양 */''}
@@ -4869,6 +4886,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-3">
+                    <!-- [냐냐 요청] 정답률 · DELE · 점수는 오른쪽 아래 (2026-09-15 다시 내림) -->
+                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
+                        ${accHtml}
+                        <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
+                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
+                    </div>
                     <!-- [냐냐 PATCH] 우측 하단: [정답률] [점수] -->
                     <div class="space-y-2.5">
                         <div class="flex items-start justify-between gap-2">
@@ -4881,20 +4904,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 </span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
-                                ${/* [냐냐 요청] 정답률·DELE·점수를 위로 올린다 (2026-09-15).
-                                     관용구 사전과 문법 노트는 다 위쪽에 있는데 단어 카드만 아래라 어긋났다. */''}
-                                <span class="flex items-center gap-1 mr-0.5 select-none">
-                                    ${accHtml}
-                                    <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
-                                    <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
-                                </span>
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
-                                <button onclick="toggleWeakWord('${w.id}', event)" title="약점 단어 표시 (약점 → 치명적 약점 → 해제)" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${grade === 'critical' ? 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm' : (grade === 'weak' ? 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300')}">
-                                    <i class="fa-solid fa-star text-xs"></i>
-                                </button>
-                                <button onclick="toggleMasterWord('${w.id}', event)" title="마스터 표시" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${grade === 'perfect' ? 'bg-emerald-600 border-2 border-emerald-700 text-white shadow-sm' : (grade === 'mastered' ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-300')}">
-                                    <i class="fa-solid fa-check text-xs"></i>
-                                </button>
+                                ${gradeCycleBtnHtml(grade, `cycleWordGrade('${w.id}', event)`)}
                                 <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
                                     <i class="fa-solid fa-pen text-xs"></i>
                                 </button>

@@ -929,6 +929,9 @@ let vocabulary = [];
             target.value = raw;
             if (!isKorean && typeof handleWordInput === 'function') handleWordInput(raw);
             target.focus();
+            //   [냐냐 요청] 찾다가 없어서 등록창이 열린 것이니, AI 추천까지 바로 돌린다 (2026-09-15).
+            //   창이 그려질 틈을 조금 준 뒤에 부른다.
+            if (typeof triggerAiAutofill === 'function') setTimeout(() => triggerAiAutofill(), 220);
         }
 
         function renderAskAiThread() {
@@ -5696,6 +5699,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         // [냐냐 요청] 주제별 묶기 ↔ 그냥 목록. 목록일 땐 카드마다 주제 배지를 달아준다
         //   ⚠️ 아래쪽 grammarViewMode 는 '전체 펼치기 3단계' 용이라 이름이 다르다
         let grammarGroupView = 'group';   // 'group' | 'list'
+        //   [냐냐 요청] 필터 패널 안의 '보기' 알약 (2026-09-15). 누르면 바로 바뀐다.
+        function setGrammarViewMode(btn) {
+            grammarGroupView = btn.dataset.gview;
+            document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b === btn));
+            saveGrammarFilterPrefs();
+            renderGrammarTables();
+        }
+
         function toggleGrammarViewMode() {
             grammarGroupView = (grammarGroupView === 'group') ? 'list' : 'group';
             saveGrammarFilterPrefs();
@@ -5893,26 +5904,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             // [냐냐 요청] 점수를 접은 상태에서도 보이게 — 마스터 체크 바로 왼쪽에.
                             //   펼치면 아래쪽(빈칸 채우기 옆)에도 같은 배지가 있지만, 목록만 훑을 때 점수가 안 보였다
                             const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
-                            return `${deleLevelBadgeHtml(grammarDeleLevels[t.id])}<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} select-none shrink-0" title="${gi.label} · 이 노트의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatGrammarScore(t.id)}</span>`;
+                            //   [냐냐 요청] 제목 줄에서는 뺀다 (2026-09-15) — 아래에 이미 나와서 복잡했다
+                            return '';
                         })()}
-                        ${(() => {
-                            // [냐냐 요청] 마스터 버튼 3단계 (단어장과 같은 색): 일반 → 마스터 → 완벽
-                            const gr = getGrammarGrade(t.id);
-                            const cls = gr === 'perfect' ? 'bg-emerald-600 border-2 border-emerald-700 text-white shadow-sm'
-                                      : gr === 'mastered' ? 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm'
-                                      : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50';
-                            const tip = gr === 'perfect' ? '마스터 해제' : gr === 'mastered' ? '완벽으로 올리기' : '마스터 표시';
-                            return `<button onclick="toggleMasterGrammar('${t.id}')" title="${tip}" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${cls}"><i class="fa-solid fa-circle-check text-xs"></i></button>`;
-                        })()}
-                        ${(() => {
-                            // [냐냐 요청] 약점 별표 — 단어장과 같은 3단계 순환 (해제 → 약점 → 치명적)
-                            const gr = getGrammarGrade(t.id);
-                            const cls = gr === 'critical' ? 'text-red-500 bg-red-50'
-                                      : gr === 'weak' ? 'text-amber-500 bg-amber-50'
-                                      : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50';
-                            const tip = gr === 'critical' ? '약점 표시 해제' : gr === 'weak' ? '치명적 약점으로' : '약점으로 표시';
-                            return `<button onclick="toggleWeakGrammar('${t.id}', event)" title="${tip}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${cls}"><i class="fa-solid fa-star text-xs"></i></button>`;
-                        })()}
+                        ${/* [냐냐 요청] 마스터·약점을 한 버튼으로 (2026-09-15) */''}
+                        ${gradeCycleBtnHtml(getGrammarGrade(t.id), `cycleGrammarGrade('${t.id}', event)`)}
                         <button onclick="togglePinGrammar('${t.id}')" title="${pinnedGrammar[t.id] ? '고정 해제' : '위에 고정 (항상 열림)'}" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${pinnedGrammar[t.id] ? 'text-[#5896cb] bg-blue-50' : 'text-slate-400 hover:text-[#5896cb] hover:bg-blue-50'}"><i class="fa-solid fa-thumbtack text-xs"></i></button>
                         <button onclick="openGrammarEditor('${t.id}')" title="수정" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"><i class="fa-solid fa-pen text-xs"></i></button>
 <!-- [냐냐 요청] 단어 찾기(돋보기)는 표 하나가 아니라 전체에 걸리는 모드라, 카드에서 빼고
@@ -6279,6 +6275,76 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 PATCH] 문법표 마스터 토글 (헤더 문법 마스터 통계 + 일지 기록 연동)
+
+        // ============================================================
+        // [냐냐 요청] 등급 버튼을 하나로 합친다 (2026-09-15).
+        //   예전엔 마스터(✓)와 약점(★)이 따로였고 각각 3단계로 돌았다. 버튼이 둘이라
+        //   자리도 먹고, '지금 무슨 등급인지' 를 두 버튼을 같이 봐야 알 수 있었다.
+        //   이제 한 버튼이 다섯 자리를 돈다 — 단어·문법·관용구 모두 같은 규칙.
+        //     일반 → 마스터(+4.5) → 완벽(+8) → 약점(−4.5) → 치명적(−8) → 일반(0)
+        // ============================================================
+        const GRADE_CYCLE = ['normal', 'mastered', 'perfect', 'weak', 'critical'];
+        const GRADE_CYCLE_SCORE = { normal: 0, mastered: SCORE_MASTER, perfect: SCORE_PERFECT, weak: SCORE_WEAK, critical: SCORE_CRITICAL };
+        const GRADE_CYCLE_BTN = {
+            perfect:  { cls: 'bg-emerald-600 border-2 border-emerald-700 text-white shadow-sm', icon: 'fa-circle-check' },
+            mastered: { cls: 'bg-white border-2 border-emerald-400 text-emerald-500 shadow-sm', icon: 'fa-circle-check' },
+            normal:   { cls: 'bg-slate-50 hover:bg-slate-100 text-slate-300', icon: 'fa-circle-half-stroke' },
+            weak:     { cls: 'bg-amber-50 border-2 border-amber-400 text-amber-500 shadow-sm', icon: 'fa-star' },
+            critical: { cls: 'bg-red-50 border-2 border-red-400 text-red-500 shadow-sm', icon: 'fa-star' }
+        };
+        function nextGradeInCycle(grade) {
+            const i = GRADE_CYCLE.indexOf(grade);
+            return GRADE_CYCLE[(i < 0 ? 0 : i + 1) % GRADE_CYCLE.length];
+        }
+        //   버튼 한 칸 — 어디서나 같은 모양으로 쓴다
+        function gradeCycleBtnHtml(grade, onclick) {
+            const g = GRADE_CYCLE_BTN[grade] || GRADE_CYCLE_BTN.normal;
+            const nx = GRADE_INFO[nextGradeInCycle(grade)] || GRADE_INFO.normal;
+            const now = GRADE_INFO[grade] || GRADE_INFO.normal;
+            return `<button onclick="${onclick}" title="지금 ${now.label} — 누르면 ${nx.label}"
+                class="w-7 h-7 rounded-full flex items-center justify-center transition-all shrink-0 ${g.cls}"><i class="fa-solid ${g.icon} text-xs"></i></button>`;
+        }
+        function gradeCycleToast(name, grade) {
+            const gi = GRADE_INFO[grade] || GRADE_INFO.normal;
+            if (grade === 'normal') return `"${name}" 표시를 해제했어요`;
+            return `"${name}" ${gi.emoji} ${gi.label}으로 표시했어요`;
+        }
+
+        function cycleGrammarGrade(id, event) {
+            if (event) event.stopPropagation();
+            const t = getAllGrammarTables().find(x => x.id === id);
+            const title = t ? (t.title || '이 표') : '이 표';
+            const to = nextGradeInCycle(getGrammarGrade(id));
+            const master = (to === 'mastered' || to === 'perfect');
+            setGrammarScore(id, GRADE_CYCLE_SCORE[to], master ? { transUsed: true } : {});
+            if (to === 'normal') delete grammarTransUsed[id];
+            if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
+            showToast(gradeCycleToast(title, to), to === 'normal' ? 'info' : 'success');
+            if (typeof logAction === 'function') logAction('snapshot');
+            renderGrammarTables();
+            saveToStorage();
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        //   관용구 점수를 못박는다 (단어의 setWordScore 와 같은 자리)
+        function setIdiomScore(wordId, idiomTextOrId, value, opts = {}) {
+            const r = getIdiomRec(wordId, idiomTextOrId);
+            r.score = clampScore(value);
+            if (opts.subjectivePassed === true) r.subjectivePassed = true;
+            if (opts.subjectivePassed === false) delete r.subjectivePassed;
+            return r.score;
+        }
+        function cycleIdiomGrade(wordId, ref, event) {
+            if (event) event.stopPropagation();
+            const to = nextGradeInCycle(getIdiomGrade(wordId, ref));
+            const master = (to === 'mastered' || to === 'perfect');
+            setIdiomScore(wordId, ref, GRADE_CYCLE_SCORE[to], { subjectivePassed: master ? true : (to === 'normal' ? false : undefined) });
+            if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
+            showToast(gradeCycleToast(String(ref), to), to === 'normal' ? 'info' : 'success');
+            if (typeof renderWordList === 'function') renderWordList();
+            saveToStorage();
+        }
+
         // [냐냐 요청] 약점 문법표(별표) 수동 토글 — 단어의 toggleWeakWord 와 같은 3단계 순환
         //   해제 → 약점(-4.5) → 치명적 약점(-8) → 해제(0)
         function toggleWeakGrammar(id, event) {
@@ -6433,6 +6499,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function syncGrammarFilterPanelUI() {
             pendingGrammarTopics = [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
+            document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b.dataset.gview === grammarGroupView));
             pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             pendingGrammarSort = grammarSortMode;
