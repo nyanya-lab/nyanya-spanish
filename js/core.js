@@ -4664,8 +4664,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return html;
         }
 
-        // [냐냐 PATCH-0배치] 단어장 성장 — 등록 단어 수(꺾은선) + 등급 비율 4종(누적 막대, 오른쪽 % 축)
-        //   마스터% / 완벽% / 약점% / 치명적약점%  ← 전체 단어 수 대비
+        // [냐냐 PATCH-0배치] 단어장 성장 — 등록 단어 수(꺾은선) + 마스터·약점 비율(막대 둘, 오른쪽 % 축)
+        // [냐냐 요청] 마스터와 약점을 **막대 둘로 가른다** (2026-09-15).
+        //   예전엔 완벽·마스터·약점·치명적을 한 막대에 네 단으로 쌓아서, 마스터가 늘었는지
+        //   약점이 줄었는지를 한눈에 못 봤다. 카드 머리의 범례는 이미 '마스터 비율 / 약점 비율'
+        //   둘이었는데 그래프만 넷이라 서로 어긋나기도 했다.
+        //   완벽은 마스터 쪽에, 치명적은 약점 쪽에 합친다 (냐냐님 결정).
+        //   문법표 성장 그래프가 이미 이 모양이라 둘이 같아진다.
+        //   ⚠️ masteredTotal 은 완벽을 이미 품고 있고(mastered 플래그), weak·critical 은 서로 다른 등급이라
+        //      약점 쪽만 둘을 더한다.
         //   ⚠️ 등급 총계는 오늘부터 쌓이기 시작 → 과거 날짜는 비어 있음 (막대 안 그림)
         function renderRecordLineChart(series) {
             const container = document.getElementById('record-line-chart');
@@ -4680,16 +4687,19 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const pct = (n, total) => (total > 0 && n !== null && n !== undefined) ? (n / total) * 100 : null;
             const withRatio = series.map(d => {
                 const tot = d.registeredTotal;
-                // '마스터'는 완벽을 포함한 값이므로, 순수 마스터(5~7점) = 마스터 - 완벽
                 const perfect = d.perfectTotal;
-                const masteredOnly = (perfect !== null && perfect !== undefined) ? Math.max(0, d.masteredTotal - perfect) : null;
+                const has = (perfect !== null && perfect !== undefined);
+                //   '마스터' 는 완벽을 이미 품고 있다. 약점 쪽만 치명적을 더해준다.
+                const weakAll = has ? ((d.weakTotal || 0) + (d.criticalTotal || 0)) : null;
                 return {
                     ...d,
-                    rPerfect: pct(perfect, tot),
-                    rMastered: pct(masteredOnly, tot),
+                    rMaster: pct(d.masteredTotal, tot),     // 막대 ① 마스터(완벽 포함)
+                    rWeakAll: pct(weakAll, tot),            // 막대 ② 약점(치명적 포함)
+                    rPerfect: pct(perfect, tot),            // 아래 넷은 풍선말에만 쓴다
+                    rMastered: has ? pct(Math.max(0, d.masteredTotal - perfect), tot) : null,
                     rWeak: pct(d.weakTotal, tot),
                     rCritical: pct(d.criticalTotal, tot),
-                    hasGrade: (perfect !== null && perfect !== undefined)
+                    hasGrade: has
                 };
             });
 
@@ -4706,27 +4716,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(9, groupWidth * 0.5);
 
-            // 누적 막대: 아래부터 완벽 → 마스터 → 약점 → 치명적
-            const STACK = [
-                { key: 'rPerfect',  color: '#059669', label: '완벽' },
-                { key: 'rMastered', color: '#6ee7b7', label: '마스터' },
-                { key: 'rWeak',     color: '#fbbf24', label: '약점' },
-                { key: 'rCritical', color: '#ef4444', label: '치명적' }
-            ];
+            //   막대 둘을 나란히 — 왼쪽 마스터(완벽 포함), 오른쪽 약점(치명적 포함)
+            const GAP = 1.2;
+            const half = Math.max(1.5, (barWidth - GAP) / 2);
             let bars = '';
             withRatio.forEach((d, i) => {
                 if (!d.hasGrade) return; // 등급 기록이 없는 과거 날짜는 건너뜀
-                const x = xOf(i) - barWidth / 2;
-                let acc = 0;
-                STACK.forEach(seg => {
-                    const v = d[seg.key] || 0;
-                    if (v <= 0) return;
-                    const h = (v / 100) * chartH;
-                    const y = baseY - acc - h;
-                    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}" fill="${seg.color}" opacity="0.85" rx="1"/>`;
-                    acc += h;
-                });
-                const txt = `${d.fullLabel}: 완벽 ${Math.round(d.rPerfect || 0)}% · 마스터 ${Math.round(d.rMastered || 0)}% · 약점 ${Math.round(d.rWeak || 0)}% · 치명적 ${Math.round(d.rCritical || 0)}%`.replace(/'/g, "\\'");
+                const mH = ((d.rMaster || 0) / 100) * chartH;
+                const wH = ((d.rWeakAll || 0) / 100) * chartH;
+                const mx = xOf(i) - half - GAP / 2;
+                const wx = xOf(i) + GAP / 2;
+                bars += `<rect x="${mx.toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${half.toFixed(1)}" height="${mH.toFixed(1)}" fill="#10b981" opacity="0.85" rx="1"/>`;
+                bars += `<rect x="${wx.toFixed(1)}" y="${(baseY - wH).toFixed(1)}" width="${half.toFixed(1)}" height="${wH.toFixed(1)}" fill="#f43f5e" opacity="0.8" rx="1"/>`;
+                //   풍선말에는 합치기 전 넷을 그대로 남긴다
+                const txt = `${d.fullLabel}: 마스터 ${Math.round(d.rMaster || 0)}% (완벽 ${Math.round(d.rPerfect || 0)}% 포함) · 약점 ${Math.round(d.rWeakAll || 0)}% (치명적 ${Math.round(d.rCritical || 0)}% 포함)`.replace(/'/g, "\\'");
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth + 2, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth + 2, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-line-chart-tooltip', '${txt}')"/>`;
             });
 
@@ -4740,8 +4743,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }).join('');
 
             const anyGrade = withRatio.some(d => d.hasGrade);
-            const legend = STACK.map(seg =>
-                `<span class="inline-flex items-center gap-1"><span style="width:9px;height:9px;border-radius:2px;background:${seg.color};display:inline-block;"></span><span class="text-[10px] font-bold text-slate-600">${seg.label}</span></span>`
+            const legend = [
+                ['#8b5cf6', '등록 단어(개)'],
+                ['#10b981', '마스터 비율(완벽 포함)'],
+                ['#f43f5e', '약점 비율(치명적 포함)']
+            ].map(([c, l]) =>
+                `<span class="inline-flex items-center gap-1"><span style="width:9px;height:9px;border-radius:2px;background:${c};display:inline-block;"></span><span class="text-[10px] font-bold text-slate-600">${l}</span></span>`
             ).join('<span class="mx-1.5"></span>');
 
             container.innerHTML = `
