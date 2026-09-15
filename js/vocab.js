@@ -1561,6 +1561,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             - 뜻이 갈리면 갈리는 대로 다 넣을 것. 예: "빨래" → la colada(빨랫감, 명사), lavar la ropa(빨래하다, 동사)
             - word: 명사면 관사를 붙여서(el/la), 동사는 원형, 그 외는 단어만.
             - meaning: 그 단어의 한국어 뜻을 짧게. 원래 물어본 뜻과 어떻게 다른지 드러나게 쓸 것.
+            - difference: 다른 후보와 무엇이 다른지 한 줄로. 쓰임새·말투·상황 위주로 (예: "일상에서 가장 흔함", "문어체·격식, 말할 때는 거의 안 씀").
+              후보가 하나뿐이면 빈 문자열.
+            - example: 그 단어를 쓴 짧은 스페인어 예문 하나.
+            - exampleMeaning: 그 예문의 한국어 뜻.
             - pos 는 noun/verb/adjective/adverb/preposition/conjunction/pronoun/interrogative/phrase 중 하나.
             - 가장 흔하고 대표적인 것을 맨 앞에 둘 것.`;
             const system = "You are a Spanish-Korean dictionary. Output strictly valid JSON matching the schema. No explanations, no markdown fences.";
@@ -1574,6 +1578,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             properties: {
                                 word: { type: "STRING", description: "스페인어 단어. 명사는 관사 포함(el libro), 동사는 원형" },
                                 meaning: { type: "STRING", description: "짧은 한국어 뜻" },
+                                difference: { type: "STRING", description: "다른 후보와 무엇이 다른지 한 줄" },
+                                example: { type: "STRING", description: "그 단어를 쓴 짧은 스페인어 예문" },
+                                exampleMeaning: { type: "STRING", description: "예문의 한국어 뜻" },
                                 pos: { type: "STRING", description: "noun|verb|adjective|adverb|preposition|conjunction|pronoun|interrogative|phrase" }
                             },
                             required: ["word", "meaning", "pos"]
@@ -1598,8 +1605,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     await triggerAiAutofill();
                     return;
                 }
-                renderAiWordCandidates(list);
-                showToast(`후보를 ${list.length}개 찾았어요. 맞는 걸 골라주세요!`, "info");
+                //   [냐냐 요청] 좁은 드롭다운으로는 비교가 안 된다 — 나란히 펼쳐서 고르게 한다 (2026-09-15)
+                openAiCandidates(list, meaningText);
+                showToast(`비슷한 뜻이 ${list.length}개예요. 비교하고 골라주세요!`, "info");
             } catch (e) {
                 console.warn("한글→스페인어 찾기 실패", e);
                 showToast(describeGeminiError(e), "error");
@@ -1608,7 +1616,49 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
         }
 
-        // 후보 목록은 단어칸 아래의 기존 자동완성 드롭다운 자리를 그대로 쓴다
+        // ============================================================
+        // [냐냐 요청] 후보 비교 창 (2026-09-15).
+        //   예전엔 단어칸 아래 좁은 드롭다운에 '단어 / 짧은 뜻 / 품사' 만 떠서,
+        //   '혹시' 처럼 뜻이 여럿인 말을 찾으면 뭐가 다른지 몰라 하나씩 눌러봐야 했다.
+        //   ⚠️ AI 를 더 부르지 않는다 — 같은 호출의 스키마에 차이·예문 칸만 더해서 받아온다.
+        // ============================================================
+        function openAiCandidates(list, meaningText) {
+            const body = document.getElementById('ai-cand-body');
+            const sub = document.getElementById('ai-cand-sub');
+            if (!body) { renderAiWordCandidates(list); return; }
+            if (sub) sub.innerText = `"${meaningText}" 로 찾은 ${list.length}개예요. 쓰임을 보고 고르면 그 단어로 이어서 채워드려요.`;
+            body.innerHTML = list.map(c => {
+                const word = String(c.word || '').trim();
+                const safe = word.replace(/'/g, "\\'");
+                const pos = (typeof POS_LABELS !== 'undefined' && POS_LABELS[c.pos]) ? POS_LABELS[c.pos] : (c.pos || '');
+                const chip = (typeof posChipColor === 'function') ? posChipColor({ pos: c.pos }) : 'bg-slate-100 text-slate-600';
+                //   이미 단어장에 있으면 알려준다 (또 등록하지 않게)
+                const bare = (x) => String(x || '').toLowerCase().replace(/^(el|la|los|las|un|una)\s+/, '').trim();
+                const have = (vocabulary || []).find(v => bare(v.word) === bare(word));
+                return `
+                <button type="button" onclick="pickAiWordCandidate('${safe}')"
+                    class="text-left rounded-2xl border-2 border-slate-200 hover:border-violet-400 hover:bg-violet-50/40 p-4 space-y-2 transition-all active:scale-[0.99]">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base font-extrabold text-slate-900 min-w-0 break-words">${escapeHtml(word)}</span>
+                        <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${chip}">${escapeHtml(pos)}</span>
+                        ${have ? `<span class="ml-auto shrink-0 px-2 py-0.5 text-[10px] font-black rounded-lg bg-emerald-100 text-emerald-700">이미 있음 ${formatScore(have)}</span>` : ''}
+                    </div>
+                    <p class="text-sm font-bold text-slate-700">${escapeHtml(c.meaning || '')}</p>
+                    ${c.difference ? `<p class="text-[11px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-2 py-1.5">${escapeHtml(c.difference)}</p>` : ''}
+                    ${c.example ? `<div class="bg-teal-50/40 border-l-2 border-teal-400 rounded-r-lg px-2 py-1.5">
+                        <p class="text-[11px] font-bold text-slate-700">${escapeHtml(c.example)}</p>
+                        ${c.exampleMeaning ? `<p class="text-[10px] text-slate-400 italic">${escapeHtml(c.exampleMeaning)}</p>` : ''}
+                    </div>` : ''}
+                </button>`;
+            }).join('');
+            document.getElementById('ai-cand-modal').classList.remove('hidden');
+        }
+        function closeAiCandidates() {
+            const m = document.getElementById('ai-cand-modal');
+            if (m) m.classList.add('hidden');
+        }
+
+        // 후보 목록은 단어칸 아래의 기존 자동완성 드롭다운 자리를 그대로 쓴다 (비교 창을 못 쓸 때의 그물)
         function renderAiWordCandidates(list) {
             const box = document.getElementById('word-suggestions');
             if (!box) return;
@@ -1627,6 +1677,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function pickAiWordCandidate(word) {
+            closeAiCandidates();
             document.getElementById('word-suggestions').classList.add('hidden');
             document.getElementById('input-word').value = word;
             triggerAiAutofill();
