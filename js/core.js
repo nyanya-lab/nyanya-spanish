@@ -4652,6 +4652,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 PATCH] 오른쪽 축 라벨 (막대 그래프 기준선). 왼쪽=꺾은선 축, 오른쪽=막대 축
+        // [냐냐 요청] 비율 축을 데이터에 맞춰 줄인다 — 20 단위로 올림 (2026-09-15).
+        //   늘 0~100 으로 잡아두니 마스터 8% · 약점 1% 짜리 막대가 바닥에 붙어 안 보였다.
+        //   20 단위라 20·40·60 을 넘나들 때만 눈금이 바뀐다 — 매번 들썩이지 않는다.
+        //   바닥은 0 그대로다 (비율이라 0 이 뜻이 있다).
+        function ratioAxisMax(values) {
+            const top = Math.max(0, ...values.filter(v => typeof v === 'number' && isFinite(v)));
+            return Math.min(100, Math.max(20, Math.ceil(top / 20) * 20));
+        }
+
         function recordChartRightAxis(maxVal, padding, chartH, width, suffix = '', color = '#94a3b8') {
             const steps = 4;
             let html = '';
@@ -4716,14 +4725,17 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const groupWidth = series.length > 0 ? chartW / series.length : chartW;
             const barWidth = Math.min(9, groupWidth * 0.5);
 
+            //   비율 축은 데이터에 맞춰 20 단위로 (늘 100 이면 막대가 바닥에 붙는다)
+            const pctMax = ratioAxisMax(withRatio.filter(d => d.hasGrade)
+                .reduce((a, d) => a.concat([d.rMaster || 0, d.rWeakAll || 0]), []));
             //   막대 둘을 나란히 — 왼쪽 마스터(완벽 포함), 오른쪽 약점(치명적 포함)
             const GAP = 1.2;
             const half = Math.max(1.5, (barWidth - GAP) / 2);
             let bars = '';
             withRatio.forEach((d, i) => {
                 if (!d.hasGrade) return; // 등급 기록이 없는 과거 날짜는 건너뜀
-                const mH = ((d.rMaster || 0) / 100) * chartH;
-                const wH = ((d.rWeakAll || 0) / 100) * chartH;
+                const mH = ((d.rMaster || 0) / pctMax) * chartH;
+                const wH = ((d.rWeakAll || 0) / pctMax) * chartH;
                 const mx = xOf(i) - half - GAP / 2;
                 const wx = xOf(i) + GAP / 2;
                 bars += `<rect x="${mx.toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${half.toFixed(1)}" height="${mH.toFixed(1)}" fill="#10b981" opacity="0.85" rx="1"/>`;
@@ -4755,7 +4767,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 ${recordChartTooltipDiv('record-line-chart-tooltip')}
                 <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '', minVal)}
-                    ${recordChartRightAxis(100, padding, chartH, width, '%', '#10b981')}
+                    ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4998,10 +5010,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const groupWidth = chartW / series.length;
             const barWidth = Math.min(6, groupWidth * 0.4);
 
+            //   단어장 성장과 같은 잣대로 비율 축을 줄인다 (20 단위)
+            const pctMax = ratioAxisMax(series.reduce((a, d, i) =>
+                a.concat([masteredRatioOf(i), hasWeakData ? weakRatioOf(i) : 0]), []));
             let bars = '';
             series.forEach((d, i) => {
-                const mBarH = (masteredRatioOf(i) / 100) * chartH;
-                const wBarH = (weakRatioOf(i) / 100) * chartH;
+                const mBarH = (masteredRatioOf(i) / pctMax) * chartH;
+                const wBarH = (weakRatioOf(i) / pctMax) * chartH;
                 if (hasWeakData) {
                     // 마스터·약점을 나란히 (단어장 성장과 같은 구성)
                     const half = barWidth / 2;
@@ -5021,7 +5036,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 ${recordChartTooltipDiv('record-grammar-chart-tooltip')}
                 <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
                     ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '', gMin)}
-                    ${recordChartRightAxis(100, padding, chartH, width, '%', '#14b8a6')}
+                    ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
                     <path d="${linePath}" fill="none" stroke="#5896cb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
