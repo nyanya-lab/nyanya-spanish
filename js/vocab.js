@@ -1130,6 +1130,30 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return result;
         }
 
+        //   [냐냐 요청] 관용구에도 제 등록일을 박는다 (2026-09-15).
+        //   여태 관용구엔 등록 시각이 없어서 사전의 '등록순' 이 주인 단어 등록일로 갈음됐다.
+        //   이제 새로 적히는 관용구는 그 순간을 적어두고, 원래 있던 줄은 그대로 둔다
+        //   (없는 날짜를 지어내면 옛 관용구가 전부 오늘 등록한 것처럼 보인다).
+        function stampIdiomDates(rows, prevWord) {
+            const norm = (t) => String(t || '').trim().toLowerCase();
+            const before = new Map();
+            (prevWord && Array.isArray(prevWord.idioms) ? prevWord.idioms : []).forEach(it => {
+                if (it && it.idiom) before.set(norm(it.idiom), it);
+            });
+            const now = Date.now();
+            (rows || []).forEach(r => {
+                const old = before.get(norm(r.idiom));
+                if (old) {
+                    if (old.addedAt) r.addedAt = old.addedAt;   // 있던 줄은 그대로
+                    if (old.dele && !r.dele) r.dele = old.dele;  // DELE 뱃지도 지키고
+                    if (old.iid && !r.iid) r.iid = old.iid;
+                } else {
+                    r.addedAt = now;                             // 이번에 새로 적은 줄
+                }
+            });
+            return rows;
+        }
+
         // ============================================================
         // [냐냐 PATCH-5배치] 유의어 / 반의어 블록 (관용구와 동일한 +/- 방식)
         //   유의어 = 스카이(하늘색) · 반의어 = 로즈(빨강)
@@ -2620,12 +2644,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   등록일(createdAt)은 보존, 수정일(updatedAt)만 갱신 (정렬엔 안 쓰지만 데이터로 남김)
                     wordObj.createdAt = prev.createdAt || prev.registeredAt || null;
                     wordObj.updatedAt = Date.now();
+                    stampIdiomDates(wordObj.idioms, prev);   // 새로 더한 관용구에만 오늘 날짜
                     vocabulary[index] = wordObj; // 제자리 교체
                     // 끝낼 때 한 번만 알린다 — 여기서도 띄우면 같은 말이 두 줄로 뜬다
                 }
                 logAction('snapshot');
             } else {
                 wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
+                stampIdiomDates(wordObj.idioms, null);
                 vocabulary.unshift(wordObj);
                 //   [냐냐 요청] 등록하는 그 순간 DELE 레벨을 물어서 채운다 (2026-09-15).
                 //   기다리지 않는다 — 오는 대로 단어에 적히고 카드에 뱃지가 끼워진다.
@@ -3239,13 +3265,25 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         // [냐냐 PATCH] 현재 필터/정렬 한 줄 요약
+        //   [냐냐 요청] 필터가 걸려 있으면 버튼 색을 바꾼다 — 단어장·관용구 사전이 같이 쓴다
+        function syncFilterBtnColor() {
+            const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered'
+                || activeFilterWeak !== 'all' || activeFilterDele.length > 0 || activeFilterSort !== 'weak-score';
+            const ON = "w-10 h-10 bg-violet-100 hover:bg-violet-200 rounded-xl border border-violet-400 text-sm text-violet-700 transition-all flex items-center justify-center";
+            const OFF = "w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center";
+            const fBtn = document.getElementById('filter-panel-btn');
+            if (fBtn) fBtn.className = hasActiveFilter ? ON : OFF;
+        }
+
         function renderFilterSummary() {
             const box = document.getElementById('filter-summary');
             if (!box) return;
             const chips = [];
             // 품사
+            if (typeof vocabMode !== 'undefined' && vocabMode === 'idiom') chips.push('📘 관용구 사전');
             if (activeFilterPos.length > 0 && activeFilterPos.length < ALL_POS_LIST.length) {
-                chips.push(activeFilterPos.map(p => POS_LABELS[p] || p).join('·'));
+                //   관용구 사전에서는 주인 단어의 품사로 거른다
+                chips.push((vocabMode === 'idiom' ? '원단어 ' : '') + activeFilterPos.map(p => POS_LABELS[p] || p).join('·'));
             }
             // 마스터 상태 (기본 미마스터가 아닐 때만 표시... 은 아니고 항상 상태 보여주되 '전체'는 생략)
             if (activeFilterDele.length) chips.push('DELE ' + activeFilterDele.map(x => x === 'none' ? '미정' : x).join('·'));
@@ -4660,10 +4698,32 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     || stripAccents(r.meaning.toLowerCase()).includes(q)
                     || stripAccents(String(r.owner.word || '').toLowerCase()).includes(q));
             }
+            // [냐냐 지적] 필터가 하나도 안 걸리고 있었다 (2026-09-15). 검색·정렬만 썼다.
+            //   관용구에도 점수·등급·DELE 가 있으니 단어장과 같은 필터를 그대로 건다.
+            //   ⚠️ 품사는 표현 자체엔 없다 — 주인 단어의 품사로 거른다 (카드에 그게 보이므로 결이 맞다).
+            //   ⚠️ 검색 중에는 단어장과 마찬가지로 필터를 무시한다 (전체에서 찾는다).
+            if (!isSearching) {
+                const posF = activeFilterPos, deleF = activeFilterDele;
+                const mF = activeFilterMastery, wF = activeFilterWeak;
+                rows = rows.filter(r => {
+                    const ref = r.it.iid || r.text;
+                    const g = getIdiomGrade(r.owner.id, ref);
+                    const isMaster = (g === 'mastered' || g === 'perfect');
+                    const isWeak = (g === 'weak' || g === 'critical');
+                    if (posF.length && !posF.includes(r.owner.pos)) return false;
+                    if (deleF.length && !deleF.includes((typeof normDeleLevel === 'function' ? normDeleLevel(r.it.dele) : r.it.dele) || 'none')) return false;
+                    if (mF === 'mastered' && !isMaster) return false;
+                    if (mF === 'not-mastered' && isMaster) return false;
+                    if (wF === 'weak' && !isWeak) return false;
+                    if (wF === 'not-weak' && isWeak) return false;
+                    return true;
+                });
+            }
             //   [냐냐 요청] 단어장과 같은 정렬 기준을 따른다 (2026-09-15).
             //   관용구엔 등록일이 없어서 '등록순' 이 안 먹었다 — 주인 단어의 등록일로 대신한다.
             const sc = (r) => getIdiomScore(r.owner.id, r.it.iid || r.text);
-            const reg = (r) => Number(r.owner.createdAt) || 0;
+            //   관용구 제 등록일이 있으면 그것으로, 없는 옛 줄은 주인 단어 등록일로 갈음한다
+            const reg = (r) => Number(r.it.addedAt) || Number(r.owner.createdAt) || 0;
             const mode = isSearching ? 'alpha-asc' : activeFilterSort;
             const byText = (a, b) => a.text.localeCompare(b.text, 'es');
             if (mode === 'recent') rows.sort((a, b) => (reg(b) - reg(a)) || byText(a, b));
@@ -4696,6 +4756,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 pageItems = rows.slice(start, start + WORDS_PER_PAGE);
             }
             renderPagination(isSearching ? 0 : totalPages, rows.length);
+            //   요약 줄과 필터 버튼 색도 같이 갱신한다 (단어장과 같은 자리를 쓴다)
+            renderFilterSummary();
+            syncFilterBtnColor();
 
             grid.innerHTML = pageItems.map(r => {
                 const idRef = r.it.iid || r.text;
@@ -4795,15 +4858,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // [냐냐 PATCH] 필터/정렬 요약 한 줄 + 활성 표시점
             renderFilterSummary();
-            const sortModeForBadge = activeFilterSort;
-            const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered' || activeFilterWeak !== 'all' || activeFilterDele.length > 0 || sortModeForBadge !== 'weak-score';
-            // [냐냐 PATCH] 점 배지 대신 버튼 자체의 배경색을 바꿔서 표시
-            const ON = "w-10 h-10 bg-violet-100 hover:bg-violet-200 rounded-xl border border-violet-400 text-sm text-violet-700 transition-all flex items-center justify-center";
-            const OFF = "w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center";
-            const fBtn = document.getElementById('filter-panel-btn');
-            if (fBtn) fBtn.className = hasActiveFilter ? ON : OFF;
+            syncFilterBtnColor();
+            //   ⚠️ ON/OFF 는 syncFilterBtnColor 안으로 옮겼으니 여기서 다시 적어준다
             const dBtn = document.getElementById('display-panel-btn');
-            if (dBtn) dBtn.className = isDisplayDefault() ? OFF : ON;
+            if (dBtn) dBtn.className = isDisplayDefault()
+                ? "w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center"
+                : "w-10 h-10 bg-violet-100 hover:bg-violet-200 rounded-xl border border-violet-400 text-sm text-violet-700 transition-all flex items-center justify-center";
 
             // [냐냐 PATCH] 단어 목록은 항상 ABC순(정관사 제외) — 검색 결과도 정렬
             const sortMode = isSearching ? 'alpha-asc' : activeFilterSort;
