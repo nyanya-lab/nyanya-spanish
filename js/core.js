@@ -508,7 +508,47 @@ let vocabulary = [];
         // [냐냐 요청] 설정 드롭다운 안의 '동기화' 행을 갱신.
         //   ⚠️ 예전엔 className을 통째로 덮어써서 메뉴에 넣으면 레이아웃이 깨졌음.
         //   이제 내용(innerHTML)만 바꾸고 스타일은 HTML에 맡긴다.
+        // ============================================================
+        // [냐냐 요청] 동기화가 꺼져 있으면 제목 밑에 한 줄로 알린다 (2026-09-15).
+        //   설정 메뉴 안의 작은 배지는 열어봐야 보여서, 꺼진 줄 모르고 며칠을 쓰게 된다.
+        //   그동안 그 기기에서 한 공부는 서버로 안 가고, 다른 기기에서 열면 감쪽같이 없다.
+        //   ⚠️ 늘 펴진 채로 뜬다. 접는 건 이번 화면에서만이고 다음에 열면 다시 펴진다 —
+        //      한 번 접었다고 영영 숨기면 알리는 뜻이 없어진다 (냐냐님 결정).
+        // ============================================================
+        let _syncWarnFolded = false;
+
+        function toggleSyncWarningBar() {
+            _syncWarnFolded = !_syncWarnFolded;
+            renderSyncWarningBar();
+        }
+
+        let _syncWarnState = null;
+        function renderSyncWarningBar() {
+            const bar = document.getElementById('sync-warning-bar');
+            if (!bar) return;
+            const MSG = {
+                'no-password': '동기화 비밀번호가 없어요 — 이 기기에서 한 공부가 다른 기기로 넘어가지 않습니다.',
+                'no-url': '저장소 주소가 없어요 — 동기화가 꺼져 있어서 이 기기에서 한 공부가 다른 기기로 넘어가지 않습니다.',
+                'sync-error': '서버에 못 닿았어요 — 지금 한 공부가 저장되지 않고 있습니다. 주소와 비밀번호를 확인해 주세요.',
+                'claude-only': 'Claude 안에서만 동기화되고 있어요 — 폰이나 다른 기기에서는 안 보입니다.'
+            };
+            const msg = MSG[_syncWarnState];
+            if (!msg) { bar.classList.add('hidden'); return; }
+            bar.classList.remove('hidden');
+            const txt = document.getElementById('sync-warning-text');
+            const fix = document.getElementById('sync-warning-fix');
+            const chev = document.getElementById('sync-warning-chevron');
+            const btn = document.getElementById('sync-warning-toggle');
+            if (txt) txt.innerText = _syncWarnFolded ? '동기화 꺼짐' : msg;
+            if (fix) fix.classList.toggle('hidden', _syncWarnFolded);
+            if (chev) chev.className = `fa-solid fa-chevron-${_syncWarnFolded ? 'down' : 'up'} text-[10px]`;
+            if (btn) btn.title = _syncWarnFolded ? '펴기' : '접기';
+        }
+
         function updateSyncBadge(state) {
+            //   윗줄 경고도 같이 갱신한다 (연결됐으면 사라진다)
+            _syncWarnState = (state === true) ? null : state;
+            renderSyncWarningBar();
             const badge = document.getElementById('sync-status-badge');
             if (!badge) return;
             let dot = 'bg-slate-400', text = '이 기기에만 저장됨';
