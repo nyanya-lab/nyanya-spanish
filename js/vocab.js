@@ -2916,7 +2916,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let activeFilterSort = 'weak-score';
         //   [냐냐 요청] DELE 레벨로도 거른다. 품사와 같은 규칙 — 패널에서는 전부 켜진 채로 시작하고,
         //   전부 켜져 있으면 '전체' 로 쳐서 안 거른다 ([] 로 저장). 'none' 은 아직 레벨이 없는 것.
-        const ALL_DELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'none'];
+        //   [냐냐 요청] '미정' 은 뺐다 (2026-09-15). 레벨 없는 것은 어떤 필터에서도 안 거른다 —
+        //   거를 대상이 아니라 채우러 가야 하는 것이라, 패널에 안내를 대신 띄운다.
+        const ALL_DELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
         let activeFilterDele = [];
         let pendingFilterDele = [...ALL_DELE_LIST];
         // 패널에서 선택 중인 임시 상태
@@ -3218,6 +3220,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             pendingFilterDele = activeFilterDele.length === 0 ? [...ALL_DELE_LIST] : [...activeFilterDele];
             document.querySelectorAll('.filter-dele-btn').forEach(b => styleFilterPill(b, pendingFilterDele.includes(b.dataset.deleLv)));
             updateDeleAllBtnLabel();
+            if (typeof renderDeleMissingNote === 'function') renderDeleMissingNote('filter-dele-note', 'vocab');
             pendingFilterMastery = activeFilterMastery;
             pendingFilterWeak = activeFilterWeak;
             pendingFilterSort = activeFilterSort;
@@ -3286,7 +3289,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 chips.push((vocabMode === 'idiom' ? '원단어 ' : '') + activeFilterPos.map(p => POS_LABELS[p] || p).join('·'));
             }
             // 마스터 상태 (기본 미마스터가 아닐 때만 표시... 은 아니고 항상 상태 보여주되 '전체'는 생략)
-            if (activeFilterDele.length) chips.push('DELE ' + activeFilterDele.map(x => x === 'none' ? '미정' : x).join('·'));
+            if (activeFilterDele.length) chips.push('DELE ' + activeFilterDele.join('·'));
             if (activeFilterMastery !== 'all') chips.push(MASTERY_LABELS[activeFilterMastery]);
             // 약점 (전체가 아니면)
             if (activeFilterWeak !== 'all') chips.push(WEAK_LABELS[activeFilterWeak]);
@@ -4547,7 +4550,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //      철자로 이미 한 번 봐줬으면(used.typo) 그때는 그대로 오답이다.
                     if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                     const p = writePrefixHint(userAnswer, w.word);
-                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?`, userAnswer);
+                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
@@ -4561,7 +4564,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   '다른 낱말이에요' 만 듣고 뭘 떠올려야 할지 알 수가 없었다.
                     const p = writePrefixHint(userAnswer, w.word);
                     const got = awardSynonymScore(userAnswer, w);
-                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ` <b>${escapeHtml(p)}</b> 로 시작해요.` : ''} 다시 한 번 써볼까요?${synonymAwardNote(got)}`, userAnswer);
+                    writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?${synonymAwardNote(got)}`, userAnswer);
                     return;
                 }
             }
@@ -4593,7 +4596,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint) + synonymAwardNote(got), userAnswer);
                     return;
                 }
-                if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`, userAnswer); return; }
+                if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`, userAnswer); return; }
                 writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
             }
@@ -4614,7 +4617,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (verdict === 'synonym' && !used.synonym) {
                 const got = awardSynonymScore(userAnswer, w);
                 writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
-                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`) + synonymAwardNote(got), userAnswer);
+                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`) + synonymAwardNote(got), userAnswer);
                 return;
             }
             if (verdict === 'typo' && !used.typo) {
@@ -4622,7 +4625,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
                     ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
                 if (dist <= 3) {
-                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — <b>${escapeHtml(writePrefixHint(userAnswer, w.word))}</b>로 시작해요.`, userAnswer);
+                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`, userAnswer);
                     return;
                 }
             }
@@ -4728,7 +4731,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     const isMaster = (g === 'mastered' || g === 'perfect');
                     const isWeak = (g === 'weak' || g === 'critical');
                     if (posF.length && !posF.includes(r.owner.pos)) return false;
-                    if (deleF.length && !deleF.includes((typeof normDeleLevel === 'function' ? normDeleLevel(r.it.dele) : r.it.dele) || 'none')) return false;
+                    const ilv = (typeof normDeleLevel === 'function' ? normDeleLevel(r.it.dele) : r.it.dele) || '';
+                    if (deleF.length && ilv && !deleF.includes(ilv)) return false;   // 레벨 없는 건 안 거른다
                     if (mF === 'mastered' && !isMaster) return false;
                     if (mF === 'not-mastered' && isMaster) return false;
                     if (wF === 'weak' && !isWeak) return false;
@@ -4859,7 +4863,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const matchesPos = posFilterActive.length === 0 || posFilterActive.includes(w.pos);
                 //   [냐냐 요청] DELE 레벨 — 아무것도 안 고르면 전체, 'none' 은 아직 레벨이 없는 것
                 const matchesDele = deleFilter.length === 0
-                    || deleFilter.includes(((typeof normDeleLevel === 'function') ? normDeleLevel(w.deleLevel) : w.deleLevel) || 'none');
+                    || (() => {
+                        const lv = ((typeof normDeleLevel === 'function') ? normDeleLevel(w.deleLevel) : w.deleLevel) || '';
+                        return !lv || deleFilter.includes(lv);   // 레벨이 아직 없는 건 안 거른다
+                    })();
                 // [냐냐 PATCH] 마스터 상태 (전체/마스터만/미마스터)
                 const matchesMastery = masteryFilter === 'all'
                     || (masteryFilter === 'mastered' && w.mastered)

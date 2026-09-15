@@ -4029,6 +4029,38 @@ let vocabulary = [];
         //   ⚠️ 문법 노트도 같이 본다. DELE 호출은 '맞게 써본 노트' 만 분류해서, 안 써본 노트는
         //      레벨이 비어 있다. 남은 것만 한 번 더 물어본다 (노트는 많아야 서른 몇 개다).
         // ============================================================
+        //   [냐냐 요청] 아직 레벨이 없는 것 세기 + 필터 패널의 안내 (2026-09-15).
+        //   '미정' 을 골라 거르는 대신, 몇 개 남았는지 알려주고 채우러 갈 곳을 짚어준다.
+        function countMissingDeleLevels() {
+            const out = { words: 0, idioms: 0, notes: 0 };
+            (vocabulary || []).forEach(w => {
+                if (!w || !w.word) return;
+                if (!normDeleLevel(w.deleLevel)) out.words++;
+                (typeof wordIdiomList === 'function' ? wordIdiomList(w) : []).forEach(it => {
+                    if (it && it.idiom && !normDeleLevel(it.dele)) out.idioms++;
+                });
+            });
+            (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).forEach(t => {
+                if (t && t.id && t.title && !normDeleLevel(grammarDeleLevels[t.id])) out.notes++;
+            });
+            out.total = out.words + out.idioms + out.notes;
+            return out;
+        }
+        function renderDeleMissingNote(boxId, kind) {
+            const box = document.getElementById(boxId);
+            if (!box) return;
+            const c = countMissingDeleLevels();
+            const bits = (kind === 'grammar')
+                ? (c.notes ? [`문법 ${c.notes}개`] : [])
+                : [c.words ? `단어 ${c.words}개` : '', c.idioms ? `관용구 ${c.idioms}개` : ''].filter(Boolean);
+            if (!bits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="mt-1.5 flex items-center gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-2">
+                <span class="leading-relaxed">아직 레벨이 없는 게 있어요 — ${bits.join(' · ')}. 어느 레벨을 골라도 같이 보여요.</span>
+                <button type="button" onclick="changeTab('records')" class="ml-auto shrink-0 px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black transition-colors">학습기록에서 채우기</button>
+            </div>`;
+        }
+
         async function fillMissingDeleLevels() {
             const out = { words: 0, notes: 0, idioms: 0 };
             if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return out;
@@ -5815,7 +5847,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
             // [냐냐 PATCH] 마스터 상태 필터
             if (grammarFilterDele.length) {
-                tables = tables.filter(t => grammarFilterDele.includes(normDeleLevel(grammarDeleLevels[t.id]) || 'none'));
+                tables = tables.filter(t => {
+                    const lv = normDeleLevel(grammarDeleLevels[t.id]) || '';
+                    return !lv || grammarFilterDele.includes(lv);   // 레벨 없는 건 안 거른다
+                });
             }
             if (grammarFilterMastery === 'mastered') tables = tables.filter(t => masteredGrammar[t.id]);
             else if (grammarFilterMastery === 'not-mastered') tables = tables.filter(t => !masteredGrammar[t.id]);
@@ -6054,6 +6089,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         const RE_QA_MARKER = /^\s*[QA]\s*[.:)]\s*/i;
 
         // ============================================================
+        //   [냐냐 지적] 앞글자 힌트가 눈에 안 띈다 (2026-09-15).
+        //   안내 상자가 통째로 진한 글씨라 <b> 로 굵게 해봐야 둘레와 구별이 안 됐다.
+        //   글자 자체를 칩으로 띄우고 자간을 벌려서, 한눈에 '이게 힌트' 로 보이게 한다.
+        //   퀴즈·쓰기 복습이 같이 쓴다.
+        function hintStartHtml(prefix) {
+            const p = String(prefix || '').trim();
+            if (!p) return '';
+            return `<span class="inline-flex items-center align-middle mx-0.5 px-2 py-0.5 rounded-lg bg-violet-600 text-white text-sm font-black tracking-[0.12em] shadow-sm">${escapeHtml(p)}</span><span class="ml-0.5">로 시작해요.</span>`;
+        }
+
         // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습·단어 빈칸이 같이 쓴다.
         //   · 철자만 틀렸으면 → 틀린 자리만 빨갛게 (내가 쓴 답 / 정답 양쪽)
         //   · 아예 다른 진짜 단어를 썼으면 → 그 단어의 뜻을 알려준다
@@ -6401,7 +6446,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         let grammarFilterTopics = [];       // [] = 전체, 아니면 아이콘 문자열(또는 '__other__') 목록
         let grammarFilterMastery = 'all';   // all | mastered | not-mastered
         //   [냐냐 요청] DELE 레벨로도 거른다 ([] = 전체, 'none' = 아직 레벨이 없는 것)
-        const ALL_GDELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'none'];
+        //   [냐냐 요청] '미정' 은 뺐다 (2026-09-15) — 단어장과 같은 규칙
+        const ALL_GDELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
         let grammarFilterDele = [];
         let pendingGrammarDele = [...ALL_GDELE_LIST];
         //   [냐냐 요청] 품사처럼 전체 선택/해제 (2026-09-15)
@@ -6536,6 +6582,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b.dataset.gview === grammarGroupView));
             pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
+            renderDeleMissingNote('grammar-dele-note', 'grammar');
             pendingGrammarSort = grammarSortMode;
             renderGrammarTopicFilterButtons();
             updateGrammarTopicAllLabel();
@@ -6589,7 +6636,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (!box) return;
             const chips = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
-            if (grammarFilterDele.length) chips.push('DELE ' + grammarFilterDele.map(x => x === 'none' ? '미정' : x).join('·'));
+            if (grammarFilterDele.length) chips.push('DELE ' + grammarFilterDele.join('·'));
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
             else if (grammarFilterMastery === 'weak') chips.push('약점만');

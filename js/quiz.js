@@ -1341,7 +1341,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             //   AI 를 안 불러도 오타인 게 분명하다 — 쓰기 복습과 같은 잣대로 그 자리에서 되묻는다.
             //   두 글자 이상 다르면 다른 진짜 낱말(유의어)일 수 있어서 그대로 AI 가 본다.
             if (!used().typo && typeof writeLooksLikeTypo === 'function' && writeLooksLikeTypo(userAnswer, correct)) {
-                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
+                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? ${hintStartHtml(prefixHint())}`);
                 return;
             }
 
@@ -1361,7 +1361,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     askRetry('synonym', analysis.hint + synonymAwardNote(awardSynonymScore(userAnswer, q.word)));
                     return;
                 }
-                if (analysis.isTypo && !used().typo) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`); return; }
+                if (analysis.isTypo && !used().typo) { askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? ${hintStartHtml(prefixHint())}`); return; }
                 // [냐냐 요청] 틀렸으면 왜 틀렸는지까지 (철자면 틀린 자리 표시, 다른 단어면 그 뜻)
                 const hint = analysis.isCorrect ? analysis.hint : buildWrongAnswerHtml(userAnswer, correct);
                 gradeNow(analysis.isCorrect, hint, analysis.unknownWord);
@@ -1400,7 +1400,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     gradeNow(false, wrongHtml());
                     return;
                 }
-                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? <b>${prefixHint()}</b>로 시작해요.`);
+                askRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요? ${hintStartHtml(prefixHint())}`);
                 return;
             }
 
