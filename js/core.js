@@ -1979,7 +1979,7 @@ let vocabulary = [];
         //   '정확히 그날'이 아니라 '그날이 지났으면' 계속 대상 → 밀린 복습 유지
         //   [냐냐 지적] 예전엔 마스터 단어를 통째로 빼고 있었다. 냐냐가 정한 규칙이 아니라
         //   이 함수를 처음 만든 날부터 그냥 박혀 있던 조건이었다. 그 바람에 마스터 단어는
-        //   틀려서 곡선 안으로 들어와도 복습에 영영 안 나왔다 — 점수가 높으면(4.5 이상)
+        //   틀려서 곡선 안으로 들어와도 복습에 영영 안 나왔다 — 점수가 높으면(5 이상)
         //   마스터가 안 풀리기 때문이다. 실제로 aprender 는 40일 동안 안 나왔다.
         //   이제는 안 뺀다. 한 번도 안 틀린 단어는 lastWrongDate 가 없어서 어차피 안 나온다.
         // ============================================================
@@ -2926,16 +2926,16 @@ let vocabulary = [];
         // [냐냐 PATCH-0배치] 점수 통합 — 약점점수/마스터점수 두 축을 하나(score)로
         //   score: -10 ~ +10 (0.1 단위)
         //     +8 이상    = 완벽 (찐초록)
-        //     +4.5 ~ +7.9 = 마스터 (연초록)  ※ 주관식 정답 경험(subjectivePassed) 필요
+        //     +5 ~ +7.9 = 마스터 (연초록)  ※ 주관식 정답 경험(subjectivePassed) 필요
         //     -4.4 ~ +4.4 = 일반 (회색)
-        //     -4.5 ~ -7.9 = 약점 (노랑)
+        //     -5 ~ -7.9 = 약점 (노랑)
         //     -8 이하  = 치명적 약점 (빨강)
         // ============================================================
         const SCORE_MIN = -10;
         const SCORE_MAX = 10;
-        const SCORE_MASTER = 4.5;  // [냐냐 요청] 마스터 기준선 (5 → 4.5)
+        const SCORE_MASTER = 5;    // [냐냐 요청] 마스터 기준선 (4.5 → 5 로 되돌림, 2026-09-15)
         const SCORE_PERFECT = 8;   // 완벽 기준선
-        const SCORE_WEAK = -4.5;   // [냐냐 요청] 약점 기준선 (-3 → -4.5)
+        const SCORE_WEAK = -5;     // [냐냐 요청] 약점 기준선 (-4.5 → -5 로 되돌림, 2026-09-15)
         const SCORE_CRITICAL = -8; // 치명적 약점 기준선
 
         function clampScore(n) {
@@ -3370,9 +3370,9 @@ let vocabulary = [];
             //   "그래서 몇 점이 마스터인데?" 를 알 수가 없다).
             const buildGradeRows = (weakDesc) => [
                 ['+8 ~ +10', '완벽', 'bg-emerald-600 text-white', '찐초록 — 확실히 내 것'],
-                ['+4.5 ~ +7.9', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
+                ['+5 ~ +7.9', '마스터', 'bg-emerald-100 text-emerald-700', '연초록 — 마스터 달성'],
                 ['-4.4 ~ +4.4', '일반', 'bg-slate-100 text-slate-600', '아직 연습 중'],
-                ['-4.5 ~ -7.9', '약점', 'bg-amber-100 text-amber-700', weakDesc],
+                ['-5 ~ -7.9', '약점', 'bg-amber-100 text-amber-700', weakDesc],
                 ['-10 ~ -8', '치명적 약점', 'bg-red-100 text-red-600', '집중 공략 대상']
             ].map(([range, name, cls, desc]) => `
                 <tr class="border-b border-slate-100 last:border-0">
@@ -3428,10 +3428,10 @@ let vocabulary = [];
                 </tr>`).join('')).join('');
 
             const manualRows = [
-                ['⭐ 별표 1번 클릭', '−4.5점 (약점)'],
+                ['⭐ 별표 1번 클릭', '−5점 (약점)'],
                 ['⭐ 별표 2번 클릭', '−8점 (치명적 약점)'],
                 ['⭐ 별표 3번 클릭', '0점 (해제)'],
-                ['✅ 마스터 1번 클릭', '+4.5점 (마스터)'],
+                ['✅ 마스터 1번 클릭', '+5점 (마스터)'],
                 ['✅ 마스터 2번 클릭', '+8점 (완벽)'],
                 ['✅ 마스터 3번 클릭', '0점 (해제)']
             ].map(([act, res]) => `
@@ -3497,7 +3497,7 @@ let vocabulary = [];
                 <!-- [냐냐 요청] 등급 표를 문법 탭에도 넣는다 — 몇 점이 마스터인지 여기서 바로 보이게 -->
                 <table class="w-full text-xs bg-white rounded-xl overflow-hidden"><tbody>${gradeRowsGrammar}</tbody></table>
                 <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
-                    <b>약점(−4.5 이하)</b>이 되면 문법 탭의 약점 필터에 걸리고,
+                    <b>약점(−5 이하)</b>이 되면 문법 탭의 약점 필터에 걸리고,
                     AI 번역 미션에서 <b>약점 문법만 골라 출제</b>할 수 있어요.
                 </p>
                 <table class="w-full text-xs bg-white rounded-xl overflow-hidden">
@@ -4221,7 +4221,7 @@ let vocabulary = [];
         }
 
         // 문법 노트도 같은 뜻으로 — 다만 기준이 다르다.
-        //   문법 마스터는 4.5점 + 번역에서 써보기까지 있어야 열려서 실제로 몇 개 안 된다
+        //   문법 마스터는 5점 + 번역에서 써보기까지 있어야 열려서 실제로 몇 개 안 된다
         //   (30개 중 3개). 그걸로는 잴 수가 없어서, 점수가 플러스인 노트를 쓴다 =
         //   첨삭·빈칸에서 맞게 쓴 적이 틀린 적보다 많은 노트. '만들어만 둔 노트' 는 빠진다.
         function deleGrammarSample(limit = 80) {
@@ -6281,7 +6281,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   예전엔 마스터(✓)와 약점(★)이 따로였고 각각 3단계로 돌았다. 버튼이 둘이라
         //   자리도 먹고, '지금 무슨 등급인지' 를 두 버튼을 같이 봐야 알 수 있었다.
         //   이제 한 버튼이 다섯 자리를 돈다 — 단어·문법·관용구 모두 같은 규칙.
-        //     일반 → 마스터(+4.5) → 완벽(+8) → 약점(−4.5) → 치명적(−8) → 일반(0)
+        //     일반 → 마스터(+5) → 완벽(+8) → 약점(−5) → 치명적(−8) → 일반(0)
         // ============================================================
         const GRADE_CYCLE = ['normal', 'mastered', 'perfect', 'weak', 'critical'];
         const GRADE_CYCLE_SCORE = { normal: 0, mastered: SCORE_MASTER, perfect: SCORE_PERFECT, weak: SCORE_WEAK, critical: SCORE_CRITICAL };
@@ -6346,7 +6346,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 요청] 약점 문법표(별표) 수동 토글 — 단어의 toggleWeakWord 와 같은 3단계 순환
-        //   해제 → 약점(-4.5) → 치명적 약점(-8) → 해제(0)
+        //   해제 → 약점(-5) → 치명적 약점(-8) → 해제(0)
         function toggleWeakGrammar(id, event) {
             if (event) event.stopPropagation();
             const t = getAllGrammarTables().find(x => x.id === id);
@@ -6368,11 +6368,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 요청] 수동 마스터 버튼 — 단어의 별표처럼 '점수를 못박는' 방식으로 통합
-        //   마스터로 박으면 점수를 기준선(+4.5)까지 올리고 마스터 자격도 같이 준다.
+        //   마스터로 박으면 점수를 기준선(+5)까지 올리고 마스터 자격도 같이 준다.
         //   해제하면 점수를 0으로 되돌린다 (계속 쌓인 기록이 아니라 '내가 정한 상태'라서)
         function toggleMasterGrammar(id) {
             // [냐냐 요청] 단어 마스터 버튼과 똑같은 3단계 순환
-            //   해제 → 마스터(+4.5) → 완벽(+8) → 해제(0)
+            //   해제 → 마스터(+5) → 완벽(+8) → 해제(0)
             const t = getAllGrammarTables().find(x => x.id === id);
             const title = t ? (t.title || '이 표') : '이 표';
             const grade = getGrammarGrade(id);
@@ -6385,9 +6385,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (typeof AudioFX !== 'undefined') AudioFX.playBell();
                 showToast(`"${title}" 완벽으로 올렸어요! 🏆 (8점)`, "success");
             } else {
-                setGrammarScore(id, SCORE_MASTER, { transUsed: true });    // 4.5점
+                setGrammarScore(id, SCORE_MASTER, { transUsed: true });    // 5점
                 if (typeof AudioFX !== 'undefined') AudioFX.playBell();
-                showToast(`"${title}" 마스터 완료! ✅ (4.5점)`, "success");
+                showToast(`"${title}" 마스터 완료! ✅ (5점)`, "success");
             }
             renderGrammarTables();
             saveToStorage();
