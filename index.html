@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609152248">
+    <link rel="stylesheet" href="css/style.css?v=202609152251">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1313,6 +1313,20 @@
                         <div id="chart-body-grammar"><div id="record-grammar-chart" class="w-full relative"></div></div>
                     </div>
 
+                    <!-- [냐냐 요청] 관용구 성장 그래프 (문법표 성장 아래) -->
+                    <div class="bg-violet-50/40 p-5 rounded-3xl border border-violet-100 shadow-sm mt-3">
+                        <button onclick="toggleChartCard('chart-body-idiom', this)" class="w-full flex items-center justify-between gap-4 mb-3">
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <span class="text-xs font-bold text-slate-700">관용구 성장</span>
+                                <span class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><span class="w-3 h-0.5 bg-violet-500 inline-block"></span>등록 관용구(개)</span>
+                                <span class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><span class="w-2 h-2 rounded-sm bg-violet-500"></span>마스터 비율(%)</span>
+                                <span class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><span class="w-2 h-2 rounded-sm bg-rose-500"></span>약점 비율(%)</span>
+                            </div>
+                            <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0"></i>
+                        </button>
+                        <div id="chart-body-idiom"><div id="record-idiom-chart" class="w-full relative"></div></div>
+                    </div>
+
                     <!-- 일별 신규 등록/마스터 그래프 -->
                     <div class="bg-amber-50/50 p-5 rounded-3xl border border-amber-100 shadow-sm mt-3">
                         <button onclick="toggleChartCard('chart-body-daily', this)" class="w-full flex items-center justify-between gap-4 mb-3">
@@ -2426,13 +2440,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609152248"></script>
-    <script src="js/creatures.js?v=202609152248"></script>
-    <script src="js/core.js?v=202609152248"></script>
-    <script src="js/vocab.js?v=202609152248"></script>
-    <script src="js/flashcards.js?v=202609152248"></script>
-    <script src="js/quiz.js?v=202609152248"></script>
-    <script src="js/games.js?v=202609152248"></script>
-    <script src="js/ai-feedback.js?v=202609152248"></script>
+    <script src="js/dictionary-data.js?v=202609152251"></script>
+    <script src="js/creatures.js?v=202609152251"></script>
+    <script src="js/core.js?v=202609152251"></script>
+    <script src="js/vocab.js?v=202609152251"></script>
+    <script src="js/flashcards.js?v=202609152251"></script>
+    <script src="js/quiz.js?v=202609152251"></script>
+    <script src="js/games.js?v=202609152251"></script>
+    <script src="js/ai-feedback.js?v=202609152251"></script>
 </body>
 </html>

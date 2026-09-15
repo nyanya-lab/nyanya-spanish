@@ -1086,6 +1086,21 @@ let vocabulary = [];
             d.weakTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'weak').length;
             d.criticalTotal = vocabulary.filter(w => typeof getWordGrade === 'function' && getWordGrade(w) === 'critical').length;
 
+            // [냐냐 요청] 관용구도 같은 방식으로 스냅샷 — 관용구 성장 그래프의 비율용 (2026-09-15)
+            if (typeof wordIdiomList === 'function' && typeof getIdiomGrade === 'function') {
+                let iTot = 0, iMas = 0, iWeak = 0;
+                vocabulary.forEach(w => wordIdiomList(w).forEach(it => {
+                    if (!it || !it.idiom) return;
+                    iTot++;
+                    const g = getIdiomGrade(w.id, it.iid || it.idiom);
+                    if (g === 'mastered' || g === 'perfect') iMas++;
+                    else if (g === 'weak' || g === 'critical') iWeak++;
+                }));
+                d.idiomTotal = iTot;
+                d.idiomMasteredTotal = iMas;
+                d.idiomWeakTotal = iWeak;
+            }
+
             // [냐냐 요청] 문법표도 같은 방식으로 스냅샷 — 문법표 성장 그래프의 비율용
             if (typeof getAllGrammarTables === 'function' && typeof getGrammarGrade === 'function') {
                 const gt = getAllGrammarTables();
@@ -3657,17 +3672,64 @@ let vocabulary = [];
                 </p>
             </div>`;
 
+
+            //   [냐냐 요청] 관용구 탭 (2026-09-15). 등급선은 단어와 똑같으니 그 표를 그대로 쓴다.
+            const idiomHtml = `
+            <div class="bg-violet-50/60 rounded-2xl border border-violet-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-quote-left text-violet-500"></i> 관용구 점수</h4>
+                <p class="text-xs text-slate-600 font-semibold leading-relaxed">
+                    관용구는 <b>표현마다 제 점수</b>를 갖습니다. 주인 단어와 섞이지 않아요 —
+                    <b>centro comercial</b> 을 맞힌 게 <b>comercial</b> 을 안다는 뜻은 아니니까요.
+                </p>
+                <p class="text-xs text-slate-600 font-semibold leading-relaxed">
+                    점수 폭·등급선·마스터 조건은 <b>단어와 똑같습니다</b>. 마스터·완벽은
+                    <b>직접 써서 맞힌 적</b>이 있어야 열리는데, 관용구에서는 <b>쓰기 복습</b>과
+                    <b>주관식 퀴즈</b>가 그 자리예요.
+                </p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-plus-minus text-violet-500"></i> 점수가 오르내리는 곳</h4>
+                <ul class="text-xs text-slate-600 font-semibold leading-relaxed space-y-1 list-disc pl-4">
+                    <li><b>쓰기 복습</b> — 맞히면 오르고 틀리면 내려요 (단어와 같은 값)</li>
+                    <li><b>퀴즈</b> — 관용구 문제(객관식·주관식) 맞히면 오르고 틀리면 −2</li>
+                    <li><b>미니게임</b> — 행맨에서 관용구가 나오면 반영돼요</li>
+                </ul>
+                <p class="text-[11px] text-slate-400 font-semibold">
+                    지금까지 단어에 쌓인 점수는 그대로 둡니다 — 지난 것 중 어느 몫이 관용구였는지 알 수 없어서요.
+                    관용구는 0 부터 새로 쌓여요.
+                </p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-amber-500"></i> 망각곡선 · 사전</h4>
+                <ul class="text-xs text-slate-600 font-semibold leading-relaxed space-y-1 list-disc pl-4">
+                    <li>관용구는 <b>제 망각곡선</b>을 따로 돕니다 (1·3·7·14·30일). 단어 곡선과 별개예요</li>
+                    <li>오늘의 복습에서 <b>단어와 한 묶음</b>으로 나와요 — 같은 쓰기 복습이니까요</li>
+                    <li>단어장에서 <b>📘 관용구</b> 를 누르면 표현만 모아 볼 수 있어요 (페이지 넘기기 옆)</li>
+                    <li>등록은 따로 없습니다 — <b>단어에 적어둔 관용구</b>를 그대로 가져와요</li>
+                </ul>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-emerald-500"></i> 등급</h4>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">단어·문법과 같은 구간을 씁니다.</p>
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden"><tbody>${buildGradeRows('자주 틀리는 표현')}</tbody></table>
+            </div>`;
+
             const tabBtn = (key, label, icon) => `
                 <button id="help-tab-btn-${key}" onclick="switchHelpTab('${key}')"
                     class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all">${icon} ${label}</button>`;
             return `
             <div class="sticky top-0 z-10 bg-white pb-3 -mt-1 pt-1">
-                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                    ${tabBtn('word', '단어 점수', '📖')}
-                    ${tabBtn('grammar', '문법 점수', '📋')}
+                <div class="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                    ${tabBtn('word', '단어', '📖')}
+                    ${tabBtn('idiom', '관용구', '📘')}
+                    ${tabBtn('grammar', '문법', '📋')}
                 </div>
             </div>
             <div id="help-pane-word" class="space-y-4">${wordHtml}${wordHtml2}</div>
+            <div id="help-pane-idiom" class="hidden space-y-4">${idiomHtml}</div>
             <div id="help-pane-grammar" class="hidden space-y-4">${grammarHtml}</div>`;
         }
 
@@ -3675,7 +3737,7 @@ let vocabulary = [];
         function switchHelpTab(which) {
             const on  = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all bg-white text-slate-900 shadow-sm';
             const off = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all text-slate-500 hover:text-slate-800';
-            ['word', 'grammar'].forEach(key => {
+            ['word', 'idiom', 'grammar'].forEach(key => {
                 const pane = document.getElementById('help-pane-' + key);
                 const btn = document.getElementById('help-tab-btn-' + key);
                 if (pane) pane.classList.toggle('hidden', key !== which);
@@ -4526,7 +4588,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'writeTotal', 'writeCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
                                    'reviewCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
         const RECORD_LAST_FIELDS = ['registeredTotal', 'masteredTotal', 'perfectTotal', 'weakTotal', 'criticalTotal',
-                                    'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal'];
+                                    'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal',
+                                    'idiomTotal', 'idiomMasteredTotal', 'idiomWeakTotal'];
 
         // 그 날짜가 속한 주의 시작(일요일) — 달력이 일요일 시작이라 맞춰준다
         function weekStartOf(ds) {
@@ -4662,7 +4725,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     // [냐냐 요청] 문법표 등급별 총계 (문법표 점수가 생긴 날부터 쌓임)
                     grammarTotal: (log && log.grammarTotal) || 0,
                     grammarMasteredTotal: (log && log.grammarMasteredTotal) || 0,
-                    grammarWeakTotal: (log && log.grammarWeakTotal) || 0
+                    grammarWeakTotal: (log && log.grammarWeakTotal) || 0,
+                    // [냐냐 요청] 관용구 등급별 총계 (2026-09-15 부터 쌓임)
+                    idiomTotal: (log && log.idiomTotal) || 0,
+                    idiomMasteredTotal: (log && log.idiomMasteredTotal) || 0,
+                    idiomWeakTotal: (log && log.idiomWeakTotal) || 0
                 };
             });
 
@@ -4702,6 +4769,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             renderGrowthDailyChart(series);
             renderActivityChart(series); // [냐냐 PATCH] 퀴즈·AI·복습·게임 통합 그래프 (기존 퀴즈/AI 대체)
             renderGrammarGrowthChart(series); // [냐냐 PATCH] 문법표 성장 그래프
+            renderIdiomGrowthChart(series);   // [냐냐 요청] 관용구 성장 그래프
             renderLearnerProfileDisplay();
         }
 
@@ -5251,6 +5319,67 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     범례를 눌러 보고 싶은 것만 골라 볼 수 있어요.
                 </p>
             `;
+        }
+
+
+        // [냐냐 요청] 관용구 성장 — 등록 관용구(꺾은선) + 마스터·약점 비율(막대 둘) (2026-09-15).
+        //   단어장·문법표 성장과 같은 틀이다. 관용구는 일별 스냅샷을 오늘부터 쌓으므로
+        //   역산 없이 그 값을 그대로 쓴다 (과거 날짜는 비어 있어 막대를 안 그린다).
+        function renderIdiomGrowthChart(series) {
+            const container = document.getElementById('record-idiom-chart');
+            if (!container) return;
+            if (series.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">데이터가 없어요</p>'; return; }
+
+            const width = CHART_VIEW_WIDTH;
+            const height = 160;
+            const padding = { top: 16, right: 34, bottom: 28, left: 36 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+            const baseY = height - padding.bottom;
+
+            const totOf = (i) => (series[i] && series[i].idiomTotal) || 0;
+            const hasData = series.some(d => d && d.idiomTotal);
+            const mRatio = (i) => totOf(i) > 0 ? ((series[i].idiomMasteredTotal || 0) / totOf(i)) * 100 : 0;
+            const wRatio = (i) => totOf(i) > 0 ? ((series[i].idiomWeakTotal || 0) / totOf(i)) * 100 : 0;
+
+            const axis = growthAxisRange(series.map((d, i) => totOf(i)));
+            const gMin = axis.min, maxVal = axis.max;
+            const xInset = Math.min(14, chartW * 0.06);
+            const xSpan = chartW - xInset * 2;
+            const xStep = series.length > 1 ? xSpan / (series.length - 1) : 0;
+            const xOf = (i) => padding.left + xInset + (series.length > 1 ? i * xStep : xSpan / 2);
+            const yOfCount = (v) => padding.top + chartH - ((v - gMin) / (maxVal - gMin)) * chartH;
+            const groupWidth = chartW / series.length;
+            const barWidth = Math.min(6, groupWidth * 0.4);
+            const pctMax = ratioAxisMax(series.reduce((a, d, i) => a.concat([mRatio(i), wRatio(i)]), []));
+
+            let bars = '';
+            series.forEach((d, i) => {
+                if (!totOf(i)) return;            // 스냅샷이 없는 날은 막대를 안 그린다
+                const mH = (mRatio(i) / pctMax) * chartH;
+                const wH = (wRatio(i) / pctMax) * chartH;
+                const half = barWidth / 2;
+                bars += `<rect x="${(xOf(i) - barWidth / 2).toFixed(1)}" y="${(baseY - mH).toFixed(1)}" width="${half.toFixed(1)}" height="${mH.toFixed(1)}" fill="#8b5cf6" opacity="0.75" rx="1.5"/>`;
+                bars += `<rect x="${xOf(i).toFixed(1)}" y="${(baseY - wH).toFixed(1)}" width="${half.toFixed(1)}" height="${wH.toFixed(1)}" fill="#f43f5e" opacity="0.6" rx="1.5"/>`;
+                const text = `${d.fullLabel}: 등록 관용구 ${totOf(i)}개 · 마스터 ${Math.round(mRatio(i))}% · 약점 ${Math.round(wRatio(i))}%`.replace(/'/g, "\\'");
+                bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-idiom-chart-tooltip', '${text}')"/>`;
+            });
+
+            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(totOf(i)).toFixed(1)}`).join(' ');
+            const lineDots = series.map((d, i) => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfCount(totOf(i)).toFixed(1)}" r="2.5" fill="#8b5cf6"/>`).join('');
+
+            container.innerHTML = `
+                ${recordChartTooltipDiv('record-idiom-chart-tooltip')}
+                <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;" preserveAspectRatio="xMidYMid meet">
+                    ${recordChartGridlines(maxVal, padding, chartW, chartH, width, '', gMin)}
+                    ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#8b5cf6')}
+                    <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
+                    ${bars}
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    ${lineDots}
+                    ${recordChartXLabels(series, xOf, height)}
+                </svg>
+                ${hasData ? '' : '<p class="text-[10px] text-slate-400 text-center font-semibold pt-1">관용구 등급 비율은 오늘부터 기록돼요 — 며칠 지나면 막대가 쌓여요!</p>'}`;
         }
 
         // [냐냐 PATCH] 문법표 성장: 등록 문법(꺾은선) + 마스터 비율(막대) — 단어장 성장과 동일 형식
