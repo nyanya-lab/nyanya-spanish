@@ -2899,11 +2899,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let pendingFilterWeak = 'all';
         let pendingFilterSort = 'weak-score';
 
+        //   [냐냐 요청] 품사처럼 전체 선택/해제 (2026-09-15)
+        function toggleAllFilterDele() {
+            const allOn = pendingFilterDele.length >= ALL_DELE_LIST.length;
+            pendingFilterDele = allOn ? [] : [...ALL_DELE_LIST];
+            document.querySelectorAll('.filter-dele-btn').forEach(b => styleFilterPill(b, pendingFilterDele.includes(b.dataset.deleLv)));
+            updateDeleAllBtnLabel();
+        }
+        function updateDeleAllBtnLabel() {
+            const btn = document.getElementById('filter-dele-all-btn');
+            if (btn) btn.innerText = (pendingFilterDele.length >= ALL_DELE_LIST.length) ? '전체 해제' : '전체 선택';
+        }
+
         function toggleFilterDele(btn) {
             const lv = btn.dataset.deleLv;
             const i = pendingFilterDele.indexOf(lv);
             if (i >= 0) pendingFilterDele.splice(i, 1); else pendingFilterDele.push(lv);
             styleFilterPill(btn, i < 0);
+            updateDeleAllBtnLabel();
         }
 
         // [냐냐 PATCH] 필터/정렬 저장·복원 (localStorage)
@@ -3178,6 +3191,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             pendingFilterPos = activeFilterPos.length === 0 ? [...ALL_POS_LIST] : [...activeFilterPos];
             pendingFilterDele = activeFilterDele.length === 0 ? [...ALL_DELE_LIST] : [...activeFilterDele];
             document.querySelectorAll('.filter-dele-btn').forEach(b => styleFilterPill(b, pendingFilterDele.includes(b.dataset.deleLv)));
+            updateDeleAllBtnLabel();
             pendingFilterMastery = activeFilterMastery;
             pendingFilterWeak = activeFilterWeak;
             pendingFilterSort = activeFilterSort;

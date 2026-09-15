@@ -6404,11 +6404,35 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         const ALL_GDELE_LIST = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'none'];
         let grammarFilterDele = [];
         let pendingGrammarDele = [...ALL_GDELE_LIST];
+        //   [냐냐 요청] 품사처럼 전체 선택/해제 (2026-09-15)
+        function toggleAllGrammarDele() {
+            const allOn = pendingGrammarDele.length >= ALL_GDELE_LIST.length;
+            pendingGrammarDele = allOn ? [] : [...ALL_GDELE_LIST];
+            document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
+            updateGrammarDeleAllLabel();
+        }
+        function updateGrammarDeleAllLabel() {
+            const btn = document.getElementById('grammar-dele-all-btn');
+            if (btn) btn.innerText = (pendingGrammarDele.length >= ALL_GDELE_LIST.length) ? '전체 해제' : '전체 선택';
+        }
+        function toggleAllGrammarTopics() {
+            const all = allGrammarTopicKeys();
+            const allOn = pendingGrammarTopics.length >= all.length;
+            pendingGrammarTopics = allOn ? [] : all;
+            renderGrammarTopicFilterButtons();
+            updateGrammarTopicAllLabel();
+        }
+        function updateGrammarTopicAllLabel() {
+            const btn = document.getElementById('grammar-topic-all-btn');
+            if (btn) btn.innerText = (pendingGrammarTopics.length >= allGrammarTopicKeys().length) ? '전체 해제' : '전체 선택';
+        }
+
         function toggleGrammarFilterDele(btn) {
             const lv = btn.dataset.gdele;
             const i = pendingGrammarDele.indexOf(lv);
             if (i >= 0) pendingGrammarDele.splice(i, 1); else pendingGrammarDele.push(lv);
             styleFilterPill(btn, i < 0);
+            updateGrammarDeleAllLabel();
         }
         // 정렬은 기존 grammarSortMode('newest'|'oldest') 재사용
         let pendingGrammarTopics = [];
@@ -6479,6 +6503,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (i >= 0) pendingGrammarTopics.splice(i, 1);
             else pendingGrammarTopics.push(key);
             styleFilterPill(btn, i < 0); // vocab.js의 공용 헬퍼 재사용
+            updateGrammarTopicAllLabel();
         }
         function setGrammarFilterMastery(btn) {
             pendingGrammarMastery = btn.dataset.gmastery;
@@ -6513,6 +6538,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             pendingGrammarSort = grammarSortMode;
             renderGrammarTopicFilterButtons();
+            updateGrammarTopicAllLabel();
+            updateGrammarDeleAllLabel();
             document.querySelectorAll('.grammar-mastery-btn').forEach(b => styleFilterPill(b, b.dataset.gmastery === pendingGrammarMastery));
             renderGrammarSortButtons();
         }

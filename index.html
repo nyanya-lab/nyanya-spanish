@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609152313">
+    <link rel="stylesheet" href="css/style.css?v=202609152316">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -318,7 +318,10 @@
                                     </div>
                                     <!-- [냐냐 요청] DELE 레벨 (여러 개 고를 수 있음. 아무것도 안 고르면 전체) -->
                                     <div class="space-y-1.5">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">DELE 레벨</label>
+                                        <div class="flex items-center justify-between">
+                                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">DELE 레벨 <span class="text-slate-300 normal-case">(여러 개)</span></label>
+                                            <button type="button" onclick="toggleAllFilterDele()" id="filter-dele-all-btn" class="text-[10px] font-bold text-violet-500 hover:text-violet-700 transition-colors">전체 해제</button>
+                                        </div>
                                         <div id="filter-dele-box" class="flex flex-wrap gap-1.5">
                                             <button type="button" data-dele-lv="A1" onclick="toggleFilterDele(this)" class="filter-dele-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A1</button>
                                             <button type="button" data-dele-lv="A2" onclick="toggleFilterDele(this)" class="filter-dele-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A2</button>
@@ -1463,7 +1466,10 @@
                                     </div>
                                     <!-- 주제 (아이콘, 여러 개 선택) -->
                                     <div class="space-y-1.5">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">주제 <span class="text-slate-300 normal-case">(여러 개)</span></label>
+                                        <div class="flex items-center justify-between">
+                                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">주제 <span class="text-slate-300 normal-case">(여러 개)</span></label>
+                                            <button type="button" onclick="toggleAllGrammarTopics()" id="grammar-topic-all-btn" class="text-[10px] font-bold text-violet-500 hover:text-violet-700 transition-colors">전체 해제</button>
+                                        </div>
                                         <div id="grammar-filter-topic-box" class="flex flex-wrap gap-1.5"></div>
                                     </div>
                                     <!-- 마스터 상태 (하나만) -->
@@ -1480,7 +1486,10 @@
                                     <!-- 정렬 기준 (하나만) -->
                                     <!-- [냐냐 요청] DELE 레벨 -->
                                     <div class="space-y-1.5">
-                                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">DELE 레벨</label>
+                                        <div class="flex items-center justify-between">
+                                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">DELE 레벨 <span class="text-slate-300 normal-case">(여러 개)</span></label>
+                                            <button type="button" onclick="toggleAllGrammarDele()" id="grammar-dele-all-btn" class="text-[10px] font-bold text-violet-500 hover:text-violet-700 transition-colors">전체 해제</button>
+                                        </div>
                                         <div id="grammar-filter-dele-box" class="flex flex-wrap gap-1.5">
                                             <button type="button" data-gdele="A1" onclick="toggleGrammarFilterDele(this)" class="grammar-dele-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A1</button>
                                             <button type="button" data-gdele="A2" onclick="toggleGrammarFilterDele(this)" class="grammar-dele-btn text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all border-slate-200 bg-slate-50 text-slate-500">A2</button>
@@ -2456,13 +2465,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609152313"></script>
-    <script src="js/creatures.js?v=202609152313"></script>
-    <script src="js/core.js?v=202609152313"></script>
-    <script src="js/vocab.js?v=202609152313"></script>
-    <script src="js/flashcards.js?v=202609152313"></script>
-    <script src="js/quiz.js?v=202609152313"></script>
-    <script src="js/games.js?v=202609152313"></script>
-    <script src="js/ai-feedback.js?v=202609152313"></script>
+    <script src="js/dictionary-data.js?v=202609152316"></script>
+    <script src="js/creatures.js?v=202609152316"></script>
+    <script src="js/core.js?v=202609152316"></script>
+    <script src="js/vocab.js?v=202609152316"></script>
+    <script src="js/flashcards.js?v=202609152316"></script>
+    <script src="js/quiz.js?v=202609152316"></script>
+    <script src="js/games.js?v=202609152316"></script>
+    <script src="js/ai-feedback.js?v=202609152316"></script>
 </body>
 </html>
