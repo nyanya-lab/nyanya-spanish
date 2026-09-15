@@ -4635,17 +4635,22 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             ${/* [냐냐 요청] 관용구 점수는 스피커 옆에 */''}
                             <span class="flex items-center gap-1.5 shrink-0">
                                 ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
+                                ${deleLevelBadgeHtml(r.it.dele)}
                                 <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
                                 <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
                             </span>
                         </div>
-                        <button onclick="openWordModal('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
-                            class="w-full flex items-center gap-1.5 text-left rounded-lg px-1.5 py-1 hover:bg-slate-50 transition-colors">
-                            <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
-                            <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
-                            <span class="text-[11px] text-slate-400 truncate min-w-0 flex-1">${escapeHtml(owMean)}</span>
-                            <span class="shrink-0 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${owGi.badge}" title="${owGi.label} · 그 단어의 점수">${formatScore(ow)}</span>
-                        </button>
+                        ${/* [냐냐 요청] 원단어 줄을 박스로 가둔다 — 단어장에서 관용구를 가두는 것과 같은 모양 */''}
+                        <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5">
+                            <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Palabra (원단어)</span>
+                            <button onclick="openWordModal('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
+                                class="w-full flex items-center gap-1.5 text-left rounded-lg hover:opacity-70 transition-opacity">
+                                <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
+                                <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
+                                <span class="text-[11px] text-slate-400 truncate min-w-0 flex-1">${escapeHtml(owMean)}</span>
+                                <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${owGi.badge}" title="${owGi.label} · 그 단어의 점수">${formatScore(ow)}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -5037,7 +5042,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                         <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
                                         <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
                                     </span>
-                                    <span class="shrink-0 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(w.id, ref)}</span>
+                                    ${deleLevelBadgeHtml(item.dele)}
+                                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(w.id, ref)}</span>
                                 </div>`;
                             }).join('');
                             return `

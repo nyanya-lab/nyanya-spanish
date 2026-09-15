@@ -1427,7 +1427,9 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     else if (q._retryReason === 'synonym') gain = 2;
                     //   [냐냐 요청] 관용구 문제는 그 표현에 점수를 준다 (2026-09-15)
                     const idiomQC = (q.type === 'idiom-mc' || q.type === 'idiom-subjective');
-                    addWordScore(vocabItemC, gain, { correct: true, subjective: (q.type === 'subjective'),
+                    //   [냐냐 요청] 관용구는 주관식 퀴즈도 '직접 써서 맞힌 것' 으로 친다 (2026-09-15)
+                    addWordScore(vocabItemC, gain, { correct: true,
+                        subjective: (q.type === 'subjective' || (idiomQC && q.type === 'idiom-subjective')),
                         idiom: idiomQC ? { wordId: vocabItemC.id, text: quizIdiomText(q) } : null });
                     // [냐냐 기준] 퀴즈에서 맞힌 건 점수만 준다. 곡선을 앞으로 미는 건 관용구 복습에서만
                     //   (단어·문법도 '오늘의 복습' 을 해냈을 때만 한 칸 나간다)

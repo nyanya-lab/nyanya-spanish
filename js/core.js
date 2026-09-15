@@ -3012,8 +3012,8 @@ let vocabulary = [];
         //   곡선(idiomReview)은 이미 표현마다 따로 돌고 있었는데 점수만 주인 단어로 갔다.
         //   'centro comercial' 을 맞힌 게 'comercial' 을 안다는 뜻은 아니라, 점수도 갈라놓는다.
         //   ⚠️ 이미 단어에 쌓인 점수는 그대로 둔다 — 지난 것 중 어느 몫이 관용구였는지 알 수 없다.
-        //   ⚠️ 잣대는 단어와 똑같다 (-10 ~ +10, 같은 등급선). 마스터·완벽은 주관식 통과가
-        //      필요한데 관용구엔 그 장치가 없어서, 점수만으로 등급을 매긴다.
+        //   ⚠️ 잣대는 단어와 똑같다 (-10 ~ +10, 같은 등급선, 마스터·완벽은 주관식 통과 필요).
+        //      관용구에서 '주관식' 은 쓰기 복습과 주관식 퀴즈다 (냐냐님 결정).
         // ============================================================
         let idiomScores = {};   // { '단어id::표현id': { score, correctTotal, wrongTotal } }
 
@@ -3028,8 +3028,9 @@ let vocabulary = [];
         }
         function getIdiomGrade(wordId, idiomTextOrId) {
             const s = getIdiomScore(wordId, idiomTextOrId);
-            if (s >= SCORE_PERFECT) return 'perfect';
-            if (s >= SCORE_MASTER) return 'mastered';
+            const rec = idiomScores[idiomKey(wordId, idiomTextOrId)] || {};
+            if (s >= SCORE_PERFECT && rec.subjectivePassed) return 'perfect';
+            if (s >= SCORE_MASTER && rec.subjectivePassed) return 'mastered';
             if (s <= SCORE_CRITICAL) return 'critical';
             if (s <= SCORE_WEAK) return 'weak';
             return 'normal';
@@ -3045,6 +3046,9 @@ let vocabulary = [];
             const wCount = (typeof opts.wrongCount === 'number') ? opts.wrongCount : (opts.correct === false ? 1 : 0);
             if (cCount) r.correctTotal = (r.correctTotal || 0) + cCount;
             if (wCount) r.wrongTotal = (r.wrongTotal || 0) + wCount;
+            //   [냐냐 요청] 마스터·완벽은 단어와 똑같이 '직접 써서 맞힌 적이 있어야' 열린다 (2026-09-15).
+            //   관용구에서는 쓰기 복습과 주관식 퀴즈가 그 자리다 (냐냐님 결정).
+            if (opts.correct === true && opts.subjective) r.subjectivePassed = true;
             r.score = clampScore((r.score || 0) + (delta || 0));
             return r.score;
         }
@@ -3923,7 +3927,9 @@ let vocabulary = [];
         function deleLevelBadgeHtml(lv) {
             const v = normDeleLevel(lv);
             if (!v) return '';
-            return `<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${DELE_LEVEL_BADGE[v]} shrink-0" title="DELE(CEFR) 가늠 — AI 가 매긴 값이에요">${v}</span>`;
+            //   [냐냐 지적] 글자 크기가 작아 점수·정답률 뱃지와 높이가 안 맞았다 (2026-09-15).
+            //   px-2 py-0.5 text-[11px] — 옆 뱃지들과 같은 값으로 맞춘다.
+            return `<span class="px-2 py-0.5 rounded-lg text-[11px] font-black ${DELE_LEVEL_BADGE[v]} shrink-0" title="DELE(CEFR) 가늠 — AI 가 매긴 값이에요">${v}</span>`;
         }
 
         //   단어 하나의 레벨을 물어서 적어둔다. 이미 있으면 안 묻는다.
@@ -3959,7 +3965,7 @@ let vocabulary = [];
         //      레벨이 비어 있다. 남은 것만 한 번 더 물어본다 (노트는 많아야 서른 몇 개다).
         // ============================================================
         async function fillMissingDeleLevels() {
-            const out = { words: 0, notes: 0 };
+            const out = { words: 0, notes: 0, idioms: 0 };
             if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return out;
             if (typeof callGemini !== 'function') return out;
             const BATCH = 150;
@@ -3995,6 +4001,27 @@ let vocabulary = [];
                 } catch (e) { console.warn('[DELE] 단어 레벨 묶음 실패', e); }
             }
 
+            //   ①-b 관용구 — 레벨은 표현 자체에 적어둔다 (it.dele). 단어와 같은 묶음 크기.
+            //   [냐냐 확인] CEFR·DELE 은 낱말뿐 아니라 표현도 등급을 매긴다
+            //   (por favor A1 · por si acaso B1 · dar por sentado C1).
+            const idioms = [];
+            (vocabulary || []).forEach(w => {
+                (typeof wordIdiomList === 'function' ? wordIdiomList(w) : []).forEach(it => {
+                    if (it && it.idiom && !normDeleLevel(it.dele)) idioms.push({ w, it });
+                });
+            });
+            for (let i = 0; i < idioms.length; i += BATCH) {
+                const chunk = idioms.slice(i, i + BATCH);
+                try {
+                    const got = await ask(
+                        `Here are ${chunk.length} Spanish expressions or set phrases a Korean learner keeps in their notebook.
+`
+                        + `Classify EVERY one into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common and basic it is in Spanish.`,
+                        chunk.map(x => String(x.it.idiom).replace(/\[[^\]]*\]/g, '...').trim()));
+                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].it.dele) { chunk[j].it.dele = lv; out.idioms++; } });
+                } catch (e) { console.warn('[DELE] 관용구 레벨 묶음 실패', e); }
+            }
+
             //   ② 문법 노트 — 남은 것만
             const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
             const left = tables.filter(t => t && t.id && t.title && !normDeleLevel(grammarDeleLevels[t.id]));
@@ -4008,7 +4035,7 @@ let vocabulary = [];
                 } catch (e) { console.warn('[DELE] 문법 레벨 묶음 실패', e); }
             }
 
-            if (out.words || out.notes) {
+            if (out.words || out.notes || out.idioms) {
                 if (typeof saveToStorage === 'function') await saveToStorage(true);
                 if (typeof renderWordList === 'function') renderWordList();
             }
@@ -4288,9 +4315,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   [냐냐 요청] 같은 걸음에 비어 있는 단어·문법 레벨도 채운다 (2026-09-15)
             try {
                 const got = await fillMissingDeleLevels();
-                if (got.words || got.notes) {
+                if (got.words || got.notes || got.idioms) {
                     const bits = [];
                     if (got.words) bits.push(`단어 ${got.words}개`);
+                    if (got.idioms) bits.push(`관용구 ${got.idioms}개`);
                     if (got.notes) bits.push(`문법 ${got.notes}개`);
                     if (typeof showToast === 'function') showToast(`${bits.join(' · ')}에 DELE 레벨을 채웠어요 🏷️`, "success");
                     renderDeleCard();
@@ -4396,9 +4424,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 setTimeout(async () => {
                     try {
                         const got = await fillMissingDeleLevels();
-                        if (got.words || got.notes) {
+                        if (got.words || got.notes || got.idioms) {
                             const bits = [];
                             if (got.words) bits.push(`단어 ${got.words}개`);
+                            if (got.idioms) bits.push(`관용구 ${got.idioms}개`);
                             if (got.notes) bits.push(`문법 ${got.notes}개`);
                             if (typeof showToast === 'function') showToast(`${bits.join(' · ')}에 DELE 레벨을 채웠어요 🏷️`, "success");
                             if (typeof renderGrammarTables === 'function') renderGrammarTables();
