@@ -4646,9 +4646,18 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     || stripAccents(r.meaning.toLowerCase()).includes(q)
                     || stripAccents(String(r.owner.word || '').toLowerCase()).includes(q));
             }
-            //   약한 것부터 (단어장 기본 정렬과 같은 결)
-            rows.sort((a, b) => getIdiomScore(a.owner.id, a.it.iid || a.text) - getIdiomScore(b.owner.id, b.it.iid || b.text)
-                || a.text.localeCompare(b.text, 'es'));
+            //   [냐냐 요청] 단어장과 같은 정렬 기준을 따른다 (2026-09-15).
+            //   관용구엔 등록일이 없어서 '등록순' 이 안 먹었다 — 주인 단어의 등록일로 대신한다.
+            const sc = (r) => getIdiomScore(r.owner.id, r.it.iid || r.text);
+            const reg = (r) => Number(r.owner.createdAt) || 0;
+            const mode = isSearching ? 'alpha-asc' : activeFilterSort;
+            const byText = (a, b) => a.text.localeCompare(b.text, 'es');
+            if (mode === 'recent') rows.sort((a, b) => (reg(b) - reg(a)) || byText(a, b));
+            else if (mode === 'oldest') rows.sort((a, b) => (reg(a) - reg(b)) || byText(a, b));
+            else if (mode === 'score-desc') rows.sort((a, b) => (sc(b) - sc(a)) || byText(a, b));
+            else if (mode === 'alpha-desc') rows.sort((a, b) => byText(b, a));
+            else if (mode === 'alpha-asc') rows.sort(byText);
+            else rows.sort((a, b) => (sc(a) - sc(b)) || byText(a, b));   // 기본: 약한 것부터
 
             if (!rows.length) {
                 grid.innerHTML = '';
@@ -4700,12 +4709,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 <span class="block text-sm text-slate-500 font-semibold mt-0.5">${escapeHtml(r.meaning)}</span>
                             </span>
                             ${/* [냐냐 요청] 관용구 점수는 스피커 옆에 */''}
+                            ${/* [냐냐 요청] 스피커 · 등급버튼 · DELE · 점수 차례로 (2026-09-15) */''}
                             <span class="flex items-center gap-1.5 shrink-0">
-                                ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
-                                ${deleLevelBadgeHtml(r.it.dele)}
-                                <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
                                 <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
                                 ${gradeCycleBtnHtml(grade, `cycleIdiomGrade('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}
+                                ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
+                                <span class="inline-flex items-center">${deleLevelBadgeHtml(r.it.dele)}</span>
+                                <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
                             </span>
                         </div>
                         ${/* [냐냐 요청] 원단어 줄을 박스로 가둔다 — 단어장에서 관용구를 가두는 것과 같은 모양 */''}
@@ -4937,10 +4947,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-3">
-                    <!-- [냐냐 요청] 정답률 · DELE · 점수는 오른쪽 아래 (2026-09-15 다시 내림) -->
-                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
+                    ${/* [냐냐 요청] 정답률 · DELE · 점수는 오른쪽 아래. 접혀 있을 땐 감춘다 (2026-09-15).
+                         ⚠️ 셋의 높이가 어긋나던 건 DELE 뱃지를 감싼 span 때문이었다 — 그 span 이
+                            flex 칸이 되면서 안쪽 뱃지는 줄높이대로만 커져 1~2px 낮았다.
+                            감싸개에 inline-flex 를 줘서 안쪽 뱃지가 그대로 서게 한다. */''}
+                    <div data-card-badges="${w.id}" class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none ${expandedAll ? '' : 'hidden'}">
                         ${accHtml}
-                        <span data-dele="${w.id}">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
+                        <span data-dele="${w.id}" class="inline-flex items-center">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
                         <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
                     </div>
                     <!-- [냐냐 PATCH] 우측 하단: [정답률] [점수] -->
@@ -5135,6 +5148,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const meaning = document.querySelector(`[data-card-meaning="${id}"]`);
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
+            //   [냐냐 요청] 접으면 점수·DELE·정답률도 같이 감춘다 (2026-09-15)
+            const badges = document.querySelector(`[data-card-badges="${id}"]`);
+            if (badges) badges.classList.toggle('hidden', nowHidden);
             if (nowHidden) expandedCardIds.delete(id); else expandedCardIds.add(id);
             //   펼칠 때 DELE 레벨이 없으면 그때 한 번 물어본다 (있으면 아무 일도 안 한다)
             if (!nowHidden && typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(id);
@@ -5145,6 +5161,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // 다시 그린 뒤 펼쳐져 있던 카드를 복원
         function restoreExpandedCards() {
             expandedCardIds.forEach(id => {
+                const badges = document.querySelector(`[data-card-badges="${id}"]`);
+                if (badges) badges.classList.remove('hidden');
                 const body = document.querySelector(`[data-card-body="${id}"]`);
                 const chevron = document.querySelector(`[data-card-chevron="${id}"]`);
                 const meaning = document.querySelector(`[data-card-meaning="${id}"]`);

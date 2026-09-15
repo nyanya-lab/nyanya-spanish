@@ -6447,6 +6447,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // 현재 표들에 실제로 존재하는 주제만 필터 버튼으로 렌더 (기타는 맨 뒤)
+        //   지금 표들이 쓰는 주제 열쇠 전부 (전부 선택 = 안 거름)
+        function allGrammarTopicKeys() {
+            const present = new Set(getAllGrammarTables().map(grammarTopicKey));
+            const ordered = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(ic => present.has(ic));
+            if (present.has(GRAMMAR_OTHER_TOPIC)) ordered.push(GRAMMAR_OTHER_TOPIC);
+            return ordered;
+        }
+
         function renderGrammarTopicFilterButtons() {
             const box = document.getElementById('grammar-filter-topic-box');
             if (!box) return;
@@ -6497,7 +6505,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         function syncGrammarFilterPanelUI() {
-            pendingGrammarTopics = [...grammarFilterTopics];
+            //   [냐냐 요청] 주제도 품사·DELE 와 같은 규칙 — 패널에서는 전부 켜진 채로 시작한다
+            pendingGrammarTopics = grammarFilterTopics.length === 0 ? allGrammarTopicKeys() : [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
             document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b.dataset.gview === grammarGroupView));
             pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
@@ -6518,7 +6527,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             document.getElementById('grammar-filter-panel')?.classList.add('hidden');
         }
         function applyGrammarFilters() {
-            grammarFilterTopics = [...pendingGrammarTopics];
+            const allTopics = allGrammarTopicKeys();
+            grammarFilterTopics = (pendingGrammarTopics.length === 0 || pendingGrammarTopics.length >= allTopics.length)
+                ? [] : [...pendingGrammarTopics];
             grammarFilterMastery = pendingGrammarMastery;
             grammarFilterDele = (pendingGrammarDele.length === 0 || pendingGrammarDele.length === ALL_GDELE_LIST.length) ? [] : [...pendingGrammarDele];
             grammarSortMode = pendingGrammarSort;
@@ -6527,7 +6538,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             renderGrammarTables();
         }
         function resetGrammarFilters() {
-            pendingGrammarTopics = [];
+            pendingGrammarTopics = allGrammarTopicKeys();
             pendingGrammarMastery = 'all';
             pendingGrammarDele = [...ALL_GDELE_LIST];
             pendingGrammarSort = 'newest';
