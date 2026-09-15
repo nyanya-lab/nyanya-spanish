@@ -275,6 +275,7 @@ let vocabulary = [];
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
                 idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
                 deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
+                grammarDeleLevels: grammarDeleLevels,     // [냐냐 요청] 문법 노트별 DELE 레벨
                 //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
                 //   아직 안 정한 상태(null)면 안 보낸다 — 딴 기기에서 골라둔 걸 덮으면 안 된다.
                 writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
@@ -436,6 +437,7 @@ let vocabulary = [];
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
                 idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
+                grammarDeleLevels = payload.grammarDeleLevels || {};                 // [냐냐 요청] 문법 노트별 DELE 레벨
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
                 customGrammarTables = payload.customGrammarTables || [];
@@ -474,6 +476,7 @@ let vocabulary = [];
                 aiNotes = [];
                 idiomReview = {};
                 deleResult = null;
+                grammarDeleLevels = {};
                 customQuestions = [];
                 selectedQuestionTopics = [];
                 customGrammarTables = [];
@@ -3848,6 +3851,55 @@ let vocabulary = [];
         // 정답률 구간
         const DELE_ACC_STEPS = [[92, 'C2'], [85, 'C1'], [78, 'B2'], [70, 'B1'], [60, 'A2'], [0, 'A1']];
 
+        // ============================================================
+        // [냐냐 요청] 단어·문법마다 DELE(CEFR) 레벨을 붙인다 (2026-09-15).
+        //   여는 창 안에만 낸다 (목록에 다 붙이면 1373줄이 빽빽해진다 — 냐냐님 결정).
+        //   ⚠️ 문법은 공짜다. DELE 가늠을 낼 때 AI 에게 이미 '노트를 전부 분류하라' 고 시켜놓고
+        //      레벨별 개수와 예시 3개만 받아 쓰고 있었다 — 나머지 판정을 그냥 버리던 것을 주워 담는다.
+        //   ⚠️ 단어는 **열 때 그 하나만** 물어본다. 1373개를 미리 채울 까닭이 없다 —
+        //      창을 열어야 보이는 값이고, 한 번 물으면 단어에 적어두니 두 번 묻지 않는다.
+        // ============================================================
+        let grammarDeleLevels = {};   // { 노트id: 'B1' }
+        const DELE_LEVEL_BADGE = {
+            A1: 'bg-slate-100 text-slate-500',  A2: 'bg-sky-100 text-sky-700',
+            B1: 'bg-violet-100 text-violet-700', B2: 'bg-emerald-100 text-emerald-700',
+            C1: 'bg-amber-100 text-amber-700',   C2: 'bg-rose-100 text-rose-700'
+        };
+        function normDeleLevel(x) {
+            const lv = String(x || '').trim().toUpperCase();
+            return DELE_LEVELS.indexOf(lv) >= 0 ? lv : null;
+        }
+        function deleLevelBadgeHtml(lv) {
+            const v = normDeleLevel(lv);
+            if (!v) return '';
+            return `<span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${DELE_LEVEL_BADGE[v]} shrink-0" title="DELE(CEFR) 가늠 — AI 가 매긴 값이에요">${v}</span>`;
+        }
+
+        //   단어 하나의 레벨을 물어서 적어둔다. 이미 있으면 안 묻는다.
+        async function ensureWordDeleLevel(wordId) {
+            const w = (vocabulary || []).find(x => String(x.id) === String(wordId));
+            if (!w || normDeleLevel(w.deleLevel)) return;
+            if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return;
+            if (typeof callGemini !== 'function') return;
+            const bare = String(w.word || '').replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/i, '').trim();
+            if (!bare) return;
+            try {
+                const res = await callGemini(
+                    `Spanish word or phrase: "${bare}" (meaning in Korean: ${w.meaning || ''}).\n`
+                    + `Classify it into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common and basic it is in Spanish.`,
+                    'Answer with strictly valid JSON matching the schema. No explanation.',
+                    { type: 'OBJECT', properties: { level: { type: 'STRING' } }, required: ['level'] },
+                    'low',
+                    (typeof GEMINI_MODEL_FLASH_LITE !== 'undefined') ? GEMINI_MODEL_FLASH_LITE : undefined
+                );
+                const lv = normDeleLevel((extractAndParseJson(res) || {}).level);
+                if (!lv) return;
+                w.deleLevel = lv;
+                if (typeof saveToStorage === 'function') saveToStorage();
+                document.querySelectorAll(`[data-dele="${w.id}"]`).forEach(el => { el.innerHTML = deleLevelBadgeHtml(lv); });
+            } catch (e) { console.warn('DELE 레벨 물어보기 실패', e); }
+        }
+
         let deleResult = null;   // { date, overall, vocab, tense, acc, comment }
         let deleBusy = false;
         let deleAutoTried = false;   // 자동 갱신은 이 페이지에서 한 번만 (기간 버튼마다 AI를 부르면 안 된다)
@@ -4027,9 +4079,12 @@ let vocabulary = [];
                             samples: levelSamples(),
                             grammarCounts: levelCounts(),
                             grammarSamples: levelSamples(),
+                            //   [냐냐 요청] 노트마다의 판정도 받아 적어둔다 (2026-09-15).
+                            //   AI 는 이미 전부 분류하고 있었는데 개수와 예시 3개만 받아 쓰고 버렸다.
+                            grammarLevels: { type: "ARRAY", items: { type: "STRING" } },
                             comment: { type: "STRING", description: "어휘와 문법을 아울러 한국어 한 문장 총평" }
                         },
-                        required: ["counts", "samples", "grammarCounts", "grammarSamples", "comment"]
+                        required: ["counts", "samples", "grammarCounts", "grammarSamples", "grammarLevels", "comment"]
                     };
                     const gramBlock = gSample.titles.length
                         ? `
@@ -4037,11 +4092,12 @@ let vocabulary = [];
 The same learner also keeps these ${gSample.titles.length} Spanish grammar notes (titles are Korean, often with Spanish examples in parentheses).
 Classify EVERY note into exactly one CEFR level by when that grammar point is normally taught.
 Return "grammarCounts" (the six numbers MUST add up to ${gSample.titles.length}) and "grammarSamples" (up to 3 note titles per level, copied EXACTLY as given, [] if none).
+Also return "grammarLevels": one entry per note, written as "<note title copied EXACTLY>|<LEVEL>" — ${gSample.titles.length} entries, same order as given.
 
 Grammar notes: ${gSample.titles.join(' / ')}`
                         : `
 
-The learner has no usable grammar notes. Return "grammarCounts" with all six values 0 and "grammarSamples" with all six empty arrays.`;
+The learner has no usable grammar notes. Return "grammarCounts" with all six values 0, "grammarSamples" with all six empty arrays, and "grammarLevels" as [].`;
                     const prompt = `Here are ${sample.words.length} Spanish words a Korean learner has studied.
 Classify EVERY word into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common/basic it is in Spanish.
 Return "counts" = how many words fell into each level (the six numbers MUST add up to ${sample.words.length}).
@@ -4074,6 +4130,24 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             samples: data.grammarSamples || {},
                             detail: `맞게 써본 문법 노트 ${gSample.poolSize}개로 쟀어요 (노트 ${gSample.allSize}개 중)`
                         } : null;
+                    }
+                    //   [냐냐 요청] 노트마다의 레벨을 제목으로 맞춰 적어둔다 (2026-09-15)
+                    if (Array.isArray(data.grammarLevels)) {
+                        const byTitle = new Map();
+                        (getAllGrammarTables() || []).forEach(t => {
+                            const k = String(t.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                            if (k) byTitle.set(k, t.id);
+                        });
+                        let got = 0;
+                        data.grammarLevels.forEach(raw => {
+                            const at = String(raw || '').lastIndexOf('|');
+                            if (at < 0) return;
+                            const title = String(raw).slice(0, at).replace(/\s+/g, ' ').trim().toLowerCase();
+                            const lv = normDeleLevel(String(raw).slice(at + 1));
+                            const id = byTitle.get(title);
+                            if (id && lv) { grammarDeleLevels[id] = lv; got++; }
+                        });
+                        if (got) console.log(`[DELE] 문법 노트 ${got}개에 레벨을 적었어요`);
                     }
                     if (data.comment) deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) });
                 } catch (e) {
@@ -4489,7 +4563,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (titleEl) {
                 titleEl.innerHTML = `${t.icon ? `<span>${escapeHtml(t.icon)}</span>` : ''}
                     <span class="min-w-0 break-words">${escapeHtml(t.title || '문법 노트')}</span>
-                    <span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} shrink-0" title="${gi.label}">${formatGrammarScore(id)}</span>`;
+                    <span class="px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge} shrink-0" title="${gi.label}">${formatGrammarScore(id)}</span>
+                    ${deleLevelBadgeHtml(grammarDeleLevels[id])}`;
             }
             const body = document.getElementById('grammar-peek-body');
             if (body) {

@@ -4820,6 +4820,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   펼칠 때(toggleWordCard) 그때 채운다 → 750개 카드도 처음엔 헤더만 그려서 훨씬 가벼움
         function buildCardBody(w) {
             const isVerb = w.pos === 'verb';
+            //   [냐냐 요청] DELE 레벨은 펼친 카드 안에만 낸다 (2026-09-15).
+            //   아직 안 물어본 단어는 '…' 로 두고, 펼치는 그 순간 물어본다 (toggleWordCard).
+            const deleHtml = (typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : '';
             return `
                         <!-- Meaning section -->
                         <div class="space-y-1">
@@ -4827,6 +4830,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 <span class="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
                                 <span>뜻:</span>
                                 <strong class="text-slate-800 font-bold">${w.meaning}</strong>
+                                <span class="ml-auto flex items-center gap-1 shrink-0">
+                                    <span class="text-[10px] font-black text-slate-300">DELE</span>
+                                    <span data-dele="${w.id}">${deleHtml || '<span class="text-[10px] font-bold text-slate-300">…</span>'}</span>
+                                </span>
                             </p>
                         </div>
 
@@ -4872,6 +4879,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!body) return;
             const nowHidden = body.classList.toggle('hidden');
             if (nowHidden) expandedCardIds.delete(id); else expandedCardIds.add(id);
+            //   펼칠 때 DELE 레벨이 없으면 그때 한 번 물어본다 (있으면 아무 일도 안 한다)
+            if (!nowHidden && typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(id);
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
             if (meaning) meaning.classList.toggle('hidden', !nowHidden);
         }
