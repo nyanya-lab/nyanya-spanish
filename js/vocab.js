@@ -4499,10 +4499,130 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (typeof renderTodayReview === 'function') { try { renderTodayReview(); } catch (err) {} }
         }
 
+
+        // ============================================================
+        // [냐냐 요청] 관용구 사전 (2026-09-15). 단어장 안에서 버튼으로 오간다.
+        //   1314개라 단어장과 맞먹는 규모다 — 검색·페이지 넘김을 그대로 쓴다.
+        //   카드 모양도 단어장과 같은 틀을 쓴다 (냐냐님 말씀 — 편집 안 해도 되니 편하다).
+        //   ⚠️ 기존 단어장은 건드리지 않는다. 모드가 'idiom' 일 때만 이 길로 샌다.
+        //   ⚠️ 점수는 표현마다 따로다 (idiomScores). 주인 단어 점수와 섞이지 않는다.
+        // ============================================================
+        let vocabMode = 'word';   // 'word' | 'idiom'
+
+        function renderVocabModeBtn() {
+            const btn = document.getElementById('vocab-mode-btn');
+            if (!btn) return;
+            const onIdiom = (vocabMode === 'idiom');
+            btn.innerHTML = onIdiom ? '📖 단어장' : '📘 관용구';
+            btn.title = onIdiom ? '단어장으로 돌아가요' : '관용구 사전을 봐요';
+            btn.className = onIdiom
+                ? 'px-2.5 h-7 rounded-lg border border-violet-400 bg-violet-50 text-[11px] font-bold text-violet-700 transition-all active:scale-95 whitespace-nowrap'
+                : 'px-2.5 h-7 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-500 transition-all active:scale-95 whitespace-nowrap';
+        }
+
+        function toggleVocabMode() {
+            vocabMode = (vocabMode === 'idiom') ? 'word' : 'idiom';
+            currentPage = 1;
+            renderVocabModeBtn();
+            renderWordList();
+        }
+
+        //   단어장 전체에서 관용구를 뽑아 한 줄씩 (주인 단어를 달고 온다)
+        function allIdiomRows() {
+            const out = [];
+            (vocabulary || []).forEach(w => {
+                (typeof wordIdiomList === 'function' ? wordIdiomList(w) : []).forEach(it => {
+                    if (!it || !it.idiom) return;
+                    out.push({ owner: w, it, text: String(it.idiom), meaning: String(it.idiomMeaning || '') });
+                });
+            });
+            return out;
+        }
+
+        function renderIdiomList() {
+            const grid = document.getElementById('vocabulary-grid');
+            const emptyState = document.getElementById('vocab-empty-state');
+            if (!grid) return;
+            const raw = document.getElementById('search-bar').value.trim().toLowerCase();
+            const q = stripAccents(raw);
+            const isSearching = q.length > 0;
+
+            let rows = allIdiomRows();
+            if (isSearching) {
+                rows = rows.filter(r => stripAccents(r.text.toLowerCase()).includes(q)
+                    || stripAccents(r.meaning.toLowerCase()).includes(q)
+                    || stripAccents(String(r.owner.word || '').toLowerCase()).includes(q));
+            }
+            //   약한 것부터 (단어장 기본 정렬과 같은 결)
+            rows.sort((a, b) => getIdiomScore(a.owner.id, a.it.iid || a.text) - getIdiomScore(b.owner.id, b.it.iid || b.text)
+                || a.text.localeCompare(b.text, 'es'));
+
+            if (!rows.length) {
+                grid.innerHTML = '';
+                if (emptyState) {
+                    const t = document.getElementById('vocab-empty-title');
+                    const d = document.getElementById('vocab-empty-desc');
+                    if (t) t.innerText = isSearching ? '찾는 관용구가 없어요' : '등록된 관용구가 아직 없어요!';
+                    if (d) d.innerText = isSearching ? '다른 말로 찾아보세요.' : '단어를 등록할 때 관용구도 같이 적어두면 여기에 모여요.';
+                    emptyState.classList.remove('hidden');
+                }
+                renderPagination(0, 0);
+                return;
+            }
+            if (emptyState) emptyState.classList.add('hidden');
+
+            let pageItems = rows, totalPages = 1;
+            if (!isSearching) {
+                totalPages = Math.max(1, Math.ceil(rows.length / WORDS_PER_PAGE));
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+                const start = (currentPage - 1) * WORDS_PER_PAGE;
+                pageItems = rows.slice(start, start + WORDS_PER_PAGE);
+            }
+            renderPagination(isSearching ? 0 : totalPages, rows.length);
+
+            grid.innerHTML = pageItems.map(r => {
+                const idRef = r.it.iid || r.text;
+                const grade = getIdiomGrade(r.owner.id, idRef);
+                const gi = GRADE_INFO[grade] || GRADE_INFO.normal;
+                const rec = idiomScores[idiomKey(r.owner.id, idRef)] || {};
+                const tries = (rec.correctTotal || 0) + (rec.wrongTotal || 0);
+                const acc = tries ? Math.round((rec.correctTotal || 0) / tries * 100) : null;
+                //   곡선에 들어와 있으면 오늘 차례인지도 같이 보여준다
+                const cr = (idiomReview || {})[idiomKey(r.owner.id, idRef)];
+                const due = cr && cr.lastWrongDate && typeof curveIsDue === 'function'
+                    && curveIsDue(cr.lastReviewDate, cr.lastWrongDate, cr.stage || 0, cr.keepDueDate);
+                return `
+                <div class="rounded-3xl p-5 bg-white border border-slate-200 flex flex-col justify-between hover:shadow-md transition-all duration-300 relative gap-3">
+                    <div class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none">
+                        ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
+                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
+                    </div>
+                    <div class="space-y-2.5">
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="min-w-0 leading-tight" style="word-break:break-word;">
+                                <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${escapeHtml(r.text)}</span>
+                                ${due ? '<span class="ml-1 align-middle text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">오늘 복습</span>' : ''}
+                                <span class="block text-sm text-slate-500 font-semibold mt-0.5">${escapeHtml(r.meaning)}</span>
+                            </span>
+                            <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                        </div>
+                        <button onclick="openWordModal('${escapeAttr(String(r.owner.id))}')" title="이 표현이 딸린 단어를 열어요"
+                            class="inline-flex items-center gap-1.5 text-[11px] font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 border border-violet-100 rounded-lg px-2 py-1 transition-colors">
+                            <i class="fa-solid fa-book-bookmark text-[10px]"></i>${escapeHtml(String(r.owner.word || ''))}
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         function renderWordList() {
             renderStreakBadge();
             renderTodayReview();
             renderTenseGapAlert();
+            renderVocabModeBtn();
+            //   [냐냐 요청] 관용구 사전 모드면 그쪽으로 샌다 (단어장은 그대로 둔다)
+            if (vocabMode === 'idiom') { renderIdiomList(); return; }
             const grid = document.getElementById('vocabulary-grid');
             const emptyState = document.getElementById('vocab-empty-state');
             const rawSearchVal = document.getElementById('search-bar').value.trim().toLowerCase();
@@ -4871,12 +4991,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             if (!isDisplayOn('idioms')) return '';
                             const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                             if (idiomList.length === 0) return '';
-                            const rows = idiomList.map((item, idx) => `
-                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''}">
-                                    <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
-                                    <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
-                                </div>
-                            `).join('');
+                            //   [냐냐 요청] 표현마다 제 점수를 오른쪽에 낸다 (2026-09-15)
+                            const rows = idiomList.map((item, idx) => {
+                                const ref = item.iid || item.idiom;
+                                const gi = GRADE_INFO[getIdiomGrade(w.id, ref)] || GRADE_INFO.normal;
+                                return `
+                                <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''} flex items-start gap-2">
+                                    <span class="min-w-0 flex-1">
+                                        <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
+                                        <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
+                                    </span>
+                                    <span class="shrink-0 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(w.id, ref)}</span>
+                                </div>`;
+                            }).join('');
                             return `
                         <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Expresión (관용구)</span>

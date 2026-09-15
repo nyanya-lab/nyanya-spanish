@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609152043">
+    <link rel="stylesheet" href="css/style.css?v=202609152046">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -396,7 +396,12 @@
                     <!-- [냐냐 요청] 입력창과 함께 고정. 같은 줄 오른쪽에 페이지 이동 -->
                     <div class="flex items-center justify-between gap-2 px-1 pt-1.5">
                         <div id="filter-summary" class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 min-w-0"></div>
-                        <div id="vocab-pagination-sticky" class="shrink-0"></div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <!-- [냐냐 요청] 단어장 ↔ 관용구 사전 전환 (페이지 넘기기 옆) -->
+                            <button id="vocab-mode-btn" onclick="toggleVocabMode()" title="단어장과 관용구 사전을 오갑니다"
+                                class="px-2.5 h-7 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-500 transition-all active:scale-95 whitespace-nowrap"></button>
+                            <div id="vocab-pagination-sticky" class="shrink-0"></div>
+                        </div>
                     </div>
                     </div><!-- /sticky search wrap -->
 
@@ -2421,13 +2426,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609152043"></script>
-    <script src="js/creatures.js?v=202609152043"></script>
-    <script src="js/core.js?v=202609152043"></script>
-    <script src="js/vocab.js?v=202609152043"></script>
-    <script src="js/flashcards.js?v=202609152043"></script>
-    <script src="js/quiz.js?v=202609152043"></script>
-    <script src="js/games.js?v=202609152043"></script>
-    <script src="js/ai-feedback.js?v=202609152043"></script>
+    <script src="js/dictionary-data.js?v=202609152046"></script>
+    <script src="js/creatures.js?v=202609152046"></script>
+    <script src="js/core.js?v=202609152046"></script>
+    <script src="js/vocab.js?v=202609152046"></script>
+    <script src="js/flashcards.js?v=202609152046"></script>
+    <script src="js/quiz.js?v=202609152046"></script>
+    <script src="js/games.js?v=202609152046"></script>
+    <script src="js/ai-feedback.js?v=202609152046"></script>
 </body>
 </html>
