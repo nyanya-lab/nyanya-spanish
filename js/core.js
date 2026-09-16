@@ -4938,6 +4938,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 : 'fa-solid fa-up-right-and-down-left-from-center text-[11px]';
         }
 
+        //   견줄 이름 — 글자·숫자만 남긴다 (따옴표·마침표·+ · 괄호 따위를 뺀다)
+        function grammarIndexSortKey(title) {
+            return String(title || '')
+                .replace(/[^0-9A-Za-z\u00C0-\u024F\uAC00-\uD7A3\u3131-\u318E\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
         function renderGrammarIndex() {
             const box = document.getElementById('grammar-index-body');
             if (!box) return;
@@ -4952,8 +4961,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const collapsed = !!grammarIndexCollapsed[key];
                 //   [냐냐 요청] 색인 안에서는 가나다순 — 목록의 정렬(등록순 등)과 상관없이
                 //   찾으려는 제목을 눈으로 훑는 곳이라 이름 순이 빠르다. 주제 차례는 그대로.
+                //   ⚠️ 문장기호는 빼고 견준다 — 따옴표로 시작하는 제목("'hay' 동사 활용")이
+                //      기호 때문에 맨 앞으로 튀어나가 이름 순이 어그러졌다.
                 const list = [...groups[key]].sort((a, b) =>
-                    String(a.title || '').localeCompare(String(b.title || ''), 'ko'));
+                    grammarIndexSortKey(a.title).localeCompare(grammarIndexSortKey(b.title), 'ko'));
                 const rows = list.map(t => {
                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
                     const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
@@ -4965,12 +4976,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     </button>`;
                 }).join('');
                 return `<div class="space-y-0.5">
+                    ${/* [냐냐 요청] 접힘 화살표는 개수 옆(오른쪽 끝)으로 (2026-09-16) */''}
                     <button type="button" onclick="toggleGrammarIndexGroup('${key}')"
                         class="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg ${c.b} hover:brightness-95 transition-all text-left">
-                        <i class="fa-solid fa-chevron-down ${c.t} text-[9px] shrink-0 transition-transform" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
                         <span class="text-sm shrink-0">${icon}</span>
                         <span class="text-[11px] font-black ${c.t} flex-1 min-w-0 truncate">${escapeHtml(grammarTopicLabel(key))}</span>
                         <span class="text-[10px] font-black ${c.t} opacity-60 shrink-0">${list.length}</span>
+                        <i class="fa-solid fa-chevron-down ${c.t} text-[9px] shrink-0 transition-transform" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
                     </button>
                     <div class="${collapsed ? 'hidden' : ''}">${rows}</div>
                 </div>`;

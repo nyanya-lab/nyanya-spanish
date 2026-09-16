@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609161308">
+    <link rel="stylesheet" href="css/style.css?v=202609161315">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1555,14 +1555,15 @@
                         <i class="fa-solid fa-chevron-left text-[10px]"></i>
                         <span class="text-[10px] font-black leading-none" style="writing-mode:vertical-rl">색인</span>
                     </button>
-                    <div id="grammar-index-panel" class="hidden fixed right-0 top-0 h-full w-72 max-w-[85vw] z-40 bg-white border-l border-slate-200 flex flex-col">
-                        <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2 shrink-0">
+                    <!-- [냐냐 요청] 테두리 대신 옅은 바탕으로 면을 가른다 (2026-09-16) -->
+                    <div id="grammar-index-panel" class="hidden fixed right-0 top-0 h-full w-72 max-w-[85vw] z-40 bg-slate-50 flex flex-col">
+                        <div class="px-4 py-3 flex items-center gap-2 shrink-0">
                             <span class="text-sm font-black text-slate-800 flex-1">📑 색인</span>
                             <!-- [냐냐 요청] 주제 전체 접기 / 펼치기 (2026-09-16) -->
-                            <button type="button" id="grammar-index-fold-btn" onclick="toggleAllGrammarIndexGroups()" title="주제 전체 접기" class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors">
+                            <button type="button" id="grammar-index-fold-btn" onclick="toggleAllGrammarIndexGroups()" title="주제 전체 접기" class="w-7 h-7 rounded-lg bg-white hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors">
                                 <i id="grammar-index-fold-icon" class="fa-solid fa-down-left-and-up-right-to-center text-[11px]"></i>
                             </button>
-                            <button type="button" onclick="toggleGrammarIndex(false)" title="닫기" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+                            <button type="button" onclick="toggleGrammarIndex(false)" title="닫기" class="w-7 h-7 rounded-full bg-white hover:bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fa-solid fa-chevron-right text-xs"></i></button>
                         </div>
                         <div id="grammar-index-body" class="flex-1 overflow-y-auto p-2 space-y-2.5"></div>
                     </div>
@@ -2518,13 +2519,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609161308"></script>
-    <script src="js/creatures.js?v=202609161308"></script>
-    <script src="js/core.js?v=202609161308"></script>
-    <script src="js/vocab.js?v=202609161308"></script>
-    <script src="js/flashcards.js?v=202609161308"></script>
-    <script src="js/quiz.js?v=202609161308"></script>
-    <script src="js/games.js?v=202609161308"></script>
-    <script src="js/ai-feedback.js?v=202609161308"></script>
+    <script src="js/dictionary-data.js?v=202609161315"></script>
+    <script src="js/creatures.js?v=202609161315"></script>
+    <script src="js/core.js?v=202609161315"></script>
+    <script src="js/vocab.js?v=202609161315"></script>
+    <script src="js/flashcards.js?v=202609161315"></script>
+    <script src="js/quiz.js?v=202609161315"></script>
+    <script src="js/games.js?v=202609161315"></script>
+    <script src="js/ai-feedback.js?v=202609161315"></script>
 </body>
 </html>
