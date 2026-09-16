@@ -5063,6 +5063,23 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             goToGrammarNote(id);
         }
 
+        //   [냐냐 요청] 제목줄의 문법 보유·마스터·약점도 같은 식으로 (2026-09-16)
+        function jumpToGrammarStat(kind) {
+            if (typeof changeTab === 'function') changeTab('grammar');
+            const sb = document.getElementById('grammar-search');
+            if (sb && sb.value) { sb.value = ''; }
+            document.getElementById('grammar-search-clear')?.classList.add('hidden');
+            grammarFilterTopics = [];
+            grammarFilterDele = [];
+            grammarFilterMastery = (kind === 'mastered') ? 'mastered' : (kind === 'weak' ? 'weak' : 'all');
+            if (typeof syncGrammarFilterPanelUI === 'function') syncGrammarFilterPanelUI();
+            saveGrammarFilterPrefs();
+            renderGrammarTables();
+            window.scrollTo(0, 0);
+            const what = kind === 'mastered' ? '마스터한 노트' : (kind === 'weak' ? '약점 노트' : '문법 노트 전체');
+            if (typeof showToast === 'function') showToast(`${what}만 보여드려요 (필터는 풀었어요)`, 'info');
+        }
+
         function goToGrammarNote(id) {
             const t = getAllGrammarTables().find(x => x.id === id);
             if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }

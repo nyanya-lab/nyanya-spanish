@@ -838,6 +838,29 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 요청] 검색했는데 없을 때 '등록하기' — 검색어를 등록창에 그대로 채워준다.
         //   검색은 단어와 뜻 둘 다에 걸리니, 한글이면 뜻 칸에 넣는다 (스페인어 칸에 한글이 들어가면 안 되니까)
+        // ============================================================
+        // [냐냐 요청] 제목줄의 보유·마스터·약점을 누르면 그 목록으로 바로 간다 (2026-09-16).
+        //   ⚠️ 가리고 있는 것을 먼저 다 걷는다 — 검색어·품사·DELE·'오늘 틀린 단어' 가 걸려 있으면
+        //      머리에 적힌 개수와 화면의 개수가 안 맞는다. 세어준 그 묶음을 그대로 보여준다.
+        // ============================================================
+        function jumpToVocabStat(kind) {
+            if (typeof changeTab === 'function') changeTab('list');
+            if (typeof vocabMode !== 'undefined' && vocabMode === 'idiom' && typeof toggleVocabMode === 'function') toggleVocabMode();
+            const sb = document.getElementById('search-bar');
+            if (sb && sb.value) { sb.value = ''; if (typeof handleSearchInput === 'function') handleSearchInput(); }
+            if (typeof todayWrongFilterActive !== 'undefined') todayWrongFilterActive = false;
+            activeFilterPos = [];
+            activeFilterDele = [];
+            activeFilterMastery = (kind === 'mastered') ? 'mastered' : 'all';
+            activeFilterWeak = (kind === 'weak') ? 'weak' : 'all';
+            if (typeof syncFilterPanelUI === 'function') syncFilterPanelUI();
+            currentPage = 1;
+            renderWordList();
+            window.scrollTo(0, 0);
+            const what = kind === 'mastered' ? '마스터한 단어' : (kind === 'weak' ? '약점 단어' : '단어장 전체');
+            if (typeof showToast === 'function') showToast(`${what}만 보여드려요 (필터는 풀었어요)`, 'info');
+        }
+
         function openWordModalFromSearch() {
             const q = ((document.getElementById('search-bar') || {}).value || '').trim();
             openWordModal();
