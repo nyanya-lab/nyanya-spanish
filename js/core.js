@@ -4884,12 +4884,27 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const open = (force === undefined) ? panel.classList.contains('hidden') : !!force;
             panel.classList.toggle('hidden', !open);
             if (handle) handle.classList.toggle('hidden', open);   // 열려 있으면 손잡이는 숨는다
+            grammarIndexOpenPref = open;
+            saveGrammarFilterPrefs();
             if (open) renderGrammarIndex();
         }
         function grammarIndexIsOpen() {
             const panel = document.getElementById('grammar-index-panel');
             return !!panel && !panel.classList.contains('hidden');
         }
+        //   [냐냐 요청] 색인은 펼친 채로 시작한다 (2026-09-16). 닫아두면 그것도 기억한다.
+        //   ⚠️ 좁은 화면에서는 색인이 노트를 통째로 덮어서, 거기서는 닫힌 채로 시작한다.
+        let grammarIndexOpenPref = true;
+        function applyGrammarIndexDefault() {
+            const open = grammarIndexOpenPref && window.innerWidth >= 1024;
+            const panel = document.getElementById('grammar-index-panel');
+            const handle = document.getElementById('grammar-index-tab');
+            if (!panel) return;
+            panel.classList.toggle('hidden', !open);
+            if (handle) handle.classList.toggle('hidden', open);
+            if (open) renderGrammarIndex();
+        }
+
         //   [냐냐 요청] 색인의 주제 접힘은 목록의 접힘과 따로 둔다 (2026-09-16) —
         //   색인에서 주제를 접었다고 목록까지 접히면 찾으러 온 곳이 되레 가려진다.
         let grammarIndexCollapsed = {};
@@ -4897,6 +4912,32 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             grammarIndexCollapsed[key] = !grammarIndexCollapsed[key];
             renderGrammarIndex();
         }
+        //   [냐냐 요청] 주제 전체 접기 / 펼치기 (2026-09-16).
+        //   하나라도 펼쳐져 있으면 '전부 접기', 다 접혀 있으면 '전부 펼치기' 로 움직인다.
+        function allGrammarIndexKeys() {
+            const keys = new Set();
+            getAllGrammarTables().forEach(t => keys.add(grammarTopicKey(t)));
+            return [...keys];
+        }
+        function toggleAllGrammarIndexGroups() {
+            const keys = allGrammarIndexKeys();
+            const anyOpen = keys.some(k => !grammarIndexCollapsed[k]);
+            grammarIndexCollapsed = {};
+            if (anyOpen) keys.forEach(k => { grammarIndexCollapsed[k] = true; });
+            renderGrammarIndex();
+        }
+        function syncGrammarIndexFoldBtn() {
+            const btn = document.getElementById('grammar-index-fold-btn');
+            const icon = document.getElementById('grammar-index-fold-icon');
+            if (!btn || !icon) return;
+            const keys = allGrammarIndexKeys();
+            const anyOpen = keys.some(k => !grammarIndexCollapsed[k]);
+            btn.title = anyOpen ? '주제 전체 접기' : '주제 전체 펼치기';
+            icon.className = anyOpen
+                ? 'fa-solid fa-down-left-and-up-right-to-center text-[11px]'
+                : 'fa-solid fa-up-right-and-down-left-from-center text-[11px]';
+        }
+
         function renderGrammarIndex() {
             const box = document.getElementById('grammar-index-body');
             if (!box) return;
@@ -4934,6 +4975,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     <div class="${collapsed ? 'hidden' : ''}">${rows}</div>
                 </div>`;
             }).join('') || '<p class="text-xs text-slate-400 text-center py-8 font-semibold">아직 노트가 없어요.</p>';
+            syncGrammarIndexFoldBtn();
         }
         function jumpFromGrammarIndex(id) {
             //   좁은 화면에서는 색인이 노트를 덮으니 데려다주고 닫는다
@@ -6732,7 +6774,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 localStorage.setItem('nyanya_grammar_filters', JSON.stringify({
                     topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
                     // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
-                    expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState
+                    expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState,
+                    indexOpen: grammarIndexOpenPref
                 }));
             } catch (e) {}
         }
@@ -6750,6 +6793,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (['default', 'topics-open', 'all-open'].includes(f.expand)) grammarViewMode = f.expand;
                 if (f.groups && typeof f.groups === 'object') grammarGroupCollapsed = f.groups;
                 if (f.open && typeof f.open === 'object') grammarOpenState = f.open;
+                if (typeof f.indexOpen === 'boolean') grammarIndexOpenPref = f.indexOpen;
             } catch (e) {}
         }
 
@@ -9594,6 +9638,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 // [냐냐 요청] 탭을 왔다갔다해도 마지막에 보던 모습 그대로 둔다
                 //   (예전엔 여기서 grammarOpenState 를 비워서 펼쳐둔 노트가 다 접혔다)
                 renderGrammarTables();
+                if (typeof applyGrammarIndexDefault === 'function') applyGrammarIndexDefault();
             }
 
             // 펼쳐둔 것뿐 아니라 보던 자리까지 되돌린다. 처음 여는 탭은 맨 위에서 시작한다.
