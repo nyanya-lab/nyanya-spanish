@@ -5219,7 +5219,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (typeof resetFilters === 'function') resetFilters();
             else if (typeof renderWordList === 'function') renderWordList();
             if (typeof updateStats === 'function') updateStats();
-            if (typeof showToast === 'function') showToast("필터를 풀고 목록을 새로고침했어요! 🔄", "info");
+            //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-16) — 버튼을 누른 사람이 이미 아는 일이다
         }
 
         // [냐냐 요청] 페이지 직접 입력 → 엔터/포커스아웃 시 이동

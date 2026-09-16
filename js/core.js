@@ -6558,7 +6558,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (typeof resetGrammarFilters === 'function') resetGrammarFilters();
             else renderGrammarTables();
             if (typeof updateStats === 'function') updateStats();
-            if (typeof showToast === 'function') showToast("필터를 풀고 목록을 새로고침했어요! 🔄", "info");
+            //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-16) — 버튼을 누른 사람이 이미 아는 일이다
         }
 
         // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
