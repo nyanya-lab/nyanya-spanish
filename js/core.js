@@ -5057,9 +5057,24 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             syncGrammarIndexFoldBtn();
             syncGrammarIndexHideBtn();
         }
+        // ============================================================
+        // [냐냐 요청] 색인에서 고르면 그 노트만 보여준다 (2026-09-16).
+        //   예전엔 목록 전체를 둔 채 그 자리로 데려다만 놨다. 노트가 길어서, 가고 나서도
+        //   위아래로 다른 노트가 붙어 있어 어디까지가 그 노트인지 알기 어려웠다.
+        //   ⚠️ 이건 필터가 아니라 '한 노트만 보기' 다 — 다른 필터를 건드리지 않고 그 위에 얹힌다.
+        //      푸는 길은 셋: 색인에서 다른 것 고르기 · 요약줄의 '전체 보기' · 새로고침 버튼.
+        // ============================================================
+        let grammarSoloId = null;
+        function clearGrammarSolo() {
+            grammarSoloId = null;
+            renderGrammarTables();
+            window.scrollTo(0, 0);
+        }
+
         function jumpFromGrammarIndex(id) {
             //   좁은 화면에서는 색인이 노트를 덮으니 데려다주고 닫는다
             if (window.innerWidth < 1024) toggleGrammarIndex(false);
+            grammarSoloId = id;
             goToGrammarNote(id);
         }
 
@@ -5108,7 +5123,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
             scrollToGrammarNote(id);
             // 검색어·필터를 지웠으면 말해준다. 말없이 지우면 '내 필터가 왜 풀렸지' 가 된다
-            showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗${걷어냄 ? ' (가리고 있던 검색·필터는 풀었어요)' : ''}`, "info");
+            //   [냐냐 요청] 색인에서 온 것이면 그 노트만 보여주는 중이라 빠져나갈 길을 같이 알린다
+            if (grammarSoloId === id) {
+                showToast(`"${t.title || '문법 노트'}" 만 보여드려요 📑 — 요약줄의 '전체 보기' 로 돌아가요`, "info");
+            } else {
+                showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗${걷어냄 ? ' (가리고 있던 검색·필터는 풀었어요)' : ''}`, "info");
+            }
         }
 
         // 그 노트를 화면 가운데로. 위에 sticky 검색줄이 있어서 그 높이만큼 비켜 세운다.
@@ -6050,6 +6070,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             document.getElementById('grammar-search-clear')?.classList.toggle('hidden', !query);
 
             let tables = getAllGrammarTables();
+            //   [냐냐 요청] '한 노트만 보기' — 색인에서 고른 그 하나만 (검색·필터보다 앞선다)
+            if (grammarSoloId) {
+                const only = tables.filter(t => t.id === grammarSoloId);
+                if (only.length) {
+                    document.getElementById('grammar-empty-msg')?.classList.add('hidden');
+                    container.innerHTML = only.map(t => renderGrammarNoteCard(t, '', true)).join('');
+                    if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
+                    if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
+                    if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
+                    if (typeof grammarIndexIsOpen === 'function' && grammarIndexIsOpen()) renderGrammarIndex();
+                    return;
+                }
+                grammarSoloId = null;   // 지워진 노트면 그냥 푼다
+            }
             if (query) {
                 tables = tables.filter(t => {
                     // [냐냐 요청] 블록 전체를 훑는다 — 글 블록 여러 개, 표 블록 여러 개 모두 검색됨
@@ -6512,11 +6546,19 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // [냐냐 요청] 문법 목록 새로고침 (점수·약점 변동 반영) — 단어장 새로고침과 같은 역할
+        //   [냐냐 요청] 새로고침이 '되돌리기' 노릇을 한다 (2026-09-16) — 단어장과 같은 규칙.
+        //   검색어·필터·'한 노트만 보기' 를 모두 푼다.
         function refreshGrammarList() {
             const icon = document.getElementById('grammar-refresh-icon');
             if (icon) { icon.classList.add('animate-spin'); setTimeout(() => icon.classList.remove('animate-spin'), 500); }
-            renderGrammarTables();
+            const sb = document.getElementById('grammar-search');
+            if (sb && sb.value) sb.value = '';
+            document.getElementById('grammar-search-clear')?.classList.add('hidden');
+            grammarSoloId = null;
+            if (typeof resetGrammarFilters === 'function') resetGrammarFilters();
+            else renderGrammarTables();
             if (typeof updateStats === 'function') updateStats();
+            if (typeof showToast === 'function') showToast("필터를 풀고 목록을 새로고침했어요! 🔄", "info");
         }
 
         // [냐냐 PATCH] 문법 표 고정 (항상 위+열림)
@@ -6857,6 +6899,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const chips = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
             if (grammarFilterDele.length) chips.push('DELE ' + grammarFilterDele.join('·'));
+            //   한 노트만 보는 중이면 그 사실과 빠져나갈 길을 맨 앞에 적는다
+            if (grammarSoloId) {
+                const t = getAllGrammarTables().find(x => x.id === grammarSoloId);
+                box.innerHTML = `<span class="bg-violet-100 text-violet-700 font-black px-2 py-0.5 rounded-full">📑 ${escapeHtml((t && t.title) || '한 노트')} 만 보는 중</span>`
+                    + `<button type="button" onclick="clearGrammarSolo()" class="text-[11px] font-bold text-violet-500 hover:text-violet-700 underline underline-offset-2">전체 보기</button>`;
+                return;
+            }
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
             else if (grammarFilterMastery === 'not-mastered') chips.push('마스터 제외');
             else if (grammarFilterMastery === 'weak') chips.push('약점만');

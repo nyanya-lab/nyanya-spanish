@@ -2985,7 +2985,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let activeFilterPos = [];          // 빈 배열 = 전체
         let activeFilterMastery = 'not-mastered';
         let activeFilterWeak = 'all';
-        let activeFilterSort = 'weak-score';
+        //   [냐냐 요청] 처음·초기화 정렬은 최근 등록순 (2026-09-16)
+        let activeFilterSort = 'recent';
         //   [냐냐 요청] DELE 레벨로도 거른다. 품사와 같은 규칙 — 패널에서는 전부 켜진 채로 시작하고,
         //   전부 켜져 있으면 '전체' 로 쳐서 안 거른다 ([] 로 저장). 'none' 은 아직 레벨이 없는 것.
         //   [냐냐 요청] '미정' 은 뺐다 (2026-09-15). 레벨 없는 것은 어떤 필터에서도 안 거른다 —
@@ -3325,14 +3326,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             pendingFilterPos = [...ALL_POS_LIST];
             pendingFilterMastery = 'not-mastered';
             pendingFilterWeak = 'all';
-            pendingFilterSort = 'weak-score';
+            pendingFilterSort = 'recent';
             pendingFilterDele = [...ALL_DELE_LIST];
             activeFilterDele = [];
             // [냐냐 PATCH] 활성 필터도 기본값으로 적용하고, 목록도 갱신 (단 패널은 열어둬서 확인 가능)
             activeFilterPos = [];
             activeFilterMastery = 'not-mastered';
             activeFilterWeak = 'all';
-            activeFilterSort = 'weak-score';
+            activeFilterSort = 'recent';
             currentPage = 1; // [냐냐 PATCH-페이지네이션] 필터 초기화 시 1페이지로
             syncFilterPanelUI();
             saveFilterPrefs();
@@ -3343,7 +3344,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   [냐냐 요청] 필터가 걸려 있으면 버튼 색을 바꾼다 — 단어장·관용구 사전이 같이 쓴다
         function syncFilterBtnColor() {
             const hasActiveFilter = activeFilterPos.length > 0 || activeFilterMastery !== 'not-mastered'
-                || activeFilterWeak !== 'all' || activeFilterDele.length > 0 || activeFilterSort !== 'weak-score';
+                || activeFilterWeak !== 'all' || activeFilterDele.length > 0 || activeFilterSort !== 'recent';
             const ON = "w-10 h-10 bg-violet-100 hover:bg-violet-200 rounded-xl border border-violet-400 text-sm text-violet-700 transition-all flex items-center justify-center";
             const OFF = "w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 text-sm text-slate-600 transition-all flex items-center justify-center";
             const fBtn = document.getElementById('filter-panel-btn');
@@ -5201,15 +5202,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         // [냐냐 요청] 단어 목록 새로고침 — 약점·점수 변동이 목록에 바로 반영되도록
+        //   [냐냐 요청] 새로고침이 '되돌리기' 노릇을 한다 (2026-09-16).
+        //   제목줄 숫자로 바로 갈 수 있게 되면서 필터가 저절로 걸리는 길이 생겼다.
+        //   그걸 푸는 자리가 필요한데, 새로고침이 이미 '원래대로' 를 뜻하는 버튼이라 여기에 싣는다.
+        //   검색어·관용구 사전 전환·'오늘 틀린 단어' 까지 같이 푼다.
         function refreshWordList() {
             const icon = document.getElementById('vocab-refresh-icon');
             if (icon) {
                 icon.classList.add('fa-spin');
                 setTimeout(() => icon.classList.remove('fa-spin'), 600);
             }
-            if (typeof renderWordList === 'function') renderWordList();
+            const sb = document.getElementById('search-bar');
+            if (sb && sb.value) { sb.value = ''; if (typeof handleSearchInput === 'function') handleSearchInput(); }
+            if (typeof vocabMode !== 'undefined' && vocabMode === 'idiom' && typeof toggleVocabMode === 'function') toggleVocabMode();
+            if (typeof todayWrongFilterActive !== 'undefined') todayWrongFilterActive = false;
+            if (typeof resetFilters === 'function') resetFilters();
+            else if (typeof renderWordList === 'function') renderWordList();
             if (typeof updateStats === 'function') updateStats();
-            if (typeof showToast === 'function') showToast("단어 목록을 새로고침했어요! 🔄", "info");
+            if (typeof showToast === 'function') showToast("필터를 풀고 목록을 새로고침했어요! 🔄", "info");
         }
 
         // [냐냐 요청] 페이지 직접 입력 → 엔터/포커스아웃 시 이동
