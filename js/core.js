@@ -4947,6 +4947,42 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 .toLowerCase();
         }
 
+        // ============================================================
+        // [냐냐 요청] 색인에서 노트 숨기기 (2026-09-16).
+        //   등록할수록 색인이 길어져 찾기가 되레 힘들어진다. 자주 안 보는 노트는
+        //   색인에서 빼둘 수 있게 한다 — 목록·검색·복습에는 그대로 있다. 색인에서만 안 보인다.
+        //   눈 버튼을 누르면 '숨기기 고르는 중' 이 되고, 그때만 숨긴 것까지 다 보이면서
+        //   줄마다 눈 버튼이 생긴다. 이 상태에서는 눌러도 그 노트로 가지 않는다.
+        // ============================================================
+        let grammarIndexHidden = {};      // { 노트id: true }
+        let grammarIndexEditing = false;  // 숨기기 고르는 중
+        function toggleGrammarIndexEdit() {
+            grammarIndexEditing = !grammarIndexEditing;
+            renderGrammarIndex();
+        }
+        function toggleGrammarIndexHide(id, event) {
+            if (event) event.stopPropagation();
+            if (grammarIndexHidden[id]) delete grammarIndexHidden[id];
+            else grammarIndexHidden[id] = true;
+            saveGrammarFilterPrefs();
+            renderGrammarIndex();
+        }
+        function showAllGrammarIndex() {
+            grammarIndexHidden = {};
+            saveGrammarFilterPrefs();
+            renderGrammarIndex();
+        }
+        function syncGrammarIndexHideBtn() {
+            const btn = document.getElementById('grammar-index-hide-btn');
+            const icon = document.getElementById('grammar-index-hide-icon');
+            if (!btn || !icon) return;
+            btn.title = grammarIndexEditing ? '숨기기 고르기 끝내기' : '색인에서 숨기기';
+            btn.className = grammarIndexEditing
+                ? 'w-9 h-9 rounded-lg bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center transition-colors'
+                : 'w-9 h-9 rounded-lg bg-white hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors';
+            icon.className = grammarIndexEditing ? 'fa-solid fa-check text-xs' : 'fa-solid fa-eye text-xs';
+        }
+
         function renderGrammarIndex() {
             const box = document.getElementById('grammar-index-body');
             if (!box) return;
@@ -4955,7 +4991,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             tables.forEach(t => { const k = grammarTopicKey(t); (groups[k] = groups[k] || []).push(t); });
             const order = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(k => groups[k]);
             if (groups[GRAMMAR_OTHER_TOPIC]) order.push(GRAMMAR_OTHER_TOPIC);
-            box.innerHTML = order.map(key => {
+            const hiddenCount = tables.filter(t => grammarIndexHidden[t.id]).length;
+            //   고르는 중에만 뜨는 안내 줄 (숨긴 게 있으면 한 번에 되돌리는 버튼도)
+            const editBar = grammarIndexEditing
+                ? `<div class="flex items-center gap-2 px-2 py-2 rounded-lg bg-violet-50 border border-violet-200">
+                        <span class="text-[10px] font-bold text-violet-700 leading-snug flex-1">눈을 눌러 색인에서 빼요. 목록·검색에는 그대로 있어요.</span>
+                        ${hiddenCount ? `<button type="button" onclick="showAllGrammarIndex()" class="shrink-0 px-2 py-1 rounded-md bg-white hover:bg-violet-100 text-[10px] font-black text-violet-700 transition-colors">모두 보이기 ${hiddenCount}</button>` : ''}
+                   </div>`
+                : (hiddenCount ? `<p class="px-2 text-[10px] font-bold text-slate-400">숨긴 노트 ${hiddenCount}개</p>` : '');
+            box.innerHTML = editBar + order.map(key => {
                 const c = grammarTopicColor(key);
                 const icon = key === GRAMMAR_OTHER_TOPIC ? '⭐' : key;
                 const collapsed = !!grammarIndexCollapsed[key];
@@ -4963,15 +5007,29 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 //   찾으려는 제목을 눈으로 훑는 곳이라 이름 순이 빠르다. 주제 차례는 그대로.
                 //   ⚠️ 문장기호는 빼고 견준다 — 따옴표로 시작하는 제목("'hay' 동사 활용")이
                 //      기호 때문에 맨 앞으로 튀어나가 이름 순이 어그러졌다.
-                const list = [...groups[key]].sort((a, b) =>
+                const all = [...groups[key]].sort((a, b) =>
                     grammarIndexSortKey(a.title).localeCompare(grammarIndexSortKey(b.title), 'ko'));
+                //   고르는 중에는 숨긴 것까지 다 보여준다 (안 보이면 되돌릴 수가 없다)
+                const list = grammarIndexEditing ? all : all.filter(t => !grammarIndexHidden[t.id]);
+                if (!list.length) return '';
                 const rows = list.map(t => {
                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
                     const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
+                    const off = !!grammarIndexHidden[t.id];
                     //   [냐냐 지적] title 은 안 단다 — 적힌 게 제목 그대로라,
                     //   마우스를 대면 브라우저 안내가 같은 말을 흰 상자로 한 번 더 띄운다 (2026-09-16)
-                    return `<button type="button" onclick="jumpFromGrammarIndex('${t.id}')"
-                        class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg hover:bg-violet-50 transition-colors">
+                    const eye = grammarIndexEditing
+                        ? `<span onclick="toggleGrammarIndexHide('${t.id}', event)" title="${off ? '색인에 다시 보이기' : '색인에서 숨기기'}"
+                                class="shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-colors ${off ? 'text-slate-300 hover:text-violet-500' : 'text-violet-500 hover:bg-violet-100'}">
+                                <i class="fa-solid ${off ? 'fa-eye-slash' : 'fa-eye'} text-[10px]"></i>
+                           </span>`
+                        : '';
+                    const click = grammarIndexEditing
+                        ? `toggleGrammarIndexHide('${t.id}', event)`
+                        : `jumpFromGrammarIndex('${t.id}')`;
+                    return `<button type="button" onclick="${click}"
+                        class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg hover:bg-violet-50 transition-colors ${off ? 'opacity-40' : ''}">
+                        ${eye}
                         ${pin}
                         <span class="text-[11px] font-bold text-slate-600 truncate flex-1 min-w-0">${escapeHtml(t.title || '(제목 없음)')}</span>
                         <span class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
@@ -4988,8 +5046,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     </button>
                     <div class="${collapsed ? 'hidden' : ''}">${rows}</div>
                 </div>`;
-            }).join('') || '<p class="text-xs text-slate-400 text-center py-8 font-semibold">아직 노트가 없어요.</p>';
+            }).join('');
+            if (!box.innerHTML.trim()) box.innerHTML = '<p class="text-xs text-slate-400 text-center py-8 font-semibold">아직 노트가 없어요.</p>';
             syncGrammarIndexFoldBtn();
+            syncGrammarIndexHideBtn();
         }
         function jumpFromGrammarIndex(id) {
             //   좁은 화면에서는 색인이 노트를 덮으니 데려다주고 닫는다
@@ -6789,7 +6849,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
                     // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
                     expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState,
-                    indexOpen: grammarIndexOpenPref
+                    indexOpen: grammarIndexOpenPref, indexHidden: grammarIndexHidden
                 }));
             } catch (e) {}
         }
@@ -6808,6 +6868,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (f.groups && typeof f.groups === 'object') grammarGroupCollapsed = f.groups;
                 if (f.open && typeof f.open === 'object') grammarOpenState = f.open;
                 if (typeof f.indexOpen === 'boolean') grammarIndexOpenPref = f.indexOpen;
+                if (f.indexHidden && typeof f.indexHidden === 'object') grammarIndexHidden = f.indexHidden;
             } catch (e) {}
         }
 
