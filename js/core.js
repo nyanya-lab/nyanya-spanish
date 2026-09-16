@@ -4968,7 +4968,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const rows = list.map(t => {
                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
                     const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
-                    return `<button type="button" onclick="jumpFromGrammarIndex('${t.id}')" title="${escapeAttr(t.title || '')}"
+                    //   [냐냐 지적] title 은 안 단다 — 적힌 게 제목 그대로라,
+                    //   마우스를 대면 브라우저 안내가 같은 말을 흰 상자로 한 번 더 띄운다 (2026-09-16)
+                    return `<button type="button" onclick="jumpFromGrammarIndex('${t.id}')"
                         class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg hover:bg-violet-50 transition-colors">
                         ${pin}
                         <span class="text-[11px] font-bold text-slate-600 truncate flex-1 min-w-0">${escapeHtml(t.title || '(제목 없음)')}</span>
