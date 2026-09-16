@@ -285,7 +285,9 @@ let vocabulary = [];
                 //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
                 //   아직 안 정한 상태(null)면 안 보낸다 — 딴 기기에서 골라둔 걸 덮으면 안 된다.
                 writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
-                gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {}
+                gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {},
+                //   [냐냐 요청] 문법 보기 설정 (필터·정렬·펼침·색인 숨김) — 폰과 PC 가 같은 모습으로 열리게
+                grammarPrefs: (typeof grammarPrefsSnapshot === 'function') ? grammarPrefsSnapshot() : undefined
             };
         }
 
@@ -476,6 +478,10 @@ let vocabulary = [];
                 // [냐냐 요청] 미니게임 역대기록 — 예전엔 이 기기 localStorage 에만 있어서
                 //   폰과 PC 기록이 서로 안 보이고 '없어졌다 생겼다' 했다. 이제 같이 동기화한다.
                 if (typeof mergeGameHighScores === 'function') mergeGameHighScores(payload.gameHighScores);
+                //   [냐냐 요청] 문법 보기 설정은 여기서 바로 안 씌운다 — loadGrammarFilterPrefs 가
+                //   나중에 돌면서 이 기기 값으로 덮어버린다. 세워뒀다가 그쪽 끝에서 씌운다.
+                _syncedGrammarPrefs = (payload.grammarPrefs && typeof payload.grammarPrefs === 'object')
+                    ? payload.grammarPrefs : null;
             } else {
                 vocabulary = [...DEFAULT_VOCABULARY];
                 nyanyaDiary = {};
@@ -6843,33 +6849,53 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 : `<span class="text-slate-400">전체 표</span>`;
             box.innerHTML = `<i class="fa-solid fa-filter text-[9px]"></i>${filterPart}<span class="text-slate-300">·</span><span class="text-slate-500">${sortLabel}</span>`;
         }
+        // ============================================================
+        // [냐냐 요청] 문법 보기 설정을 기기끼리 맞춘다 (2026-09-16).
+        //   여태 이 설정들은 이 기기 localStorage 에만 있었다 — 색인에서 숨긴 노트를
+        //   PC 에서 골라놔도 폰에서는 그대로 다 보였다. 이제 저장 짐(payload)에 같이 실어
+        //   폰·PC 가 같은 모습으로 열린다. localStorage 는 그대로 둔다 (동기화가 꺼져 있거나
+        //   서버에 아직 없을 때의 그물).
+        //   ⚠️ 순서 주의: 시작할 때 loadFromStorage 가 먼저 돌고 loadGrammarFilterPrefs 가
+        //      나중에 돈다. 그래서 서버에서 받은 것은 여기 세워뒀다가 마지막에 덮어씌운다 —
+        //      안 그러면 이 기기의 옛 설정이 딴 기기에서 온 새 설정을 도로 밀어낸다.
+        // ============================================================
+        let _syncedGrammarPrefs = null;
+        function grammarPrefsSnapshot() {
+            return {
+                topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
+                // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
+                expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState,
+                indexOpen: grammarIndexOpenPref, indexHidden: grammarIndexHidden,
+                indexGroups: grammarIndexCollapsed
+            };
+        }
+        function applyGrammarPrefs(f) {
+            if (!f || typeof f !== 'object') return;
+            if (Array.isArray(f.topics)) grammarFilterTopics = f.topics;
+            if (f.mastery) grammarFilterMastery = f.mastery;
+            if (f.view === 'list' || f.view === 'group') grammarGroupView = f.view;
+            // 예전에 저장해둔 값('topic' 등 지금은 없는 것)이 남아 있으면 기본(가나다순)으로
+            if (f.sort) grammarSortMode = GSORT_KEY_OF[f.sort] ? f.sort : 'alpha-asc';
+            // [냐냐 요청] 마지막에 보던 모습 복원 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
+            if (['default', 'topics-open', 'all-open'].includes(f.expand)) grammarViewMode = f.expand;
+            if (f.groups && typeof f.groups === 'object') grammarGroupCollapsed = f.groups;
+            if (f.open && typeof f.open === 'object') grammarOpenState = f.open;
+            if (typeof f.indexOpen === 'boolean') grammarIndexOpenPref = f.indexOpen;
+            if (f.indexHidden && typeof f.indexHidden === 'object') grammarIndexHidden = f.indexHidden;
+            if (f.indexGroups && typeof f.indexGroups === 'object') grammarIndexCollapsed = f.indexGroups;
+        }
         function saveGrammarFilterPrefs() {
-            try {
-                localStorage.setItem('nyanya_grammar_filters', JSON.stringify({
-                    topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
-                    // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
-                    expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState,
-                    indexOpen: grammarIndexOpenPref, indexHidden: grammarIndexHidden
-                }));
-            } catch (e) {}
+            try { localStorage.setItem('nyanya_grammar_filters', JSON.stringify(grammarPrefsSnapshot())); } catch (e) {}
+            //   딴 기기에도 넘어가게 짐에 실어 올린다 (1초 미룸이라 연달아 눌러도 한 번만 올라간다)
+            if (typeof saveToStorage === 'function') saveToStorage();
         }
         function loadGrammarFilterPrefs() {
             try {
                 const raw = localStorage.getItem('nyanya_grammar_filters');
-                if (!raw) return;
-                const f = JSON.parse(raw);
-                if (Array.isArray(f.topics)) grammarFilterTopics = f.topics;
-                if (f.mastery) grammarFilterMastery = f.mastery;
-                if (f.view === 'list' || f.view === 'group') grammarGroupView = f.view;
-                // 예전에 저장해둔 값('topic' 등 지금은 없는 것)이 남아 있으면 기본(가나다순)으로
-                if (f.sort) grammarSortMode = GSORT_KEY_OF[f.sort] ? f.sort : 'alpha-asc';
-                // [냐냐 요청] 마지막에 보던 모습 복원 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
-                if (['default', 'topics-open', 'all-open'].includes(f.expand)) grammarViewMode = f.expand;
-                if (f.groups && typeof f.groups === 'object') grammarGroupCollapsed = f.groups;
-                if (f.open && typeof f.open === 'object') grammarOpenState = f.open;
-                if (typeof f.indexOpen === 'boolean') grammarIndexOpenPref = f.indexOpen;
-                if (f.indexHidden && typeof f.indexHidden === 'object') grammarIndexHidden = f.indexHidden;
+                if (raw) applyGrammarPrefs(JSON.parse(raw));
             } catch (e) {}
+            //   서버에서 온 것이 있으면 그것이 이긴다 (마지막으로 저장한 기기의 모습)
+            if (_syncedGrammarPrefs) applyGrammarPrefs(_syncedGrammarPrefs);
         }
 
         // ---- 문법 표 편집기 ----
