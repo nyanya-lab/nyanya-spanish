@@ -5093,8 +5093,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             saveGrammarFilterPrefs();
             renderGrammarTables();
             window.scrollTo(0, 0);
-            const what = kind === 'mastered' ? '마스터한 노트' : (kind === 'weak' ? '약점 노트' : '문법 노트 전체');
-            if (typeof showToast === 'function') showToast(`${what}만 보여드려요 (필터는 풀었어요)`, 'info');
+            //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-16) — 요약줄에 이미 적혀 있다
         }
 
         function goToGrammarNote(id) {
