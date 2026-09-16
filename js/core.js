@@ -5022,6 +5022,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
                     const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
                     const off = !!grammarIndexHidden[t.id];
+                    //   [냐냐 요청] 지금 보고 있는 노트는 색으로 짚어준다 (2026-09-16)
+                    const on = (typeof grammarSoloId !== 'undefined' && grammarSoloId === t.id);
                     //   [냐냐 지적] title 은 안 단다 — 적힌 게 제목 그대로라,
                     //   마우스를 대면 브라우저 안내가 같은 말을 흰 상자로 한 번 더 띄운다 (2026-09-16)
                     const eye = grammarIndexEditing
@@ -5034,10 +5036,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         ? `toggleGrammarIndexHide('${t.id}', event)`
                         : `jumpFromGrammarIndex('${t.id}')`;
                     return `<button type="button" onclick="${click}"
-                        class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg hover:bg-violet-50 transition-colors ${off ? 'opacity-40' : ''}">
+                        class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg transition-colors ${off ? 'opacity-40' : ''} ${on ? 'bg-violet-600' : 'hover:bg-violet-50'}">
                         ${eye}
                         ${pin}
-                        <span class="text-[11px] font-bold text-slate-600 truncate flex-1 min-w-0">${escapeHtml(t.title || '(제목 없음)')}</span>
+                        <span class="text-[11px] font-bold truncate flex-1 min-w-0 ${on ? 'text-white' : 'text-slate-600'}">${escapeHtml(t.title || '(제목 없음)')}</span>
                         <span class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
                     </button>`;
                 }).join('');
@@ -5123,9 +5125,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
             scrollToGrammarNote(id);
             // 검색어·필터를 지웠으면 말해준다. 말없이 지우면 '내 필터가 왜 풀렸지' 가 된다
-            //   [냐냐 요청] 색인에서 온 것이면 그 노트만 보여주는 중이라 빠져나갈 길을 같이 알린다
+            //   [냐냐 요청] 색인에서 온 것이면 토스트를 안 띄운다 (2026-09-16) —
+            //   색인에 보라색으로 짚어주고 '전체 보기' 도 화면에 떠 있어서 말로 또 할 것 없다.
             if (grammarSoloId === id) {
-                showToast(`"${t.title || '문법 노트'}" 만 보여드려요 📑 — 요약줄의 '전체 보기' 로 돌아가요`, "info");
+                /* 조용히 */
             } else {
                 showToast(`"${t.title || '문법 노트'}" 로 이동했어요 🔗${걷어냄 ? ' (가리고 있던 검색·필터는 풀었어요)' : ''}`, "info");
             }
@@ -6899,11 +6902,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const chips = [];
             if (grammarFilterTopics.length > 0) chips.push(grammarFilterTopics.map(grammarTopicLabel).join('·'));
             if (grammarFilterDele.length) chips.push('DELE ' + grammarFilterDele.join('·'));
-            //   한 노트만 보는 중이면 그 사실과 빠져나갈 길을 맨 앞에 적는다
+            //   [냐냐 요청] 한 노트만 보는 중일 때는 빠져나갈 길만 오른쪽에 둔다 (2026-09-16).
+            //   무엇을 보고 있는지는 색인에 색으로 표시되고 화면에 그 노트가 떠 있으니,
+            //   '~만 보는 중' 이라고 또 적을 것 없다.
             if (grammarSoloId) {
-                const t = getAllGrammarTables().find(x => x.id === grammarSoloId);
-                box.innerHTML = `<span class="bg-violet-100 text-violet-700 font-black px-2 py-0.5 rounded-full">📑 ${escapeHtml((t && t.title) || '한 노트')} 만 보는 중</span>`
-                    + `<button type="button" onclick="clearGrammarSolo()" class="text-[11px] font-bold text-violet-500 hover:text-violet-700 underline underline-offset-2">전체 보기</button>`;
+                box.innerHTML = `<button type="button" onclick="clearGrammarSolo()" class="ml-auto text-[11px] font-bold text-violet-500 hover:text-violet-700 underline underline-offset-2">전체 보기</button>`;
                 return;
             }
             if (grammarFilterMastery === 'mastered') chips.push('마스터만');
