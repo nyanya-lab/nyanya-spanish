@@ -5327,6 +5327,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             expandedCardIds.clear();
             if (expand) document.querySelectorAll('[data-card-body]').forEach(b => expandedCardIds.add(b.getAttribute('data-card-body')));
             document.querySelectorAll('[data-card-body]').forEach(b => b.classList.toggle('hidden', !expand));
+            //   [냐냐 지적] 전체 펼치기로 열었을 땐 뷰지를 안 켜줘서 점수·DELE·정답률이 숨은 채로 남았다
+            document.querySelectorAll('[data-card-badges]').forEach(b => b.classList.toggle('hidden', !expand));
             document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = expand ? 'rotate(90deg)' : 'rotate(0deg)'; });
             document.querySelectorAll('[data-card-meaning]').forEach(m => m.classList.toggle('hidden', expand)); // 펼치면 헤더 뜻 숨김
         }
