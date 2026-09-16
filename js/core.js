@@ -105,6 +105,8 @@ let vocabulary = [];
                     //   [냐냐 요청] 단어 조회 창도 ESC 로 닫힌다 (2026-09-16)
                     const wv = document.getElementById('word-view-modal');
                     if (wv && !wv.classList.contains('hidden')) { closeWordView(); return; }
+                    //   색인도 ESC 로 닫는다
+                    if (typeof grammarIndexIsOpen === 'function' && grammarIndexIsOpen()) { toggleGrammarIndex(false); return; }
                 }
                 if (activeTab === 'cards') {
                     if (e.key === 'ArrowRight') nextFlashcard();
@@ -4867,6 +4869,64 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (m) m.classList.add('hidden');
         }
 
+        // ============================================================
+        // [냐냐 요청] 문법 노트 색인 (2026-09-16).
+        //   목록은 나열형이라 '지금 어디쯤' 인지도, '무엇무엇이 있는지' 도 한눈에 안 들어왔다.
+        //   주제별 목차를 옆에 띄우고, 제목을 누르면 goToGrammarNote 가 데려간다
+        //   (가리고 있던 검색·필터를 걷고 그 주제를 펼치는 일은 그쪽이 이미 한다).
+        //   ⚠️ 색인은 필터를 안 본다 — 필터에 걸려 안 보이는 노트도 색인에는 있어야
+        //      '찾으러 오는 곳' 노릇을 한다.
+        // ============================================================
+        function toggleGrammarIndex(force) {
+            const panel = document.getElementById('grammar-index-panel');
+            const handle = document.getElementById('grammar-index-tab');
+            if (!panel) return;
+            const open = (force === undefined) ? panel.classList.contains('hidden') : !!force;
+            panel.classList.toggle('hidden', !open);
+            if (handle) handle.classList.toggle('hidden', open);   // 열려 있으면 손잡이는 숨는다
+            if (open) renderGrammarIndex();
+        }
+        function grammarIndexIsOpen() {
+            const panel = document.getElementById('grammar-index-panel');
+            return !!panel && !panel.classList.contains('hidden');
+        }
+        function renderGrammarIndex() {
+            const box = document.getElementById('grammar-index-body');
+            if (!box) return;
+            const tables = getAllGrammarTables();
+            const groups = {};
+            tables.forEach(t => { const k = grammarTopicKey(t); (groups[k] = groups[k] || []).push(t); });
+            const order = (typeof GRAMMAR_ICONS !== 'undefined' ? GRAMMAR_ICONS.map(g => g.icon) : []).filter(k => groups[k]);
+            if (groups[GRAMMAR_OTHER_TOPIC]) order.push(GRAMMAR_OTHER_TOPIC);
+            box.innerHTML = order.map(key => {
+                const c = grammarTopicColor(key);
+                const icon = key === GRAMMAR_OTHER_TOPIC ? '⭐' : key;
+                const rows = groups[key].map(t => {
+                    const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
+                    const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
+                    return `<button type="button" onclick="jumpFromGrammarIndex('${t.id}')" title="${escapeAttr(t.title || '')}"
+                        class="w-full flex items-center gap-1.5 text-left px-2 py-1.5 rounded-lg hover:bg-violet-50 transition-colors">
+                        ${pin}
+                        <span class="text-[11px] font-bold text-slate-600 truncate flex-1 min-w-0">${escapeHtml(t.title || '(제목 없음)')}</span>
+                        <span class="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
+                    </button>`;
+                }).join('');
+                return `<div class="space-y-0.5">
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg ${c.b}">
+                        <span class="text-sm shrink-0">${icon}</span>
+                        <span class="text-[11px] font-black ${c.t} flex-1 min-w-0 truncate">${escapeHtml(grammarTopicLabel(key))}</span>
+                        <span class="text-[10px] font-black ${c.t} opacity-60 shrink-0">${groups[key].length}</span>
+                    </div>
+                    ${rows}
+                </div>`;
+            }).join('') || '<p class="text-xs text-slate-400 text-center py-8 font-semibold">아직 노트가 없어요.</p>';
+        }
+        function jumpFromGrammarIndex(id) {
+            //   좁은 화면에서는 색인이 노트를 덮으니 데려다주고 닫는다
+            if (window.innerWidth < 1024) toggleGrammarIndex(false);
+            goToGrammarNote(id);
+        }
+
         function goToGrammarNote(id) {
             const t = getAllGrammarTables().find(x => x.id === id);
             if (!t) { showToast("그 문법 노트를 찾을 수 없어요", "error"); return; }
@@ -5889,6 +5949,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (typeof syncGrammarViewBtn === 'function') syncGrammarViewBtn();
             if (typeof syncGrammarLookupBtn === 'function') syncGrammarLookupBtn();
             if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
+            //   [냐냐 요청] 색인이 열려 있으면 같이 새로 그린다 (점수·제목이 바뀌었을 수 있다)
+            if (typeof grammarIndexIsOpen === 'function' && grammarIndexIsOpen()) renderGrammarIndex();
         }
 
         // [냐냐 요청] 주제별 그룹 렌더 — 주제 헤더(접기 가능) 아래에 그 주제 노트들
