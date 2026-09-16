@@ -4890,6 +4890,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const panel = document.getElementById('grammar-index-panel');
             return !!panel && !panel.classList.contains('hidden');
         }
+        //   [냐냐 요청] 색인의 주제 접힘은 목록의 접힘과 따로 둔다 (2026-09-16) —
+        //   색인에서 주제를 접었다고 목록까지 접히면 찾으러 온 곳이 되레 가려진다.
+        let grammarIndexCollapsed = {};
+        function toggleGrammarIndexGroup(key) {
+            grammarIndexCollapsed[key] = !grammarIndexCollapsed[key];
+            renderGrammarIndex();
+        }
         function renderGrammarIndex() {
             const box = document.getElementById('grammar-index-body');
             if (!box) return;
@@ -4901,7 +4908,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             box.innerHTML = order.map(key => {
                 const c = grammarTopicColor(key);
                 const icon = key === GRAMMAR_OTHER_TOPIC ? '⭐' : key;
-                const rows = groups[key].map(t => {
+                const collapsed = !!grammarIndexCollapsed[key];
+                //   [냐냐 요청] 색인 안에서는 가나다순 — 목록의 정렬(등록순 등)과 상관없이
+                //   찾으려는 제목을 눈으로 훑는 곳이라 이름 순이 빠르다. 주제 차례는 그대로.
+                const list = [...groups[key]].sort((a, b) =>
+                    String(a.title || '').localeCompare(String(b.title || ''), 'ko'));
+                const rows = list.map(t => {
                     const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
                     const pin = pinnedGrammar[t.id] ? '<i class="fa-solid fa-thumbtack text-[9px] text-violet-400 shrink-0"></i>' : '';
                     return `<button type="button" onclick="jumpFromGrammarIndex('${t.id}')" title="${escapeAttr(t.title || '')}"
@@ -4912,12 +4924,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     </button>`;
                 }).join('');
                 return `<div class="space-y-0.5">
-                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg ${c.b}">
+                    <button type="button" onclick="toggleGrammarIndexGroup('${key}')"
+                        class="w-full flex items-center gap-1.5 px-2 py-1 rounded-lg ${c.b} hover:brightness-95 transition-all text-left">
+                        <i class="fa-solid fa-chevron-down ${c.t} text-[9px] shrink-0 transition-transform" style="${collapsed ? 'transform:rotate(-90deg);' : ''}"></i>
                         <span class="text-sm shrink-0">${icon}</span>
                         <span class="text-[11px] font-black ${c.t} flex-1 min-w-0 truncate">${escapeHtml(grammarTopicLabel(key))}</span>
-                        <span class="text-[10px] font-black ${c.t} opacity-60 shrink-0">${groups[key].length}</span>
-                    </div>
-                    ${rows}
+                        <span class="text-[10px] font-black ${c.t} opacity-60 shrink-0">${list.length}</span>
+                    </button>
+                    <div class="${collapsed ? 'hidden' : ''}">${rows}</div>
                 </div>`;
             }).join('') || '<p class="text-xs text-slate-400 text-center py-8 font-semibold">아직 노트가 없어요.</p>';
         }
