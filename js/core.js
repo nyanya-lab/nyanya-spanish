@@ -6352,7 +6352,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function hintStartHtml(prefix) {
             const p = String(prefix || '').trim();
             if (!p) return '';
-            return `<span class="inline-flex items-center align-middle mx-0.5 px-2 py-0.5 rounded-lg bg-violet-600 text-white text-sm font-black tracking-[0.12em] shadow-sm">${escapeHtml(p)}</span><span class="ml-0.5">로 시작해요.</span>`;
+            //   ⚠️ inline-flex + 큰 글씨로 만들었더니 줄 가운데에서 위아래로 어긋나고 혼자 튀었다.
+            //      inline-block + align-baseline 이라야 둘레 글자와 밑줄이 맞는다. 글씨 크기도 같게 두고,
+            //      색은 옅은 바탕에 진한 글씨로 — 눈에는 띄되 소리치지는 않게.
+            return `<span class="inline-block align-baseline mx-0.5 px-1.5 py-[1px] rounded-md bg-violet-100 border border-violet-200 text-violet-700 font-black tracking-[0.08em]">${escapeHtml(p)}</span><span class="ml-0.5">로 시작해요.</span>`;
         }
 
         // [냐냐 요청] 틀렸을 때 "왜" 틀렸는지 짚어준다. 퀴즈·쓰기 복습·단어 빈칸이 같이 쓴다.
