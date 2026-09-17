@@ -1512,16 +1512,18 @@ let vocabulary = [];
                             <td class="text-center py-1 text-[11px] font-bold ${color}">${label}</td>
                             ${cells[key].map(v => num(v, color)).join('')}
                         </tr>`).join('')}
-                        ${/* [냐냐 요청] 복습·연습·첨삭은 한 줄에 (2026-09-18).
+                        ${/* [냐냐 요청] 첫 줄은 복습만, 그 밑 네 칸을 둘씩 나눠 연습·첨삭 (2026-09-18).
                              복습 = 오늘의 복습에서 푼 것 (문법 복습 번역 포함)
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
-                            <td></td>
-                            ${['복습', '연습', '첨삭'].map(t => `<th class="text-center pt-1 pb-0.5 text-[10px] font-black text-slate-700 ${VLINE}">${t}</th>`).join('')}
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습</td>
+                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</td>
                         </tr>
-                        <tr>
-                            <td></td>
-                            ${[reviewN, practiceN, aiN].map(v => `<td class="text-center pb-1 font-black ${VLINE} ${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</td>`).join('')}
+                        <tr class="border-t border-slate-200">
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">연습</td>
+                            <td class="text-center py-1.5 font-black ${VLINE} ${practiceN > 0 ? 'text-slate-700' : 'text-slate-300'}">${practiceN}</td>
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700 ${VLINE}">첨삭</td>
+                            <td class="text-center py-1.5 font-black ${VLINE} ${aiN > 0 ? 'text-slate-700' : 'text-slate-300'}">${aiN}</td>
                         </tr>
                     </tbody>
                 </table>`;
