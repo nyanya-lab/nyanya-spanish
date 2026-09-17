@@ -1482,9 +1482,10 @@ let vocabulary = [];
                 weak:   [log.newWeakCount || 0, log.newIdiomWeakCount || 0, log.newGrammarWeakCount || 0]
             };
             const reviewN = log.reviewCount || 0;
-            const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0) + reviewN;
+            const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0)
+                + reviewN + (log.practiceCount || 0) + (log.aiSessions || 0);
             //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
-            const total = shownTotal + (log.quizTotal || 0) + (log.aiSessions || 0) + (log.gameCount || 0);   // 첨삭은 표에도 있지만 여기서 한 번만 센다
+            const total = shownTotal + (log.quizTotal || 0) + (log.gameCount || 0);   // 퀴즈·게임은 표에 없지만 활동이다
             //   [냐냐 요청] 색은 줄이고 세로선을 넣는다 (2026-09-17).
             //   열 이름은 어두운 한 색, 숫자는 그 줄 이름과 같은 색 (등록 어둡게 · 마스터 초록 · 약점 빨강),
             //   0 은 옅게, 복습 줄은 색 없이.
@@ -1492,6 +1493,7 @@ let vocabulary = [];
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
             const VLINE = 'border-l border-slate-200';
             const aiN = log.aiSessions || 0;
+            const practiceN = log.practiceCount || 0;
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
             const num = (v, color) => `<td class="text-center py-1 font-black ${VLINE} ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
             const wideRow = (label, v) => `<tr class="border-t border-slate-200">
@@ -1510,9 +1512,17 @@ let vocabulary = [];
                             <td class="text-center py-1 text-[11px] font-bold ${color}">${label}</td>
                             ${cells[key].map(v => num(v, color)).join('')}
                         </tr>`).join('')}
-                        ${wideRow('복습', reviewN)}
-                        ${/* [냐냐 요청] 첨삭도 한 줄 — 문법 복습으로 한 번역은 위 복습에 들어가 있다 */''}
-                        ${wideRow('첨삭', aiN)}
+                        ${/* [냐냐 요청] 복습·연습·첨삭은 한 줄에 (2026-09-18).
+                             복습 = 오늘의 복습에서 푼 것 (문법 복습 번역 포함)
+                             연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
+                        <tr class="border-t border-slate-200">
+                            <td></td>
+                            ${['복습', '연습', '첨삭'].map(t => `<th class="text-center pt-1 pb-0.5 text-[10px] font-black text-slate-700 ${VLINE}">${t}</th>`).join('')}
+                        </tr>
+                        <tr>
+                            <td></td>
+                            ${[reviewN, practiceN, aiN].map(v => `<td class="text-center pb-1 font-black ${VLINE} ${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</td>`).join('')}
+                        </tr>
                     </tbody>
                 </table>`;
             // [냐냐 요청] 복습 예정과 틀린 것을 버튼 한 줄로 (2026-09-04).
@@ -3947,6 +3957,10 @@ let vocabulary = [];
                 nyanyaDiary[today].newPerfectCount = Math.max(0, (nyanyaDiary[today].newPerfectCount || 0) - 1);
             } else if (type === 'review') {
                 nyanyaDiary[today].reviewCount = (nyanyaDiary[today].reviewCount || 0) + 1; // [냐냐 PATCH] 복습 제출 1개
+            } else if (type === 'practice') {
+                //   [냐냐 요청] 스스로 돌린 연습 — 쓰기 · 동사변형 · 빈칸 (2026-09-18).
+                //   오늘의 복습에서 푼 것만 '복습' 으로 센다. 예전 기록은 갈라지지 않아 그대로 복습에 남는다.
+                nyanyaDiary[today].practiceCount = (nyanyaDiary[today].practiceCount || 0) + 1;
             } else if (type === 'game') {
                 nyanyaDiary[today].gameCount = (nyanyaDiary[today].gameCount || 0) + 1; // [냐냐 PATCH] 게임 1판 완료
             } else if (type === 'new-grammar') {
@@ -5564,7 +5578,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         // [냐냐 PATCH] 범례 전체 선택 / 전체 해제
         function setAllActivityCats(showAll) {
-            activityHidden = showAll ? [] : ['_total', '_newReg', 'quizTotal', 'aiSessions', 'reviewCount', 'gameCount'];
+            activityHidden = showAll ? [] : ['_total', '_newReg', 'reviewCount', 'practiceCount', 'aiSessions', '_etc'];
             if (_lastActivitySeries) renderActivityChart(_lastActivitySeries);
         }
 
@@ -5581,15 +5595,18 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const chartH = height - padding.top - padding.bottom;
             const baseY = height - padding.bottom;
 
+            //   [냐냐 요청] 일지 표와 같은 갈래로 (2026-09-18) — 퀴즈·게임은 '기타' 로 합치고 '연습' 을 낸다
             const allCats = [
                 { key: '_newReg', label: '신규등록', color: '#8b5cf6', scale: ACT_REG_SCALE },
-                { key: 'quizTotal', label: '퀴즈', color: '#f59e0b', scale: 1 },
-                { key: 'aiSessions', label: 'AI', color: '#6366f1', scale: 1 },
                 { key: 'reviewCount', label: '복습', color: '#0ea5e9', scale: 1 },
-                { key: 'gameCount', label: '게임', color: '#ec4899', scale: 1 },
+                { key: 'practiceCount', label: '연습', color: '#f59e0b', scale: 1 },
+                { key: 'aiSessions', label: 'AI', color: '#6366f1', scale: 1 },
+                { key: '_etc', label: '기타', color: '#ec4899', scale: 1 },
             ];
-            // 신규등록(단어+문법) 합산 — 총합엔 실제 갯수 그대로 반영
-            series = series.map(d => ({ ...d, _newReg: (d.newWordsCount || 0) + (d.newGrammarCount || 0) }));
+            // 신규등록(단어+문법) 합산 — 총합엔 실제 갯수 그대로 반영. 기타 = 퀴즈 + 미니게임
+            series = series.map(d => ({ ...d,
+                _newReg: (d.newWordsCount || 0) + (d.newGrammarCount || 0),
+                _etc: (d.quizTotal || 0) + (d.gameCount || 0) }));
             const withTotal = series.map(d => ({ ...d, _total: allCats.reduce((s, c) => s + (d[c.key] || 0), 0) }));
 
             // 보이는 카테고리만 (범례 클릭으로 토글)
@@ -5619,7 +5636,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         bars += `<rect x="${bx.toFixed(1)}" y="${(baseY - barH).toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${c.color}" opacity="0.85" rx="1"/>`;
                     }
                 });
-                const text = `${d.fullLabel}: 신규등록 ${d._newReg||0} · 퀴즈 ${d.quizTotal||0} · AI ${d.aiSessions||0} · 복습 ${d.reviewCount||0} · 게임 ${d.gameCount||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
+                const text = `${d.fullLabel}: 신규등록 ${d._newReg||0} · 복습 ${d.reviewCount||0} · 연습 ${d.practiceCount||0} · AI ${d.aiSessions||0} · 기타 ${d._etc||0} (총 ${d._total}개 활동)`.replace(/'/g, "\\'");
                 const hitW = Math.max(totalW, 14);
                 bars += `<rect x="${(groupCenter - hitW / 2).toFixed(1)}" y="${padding.top}" width="${hitW.toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-activity-chart-tooltip', '${text}')"/>`;
             });
