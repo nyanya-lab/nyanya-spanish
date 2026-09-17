@@ -1736,6 +1736,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
                 applyAiWritingScores(feedback, koEsScoreNotes, true);   // 점수 카드는 그 아래에 이어 붙는다
                 //   ⚠️ true = 한→스 미션의 답. 이 한 군데만 복습으로 쳐준다 (다른 세 탭은 안 넘긴다)
+                //   [냐냐 요청] 문법 복습으로 낸 미션은 일지에 'AI 첨삭' 이 아니라 '복습' 으로 센다 (2026-09-17).
+                //   ⚠️ 둘 다 세면 안 된다 — 알 키우기가 첨삭 횟수와 복습 개수를 더해서 자란다.
+                const countAsReview = !!(aiMissionReviewGrammarId && grammarReviewTotal);
                 if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
                 grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
                 aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
@@ -1775,7 +1778,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 renderChatThread();
 
                 recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback);
-                logAction('ai');
+                logAction(countAsReview ? 'review' : 'ai');
                 saveToStorage();
                 updateStats();
                 scrollAiResultIntoView();

@@ -1462,23 +1462,49 @@ let vocabulary = [];
             const log = (nyanyaDiary && nyanyaDiary[ds]) || {};
             // [냐냐 요청] 서식은 없앤 '일일 학습 일지' 것을 그대로 쓴다 — 그쪽이 읽기 편했다.
             //   퀴즈는 일지처럼 '맞은 수/푼 수' 로 낸다 (달력은 푼 수만 보여주고 있었다).
-            const items = [
-                ['등록 단어', log.newWordsCount || 0, `${log.newWordsCount || 0}개`, 'text-violet-600'],
-                ['마스터 단어', log.newMasteredCount || 0, `${log.newMasteredCount || 0}개`, 'text-emerald-600'],
-                ['등록 문법', log.newGrammarCount || 0, `${log.newGrammarCount || 0}개`, 'text-[#5896cb]'],
-                ['마스터 문법', log.newGrammarMasteredCount || 0, `${log.newGrammarMasteredCount || 0}개`, 'text-teal-500'],
-                ['퀴즈', log.quizTotal || 0, `${log.quizCorrect || 0}/${log.quizTotal || 0}개`, 'text-amber-600'],
-                ['AI 첨삭', log.aiSessions || 0, `${log.aiSessions || 0}회`, 'text-indigo-600'],
-                ['복습', log.reviewCount || 0, `${log.reviewCount || 0}개`, 'text-sky-600'],
-                ['미니 게임', log.gameCount || 0, `${log.gameCount || 0}판`, 'text-pink-600'],
-            ];
-            const total = items.reduce((s, x) => s + x[1], 0);
-            // [냐냐 요청] 2열은 그대로 두고 글씨만 줄여서 두 줄로 접히던 걸 없앤다.
-            //   데스크톱 사이드바(w-56)에서 칸 하나가 70px 인데, 12px 글씨로는
-            //   '마스터 단어'(58px)+값(22px)=80px 라 넘쳤다.
-            //   10px 로 줄이면 66px, 좌우 여백도 px-2→px-1.5 로 줄여 74px 를 확보한다.
-            const grid = items.map(([label, val, text, color]) =>
-                `<div>${label}: <strong class="${val > 0 ? color : 'text-slate-300'}">${text}</strong></div>`).join('');
+            // ============================================================
+            // [냐냐 요청] 일지를 표로 (2026-09-17).
+            //   열 = 단어 · 관용구 · 문법 (헤더 줄과 같은 차례·색), 줄 = 등록 · 마스터 · 약점, 맨 밑에 복습.
+            //   퀴즈·AI 첨삭·미니 게임은 뺐다 — 학습기록 그래프에 있다.
+            //   ⚠️ 뺀 것도 기록은 계속 쌓인다. 알 키우기와 '총 N개 활동' 이 그걸로 센다.
+            //   관용구 등록은 따로 세지 않고 표현마다 적힌 등록일(addedAt)로 센다 — 9/15 부터 있다.
+            // ============================================================
+            const idiomRegOn = (day) => {
+                let n = 0;
+                (vocabulary || []).forEach(w => (typeof wordIdiomList === 'function' ? wordIdiomList(w) : []).forEach(it => {
+                    if (it && it.addedAt && getLocalDateString(new Date(Number(it.addedAt))) === day) n++;
+                }));
+                return n;
+            };
+            const cells = {
+                reg:    [log.newWordsCount || 0, idiomRegOn(ds), log.newGrammarCount || 0],
+                master: [log.newMasteredCount || 0, log.newIdiomMasteredCount || 0, log.newGrammarMasteredCount || 0],
+                weak:   [log.newWeakCount || 0, log.newIdiomWeakCount || 0, log.newGrammarWeakCount || 0]
+            };
+            const reviewN = log.reviewCount || 0;
+            const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0) + reviewN;
+            //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
+            const total = shownTotal + (log.quizTotal || 0) + (log.aiSessions || 0) + (log.gameCount || 0);
+            const COLS = [['단어', 'text-violet-500'], ['관용구', 'text-purple-500'], ['문법', 'text-[#5896cb]']];
+            const ROWS = [['reg', '등록', 'text-slate-500', 'text-violet-600'], ['master', '마스터', 'text-emerald-600', 'text-emerald-600'], ['weak', '약점', 'text-rose-500', 'text-rose-600']];
+            const num = (v, color) => `<td class="text-center py-1 font-black ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
+            const grid = `
+                <table class="w-full text-xs">
+                    <thead><tr>
+                        <th class="w-12"></th>
+                        ${COLS.map(([t, c]) => `<th class="text-center pb-1 text-[10px] font-black ${c}">${t}</th>`).join('')}
+                    </tr></thead>
+                    <tbody>
+                        ${ROWS.map(([key, label, lc, vc]) => `<tr class="border-t border-slate-100">
+                            <td class="py-1 text-[11px] font-bold ${lc}">${label}</td>
+                            ${cells[key].map(v => num(v, vc)).join('')}
+                        </tr>`).join('')}
+                        <tr class="border-t border-slate-200">
+                            <td class="py-1.5 text-[11px] font-bold text-sky-600">복습</td>
+                            <td colspan="3" class="text-center py-1.5 font-black ${reviewN > 0 ? 'text-sky-600' : 'text-slate-300'}">${reviewN}개</td>
+                        </tr>
+                    </tbody>
+                </table>`;
             // [냐냐 요청] 복습 예정과 틀린 것을 버튼 한 줄로 (2026-09-04).
             //   예전엔 둘이 각각 세 줄(단어·관용구·문법)을 펼쳐서 사이드바가 너무 길어졌다.
             //   개수만 버튼에 얹고, 세부는 팝업 안의 탭에서 본다.
@@ -1508,7 +1534,7 @@ let vocabulary = [];
                 </div>
                 ${/* [냐냐 요청] 상자를 빼고 글씨를 키웠다 (2026-09-04) — 이제 이 카드의 본문이라 가둘 이유가 없다 */''}
                 ${total > 0
-                    ? `<div class="grid grid-cols-2 gap-x-3 gap-y-1.5 px-0.5 text-xs text-slate-500 font-medium">${grid}</div>`
+                    ? `<div class="px-0.5">${grid}</div>`
                     : (ds > today
                         ? ''
                         : `<p class="text-slate-400 text-center text-xs py-3">${isToday ? '오늘의 첫 학습을 기록해보세요!' : '이 날은 쉬어갔네요 🌙'}</p>`)}
@@ -2992,6 +3018,7 @@ let vocabulary = [];
             const shouldWeak = (grade === 'weak' || grade === 'critical');
             const wasMastered = !!w.mastered;
             const wasPerfect = !!w.perfect;
+            const wasWeak = !!w.weak;
             const isPerfect = (grade === 'perfect');
 
             w.mastered = shouldMaster;
@@ -3003,6 +3030,9 @@ let vocabulary = [];
                 else if (wasMastered && !shouldMaster) logAction('undo-new-mastered');
                 if (!wasPerfect && isPerfect) logAction('new-perfect');
                 else if (wasPerfect && !isPerfect) logAction('undo-new-perfect');
+                //   [냐냐 요청] 일지 표의 '약점' 칸 (2026-09-17)
+                if (!wasWeak && shouldWeak) logAction('new-weak');
+                else if (wasWeak && !shouldWeak) logAction('undo-new-weak');
             }
         }
 
@@ -3077,9 +3107,21 @@ let vocabulary = [];
             if (wCount) r.wrongTotal = (r.wrongTotal || 0) + wCount;
             //   [냐냐 요청] 마스터·완벽은 단어와 똑같이 '직접 써서 맞힌 적이 있어야' 열린다 (2026-09-15).
             //   관용구에서는 쓰기 복습과 주관식 퀴즈가 그 자리다 (냐냐님 결정).
+            const before = getIdiomGrade(wordId, idiomTextOrId);
             if (opts.correct === true && opts.subjective) r.subjectivePassed = true;
             r.score = clampScore((r.score || 0) + (delta || 0));
+            logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId));
             return r.score;
+        }
+        //   [냐냐 요청] 일지 표의 관용구 마스터·약점 칸 (2026-09-17) — 단어와 같은 방식
+        function logIdiomGradeChange(before, after) {
+            if (typeof logAction !== 'function' || before === after) return;
+            const isM = (g) => g === 'mastered' || g === 'perfect';
+            const isW = (g) => g === 'weak' || g === 'critical';
+            if (!isM(before) && isM(after)) logAction('new-idiom-mastered');
+            else if (isM(before) && !isM(after)) logAction('undo-new-idiom-mastered');
+            if (!isW(before) && isW(after)) logAction('new-idiom-weak');
+            else if (isW(before) && !isW(after)) logAction('undo-new-idiom-weak');
         }
 
         function addWordScore(wordOrId, delta, opts = {}) {
@@ -3295,6 +3337,13 @@ let vocabulary = [];
             // [냐냐 요청] 헤더의 문법 보유/마스터/약점 숫자를 항상 최신으로
             if (typeof updateStats === 'function') setTimeout(updateStats, 0);
             const grade = getGrammarGrade(id);
+            //   [냐냐 요청] 일지 표의 '약점' 칸 (2026-09-17). 약점은 번역 자격과 상관없이 점수로만 갈린다
+            if (typeof beforeScore === 'number' && typeof logAction === 'function') {
+                const wasWeak = beforeScore <= SCORE_WEAK;
+                const nowWeak = (grade === 'weak' || grade === 'critical');
+                if (!wasWeak && nowWeak) logAction('new-grammar-weak');
+                else if (wasWeak && !nowWeak) logAction('undo-new-grammar-weak');
+            }
             const nowMastered = (grade === 'mastered' || grade === 'perfect');
             const wasMastered = !!masteredGrammar[id];
             if (nowMastered === wasMastered) return;
@@ -3902,6 +3951,17 @@ let vocabulary = [];
                 nyanyaDiary[today].newGrammarCount = Math.max(0, (nyanyaDiary[today].newGrammarCount || 0) - 1); // [냐냐 PATCH] 문법표 삭제
             } else if (type === 'undo-new-grammar-mastered') {
                 nyanyaDiary[today].newGrammarMasteredCount = Math.max(0, (nyanyaDiary[today].newGrammarMasteredCount || 0) - 1); // [냐냐 PATCH] 문법표 마스터 해제/삭제
+            } else {
+                //   [냐냐 요청] 일지 표(등록·마스터·약점 × 단어·관용구·문법)를 채우는 새 칸들 (2026-09-17).
+                //   마스터와 같은 방식 — 들어가면 +1, 빠지면 −1 (0 밑으로는 안 간다). 이 날부터 쌓인다.
+                const COUNTERS = {
+                    'new-weak': ['newWeakCount', 1],                 'undo-new-weak': ['newWeakCount', -1],
+                    'new-idiom-mastered': ['newIdiomMasteredCount', 1], 'undo-new-idiom-mastered': ['newIdiomMasteredCount', -1],
+                    'new-idiom-weak': ['newIdiomWeakCount', 1],       'undo-new-idiom-weak': ['newIdiomWeakCount', -1],
+                    'new-grammar-weak': ['newGrammarWeakCount', 1],   'undo-new-grammar-weak': ['newGrammarWeakCount', -1]
+                };
+                const c = COUNTERS[type];
+                if (c) nyanyaDiary[today][c[0]] = Math.max(0, (nyanyaDiary[today][c[0]] || 0) + c[1]);
             }
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
@@ -6664,9 +6724,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   관용구 점수를 못박는다 (단어의 setWordScore 와 같은 자리)
         function setIdiomScore(wordId, idiomTextOrId, value, opts = {}) {
             const r = getIdiomRec(wordId, idiomTextOrId);
+            const before = getIdiomGrade(wordId, idiomTextOrId);
             r.score = clampScore(value);
             if (opts.subjectivePassed === true) r.subjectivePassed = true;
             if (opts.subjectivePassed === false) delete r.subjectivePassed;
+            if (typeof logIdiomGradeChange === 'function') logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId));
             return r.score;
         }
         function cycleIdiomGrade(wordId, ref, event) {
