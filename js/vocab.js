@@ -3537,11 +3537,40 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
         //   지금 고른 범위 안에서 실제로 나올 수 있는 표현만 센다.
+        // ============================================================
+        // [냐냐 지적] 관용구 문제의 범위를 표현 제 등급으로 가른다 (2026-09-17).
+        //   예전엔 '약점·마스터·안 외운·졸업' 범위를 고르면 **그 범위의 단어** 에 달린 관용구가 나왔다.
+        //   관용구가 제 점수를 갖게 된 뒤로는 틀린 기준이다 — 약점 단어에 달렸다고 그 표현이 약점은 아니다.
+        //   이제 단어장 전체의 표현을 놓고, 표현 하나하나의 등급·곡선으로 거른다.
+        //   ('안 만난' 은 원래도 표현 단위로 봤다 — 같은 틀로 합친다)
+        // ============================================================
+        function idiomEntryInWriteScope(w, it) {
+            const id = w.id, text = it.idiom;
+            const grade = (typeof getIdiomGrade === 'function') ? getIdiomGrade(id, text) : 'normal';
+            const mastered = (grade === 'mastered' || grade === 'perfect');
+            switch (writeScope) {
+                case 'untouched':
+                    return (typeof isUntouchedIdiom === 'function') ? isUntouchedIdiom(id, text) : true;
+                case 'mastered':     return mastered;
+                case 'weak':         return (grade === 'weak' || grade === 'critical');
+                case 'not-mastered': return !mastered;
+                case 'graduated': {
+                    const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
+                    const rec = key ? (idiomReview || {})[key] : null;
+                    return !!(rec && rec.lastWrongDate && (rec.stage || 0) >= REVIEW_INTERVALS.length);
+                }
+                default: return true;
+            }
+        }
+        function writeScopeIdiomEntries() {
+            const entries = [];
+            (vocabulary || []).forEach(w => wordIdiomList(w).forEach(it => {
+                if (idiomEntryInWriteScope(w, it)) entries.push({ w, it });
+            }));
+            return entries;
+        }
         function countIdiomEntries() {
-            const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
-            const pool = onlyNew ? (vocabulary || [])
-                : ((typeof getWriteScopePool === 'function') ? getWriteScopePool() : (vocabulary || []));
-            return pool.reduce((a, w) => a + wordIdiomList(w).filter(it => !onlyNew || isUntouchedIdiom(w.id, it.idiom)).length, 0);
+            return writeScopeIdiomEntries().length;
         }
         // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
         // [냐냐 요청] 관용구도 소리내 들어본다. 표현은 통으로 들어야 입에 붙는다.
@@ -3677,8 +3706,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const cueHtml = cue.split(' · ').map(part => {
                 const num = part.match(/^(\d인칭) (단수|복수)$/);
                 if (!num) return `<span>${escapeHtml(part)}</span>`;
-                const color = num[2] === '단수' ? 'bg-sky-100 text-sky-700' : 'bg-fuchsia-100 text-fuchsia-700';
-                return `<span class="inline-block px-1.5 py-[1px] rounded-md ${color}">${num[1]} ${num[2]}</span>`;
+                //   [냐냐 요청] 옅은 바탕끼리는 한눈에 안 갈렸다 — 단수·복수 글자만 진한 두 색으로 칠한다
+                const color = num[2] === '단수' ? 'bg-sky-500 text-white' : 'bg-orange-500 text-white';
+                return `<span>${num[1]} <span class="inline-block px-1.5 py-[1px] rounded-md font-black ${color}">${num[2]}</span></span>`;
             }).join('<span class="text-slate-300 mx-1">·</span>');
             return mainHtml + `<p class="text-xs font-bold text-slate-500 pt-0.5">${cueHtml}</p>`;
         }
@@ -3719,11 +3749,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   ⚠️ 그렇다고 '안 만난 단어' 안에서만 찾으면 안 된다. 관용구는 표현 단위라
             //   이미 만난 단어에 달린 표현도 처음일 수 있다 (실제로 1117개 중 541개가 그랬다).
             //   그래서 이 범위에서만 관용구는 단어장 전체를 보고, '안 만난 표현' 으로 거른다.
-            const onlyNew = (writeScope === 'untouched') && (typeof isUntouchedIdiom === 'function');
-            (onlyNew ? (vocabulary || []) : pool).forEach(w => wordIdiomList(w).forEach(it => {
-                if (onlyNew && !isUntouchedIdiom(w.id, it.idiom)) return;
-                entries.push({ w, it });
-            }));
+            //   [냐냐 지적] 다른 범위도 표현 제 등급으로 거른다 (idiomEntryInWriteScope)
+            writeScopeIdiomEntries().forEach(e => entries.push(e));
             const idiomTasks = shuffleArray(entries).slice(0, wantIdiom)
                 .map(e => makeWriteIdiomTask(e.w, e.it));
 
@@ -3741,7 +3768,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         const WRITE_COUNT_MIN = 1;
         const WRITE_COUNT_MAX = 200;
-        let writeScope = 'not-mastered';
+        //   [냐냐 요청] 쓰기 복습 범위 기본값은 '안 만난' (2026-09-17, 예전 '안 외운')
+        let writeScope = 'untouched';
 
         // fromInput = 직접 적는 칸에서 부른 것 (그 칸의 값은 건드리지 않는다 — 타이핑 중이라)
         function selectWriteCount(n, fromInput) {
@@ -3863,7 +3891,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         function resetWriteSetup() {
             selectWriteCount(writeCount || 20);
-            selectWriteScope(writeScope || 'not-mastered');
+            selectWriteScope(writeScope || 'untouched');
             renderWriteTenses();
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.remove('hidden');
@@ -3875,7 +3903,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 쓰기는 '단어'만. 관용구·예문은 단어 빈칸이 이미 다루므로 여기선 안 씀.
         function startWriteReview() {
             const pool = getWriteScopePool().filter(w => w && w.word);
-            if (!pool.length) { showToast("이 범위엔 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
+            //   [냐냐 지적] 관용구만 낼 때는 단어가 아니라 표현이 있는지 본다 — 약점 단어가 0개여도
+            //   약점 표현은 있을 수 있다 (표현은 제 등급으로 거른다)
+            const idiomOnly = (typeof writeMix !== 'undefined' && writeMix.mode === 'idiom');
+            const empty = idiomOnly ? countIdiomEntries() === 0 : !pool.length;
+            if (empty) { showToast(idiomOnly ? "이 범위엔 관용구가 없어요! 다른 범위를 골라보세요." : "이 범위엔 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
             // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
             const input = document.getElementById('write-count-input');
             if (input && !parseInt(input.value, 10)) selectWriteCount(20);
