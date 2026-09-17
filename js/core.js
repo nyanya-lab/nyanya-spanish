@@ -1485,23 +1485,27 @@ let vocabulary = [];
             const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0) + reviewN;
             //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
             const total = shownTotal + (log.quizTotal || 0) + (log.aiSessions || 0) + (log.gameCount || 0);
-            const COLS = [['단어', 'text-violet-500'], ['관용구', 'text-purple-500'], ['문법', 'text-[#5896cb]']];
-            const ROWS = [['reg', '등록', 'text-slate-500', 'text-violet-600'], ['master', '마스터', 'text-emerald-600', 'text-emerald-600'], ['weak', '약점', 'text-rose-500', 'text-rose-600']];
-            const num = (v, color) => `<td class="text-center py-1 font-black ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
+            //   [냐냐 요청] 색은 줄이고 세로선을 넣는다 (2026-09-17).
+            //   열 이름은 어두운 한 색, 숫자는 그 줄 이름과 같은 색 (등록 어둡게 · 마스터 초록 · 약점 빨강),
+            //   0 은 옅게, 복습 줄은 색 없이.
+            const COLS = ['단어', '관용구', '문법'];
+            const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
+            const VLINE = 'border-l border-slate-200';
+            const num = (v, color) => `<td class="text-center py-1 font-black ${VLINE} ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
             const grid = `
                 <table class="w-full text-xs">
                     <thead><tr>
                         <th class="w-12"></th>
-                        ${COLS.map(([t, c]) => `<th class="text-center pb-1 text-[10px] font-black ${c}">${t}</th>`).join('')}
+                        ${COLS.map(t => `<th class="text-center pb-1 text-[10px] font-black text-slate-700 ${VLINE}">${t}</th>`).join('')}
                     </tr></thead>
                     <tbody>
-                        ${ROWS.map(([key, label, lc, vc]) => `<tr class="border-t border-slate-100">
-                            <td class="py-1 text-[11px] font-bold ${lc}">${label}</td>
-                            ${cells[key].map(v => num(v, vc)).join('')}
+                        ${ROWS.map(([key, label, color]) => `<tr class="border-t border-slate-200">
+                            <td class="py-1 text-[11px] font-bold ${color}">${label}</td>
+                            ${cells[key].map(v => num(v, color)).join('')}
                         </tr>`).join('')}
                         <tr class="border-t border-slate-200">
-                            <td class="py-1.5 text-[11px] font-bold text-sky-600">복습</td>
-                            <td colspan="3" class="text-center py-1.5 font-black ${reviewN > 0 ? 'text-sky-600' : 'text-slate-300'}">${reviewN}개</td>
+                            <td class="py-1.5 text-[11px] font-bold text-slate-700">복습</td>
+                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}개</td>
                         </tr>
                     </tbody>
                 </table>`;
