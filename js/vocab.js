@@ -3636,11 +3636,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const form = String(c.form || '').trim();
                 return form ? { tense, tenseLabel: label, person: 'form', personLabel: '', form } : null;
             }
-            const persons = [['yo', 'yo'], ['tu', 'tú'], ['el', 'él/ella'], ['nos', 'nosotros'], ['vos', 'vosotros'], ['ellos', 'ellos/ellas']]
-                .filter(([k]) => String(c[k] || '').trim());
+            //   [냐냐 요청] 인칭은 '1인칭 단수' 처럼 적는다 (2026-09-17). 예전엔 yo · tú · él/ella 로 적었다.
+            //   대명사는 AI 채점에 넘길 때만 같이 붙인다 (personPronoun).
+            const persons = [
+                ['yo', '1인칭 단수', 'yo'], ['tu', '2인칭 단수', 'tú'], ['el', '3인칭 단수', 'él/ella'],
+                ['nos', '1인칭 복수', 'nosotros'], ['vos', '2인칭 복수', 'vosotros'], ['ellos', '3인칭 복수', 'ellos/ellas']
+            ].filter(([k]) => String(c[k] || '').trim());
             if (!persons.length) return null;
-            const [pk, plabel] = persons[Math.floor(Math.random() * persons.length)];
-            return { tense, tenseLabel: label, person: pk, personLabel: plabel, form: String(c[pk] || '').trim() };
+            const [pk, plabel, pron] = persons[Math.floor(Math.random() * persons.length)];
+            return { tense, tenseLabel: label, person: pk, personLabel: plabel, personPronoun: pron, form: String(c[pk] || '').trim() };
         }
 
         // 활용형 과제도 '단어의 복제본' 으로 만든다 (관용구 과제와 같은 방식).
@@ -4262,6 +4266,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         //   [냐냐 요청] 슬래시로 갈린 답은 어느 쪽을 써도 인정한다 ("salir bien/mal")
         function writeAnswerMatches(userRaw, correctRaw) {
+            //   [냐냐 지적] 'un montón' 을 'montón' 으로 써도 맞다고 하던 것 (indefiniteArticleMissing 참고)
+            if (typeof indefiniteArticleMissing === 'function' && indefiniteArticleMissing(userRaw, correctRaw)) return false;
             if (normalizeWriteAnswer(userRaw) === normalizeWriteAnswer(correctRaw)) return true;
             return (typeof spanishAnswerMatches === 'function') && spanishAnswerMatches(userRaw, correctRaw, true);
         }
@@ -4573,9 +4579,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
         // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자
         function writePrefixHint(userRaw, correctRaw) {
+            //   [냐냐 지적] 부정관사는 떼지 않는다 — 'un montón' 의 힌트가 'm' 이면 un 을 빼도 되는 줄 안다
             const bare = String(correctRaw || '').trim()
-                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
-            const u = normalizeWriteAnswer(userRaw), c = normalizeWriteAnswer(bare);
+                .replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '');
+            //   견줄 때도 관사째로 견줘야 앞글자 자리가 어긋나지 않는다 (정규화는 관사를 떼 버린다)
+            const keepIndef = (typeof leadingIndefArticle === 'function') && !!leadingIndefArticle(bare);
+            const flat = (x) => String(x || '').trim().toLowerCase().normalize('NFC').replace(/\s+/g, ' ');
+            const u = keepIndef ? flat(userRaw) : normalizeWriteAnswer(userRaw);
+            const c = keepIndef ? flat(bare) : normalizeWriteAnswer(bare);
             const shared = (typeof sharedPrefixLen === 'function') ? sharedPrefixLen(u, c) : 0;
             // ⚠️ 마지막 글자는 남긴다. 'cassa'처럼 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
             return bare.slice(0, Math.max(1, Math.min(shared + 1, bare.length - 1)));
@@ -4600,6 +4611,21 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   다른 동사를 같은 시제·인칭으로 바르게 활용해 쓸 수 있다 (esperando ↔ aguardando).
             //   그래서 AI 채점을 그대로 탄다. 대신 '같은 동사인데 활용을 틀린 것' 은
             //   유의어가 아니라 오답이라고 프롬프트에서 갈라준다 (aiGradeSubjective).
+
+            // 2-1) [냐냐 지적] 부정관사만 빠뜨림 — 'un montón' 을 'montón' 으로.
+            //   나머지는 맞았으니 오타와 같은 대접으로 한 번 더 (철자로 이미 봐줬으면 오답).
+            //   ⚠️ 악센트 검사보다 앞에 둔다. 정규화가 관사를 떼고 견주니, 그대로 두면
+            //      '악센트가 빠졌어요' 라는 엉뚱한 말이 나간다.
+            if (typeof indefiniteArticleMissing === 'function' && indefiniteArticleMissing(userAnswer, w.word)) {
+                const art = leadingIndefArticle(w.word);
+                const restOk = normalizeWriteAnswer(userAnswer) === normalizeWriteAnswer(w.word)
+                    || stripAccentMarks(normalizeWriteAnswer(userAnswer)) === stripAccentMarks(normalizeWriteAnswer(w.word));
+                if (restOk) {
+                    if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
+                    writeAskRetry('typo', `✏️ 관사까지 한 덩어리로 외우는 표현이에요! ${hintStartHtml(art.split('/')[0])}`, userAnswer);
+                    return;
+                }
+            }
 
             // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더' (철자로 이미 봐줬으면 오답)
             if (writeAccentOnlyMiss(userAnswer, w.word)) {

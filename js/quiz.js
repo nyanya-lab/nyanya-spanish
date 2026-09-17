@@ -577,7 +577,9 @@ let quizSession = null;
             const userNorm = normalizeSpanishAnswer(userRaw);
 
             // 1) 정답 (악센트/관사 관용 처리 후 일치. 슬래시 갈림은 어느 쪽이든 인정)
-            if (userNorm === correctNorm || spanishAnswerMatches(userRaw, correct)) return { isCorrect: true, hint: '' };
+            //   [냐냐 지적] 단, 부정관사로 시작하는 표현(un montón)은 관사까지 써야 맞다
+            const indefMissing = (typeof indefiniteArticleMissing === 'function') && indefiniteArticleMissing(userRaw, correct);
+            if (!indefMissing && (userNorm === correctNorm || spanishAnswerMatches(userRaw, correct))) return { isCorrect: true, hint: '' };
 
             // 빈칸이면 힌트 없이 오답
             if (!userRaw.trim()) return { isCorrect: false, hint: '' };
@@ -1169,7 +1171,7 @@ Return JSON only.`;
                 //   반대로 같은 동사인데 인칭·시제를 틀린 것은 유의어가 아니라 오답이다.
                 const conjSlot = q.word && q.word._isConjTask ? q.word._conjSlot : null;
                 const conjNote = conjSlot ? `
-This is a CONJUGATION question: the student saw only the Korean meaning plus "${conjSlot.tenseLabel}${conjSlot.personLabel ? ' · ' + conjSlot.personLabel : ''}" and had to produce that exact form — the infinitive was hidden.
+This is a CONJUGATION question: the student saw only the Korean meaning plus "${conjSlot.tenseLabel}${conjSlot.personLabel ? ' · ' + conjSlot.personLabel + (conjSlot.personPronoun ? ' (' + conjSlot.personPronoun + ')' : '') : ''}" and had to produce that exact form — the infinitive was hidden.
 - "synonym" = a DIFFERENT verb with the same meaning, correctly conjugated in that same tense and person (target "esperando", answer "aguardando"). The student knew the grammar but reached for another verb.
 - "wrong" = the RIGHT verb in the WRONG form (target "alternáis", answer "alterno" or "alternado"). That is a conjugation mistake, never "synonym" and never "typo".
 - "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".` : '';
@@ -1305,9 +1307,13 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자 (televisión → televiso)
             //   ⚠️ 관사를 떼고 세야 한다. 안 그러면 'el agua' 의 힌트가 "el 로 시작해요"가 되어
             //      힌트 구실을 못 한다 (userNorm/correctNorm 은 이미 관사가 떼여 있다).
-            const bareCorrect = correct.trim().replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
+            //   [냐냐 지적] 부정관사는 떼지 않는다 (un montón → 'u' 로 시작해요). 힌트 자리도 쓰기 복습과 같게 센다.
+            const bareCorrect = correct.trim().replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '');
             //   ⚠️ 마지막 글자는 남긴다. 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
-            const prefixHint = () => bareCorrect.slice(0, Math.max(1, Math.min(sharedPrefixLen(userNorm, correctNorm) + 1, bareCorrect.length - 1)));
+            const prefixHint = () => (typeof writePrefixHint === 'function')
+                ? writePrefixHint(userAnswer, correct)
+                : bareCorrect.slice(0, Math.max(1, Math.min(sharedPrefixLen(userNorm, correctNorm) + 1, bareCorrect.length - 1)));
+            const indefMissing = (typeof indefiniteArticleMissing === 'function') && indefiniteArticleMissing(userAnswer, correct);
 
             // 0) [냐냐 요청] 빈칸이면 한 번 물어본다 (쓰기 복습과 같은 대접).
             //    손이 미끄러져 누른 것과 정말 모르겠는 것을 가른다. 한 번 더 누르면 넘어간다.
@@ -1325,12 +1331,22 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 return;
             }
             q._blankAsked = false;   // 뭔가 쓰고 냈으면 물어본 건 없던 일로
+            // 0-1) [냐냐 지적] 부정관사만 빠뜨림 — 나머지가 맞으면 오타와 같은 대접으로 한 번 더.
+            //   ⚠️ 아래 악센트 검사보다 앞이어야 한다 (정규화가 관사를 떼서 '악센트' 로 오인한다)
+            if (indefMissing) {
+                const restOk = userNorm === correctNorm;
+                if (restOk) {
+                    if (used().typo) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
+                    askRetry('typo', `✏️ 관사까지 한 덩어리로 외우는 표현이에요! ${hintStartHtml(leadingIndefArticle(correct).split('/')[0])}`);
+                    return;
+                }
+            }
             // 1) 악센트까지 정확히 맞으면 AI 안 부르고 바로 통과 (빠름)
-            if (spanishAnswerMatches(userAnswer, correct, true)) { gradeNow(true, ''); return; }
+            if (!indefMissing && spanishAnswerMatches(userAnswer, correct, true)) { gradeNow(true, ''); return; }
             // 1-2) [냐냐 요청] 악센트만 틀렸으면 그냥 넘기지 않고 한 번 더 물어본다.
             //   esta/está · el/él · si/sí 처럼 악센트 하나로 뜻이 갈리는 짝이 있다.
             //   고쳐 쓰면 오타와 같은 대접(+1). AI를 부를 것도 없다.
-            if (userNorm === correctNorm || spanishAnswerMatches(userAnswer, correct)) {
+            if (!indefMissing && (userNorm === correctNorm || spanishAnswerMatches(userAnswer, correct))) {
                 // 철자로 이미 한 번 봐줬는데 또 악센트를 빠뜨렸으면 오답 — 어디가 다른지 짚어준다
                 if (used().typo) { gradeNow(false, buildWrongAnswerHtml(userAnswer, correct)); return; }
                 askRetry('typo', `✏️ 악센트가 빠졌거나 자리가 달라요! 다시 한 번 써볼까요?`);

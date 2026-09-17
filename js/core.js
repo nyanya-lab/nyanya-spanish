@@ -6339,6 +6339,29 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         const RE_PLACEHOLDER = /[\[\(（【][^\]\)）】]*[\]\)）】]/g;      // "antes de [명사/동사원형]" 의 대괄호 뭉치
         const RE_HANGUL = /[ㄱ-ㅎㅏ-ㅣ가-힣]/g;                        // 답에 한글이 섞일 일은 없다
         const RE_LEADING_ARTICLE = /^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i;
+        // ============================================================
+        // [냐냐 지적] 'un montón' 의 un 은 떼면 안 된다 (2026-09-17).
+        //   채점은 맨 앞 관사를 통째로 떼고 견준다 — 명사는 el/la 를 붙여 등록하니까 그게 맞다
+        //   (관사는 성별 표시라 'libro' 라고만 써도 낱말은 맞힌 것이다).
+        //   그런데 부정관사(un/una/unos/unas)로 시작하는 등록어는 명사가 아니라 표현이다
+        //   (un montón · una vez · unos cuantos). 거기서 관사는 표현의 일부라, 빼고 쓰면 틀린 것이다.
+        //   그래서 정답이 부정관사로 시작하면 쓴 답도 같은 관사로 시작해야 한다.
+        //   'un/una ~' 처럼 갈려 있으면 둘 중 아무거나.
+        // ============================================================
+        const RE_LEADING_INDEF = /^\s*(un\/una|unos\/unas|unos|unas|un|una)\s+/i;
+        function leadingIndefArticle(s) {
+            const m = String(s || '').trim().match(RE_LEADING_INDEF);
+            return m ? m[1].toLowerCase() : '';
+        }
+        //   정답에 있는 부정관사를 쓴 답이 빠뜨렸거나 다르게 썼으면 true
+        function indefiniteArticleMissing(userRaw, correctRaw) {
+            const need = leadingIndefArticle(correctRaw);
+            if (!need) return false;
+            const got = leadingIndefArticle(userRaw);
+            if (!got) return true;
+            const ok = need.split('/');
+            return ok.indexOf(got) < 0;
+        }
         // [냐냐 요청] 문답으로 적어둔 표현의 머리표 — "Q. ¿De dónde ser (주어)?" / "A.(주어) ser de [국가명사]".
         //   이건 표현의 일부가 아니라 '질문/대답' 이라는 딱지다. 그대로 두면 기호가 걷힌 뒤
         //   'a ser de' 처럼 앞에 a·q 가 남아서, 제대로 써도 오답이 됐다.
