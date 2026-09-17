@@ -3525,14 +3525,18 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   단어는 고른 범위 안의 개수, 관용구는 실제로 나올 수 있는 표현의 개수다.
             const hint = document.getElementById('write-mix-hint');
             if (hint) {
-                const n = countIdiomEntries();
-                const wordN = (typeof getWriteScopePool === 'function') ? getWriteScopePool().length : 0;
+                //   [냐냐 요청] 범위에 없으면 '해당 ~이 없어서 전체에서 나와요' (writeEffectivePools)
+                const P = writeEffectivePools();
+                const n = P.idioms.length, wordN = P.words.length;
+                const fbNote = [P.wordsFallback ? '단어' : '', P.idiomsFallback ? '관용구' : ''].filter(Boolean);
                 hint.innerText = writeMix.mode === 'word'
-                        ? (wordN ? `단어 ${wordN}개에서 나와요` : '이 범위엔 단어가 없어요')
-                    : (n === 0 ? '등록된 관용구가 없어서 단어만 나와요'
-                    : (writeMix.mode === 'idiom' ? `관용구 ${n}개에서 나와요`
+                        ? (!wordN ? '등록된 단어가 없어요'
+                            : (P.wordsFallback ? `해당 단어가 없어서 전체 ${wordN}개에서 나와요` : `단어 ${wordN}개에서 나와요`))
+                    : (P.noIdiomsAtAll ? '등록된 관용구가 없어서 단어만 나와요'
+                    : (writeMix.mode === 'idiom'
+                        ? (P.idiomsFallback ? `해당 관용구가 없어서 전체 ${n}개에서 나와요` : `관용구 ${n}개에서 나와요`)
                     //   [냐냐 요청] 섞어서는 총 개수를 먼저 적고 내역은 괄호로 묶는다
-                                                 : `${wordN + n}개를 섞어서 내요 (단어 ${wordN} · 관용구 ${n})`));
+                        : `${fbNote.length ? `해당 ${fbNote.join('·')}가 없어서 ${fbNote.join('·')}는 전체에서 나와요 · ` : ''}${wordN + n}개를 섞어서 내요 (단어 ${wordN} · 관용구 ${n})`));
             }
         }
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
@@ -3572,6 +3576,32 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function countIdiomEntries() {
             return writeScopeIdiomEntries().length;
         }
+        // ============================================================
+        // [냐냐 요청] 고른 범위에 그 갈래가 하나도 없으면 **그 갈래 전체** 에서 낸다 (2026-09-17).
+        //   예전엔 '관용구만 + 마스터' 처럼 해당 표현이 0개면 '관용구가 없어서 단어만 나와요' 하고
+        //   엉뚱하게 단어로 넘어갔다. 이제 갈래는 지킨다 — 관용구는 관용구 전체에서,
+        //   단어는 단어 전체에서, 섞어서는 각자 그렇게 채운 뒤 비율대로.
+        //   ⚠️ 관용구가 아예 하나도 등록돼 있지 않을 때만 단어로 넘어간다 (낼 게 없으니까).
+        // ============================================================
+        function writeEffectivePools() {
+            const mode = writeMix.mode;
+            const scopedWords = ((typeof getWriteScopePool === 'function') ? getWriteScopePool() : (vocabulary || [])).filter(w => w && w.word);
+            const scopedIdioms = writeScopeIdiomEntries();
+            const allWords = (vocabulary || []).filter(w => w && w.word);
+            const allIdioms = [];
+            (vocabulary || []).forEach(w => wordIdiomList(w).forEach(it => allIdioms.push({ w, it })));
+            const needWords = mode !== 'idiom';
+            const needIdioms = mode !== 'word';
+            const wordsFallback = needWords && !scopedWords.length && allWords.length > 0;
+            const idiomsFallback = needIdioms && !scopedIdioms.length && allIdioms.length > 0;
+            return {
+                words: wordsFallback ? allWords : scopedWords,
+                idioms: idiomsFallback ? allIdioms : scopedIdioms,
+                wordsFallback, idiomsFallback,
+                noIdiomsAtAll: allIdioms.length === 0
+            };
+        }
+
         // 단어 하나가 가진 관용구 목록 (예전 단일 필드 형태도 받아준다)
         // [냐냐 요청] 관용구도 소리내 들어본다. 표현은 통으로 들어야 입에 붙는다.
         //   따옴표가 섞여도 onclick 이 안 깨지게 인덱스가 아니라 escape 한 글자를 넘긴다.
@@ -3739,8 +3769,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   표현이 여럿이어도 한 번에 하나밖에 못 나왔고, 표현이 많은 단어가 오히려 손해였다.
         //   이제 '표현' 하나하나를 후보로 놓고 전체에서 고른다 (관용구 1113개가 다 대상).
         //   같은 단어가 단어 문제와 관용구 문제로 겹쳐 나오지는 않게 한다.
-        function buildWriteTasks(pool, count) {
-            const pct = writeIdiomPct();
+        function buildWriteTasks(pool, count, idiomEntries) {
+            //   관용구가 아예 없으면 비율과 상관없이 단어만
+            const pct = (idiomEntries && !idiomEntries.length) ? 0 : writeIdiomPct();
             if (pct <= 0) return shuffleArray(pool.slice()).slice(0, count).map(toWriteVerbTask);
 
             const wantIdiom = Math.round(count * pct / 100);
@@ -3750,7 +3781,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   이미 만난 단어에 달린 표현도 처음일 수 있다 (실제로 1117개 중 541개가 그랬다).
             //   그래서 이 범위에서만 관용구는 단어장 전체를 보고, '안 만난 표현' 으로 거른다.
             //   [냐냐 지적] 다른 범위도 표현 제 등급으로 거른다 (idiomEntryInWriteScope)
-            writeScopeIdiomEntries().forEach(e => entries.push(e));
+            //   [냐냐 요청] 범위에 없으면 관용구 전체에서 — 부르는 쪽이 넘겨준다 (writeEffectivePools)
+            (idiomEntries || writeScopeIdiomEntries()).forEach(e => entries.push(e));
             const idiomTasks = shuffleArray(entries).slice(0, wantIdiom)
                 .map(e => makeWriteIdiomTask(e.w, e.it));
 
@@ -3902,16 +3934,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 요청] 쓰기는 '단어'만. 관용구·예문은 단어 빈칸이 이미 다루므로 여기선 안 씀.
         function startWriteReview() {
-            const pool = getWriteScopePool().filter(w => w && w.word);
-            //   [냐냐 지적] 관용구만 낼 때는 단어가 아니라 표현이 있는지 본다 — 약점 단어가 0개여도
-            //   약점 표현은 있을 수 있다 (표현은 제 등급으로 거른다)
-            const idiomOnly = (typeof writeMix !== 'undefined' && writeMix.mode === 'idiom');
-            const empty = idiomOnly ? countIdiomEntries() === 0 : !pool.length;
-            if (empty) { showToast(idiomOnly ? "이 범위엔 관용구가 없어요! 다른 범위를 골라보세요." : "이 범위엔 단어가 없어요! 다른 범위를 골라보세요.", "error"); return; }
+            //   [냐냐 요청] 범위에 그 갈래가 없으면 그 갈래 전체에서 낸다 (writeEffectivePools)
+            const P = writeEffectivePools();
+            const pool = P.words;
+            if (!pool.length && !P.idioms.length) { showToast("낼 단어·관용구가 없어요!", "error"); return; }
             // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
             const input = document.getElementById('write-count-input');
             if (input && !parseInt(input.value, 10)) selectWriteCount(20);
-            const picked = buildWriteTasks(pool, writeCount);
+            const picked = buildWriteTasks(pool, writeCount, P.idioms);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
             beginWritePractice(picked, {
@@ -4067,7 +4097,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     }
                 } else if (s.scopeContinue && typeof getWriteScopePool === 'function') {
                     // [냐냐 요청] 쓰기연습 탭에서 시작 → 같은 범위에서 '내가 고른 개수'만큼 이어서
-                    const poolLeft = getWriteScopePool().filter(x => x && x.word).length;
+                    const poolLeft = (typeof writeEffectivePools === 'function')
+                        ? (() => { const P = writeEffectivePools(); return P.words.length + P.idioms.length; })()
+                        : getWriteScopePool().filter(x => x && x.word).length;
                     if (poolLeft > 0) {
                         nextBtn = `<button onclick="closeWritePractice(); startWriteReview();" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(poolLeft, batch)}개 이어서 →</button>`;
                     }
