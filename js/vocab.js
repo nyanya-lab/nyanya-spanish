@@ -860,9 +860,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-16) — 요약줄에 이미 적혀 있다
         }
 
+        //   단어장의 + 버튼 — 여기서 연 것만 '계속 등록?' 을 묻는다
+        function openWordModalFromVocab() {
+            openWordModal();
+            _skipContinueRegisterPrompt = false;
+        }
         function openWordModalFromSearch() {
             const q = ((document.getElementById('search-bar') || {}).value || '').trim();
-            openWordModal();
+            openWordModalFromVocab();
             if (!q) return;
             const isKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(q);
             const target = document.getElementById(isKorean ? 'input-meaning' : 'input-word');
@@ -925,7 +930,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // 모달 열 때 초기화
-            _skipContinueRegisterPrompt = false; // [냐냐 PATCH] 기본은 계속등록 팝업 표시 (첨삭 등록만 스킵)
+            //   [냐냐 요청] '계속 등록?' 은 단어장에서 연 등록창에서만 묻는다 (2026-09-17).
+            //   기본은 안 묻고, 단어장의 + 버튼·빈 목록 버튼(openWordModalFromVocab)만 켠다.
+            _skipContinueRegisterPrompt = true;
             resetModalPosition(); // [냐냐 PATCH] 직접 열면 항상 중앙에서 시작
             
             if (wordId) {
@@ -3576,7 +3583,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 apply();
                 return { gradeBefore: before, gradeAfter: getIdiomGrade(id, text) };
             }
-            return withGradeShift((w && (w._idiomOf || w._conjOf)) || w, apply);
+            //   복제본이면 점수가 안 따라온다 — 단어장의 그 단어를 id 로 찾아 잰다
+            const real = (w && (vocabulary || []).find(v => v.id === w.id)) || (w && (w._idiomOf || w._conjOf)) || w;
+            return withGradeShift(real, apply);
         }
 
         // [냐냐 요청] 동사는 원형이 아니라 활용형으로 묻는다 (2026-09-02).
@@ -3647,13 +3656,48 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return { tense, tenseLabel: label, person: pk, personLabel: plabel, personPronoun: pron, form: String(c[pk] || '').trim() };
         }
 
+        // ============================================================
+        // [냐냐 요청] 활용형 문제의 뜻 줄 (2026-09-17).
+        //   예전엔 '뜻 → 직설법 현재 · 2인칭 복수' 를 한 줄에 화살표로 이어 적었다.
+        //   뜻은 뜻대로 한 줄, 시제·인칭은 그 밑 한 줄로 가르고, 단수·복수는 색을 달리한다
+        //   (단수 하늘색 · 복수 자주색) — 글자만으로는 한눈에 안 갈렸다.
+        //   ⚠️ 과제 뜻은 '뜻\n시제 · 인칭' 으로 담는다. 예전에 저장된 판(화살표)도 읽는다.
+        // ============================================================
+        function writeMeaningHtml(meaning, cls) {
+            const raw = String(meaning || '');
+            let main = raw, cue = '';
+            const nl = raw.indexOf('\n');
+            if (nl >= 0) { main = raw.slice(0, nl); cue = raw.slice(nl + 1); }
+            else {
+                const m = raw.match(/^(.*) → (.+?(?:인칭 [단복]수|분사))$/);
+                if (m) { main = m[1]; cue = m[2]; }
+            }
+            const mainHtml = `<p class="${cls} break-words">${escapeHtml(main)}</p>`;
+            if (!cue) return mainHtml;
+            const cueHtml = cue.split(' · ').map(part => {
+                const num = part.match(/^(\d인칭) (단수|복수)$/);
+                if (!num) return `<span>${escapeHtml(part)}</span>`;
+                const color = num[2] === '단수' ? 'bg-sky-100 text-sky-700' : 'bg-fuchsia-100 text-fuchsia-700';
+                return `<span class="inline-block px-1.5 py-[1px] rounded-md ${color}">${num[1]} ${num[2]}</span>`;
+            }).join('<span class="text-slate-300 mx-1">·</span>');
+            return mainHtml + `<p class="text-xs font-bold text-slate-500 pt-0.5">${cueHtml}</p>`;
+        }
+
+        //   이 과제의 지금 등급 — 복제본이면 점수가 안 따라오니 단어장의 그 단어를 id 로 찾아 잰다
+        function writeTaskGradeNow(w) {
+            if (!w) return null;
+            if (w._isIdiomTask && w._idiomOf && typeof getIdiomGrade === 'function') return getIdiomGrade(w._idiomOf.id, w.word);
+            const real = (vocabulary || []).find(v => v.id === w.id) || w._conjOf || w;
+            return (typeof getWordGrade === 'function') ? getWordGrade(real) : null;
+        }
+
         // 활용형 과제도 '단어의 복제본' 으로 만든다 (관용구 과제와 같은 방식).
         //   id 가 같아서 점수는 그 동사에 붙고, 채점·결과 화면이 지금 코드 그대로 돈다.
         function makeWriteConjTask(w, slot) {
             const cue = slot.personLabel ? `${slot.tenseLabel} · ${slot.personLabel}` : slot.tenseLabel;
             return Object.assign({}, w, {
                 word: slot.form,
-                meaning: `${w.meaning || ''} → ${cue}`,
+                meaning: `${w.meaning || ''}\n${cue}`,   // [냐냐 요청] 화살표 대신 줄을 바꾼다 (writeMeaningHtml)
                 _conjOf: w,
                 _conjSlot: slot,
                 _isConjTask: true
@@ -4008,7 +4052,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const groups = [
                     ['한 번에',      nBy(2),   '+2',   'text-emerald-600'],
                     ['오타 고쳐서',  nBy(1),   '+1',   'text-emerald-600'],
-                    ['익혀서',       nBy(-1),  '−1',   'text-amber-600'],
+                    ['익혀서',       nBy(-1.5), '−1.5', 'text-amber-600'],
                     ['끝내',         nBy(-2),  '−2',   'text-rose-500']
                 ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
                 const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
@@ -4121,7 +4165,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <div class="bg-violet-50 rounded-2xl border border-violet-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-violet-300 tracking-widest select-none">? ? ?</p>
-                        <p class="text-base font-extrabold text-slate-800 break-words">${escapeHtml(w.meaning || '')}</p>
+                        ${writeMeaningHtml(w.meaning, 'text-base font-extrabold text-slate-800')}
                     </div>`;
                 inputLabel = '떠올려서 쓰세요 (엔터)';
                 placeholder = '스페인어로...';
@@ -4136,7 +4180,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-rose-600 break-words">${escapeHtml(w.word)}</p>
-                        <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(w.meaning || '')}</p>
+                        ${writeMeaningHtml(w.meaning, 'text-sm font-bold text-slate-500')}
                         <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
                             <p class="text-[10px] font-bold text-slate-400">내가 쓴 답</p>
                             ${mineHtml}
@@ -4159,7 +4203,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <p class="text-xs font-black ${fb.correct ? 'text-emerald-600' : 'text-rose-500'}">${fb.correct ? `✅ 정답! <span class="text-emerald-500">${gainText}</span>` : '❌ 아쉬워요'}</p>
                         <p class="text-2xl font-extrabold ${fb.correct ? 'text-emerald-700' : 'text-rose-600'} break-words">${escapeHtml(fb.answer)}</p>
                         ${fb.base ? `<p class="text-xs font-bold text-slate-400 break-words">원형 <b class="text-slate-600">${escapeHtml(fb.base)}</b></p>` : ''}
-                        <p class="text-sm font-bold text-slate-500 break-words">${escapeHtml(fb.meaning || '')}</p>
+                        ${writeMeaningHtml(fb.meaning, 'text-sm font-bold text-slate-500')}
                         ${(!fb.correct && fb.why) ? `
                         <div class="pt-2 mt-2 border-t border-rose-200 text-xs">${fb.why}</div>` : ((!fb.correct && mine) ? `
                         <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
@@ -4437,12 +4481,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
                     const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
-                    if (already) addWordScore(w.id, 1, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
-                    else addWordScore(w.id, -1, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
+                    //   [냐냐 요청] 익혀서 맞히면 합이 −1.5 (2026-09-17, 예전 −1): 1바퀴 −2 에 +0.5 를 돌려준다
+                    if (already) addWordScore(w.id, 0.5, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
+                    else addWordScore(w.id, -1.5, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
+                if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1.5, ...shift });
                 s.index++;
                 s.done = 0;
             } else {
@@ -4453,6 +4499,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
                         idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
                 });
+                if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction('review');
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
@@ -4516,6 +4563,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const failKey = writeFailKey(w);
             if (!s.failedOnce[failKey]) {
                 s.failedOnce[failKey] = true;
+                //   [냐냐 지적] 3바퀴에서 등급 변화를 잴 때 쓸 '틀리기 전' 등급 (2026-09-17).
+                //   cuero 가 −1 이 됐는데 '약점에서 벗어났어요' 가 떴다 — 3바퀴의 +차액만 재서,
+                //   여기서 −2 로 약점에 잠깐 들어갔다가 나온 것을 '벗어났다' 로 읽었다.
+                s.gradeBeforeFail = s.gradeBeforeFail || {};
+                s.gradeBeforeFail[failKey] = writeTaskGradeNow(w);
                 if (typeof addWordScore === 'function') {
                     addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
                         idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });

@@ -2459,7 +2459,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         if (h) return h;
                     }
                 }
-                return (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(k) : null;
+                //   [냐냐 지적] 활용형 역추적은 품사를 안 본다 (2026-09-17). 'arriba'(부사·전치사)가
+                //   arribar(도착하다)의 3인칭 꼴로 읽혀 −2 가 붙었다. AI 가 동사가 아니라고 했으면 받지 않는다.
+                const back = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(k) : null;
+                if (back && pos && pos !== 'verb' && String(back.pos || '').toLowerCase() === 'verb') return null;
+                return back;
             };
 
             const tokensOf = (html) => String(html || '').replace(/<[^>]*>/g, ' ')
@@ -2699,6 +2703,39 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   ⚠️ 기능어는 뺀다. AI 는 문장을 손볼 때마다 con·de·a 를 넣고 빼는데,
             //      그걸 '못 떠올린 단어' 로 치면 첨삭마다 −2 가 줄줄이 붙는다.
             const FUNC_POS = new Set(['preposition', 'article', 'pronoun', 'conjunction', 'determiner']);
+            // ③-b [냐냐 지적] 고친 문장에 들어간 **여러 낱말 표현** 을 먼저 자리 잡는다 (2026-09-17).
+            //   내 문장은 ① 에서 긴 표현부터 자리를 잡는데, 고친 문장 쪽은 낱말 하나씩만 봤다.
+            //   그래서 AI 가 넣어준 'arriba de' 는 아예 안 잡히고, 그 안의 'arriba' 가 동사 arribar 로 읽혀 −2 가 붙었다.
+            //   여기서 잡힌 표현의 토막은 아래(④·④-b)에서 다시 세지 않는다.
+            //   점수는 낱말과 같은 규칙 — 기능어(전치사 등)면 0, 내용어면 −2 (못 떠올린 것).
+            const fixedUsed = new Array(fixedToks.length).fill(false);
+            const findFixedSpan = (words) => {
+                for (let i = 0; i + words.length <= fixedToks.length; i++) {
+                    let ok = true;
+                    for (let j = 0; j < words.length; j++) {
+                        if (fixedUsed[i + j] || norm(fixedToks[i + j]) !== words[j]) { ok = false; break; }
+                    }
+                    if (ok) return i;
+                }
+                return -1;
+            };
+            phrases.forEach(({ w, words }) => {
+                if (done.has(w.id)) return;
+                if (mineFlat.includes(' ' + words.join(' ') + ' ')) return;   // 내가 쓴 표현은 ① 에서 매겼다
+                const at = findFixedSpan(words);
+                if (at < 0) return;
+                for (let j = 0; j < words.length; j++) fixedUsed[at + j] = true;
+                const isFunc = FUNC_POS.has(String(w.pos || '').toLowerCase());
+                push(w, false, !isFunc);
+                const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
+                if (e && e.word.id === w.id) { if (isFunc) e.added = true; else e.missed = true; }
+            });
+            //   표현 안에 든 토막 — AI 가 따로 올려도 받지 않는다
+            const inFixedPhrase = (name) => {
+                const parts = norm(name).split(' ').filter(Boolean);
+                if (!parts.length) return false;
+                return parts.every(p => fixedToks.some((t, i) => fixedUsed[i] && norm(t) === p));
+            };
             //   [냐냐 요청] 어느 낱말인지는 AI 에게 대놓고 묻는다 — wordsAdded (2026-09-10).
             //     예전엔 고친 문장의 토막을 훑어 짐작했는데 두 가지가 샜다:
             //     ① 내가 쓴 낱말의 성 변형까지 딴 낱말로 봤다 — 'caro'(비싼)를 'cara' 로 고쳐준 것을
@@ -2711,6 +2748,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const k = norm(name);
                 if (!k || k.length < 3) return;
                 if (mineFlat.includes(' ' + k + ' ')) return;      // 내가 쓴 것은 위에서 매겼다
+                if (inFixedPhrase(name)) return;                    // ③-b 에서 표현으로 매겼다
                 if (typeof AI_FUNCTION_WORDS !== 'undefined' && AI_FUNCTION_WORDS.has(k)) return;
                 const w = resolve(name, pos);
                 if (!w || done.has(w.id)) return;
@@ -2743,7 +2781,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     missedOne(name, pos);
                 });
             } else {
-                fixedToks.forEach(tok => missedOne(tok, ''));
+                fixedToks.forEach((tok, i) => { if (!fixedUsed[i]) missedOne(tok, ''); });
             }
             // ④-b [냐냐 요청] AI 가 고친 문장에 넣은 **기능어**도 0 점으로 보여준다 (2026-09-14).
             //   냐냐님 말씀 — "내가 안 쓰고 ai가 문장 수정해줄 때 쓴 단어들 0점으로 일단 다 넣어줄래?
@@ -2754,9 +2792,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   ⚠️ AI 목록(wordsAdded)으로는 못 받는다. 지시문이 '관사·전치사·대명사는 빼라' 고
             //      못박아 뒀기 때문이다. 그래서 여기서만 코드가 고친 문장을 직접 훑는다.
             //   ⚠️ 단어장에 등록된 것만 나온다 — 칩을 누르면 그 단어가 열려야 하기 때문이다.
-            fixedToks.forEach(tok => {
+            fixedToks.forEach((tok, i) => {
                 const k = norm(tok);
                 if (!k) return;
+                if (fixedUsed[i]) return;                       // ③-b 에서 표현으로 매겼다
                 if (mineFlat.includes(' ' + k + ' ')) return;   // 내가 쓴 것은 위에서 매겼다
                 const w = resolve(tok, '');
                 if (!w || done.has(w.id)) return;
