@@ -1484,29 +1484,35 @@ let vocabulary = [];
             const reviewN = log.reviewCount || 0;
             const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0) + reviewN;
             //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
-            const total = shownTotal + (log.quizTotal || 0) + (log.aiSessions || 0) + (log.gameCount || 0);
+            const total = shownTotal + (log.quizTotal || 0) + (log.aiSessions || 0) + (log.gameCount || 0);   // 첨삭은 표에도 있지만 여기서 한 번만 센다
             //   [냐냐 요청] 색은 줄이고 세로선을 넣는다 (2026-09-17).
             //   열 이름은 어두운 한 색, 숫자는 그 줄 이름과 같은 색 (등록 어둡게 · 마스터 초록 · 약점 빨강),
             //   0 은 옅게, 복습 줄은 색 없이.
             const COLS = ['단어', '관용구', '문법'];
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
             const VLINE = 'border-l border-slate-200';
+            const aiN = log.aiSessions || 0;
+            //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
             const num = (v, color) => `<td class="text-center py-1 font-black ${VLINE} ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
+            const wideRow = (label, v) => `<tr class="border-t border-slate-200">
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">${label}</td>
+                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</td>
+                        </tr>`;
             const grid = `
-                <table class="w-full text-xs">
+                <table class="w-full table-fixed text-xs">
+                    <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
                     <thead><tr>
-                        <th class="w-12"></th>
+                        <th></th>
                         ${COLS.map(t => `<th class="text-center pb-1 text-[10px] font-black text-slate-700 ${VLINE}">${t}</th>`).join('')}
                     </tr></thead>
                     <tbody>
                         ${ROWS.map(([key, label, color]) => `<tr class="border-t border-slate-200">
-                            <td class="py-1 text-[11px] font-bold ${color}">${label}</td>
+                            <td class="text-center py-1 text-[11px] font-bold ${color}">${label}</td>
                             ${cells[key].map(v => num(v, color)).join('')}
                         </tr>`).join('')}
-                        <tr class="border-t border-slate-200">
-                            <td class="py-1.5 text-[11px] font-bold text-slate-700">복습</td>
-                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}개</td>
-                        </tr>
+                        ${wideRow('복습', reviewN)}
+                        ${/* [냐냐 요청] 첨삭도 한 줄 — 문법 복습으로 한 번역은 위 복습에 들어가 있다 */''}
+                        ${wideRow('첨삭', aiN)}
                     </tbody>
                 </table>`;
             // [냐냐 요청] 복습 예정과 틀린 것을 버튼 한 줄로 (2026-09-04).
@@ -1522,7 +1528,7 @@ let vocabulary = [];
             let planHtml = '';
             if (plan3 || bad3) {
                 planHtml = `
-                    <div class="mt-2 pt-2 border-t border-violet-100 flex items-stretch gap-1.5 text-[11px]">
+                    <div class="mt-2 flex items-stretch gap-1.5 text-[11px]">
                         ${plan3 ? pill('복습 예정', plan3.total, 'plan', 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100') : ''}
                         ${bad3 && bad3.total ? pill('틀린 것', bad3.total, 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100') : ''}
                     </div>`;
@@ -1538,7 +1544,7 @@ let vocabulary = [];
                 </div>
                 ${/* [냐냐 요청] 상자를 빼고 글씨를 키웠다 (2026-09-04) — 이제 이 카드의 본문이라 가둘 이유가 없다 */''}
                 ${total > 0
-                    ? `<div class="px-0.5">${grid}</div>`
+                    ? `<div class="bg-slate-50 rounded-xl px-1.5 py-1.5">${grid}</div>`
                     : (ds > today
                         ? ''
                         : `<p class="text-slate-400 text-center text-xs py-3">${isToday ? '오늘의 첫 학습을 기록해보세요!' : '이 날은 쉬어갔네요 🌙'}</p>`)}
