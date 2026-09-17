@@ -4062,7 +4062,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const posHtml = w._isIdiomTask
                 ? `<span class="inline-block text-[10px] font-black text-violet-600 bg-violet-100 border border-violet-200 rounded-lg px-2 py-0.5">📘 관용구${showIdiomBase ? ` · ${escapeHtml((w._idiomOf || {}).word || '')}` : ''}</span>`
                 : (posLabel
-                    ? `<span class="inline-block text-[10px] font-bold text-slate-500 bg-white border border-slate-200 rounded-lg px-2 py-0.5">${escapeHtml(posLabel)}</span>`
+                    //   [냐냐 요청] 품사마다 단어장 카드와 같은 색으로 (2026-09-17).
+                    //   ⚠️ 명사만은 성별 색(남 파랑·여 분홍)을 쓰지 않는다 — 답을 가린 채 묻는 자리라,
+                    //      색이 el / la 를 알려주는 꼴이 된다. 명사는 회색 하나로 둔다.
+                    ? `<span class="inline-block text-[10px] font-bold rounded-lg px-2 py-0.5 ${(w.pos === 'noun' || typeof posChipColor !== 'function') ? 'bg-slate-100 text-slate-600' : posChipColor(w)}">${escapeHtml(posLabel)}</span>`
                     : '');
 
             // [냐냐 요청] 익히기 바퀴 카드는 "퀴즈 정답 화면"과 같은 양식으로 정보를 전부 펼쳐서 보여줌
