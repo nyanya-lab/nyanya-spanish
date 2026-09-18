@@ -3071,12 +3071,24 @@ let vocabulary = [];
         const SYNONYM_AWARD = 2;
         let _synonymAwarded = new Set();   // 이번 판에 덤을 받은 낱말 id
 
+        //   [냐냐 지적] pesado 를 물었는데 pasado 라고 썼더니 pasado 에 +2 가 갔다 (2026-09-18).
+        //   글자 한두 개 차이는 '다른 낱말을 떠올린 것' 이 아니라 손이 미끄러진 것이다.
+        //   그 낱말이 단어장에 있다는 이유로 덤을 주면, 오타가 남의 점수를 올린다.
+        function answerIsSlipOf(userAnswer, askedWord) {
+            if (typeof levenshtein !== 'function' || typeof normalizeSpanishAnswer !== 'function') return false;
+            const target = (askedWord && (askedWord.word || askedWord)) || '';
+            const u = normalizeSpanishAnswer(userAnswer), c = normalizeSpanishAnswer(target);
+            if (!u || !c || u === c) return false;
+            return levenshtein(u, c) <= 2;
+        }
+
         function awardSynonymScore(userAnswer, askedWord) {
             if (typeof findVocabWordByForm !== 'function' || typeof addWordScore !== 'function') return null;
             const hit = findVocabWordByForm(userAnswer);
             if (!hit) return null;
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
+            if (answerIsSlipOf(userAnswer, askedWord)) return null;   // 오타는 덤이 아니다
             if (_synonymAwarded.has(hit.id)) return null;
             _synonymAwarded.add(hit.id);
             addWordScore(hit, SYNONYM_AWARD, { correct: true });

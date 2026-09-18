@@ -1384,7 +1384,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 return;
             }
 
-            const verdict = String(ai.verdict || '').toLowerCase();
+            let verdict = String(ai.verdict || '').toLowerCase();   // 아래에서 '오타' 로 고쳐 잡을 수 있다
             // [냐냐 요청] 오답 설명 — 철자면 틀린 자리만 빨갛게, 다른 단어면 그 단어의 뜻을
             const wrongHtml = () => buildWrongAnswerHtml(userAnswer, correct, {
                 aiIsRealWord: ai.answerIsRealWord,
@@ -1403,6 +1403,9 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             }
             if (verdict === 'correct') { gradeNow(true, ''); return; }
 
+            //   [냐냐 지적] 글자 한두 개 차이면 오타로 본다 — 단어장에 있는 낱말이라도 덤을 주지 않는다
+            if ((verdict === 'synonym' || verdict === 'wrong') && typeof answerIsSlipOf === 'function'
+                && answerIsSlipOf(userAnswer, q.word)) verdict = 'typo';
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used().synonym) {
                 const got = awardSynonymScore(userAnswer, q.word);
