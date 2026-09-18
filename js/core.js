@@ -3071,15 +3071,28 @@ let vocabulary = [];
         const SYNONYM_AWARD = 2;
         let _synonymAwarded = new Set();   // 이번 판에 덤을 받은 낱말 id
 
-        //   [냐냐 지적] pesado 를 물었는데 pasado 라고 썼더니 pasado 에 +2 가 갔다 (2026-09-18).
-        //   글자 한두 개 차이는 '다른 낱말을 떠올린 것' 이 아니라 손이 미끄러진 것이다.
-        //   그 낱말이 단어장에 있다는 이유로 덤을 주면, 오타가 남의 점수를 올린다.
-        function answerIsSlipOf(userAnswer, askedWord) {
-            if (typeof levenshtein !== 'function' || typeof normalizeSpanishAnswer !== 'function') return false;
-            const target = (askedWord && (askedWord.word || askedWord)) || '';
-            const u = normalizeSpanishAnswer(userAnswer), c = normalizeSpanishAnswer(target);
-            if (!u || !c || u === c) return false;
-            return levenshtein(u, c) <= 2;
+        // ============================================================
+        // [냐냐 지적] pesado 를 물었는데 pasado 라고 썼더니 'el pasado' 에 +2 가 갔다 (2026-09-18).
+        //   pasado 는 오타가 아니라 진짜 다른 낱말이다 ('지난·과거의'). 틀린 건 덤을 준 쪽이다 —
+        //   유의어 덤은 '같은 뜻의 다른 낱말을 떠올려 썼다' 는 증거로 주는 것인데,
+        //   AI 가 'synonym' 이라고만 하면 뜻을 안 보고 그대로 줬다. AI 는 이 자리에서 곧잘 틀린다.
+        //   그래서 코드가 한 번 더 본다 — 등록된 유의어이거나 뜻이 겹칠 때만 덤이다.
+        //   ⚠️ 오타로 보지 않는다 (냐냐님 확인). 뜻이 다르면 그냥 오답이다.
+        // ============================================================
+        function synonymClaimIsReal(userAnswer, askedWord) {
+            const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
+            if (!asked) return false;
+            const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+            if (!hit || hit.id === asked.id) return false;
+            //   ① 내가 등록해 둔 유의어 (반의어는 빼고)
+            const syns = Array.isArray(asked.synonyms) ? asked.synonyms : [];
+            if (syns.some(sy => sy && sy.type !== 'antonym' && (sy.id === hit.id
+                || (typeof normalizeSpanishAnswer === 'function'
+                    && normalizeSpanishAnswer(sy.word || '') === normalizeSpanishAnswer(hit.word || ''))))) return true;
+            //   ② 적어둔 뜻이 겹치는가 (단어 빈칸·퀴즈의 유의어 판정과 같은 잣대)
+            const hm = String(hit.meaning || ''), am = String(asked.meaning || '');
+            if (!hm || !am) return false;
+            return (typeof meaningsOverlap === 'function') && !!meaningsOverlap(hm, am);
         }
 
         function awardSynonymScore(userAnswer, askedWord) {
@@ -3088,7 +3101,8 @@ let vocabulary = [];
             if (!hit) return null;
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
-            if (answerIsSlipOf(userAnswer, askedWord)) return null;   // 오타는 덤이 아니다
+            //   뜻이 겹치지 않으면 덤이 아니다 (AI 가 '유의어' 라고 해도)
+            if (!synonymClaimIsReal(userAnswer, askedWord)) return null;
             if (_synonymAwarded.has(hit.id)) return null;
             _synonymAwarded.add(hit.id);
             addWordScore(hit, SYNONYM_AWARD, { correct: true });

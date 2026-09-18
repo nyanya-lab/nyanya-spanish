@@ -1403,9 +1403,9 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             }
             if (verdict === 'correct') { gradeNow(true, ''); return; }
 
-            //   [냐냐 지적] 글자 한두 개 차이면 오타로 본다 — 단어장에 있는 낱말이라도 덤을 주지 않는다
-            if ((verdict === 'synonym' || verdict === 'wrong') && typeof answerIsSlipOf === 'function'
-                && answerIsSlipOf(userAnswer, q.word)) verdict = 'typo';
+            //   [냐냐 지적] AI 가 '유의어' 라고 해도 뜻이 안 겹치면 그냥 오답 (pesado ↔ pasado)
+            if (verdict === 'synonym' && typeof synonymClaimIsReal === 'function'
+                && !synonymClaimIsReal(userAnswer, q.word)) verdict = 'wrong';
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used().synonym) {
                 const got = awardSynonymScore(userAnswer, q.word);

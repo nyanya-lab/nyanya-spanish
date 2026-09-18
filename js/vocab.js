@@ -4812,12 +4812,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!ai) {
                 const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
-                if (a.isSynonym && typeof answerIsSlipOf === 'function' && answerIsSlipOf(userAnswer, w)) {
-                    //   오타로 본다 (위 AI 길과 같은 규칙)
-                    if (!used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`, userAnswer); return; }
-                    writeFirstRoundFail(w, userAnswer, aiInfo());
-                    return;
-                }
                 if (a.isSynonym && !used.synonym) {
                     const got = awardSynonymScore(userAnswer, w);
                     writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint) + synonymAwardNote(got), userAnswer);
@@ -4829,10 +4823,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             let verdict = String(ai.verdict || '').toLowerCase();
-            //   [냐냐 지적] 글자 한두 개 차이면 뜻을 떠올린 게 아니라 손이 미끄러진 것 — 오타로 본다
-            //   (pesado ↔ pasado. 둘 다 단어장에 있으면 AI 가 '다른 낱말' 로 보기 쉽다)
-            if ((verdict === 'synonym' || verdict === 'wrong') && typeof answerIsSlipOf === 'function'
-                && answerIsSlipOf(userAnswer, w)) verdict = 'typo';
+            //   [냐냐 지적] AI 가 '유의어' 라고 해도 뜻이 안 겹치면 그냥 오답이다 (pesado ↔ pasado).
+            //   오타로도 보지 않는다 — 글자가 비슷할 뿐 진짜 다른 낱말이다.
+            if (verdict === 'synonym' && typeof synonymClaimIsReal === 'function'
+                && !synonymClaimIsReal(userAnswer, w)) verdict = 'wrong';
             // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (퀴즈 주관식과 같은 규칙)
             if (verdict === 'correct' && typeof phraseAnswerIncomplete === 'function'
                 && phraseAnswerIncomplete(userAnswer, w.word)) {
