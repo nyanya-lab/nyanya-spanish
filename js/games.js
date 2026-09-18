@@ -1722,7 +1722,7 @@
             }
             const btn = document.getElementById('vconj-action-btn');
             if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextVconjProblem()'); }
-            if (typeof logAction === 'function') logAction('practice');   // [냐냐 요청] 동사변형은 연습
+            if (typeof logAction === 'function') logAction('practice', null, w && w.id);   // [냐냐 요청] 동사변형은 연습
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
             if (typeof updateStats === 'function') updateStats();
         }
@@ -2188,7 +2188,7 @@ Return JSON only, no markdown.`;
                 if (typeof updateStats === 'function') updateStats();
             }
 
-            if (typeof logAction === 'function') logAction('practice'); // [냐냐 요청] 단어 빈칸은 연습
+            if (typeof logAction === 'function') logAction('practice', null, (fillState && fillState.current && fillState.current.word) ? fillState.current.word.id : null); // [냐냐 요청] 단어 빈칸은 연습
 
             applyFillGradeResults(detail);
             fillState.phase = 'graded';
@@ -2702,7 +2702,7 @@ Return JSON only, no markdown.`;
                 });
             }
 
-            if (typeof logAction === 'function') logAction('practice');   // [냐냐 요청] 문법표 빈칸은 연습
+            if (typeof logAction === 'function') logAction('practice', null, (gfillState && gfillState.current && gfillState.current.table) ? gfillState.current.table.id : null);   // [냐냐 요청] 문법표 빈칸은 연습
 
             applyGrammarFillResults(detail);
             gfillState.phase = 'graded';

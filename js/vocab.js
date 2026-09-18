@@ -2735,7 +2735,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   기다리지 않는다 — 오는 대로 단어에 적히고 카드에 뱃지가 끼워진다.
                 if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(wordObj.id);
                 // 등록도 끝낼 때 한 번만 알린다 (아래 토스트 또는 '계속 등록?' 확인창이 이미 말해준다)
-                logAction('new-word'); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
+                logAction('new-word', null, wordObj.id); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
             // [냐냐 PATCH-5배치] 유의어/반의어 — 미등록 단어 자동 등록 + 상대 단어에 양방향 연결
@@ -4452,6 +4452,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return (w && w._isConjTask && w._conjOf && w._conjOf.word) ? w._conjOf.word : '';
         }
 
+        //   일지 목록에 남길 열쇠 — 관용구는 표현 열쇠로, 단어는 그 id 로
+        function writeTaskKey(w) {
+            if (w && w._isIdiomTask && w._idiomOf && typeof idiomKey === 'function') return idiomKey(w._idiomOf.id, w.word);
+            return w ? w.id : null;
+        }
         //   [냐냐 요청] 오늘의 복습에서 푼 것만 '복습', 스스로 돌린 쓰기는 '연습' (2026-09-18)
         function writeLogKind(s) {
             return (s && s.isTodayReview) ? 'review' : 'practice';
@@ -4555,7 +4560,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 });
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                if (!already && typeof logAction === 'function') logAction(writeLogKind(s));
+                if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1.5, ...shift });
                 s.index++;
                 s.done = 0;
@@ -4569,7 +4574,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 });
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
-                if (!already && typeof logAction === 'function') logAction(writeLogKind(s));
+                if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
             }
             writePracticeSave();
@@ -4603,7 +4608,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
             // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
             if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
-            if (typeof logAction === 'function') { logAction(writeLogKind(s)); logAction('write', true); }
+            if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', true); }
             s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '', base: writeBaseForm(w) };
             writePracticeSave();
@@ -4643,7 +4648,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // 관용구 과제는 단어 곡선을 건드리지 않는다 (그 표현의 곡선은 위에서 이미 밀었다)
                 if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 //   [냐냐 요청] 1바퀴 결과를 정답률에도 넣는다. 이 가드 안이라 한 낱말당 한 번이다
-                if (typeof logAction === 'function') { logAction(writeLogKind(s)); logAction('write', false); }
+                if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', false); }
             }
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)

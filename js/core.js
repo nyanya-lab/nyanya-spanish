@@ -1495,11 +1495,13 @@ let vocabulary = [];
             const aiN = log.aiSessions || 0;
             const practiceN = log.practiceCount || 0;
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
-            const num = (v, color) => `<td class="text-center py-1 font-black ${VLINE} ${v > 0 ? color : 'text-slate-300'}">${v}</td>`;
-            const wideRow = (label, v) => `<tr class="border-t border-slate-200">
-                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">${label}</td>
-                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</td>
-                        </tr>`;
+            //   [냐냐 요청] 숫자를 누르면 그 날 무엇이었는지 (openDiaryDetail)
+            const num = (v, color, what) => `<td class="${VLINE} p-0">${v > 0
+                ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${color} hover:bg-white rounded transition-colors">${v}</button>`
+                : `<span class="block py-1 text-center font-black text-slate-300">${v}</span>`}</td>`;
+            const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
+                ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
+                : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
             const grid = `
                 <table class="w-full table-fixed text-xs">
                     <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
@@ -1510,20 +1512,20 @@ let vocabulary = [];
                     <tbody>
                         ${ROWS.map(([key, label, color]) => `<tr class="border-t border-slate-200">
                             <td class="text-center py-1 text-[11px] font-bold ${color}">${label}</td>
-                            ${cells[key].map(v => num(v, color)).join('')}
+                            ${cells[key].map((v, ci) => num(v, color, `${key === 'reg' ? 'reg' : key === 'master' ? 'master' : 'weak'}-${['word', 'idiom', 'grammar'][ci]}`)).join('')}
                         </tr>`).join('')}
                         ${/* [냐냐 요청] 첫 줄은 복습만, 그 밑 네 칸을 둘씩 나눠 연습·첨삭 (2026-09-18).
                              복습 = 오늘의 복습에서 푼 것 (문법 복습 번역 포함)
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습</td>
-                            <td colspan="3" class="text-center py-1.5 font-black ${VLINE} ${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</td>
+                            ${cellBtn(reviewN, 'review', 3)}
                         </tr>
                         <tr class="border-t border-slate-200">
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">연습</td>
-                            <td class="text-center py-1.5 font-black ${VLINE} ${practiceN > 0 ? 'text-slate-700' : 'text-slate-300'}">${practiceN}</td>
+                            ${cellBtn(practiceN, 'practice')}
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700 ${VLINE}">첨삭</td>
-                            <td class="text-center py-1.5 font-black ${VLINE} ${aiN > 0 ? 'text-slate-700' : 'text-slate-300'}">${aiN}</td>
+                            ${cellBtn(aiN, 'ai')}
                         </tr>
                     </tbody>
                 </table>`;
@@ -1650,6 +1652,139 @@ let vocabulary = [];
         //      기준으로 붙는데 위쪽 여백이 -20px 이라, top-0 으로 두면 딱 그만큼 아래로 밀려서
         //      틈이 그대로 남는다 (재보니 20px 어긋났다). -top-5 로 그만큼 되돌린다.
         const STICKY_TABS_WRAP = 'sticky -top-5 z-10 -mt-5 pt-5 -mx-5 px-5 pb-1.5 bg-white';
+
+        // ============================================================
+        // [냐냐 요청] 일지의 숫자를 누르면 그 날 '무엇' 이었는지 목록으로 (2026-09-18).
+        //   복습 예정 팝업(review-plan-modal)의 껍데기를 그대로 빌려 쓴다.
+        //   ⚠️ 등록 단어·관용구는 등록일로 지난 날까지 되짚는다. 나머지는 적어둔 목록이라
+        //      2026-09-18 부터만 나온다 — 그 전 날은 '숫자만 남아 있어요' 라고 알려준다.
+        // ============================================================
+        const DIARY_DETAIL_META = {
+            'reg-word':      { icon: '📖', label: '등록한 단어',     field: 'regWordIds',       kind: 'word' },
+            'reg-idiom':     { icon: '📘', label: '등록한 관용구',   field: null,               kind: 'idiom' },
+            'reg-grammar':   { icon: '📋', label: '등록한 문법',     field: 'regGrammarIds',    kind: 'grammar' },
+            'master-word':   { icon: '📖', label: '마스터한 단어',   field: 'masterWordIds',    kind: 'word' },
+            'master-idiom':  { icon: '📘', label: '마스터한 관용구', field: 'masterIdiomKeys',  kind: 'idiom' },
+            'master-grammar':{ icon: '📋', label: '마스터한 문법',   field: 'masterGrammarIds', kind: 'grammar' },
+            'weak-word':     { icon: '📖', label: '약점이 된 단어',   field: 'weakWordIds',      kind: 'word' },
+            'weak-idiom':    { icon: '📘', label: '약점이 된 관용구', field: 'weakIdiomKeys',    kind: 'idiom' },
+            'weak-grammar':  { icon: '📋', label: '약점이 된 문법',   field: 'weakGrammarIds',   kind: 'grammar' },
+            'review':        { icon: '🔁', label: '복습한 것',       field: 'reviewIds',        kind: 'mixed' },
+            'practice':      { icon: '✍️', label: '연습한 것',       field: 'practiceIds',      kind: 'mixed' },
+            'ai':            { icon: '🤖', label: '첨삭',            field: null,               kind: 'ai' }
+        };
+        //   그 날 등록한 관용구 (표현마다 적어둔 등록일로)
+        function diaryIdiomsAddedOn(day) {
+            const out = [];
+            (vocabulary || []).forEach(w => (typeof wordIdiomList === 'function' ? wordIdiomList(w) : []).forEach(it => {
+                if (it && it.addedAt && getLocalDateString(new Date(Number(it.addedAt))) === day) out.push({ w, it });
+            }));
+            return out;
+        }
+        //   열쇠 하나를 보여줄 줄로 (단어 id · 표현 열쇠 둘 다 받는다)
+        function diaryRowHtml(key) {
+            const sep = String(key).indexOf('::');
+            if (sep > 0) {
+                const wid = String(key).slice(0, sep), part = String(key).slice(sep + 2);
+                const w = (vocabulary || []).find(v => String(v.id) === wid);
+                const it = w && (typeof findIdiomByKeyPart === 'function') ? findIdiomByKeyPart(w, part) : null;
+                const text = it ? it.idiom : part;
+                const mean = it ? (it.idiomMeaning || '') : '';
+                const gi = (w && typeof getIdiomGrade === 'function') ? (GRADE_INFO[getIdiomGrade(w.id, text)] || GRADE_INFO.normal) : null;
+                return `<div class="flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
+                    <span class="text-[10px] font-black text-violet-500 shrink-0">관용구</span>
+                    <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(text)}</span>
+                    <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(mean)}</span>
+                    ${gi && w ? `<span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
+                </div>`;
+            }
+            const w = (vocabulary || []).find(v => String(v.id) === String(key));
+            if (w) {
+                const gi = GRADE_INFO[getWordGrade(w)] || GRADE_INFO.normal;
+                return `<button type="button" onclick="closeReviewPlanModal(); goToWord('${escapeAttr(String(w.id))}')"
+                    class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
+                    <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
+                    <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
+                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
+                </button>`;
+            }
+            const t = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === key);
+            if (t) {
+                const gi = GRADE_INFO[getGrammarGrade(t.id)] || GRADE_INFO.normal;
+                return `<button type="button" onclick="closeReviewPlanModal(); goToGrammarNote('${escapeAttr(String(t.id))}')"
+                    class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
+                    <span class="text-[10px] font-black text-[#5896cb] shrink-0">문법</span>
+                    <span class="text-sm font-bold text-slate-700 min-w-0 truncate flex-1">${escapeHtml(t.title || '(제목 없음)')}</span>
+                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
+                </button>`;
+            }
+            return `<div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-100 last:border-0">지워진 항목이에요</div>`;
+        }
+        function openDiaryDetail(ds, what) {
+            const meta = DIARY_DETAIL_META[what];
+            const modal = document.getElementById('review-plan-modal');
+            if (!meta || !modal) return;
+            const log = (nyanyaDiary && nyanyaDiary[ds]) || {};
+            let rows = '', count = 0, note = '';
+
+            if (what === 'reg-word') {
+                //   등록일이 있는 단어는 그걸로 (지난 날까지), 없으면 적어둔 목록으로
+                const byDate = (vocabulary || []).filter(w => w.createdAt && getLocalDateString(new Date(Number(w.createdAt))) === ds);
+                const ids = byDate.length ? byDate.map(w => w.id) : (log.regWordIds || []);
+                count = ids.length; rows = ids.map(diaryRowHtml).join('');
+            } else if (what === 'reg-idiom') {
+                const list = diaryIdiomsAddedOn(ds);
+                count = list.length;
+                rows = list.map(e => diaryRowHtml(idiomKey(e.w.id, e.it.idiom))).join('');
+            } else if (what === 'ai') {
+                const notes = (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes))
+                    ? aiNotes.filter(n => n && String(n.t || '').slice(0, 10) === ds) : [];
+                count = notes.length;
+                rows = notes.map(n => `<div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
+                        <p class="text-[10px] font-black text-indigo-500">${escapeHtml(((typeof AI_NOTE_MODES !== 'undefined' && AI_NOTE_MODES[n.mode]) || {}).label || n.mode || '')}</p>
+                        <p class="text-sm font-bold text-slate-700 break-words">${escapeHtml(n.mine || '')}</p>
+                        ${n.fixed ? `<p class="text-xs text-emerald-600 break-words">→ ${escapeHtml(n.fixed)}</p>` : ''}
+                    </div>`).join('');
+            } else {
+                const ids = log[meta.field] || [];
+                count = ids.length; rows = ids.map(diaryRowHtml).join('');
+            }
+
+            //   숫자는 있는데 목록이 없으면 (적어두기 전 날) 그 사정을 적어준다
+            const shownCount = (() => {
+                switch (what) {
+                    case 'reg-word': return log.newWordsCount || 0;
+                    case 'reg-grammar': return log.newGrammarCount || 0;
+                    case 'master-word': return log.newMasteredCount || 0;
+                    case 'master-idiom': return log.newIdiomMasteredCount || 0;
+                    case 'master-grammar': return log.newGrammarMasteredCount || 0;
+                    case 'weak-word': return log.newWeakCount || 0;
+                    case 'weak-idiom': return log.newIdiomWeakCount || 0;
+                    case 'weak-grammar': return log.newGrammarWeakCount || 0;
+                    case 'review': return log.reviewCount || 0;
+                    case 'practice': return log.practiceCount || 0;
+                    case 'ai': return log.aiSessions || 0;
+                    default: return count;
+                }
+            })();
+            if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
+            else if (count && shownCount && count !== shownCount) {
+                note = (what === 'review' || what === 'practice')
+                    ? `같은 것을 여러 번 푼 것은 하나로 묶었어요 (${shownCount}번 → ${count}개).`
+                    //   등록은 지운 것이 빠지고, 유의어 자동 등록처럼 등록일이 없는 것도 빠진다
+                    : `일지엔 ${shownCount}개인데 지금 남아 있는 건 ${count}개예요.`;
+            }
+
+            const titleEl = document.getElementById('review-plan-title');
+            const subEl = document.getElementById('review-plan-sub');
+            const bodyEl = document.getElementById('review-plan-body');
+            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} · ${meta.icon} ${meta.label} ${count}개`;
+            if (subEl) subEl.innerText = note || '';
+            if (bodyEl) bodyEl.innerHTML = rows
+                ? `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div>`
+                : `<p class="text-center text-sm text-slate-400 py-10">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`;
+            modal.classList.remove('hidden');
+        }
 
         function openReviewPlanModal(ds, kind, mode) {
             const isWrong = (mode === 'wrong');
@@ -3048,13 +3183,13 @@ let vocabulary = [];
             w.perfect = isPerfect;
 
             if (!silent) {
-                if (!wasMastered && shouldMaster) logAction('new-mastered');
-                else if (wasMastered && !shouldMaster) logAction('undo-new-mastered');
+                if (!wasMastered && shouldMaster) logAction('new-mastered', null, w.id);
+                else if (wasMastered && !shouldMaster) logAction('undo-new-mastered', null, w.id);
                 if (!wasPerfect && isPerfect) logAction('new-perfect');
                 else if (wasPerfect && !isPerfect) logAction('undo-new-perfect');
                 //   [냐냐 요청] 일지 표의 '약점' 칸 (2026-09-17)
-                if (!wasWeak && shouldWeak) logAction('new-weak');
-                else if (wasWeak && !shouldWeak) logAction('undo-new-weak');
+                if (!wasWeak && shouldWeak) logAction('new-weak', null, w.id);
+                else if (wasWeak && !shouldWeak) logAction('undo-new-weak', null, w.id);
             }
         }
 
@@ -3162,18 +3297,18 @@ let vocabulary = [];
             const before = getIdiomGrade(wordId, idiomTextOrId);
             if (opts.correct === true && opts.subjective) r.subjectivePassed = true;
             r.score = clampScore((r.score || 0) + (delta || 0));
-            logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId));
+            logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId), idiomKey(wordId, idiomTextOrId));
             return r.score;
         }
         //   [냐냐 요청] 일지 표의 관용구 마스터·약점 칸 (2026-09-17) — 단어와 같은 방식
-        function logIdiomGradeChange(before, after) {
+        function logIdiomGradeChange(before, after, key) {
             if (typeof logAction !== 'function' || before === after) return;
             const isM = (g) => g === 'mastered' || g === 'perfect';
             const isW = (g) => g === 'weak' || g === 'critical';
-            if (!isM(before) && isM(after)) logAction('new-idiom-mastered');
-            else if (isM(before) && !isM(after)) logAction('undo-new-idiom-mastered');
-            if (!isW(before) && isW(after)) logAction('new-idiom-weak');
-            else if (isW(before) && !isW(after)) logAction('undo-new-idiom-weak');
+            if (!isM(before) && isM(after)) logAction('new-idiom-mastered', null, key);
+            else if (isM(before) && !isM(after)) logAction('undo-new-idiom-mastered', null, key);
+            if (!isW(before) && isW(after)) logAction('new-idiom-weak', null, key);
+            else if (isW(before) && !isW(after)) logAction('undo-new-idiom-weak', null, key);
         }
 
         function addWordScore(wordOrId, delta, opts = {}) {
@@ -3393,18 +3528,18 @@ let vocabulary = [];
             if (typeof beforeScore === 'number' && typeof logAction === 'function') {
                 const wasWeak = beforeScore <= SCORE_WEAK;
                 const nowWeak = (grade === 'weak' || grade === 'critical');
-                if (!wasWeak && nowWeak) logAction('new-grammar-weak');
-                else if (wasWeak && !nowWeak) logAction('undo-new-grammar-weak');
+                if (!wasWeak && nowWeak) logAction('new-grammar-weak', null, id);
+                else if (wasWeak && !nowWeak) logAction('undo-new-grammar-weak', null, id);
             }
             const nowMastered = (grade === 'mastered' || grade === 'perfect');
             const wasMastered = !!masteredGrammar[id];
             if (nowMastered === wasMastered) return;
             if (nowMastered) {
                 masteredGrammar[id] = true;
-                if (typeof logAction === 'function') logAction('new-grammar-mastered');
+                if (typeof logAction === 'function') logAction('new-grammar-mastered', null, id);
             } else {
                 delete masteredGrammar[id];
-                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered');
+                if (typeof logAction === 'function') logAction('undo-new-grammar-mastered', null, id);
             }
         }
 
@@ -3966,9 +4101,43 @@ let vocabulary = [];
             showToast(`"${w.word}"로 이동했어요 🔗`, "info");
         }
 
-        function logAction(type, extra) {
+        // ============================================================
+        // [냐냐 요청] 일지의 숫자를 누르면 '무엇' 이었는지 보여준다 (2026-09-18).
+        //   숫자만 세던 것에 더해, 그 날 어떤 낱말·표현·노트였는지 목록도 남긴다.
+        //   ⚠️ 등록 단어·관용구는 등록일(createdAt/addedAt)로 지난 날짜까지 되짚을 수 있지만,
+        //      마스터·약점·복습·연습은 남겨둔 게 없어서 **오늘부터** 쌓인다.
+        //   ⚠️ 되돌림(해제)이면 그 날 목록에서도 뺀다 — 숫자와 목록이 어긋나면 안 된다.
+        // ============================================================
+        const DIARY_ID_FIELD = {
+            'new-word': 'regWordIds', 'undo-new-word': '-regWordIds',
+            'new-grammar': 'regGrammarIds', 'undo-new-grammar': '-regGrammarIds',
+            'new-mastered': 'masterWordIds', 'undo-new-mastered': '-masterWordIds',
+            'new-weak': 'weakWordIds', 'undo-new-weak': '-weakWordIds',
+            'new-grammar-mastered': 'masterGrammarIds', 'undo-new-grammar-mastered': '-masterGrammarIds',
+            'new-grammar-weak': 'weakGrammarIds', 'undo-new-grammar-weak': '-weakGrammarIds',
+            'new-idiom-mastered': 'masterIdiomKeys', 'undo-new-idiom-mastered': '-masterIdiomKeys',
+            'new-idiom-weak': 'weakIdiomKeys', 'undo-new-idiom-weak': '-weakIdiomKeys',
+            'review': 'reviewIds', 'practice': 'practiceIds'
+        };
+        function diaryRecordId(day, type, id) {
+            if (!id) return;
+            const field = DIARY_ID_FIELD[type];
+            if (!field) return;
+            const remove = field[0] === '-';
+            const key = remove ? field.slice(1) : field;
+            const d = nyanyaDiary[day];
+            if (!d) return;
+            const list = Array.isArray(d[key]) ? d[key] : [];
+            const i = list.indexOf(id);
+            if (remove) { if (i >= 0) list.splice(i, 1); }
+            else if (i < 0) list.push(id);
+            if (list.length) d[key] = list; else delete d[key];
+        }
+
+        function logAction(type, extra, id) {
             touchDiarySnapshot();
             const today = getLocalDateString();
+            diaryRecordId(today, type, id);
 
             if (type === 'quiz') {
                 nyanyaDiary[today].quizTotal++;
@@ -6787,7 +6956,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             r.score = clampScore(value);
             if (opts.subjectivePassed === true) r.subjectivePassed = true;
             if (opts.subjectivePassed === false) delete r.subjectivePassed;
-            if (typeof logIdiomGradeChange === 'function') logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId));
+            if (typeof logIdiomGradeChange === 'function') logIdiomGradeChange(before, getIdiomGrade(wordId, idiomTextOrId), idiomKey(wordId, idiomTextOrId));
             return r.score;
         }
         function cycleIdiomGrade(wordId, ref, event) {
@@ -9802,7 +9971,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
             closeGrammarEditor();
             renderGrammarTables();
-            if (isBrandNew && typeof logAction === 'function') logAction('new-grammar'); // [냐냐 PATCH] 새 문법표 등록 기록
+            if (isBrandNew && typeof logAction === 'function') logAction('new-grammar', null, s.id); // [냐냐 PATCH] 새 문법표 등록 기록
             await saveToStorage();
             if (typeof updateStats === 'function') updateStats(); // 헤더 문법 개수 갱신
             showToast("문법 표가 저장됐어요! ✨", "success");
