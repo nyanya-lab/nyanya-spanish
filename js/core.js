@@ -3079,7 +3079,7 @@ let vocabulary = [];
         //   그래서 코드가 한 번 더 본다 — 등록된 유의어이거나 뜻이 겹칠 때만 덤이다.
         //   ⚠️ 오타로 보지 않는다 (냐냐님 확인). 뜻이 다르면 그냥 오답이다.
         // ============================================================
-        function synonymClaimIsReal(userAnswer, askedWord) {
+        function synonymClaimIsReal(userAnswer, askedWord, aiMeaning) {
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (!asked) return false;
             const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
@@ -3091,18 +3091,22 @@ let vocabulary = [];
                     && normalizeSpanishAnswer(sy.word || '') === normalizeSpanishAnswer(hit.word || ''))))) return true;
             //   ② 적어둔 뜻이 겹치는가 (단어 빈칸·퀴즈의 유의어 판정과 같은 잣대)
             const hm = String(hit.meaning || ''), am = String(asked.meaning || '');
-            if (!hm || !am) return false;
-            return (typeof meaningsOverlap === 'function') && !!meaningsOverlap(hm, am);
+            const overlap = (x, y) => !!(x && y && typeof meaningsOverlap === 'function' && meaningsOverlap(x, y));
+            if (overlap(hm, am)) return true;
+            //   ③ [냐냐 요청] 유의어인데 등록해 두지 않았고 뜻도 다른 말로 적어뒀을 수 있다 (2026-09-18).
+            //   그때는 AI 가 말한 '네가 쓴 낱말의 뜻' 을 마지막으로 한 번 더 본다
+            //   (aiMeaning. 채점이 돌려주는 answerMeaning 을 부르는 쪽이 넘겨준다).
+            return overlap(String(aiMeaning || ''), am);
         }
 
-        function awardSynonymScore(userAnswer, askedWord) {
+        function awardSynonymScore(userAnswer, askedWord, aiMeaning) {
             if (typeof findVocabWordByForm !== 'function' || typeof addWordScore !== 'function') return null;
             const hit = findVocabWordByForm(userAnswer);
             if (!hit) return null;
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
             //   뜻이 겹치지 않으면 덤이 아니다 (AI 가 '유의어' 라고 해도)
-            if (!synonymClaimIsReal(userAnswer, askedWord)) return null;
+            if (!synonymClaimIsReal(userAnswer, askedWord, aiMeaning)) return null;
             if (_synonymAwarded.has(hit.id)) return null;
             _synonymAwarded.add(hit.id);
             addWordScore(hit, SYNONYM_AWARD, { correct: true });

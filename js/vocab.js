@@ -4826,7 +4826,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   [냐냐 지적] AI 가 '유의어' 라고 해도 뜻이 안 겹치면 그냥 오답이다 (pesado ↔ pasado).
             //   오타로도 보지 않는다 — 글자가 비슷할 뿐 진짜 다른 낱말이다.
             if (verdict === 'synonym' && typeof synonymClaimIsReal === 'function'
-                && !synonymClaimIsReal(userAnswer, w)) verdict = 'wrong';
+                && !synonymClaimIsReal(userAnswer, w, ai.answerMeaning)) verdict = 'wrong';
             // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (퀴즈 주관식과 같은 규칙)
             if (verdict === 'correct' && typeof phraseAnswerIncomplete === 'function'
                 && phraseAnswerIncomplete(userAnswer, w.word)) {
@@ -4840,7 +4840,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used.synonym) {
-                const got = awardSynonymScore(userAnswer, w);
+                const got = awardSynonymScore(userAnswer, w, ai.answerMeaning);
                 writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
                     `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`) + synonymAwardNote(got), userAnswer);
                 return;

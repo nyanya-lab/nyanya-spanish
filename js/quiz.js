@@ -1405,10 +1405,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
 
             //   [냐냐 지적] AI 가 '유의어' 라고 해도 뜻이 안 겹치면 그냥 오답 (pesado ↔ pasado)
             if (verdict === 'synonym' && typeof synonymClaimIsReal === 'function'
-                && !synonymClaimIsReal(userAnswer, q.word)) verdict = 'wrong';
+                && !synonymClaimIsReal(userAnswer, q.word, ai.answerMeaning)) verdict = 'wrong';
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
             if (verdict === 'synonym' && !used().synonym) {
-                const got = awardSynonymScore(userAnswer, q.word);
+                const got = awardSynonymScore(userAnswer, q.word, ai.answerMeaning);
                 askRetry('synonym', `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? <b>${prefixHint()}</b>로 시작하는 단어예요.` + synonymAwardNote(got));
                 return;
             }
