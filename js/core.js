@@ -1535,16 +1535,27 @@ let vocabulary = [];
             const today = getLocalDateString();
             const plan3 = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
             const bad3 = (ds === today && typeof getAllWrongOn === 'function') ? getAllWrongOn(ds) : null;
-            const pill = (label, n, mode, tone) =>
-                `<button onclick="openReviewPlanModal('${ds}', 'word', '${mode}')" class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl border font-black transition-all active:scale-95 ${tone}">
+            //   [냐냐 요청] 복습 예정은 '단어·관용구' 와 '문법' 을 갈라서 낸다 (2026-09-21).
+            //   복습이 실제로 둘로 갈려 있다 — 단어·관용구는 쓰기 복습 한 묶음, 문법은 번역 미션이다.
+            //   합쳐서 '12개' 만 보면 어느 쪽 12개인지 몰라 할 일이 안 그려졌다.
+            //   누르면 팝업도 그 갈래로 바로 열린다 (팝업 안 탭은 그대로).
+            const pill = (label, n, kind, mode, tone) =>
+                `<button onclick="openReviewPlanModal('${ds}', '${kind}', '${mode}')" class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl border font-black transition-all active:scale-95 ${tone}">
                     <span class="truncate">${label}</span><span class="shrink-0">${n}</span>
                  </button>`;
+            const planWI = plan3 ? ((plan3.word || []).length + (plan3.idiom || []).length) : 0;
+            const planG = plan3 ? (plan3.grammar || []).length : 0;
             let planHtml = '';
             if (plan3 || bad3) {
+                //   ⚠️ 셋을 한 줄에 두면 사이드바가 좁아 글씨가 다 잘린다 ('복… 91').
+                //      복습 예정 둘이 한 줄, 틀린 것은 그 밑에 한 줄 통째로.
                 planHtml = `
-                    <div class="mt-2 flex items-stretch gap-1.5 text-[11px]">
-                        ${plan3 ? pill('복습 예정', plan3.total, 'plan', 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100') : ''}
-                        ${bad3 && bad3.total ? pill('틀린 것', bad3.total, 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100') : ''}
+                    <div class="mt-2 space-y-1.5 text-[11px]">
+                        <div class="flex items-stretch gap-1.5">
+                            ${plan3 && (planWI || !planG) ? pill('복습 예정', planWI, 'word', 'plan', 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100') : ''}
+                            ${planG ? pill('문법 복습', planG, 'grammar', 'plan', 'bg-[#f3f8fd] border-[#cfdeeb] text-[#2c5578] hover:bg-[#e4eff9]') : ''}
+                        </div>
+                        ${bad3 && bad3.total ? `<div class="flex items-stretch">${pill('틀린 것', bad3.total, 'word', 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100')}</div>` : ''}
                     </div>`;
             }
 
@@ -1961,12 +1972,16 @@ let vocabulary = [];
                     const isPast = ds < todayStr;
                     const showX = isPast && n === 0;
                     // [냐냐 요청] 앞으로 복습이 잡힌 날은 점을 찍어둔다 — 눌러보지 않아도 몰리는 날이 보이게.
-                    const plan = (!isPast && typeof getAllScheduledOn === 'function') ? ((getAllScheduledOn(ds) || {}).total || 0) : 0;
+                    const plan3 = (!isPast && typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
+                    const plan = (plan3 || {}).total || 0;
                     const dot = plan > 0 ? `<span class="absolute bottom-0.5 w-1 h-1 rounded-full bg-amber-500"></span>` : '';
                     const inner = showX
                         ? `<span class="relative flex items-center justify-center w-full h-full"><span class="text-slate-300">${d}</span><i class="fa-solid fa-xmark absolute text-slate-300/60 text-[13px]"></i></span>`
                         : `<span class="relative flex items-center justify-center w-full h-full">${d}${dot}</span>`;
-                    const planTitle = plan > 0 ? ` · 복습 예정 ${plan}개 (단어·관용구·문법)` : '';
+                    //   [냐냐 요청] 여기도 단어·관용구와 문법을 갈라서 적는다 (2026-09-21)
+                    const planTitle = plan > 0
+                        ? ` · 복습 예정 단어·관용구 ${(plan3.word || []).length + (plan3.idiom || []).length}개 · 문법 ${(plan3.grammar || []).length}개`
+                        : '';
                     // [냐냐 요청] 지금 펼쳐둔 날은 진하게, 오늘은 늘 테두리로 (둘이 겹치면 진한 쪽)
                     const isPicked = ds === (calSelectedDay || todayStr);
                     const ringCls = isPicked ? 'ring-2 ring-violet-600' : (isToday ? 'ring-2 ring-violet-400' : '');
