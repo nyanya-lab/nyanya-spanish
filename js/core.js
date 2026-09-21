@@ -2340,8 +2340,8 @@ let vocabulary = [];
                     fn({ it: t, wrong: rec.lastWrongDate, review: rec.lastReviewDate, keep: rec.keepDueDate,
                          entered: rec.curveEnteredDate || rec.lastWrongDate, stage: rec.stage || 0,
                          sort: (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0,
-                         met: !!(rec.lastWrongDate || rec.lastReviewDate)
-                             || ((typeof getGrammarScore === 'function' ? getGrammarScore(t.id) : 0) !== 0) });
+                         met: !((typeof isUntouchedGrammar === 'function') ? isUntouchedGrammar(t.id)
+                             : !(rec.lastWrongDate || rec.lastReviewDate)) });
                 });
             }
         }
@@ -2690,7 +2690,21 @@ let vocabulary = [];
         function isUntouchedIdiom(wordId, idiomText) {
             const key = (typeof idiomKey === 'function') ? idiomKey(wordId, idiomText) : null;
             const rec = key ? (idiomReview || {})[key] : null;
-            return !rec || (!rec.lastWrongDate && !rec.lastSeenDate && !(rec.stage || 0));
+            if (rec && (rec.lastWrongDate || rec.lastSeenDate || (rec.stage || 0))) return false;
+            //   [냐냐 지적] 점수 흔적도 '만난 것' 이다 (2026-09-21) — 단어와 같은 잣대.
+            //   등급 버튼으로 매긴 점수는 곡선 기록(idiomReview)이 아니라 점수 기록(idiomScores)에 남는다.
+            const sc = key ? (idiomScores || {})[key] : null;
+            if (sc && ((sc.score || 0) !== 0 || (sc.correctTotal || 0) || (sc.wrongTotal || 0) || sc.subjectivePassed)) return false;
+            return true;
+        }
+
+        //   문법 노트도 같은 잣대로 — 점수·번역에서 써봄·마스터 표시 중 하나라도 있으면 만난 것이다
+        function isUntouchedGrammar(id) {
+            const rec = (grammarReview || {})[id] || {};
+            if (rec.lastWrongDate || rec.lastReviewDate || (rec.stage || 0)) return false;
+            if (((typeof getGrammarScore === 'function') ? getGrammarScore(id) : 0) !== 0) return false;
+            if ((grammarTransUsed || {})[id] || (masteredGrammar || {})[id]) return false;
+            return true;
         }
 
         // 곡선 현황용 통계 (문법 쪽과 같은 모양). '전체'는 단어장에 적힌 관용구 총 개수다.
