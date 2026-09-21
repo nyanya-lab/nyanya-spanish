@@ -4579,6 +4579,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
                 s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
+                //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
+                //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
+                if (typeof speakSpanishVoice === 'function') {
+                    setTimeout(() => speakSpanishVoice(w.word), 150);
+                }
             }
             writePracticeSave();
             renderWritePractice();

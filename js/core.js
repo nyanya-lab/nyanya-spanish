@@ -658,8 +658,20 @@ let vocabulary = [];
                 showToast("이 브라우저는 음성 합성을 지원하지 않아요.", "error");
                 return;
             }
+            // ============================================================
+            // [냐냐 요청] 한글은 읽지 않는다 (2026-09-21).
+            //   관용구에는 자리표시자가 한글로 들어 있다 — "llevar [시간] + [현재분사]".
+            //   스페인어 목소리로 그 한글까지 읽어버려서 쓰기 복습이 시끄러웠다.
+            //   대괄호 뭉치와 한글을 떼고 읽는다. 뗀 뒤 남는 게 없으면 아예 안 읽는다.
+            //   (규칙은 채점이 쓰는 것과 같은 것 — RE_PLACEHOLDER · RE_HANGUL)
+            // ============================================================
+            const sayable = String(text || '')
+                .replace(typeof RE_PLACEHOLDER !== 'undefined' ? RE_PLACEHOLDER : /[\[\(][^\]\)]*[\]\)]/g, ' ')
+                .replace(typeof RE_HANGUL !== 'undefined' ? RE_HANGUL : /[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+            if (!sayable) return;
             window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
+            const u = new SpeechSynthesisUtterance(sayable);
             u.lang = 'es-ES';
             u.rate = rate || 0.9;
             u.pitch = 1.15; // [냐냐 요청] 살짝 높은 톤 = 더 여성적인 음색
