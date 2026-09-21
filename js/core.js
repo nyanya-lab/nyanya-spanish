@@ -1795,7 +1795,29 @@ let vocabulary = [];
                     default: return count;
                 }
             })();
-            if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
+            // ============================================================
+            // [냐냐 요청] 그 날 **벗어난 것**도 같이 보여준다 (2026-09-21).
+            //   일지 칸의 숫자는 순증감이라 '된 것' 목록보다 작을 수 있다 (4개 됐는데 3개 풀리면 1).
+            //   예전엔 그걸 "지금 남아 있는 건 4개예요" 라고만 적어서, 뭔가 지워진 줄로 읽혔다.
+            //   이제 아래에 벗어난 목록을 붙이고, 윗줄에 셈을 그대로 적어준다 (4 − 3 = 1).
+            // ============================================================
+            const LEFT_META = {
+                'master-word':   { field: 'unmasterWordIds',    label: '마스터에서 벗어난 단어' },
+                'weak-word':     { field: 'unweakWordIds',      label: '약점에서 벗어난 단어' },
+                'master-idiom':  { field: 'unmasterIdiomKeys',  label: '마스터에서 벗어난 관용구' },
+                'weak-idiom':    { field: 'unweakIdiomKeys',    label: '약점에서 벗어난 관용구' },
+                'master-grammar':{ field: 'unmasterGrammarIds', label: '마스터에서 벗어난 문법' },
+                'weak-grammar':  { field: 'unweakGrammarIds',   label: '약점에서 벗어난 문법' }
+            };
+            const left = LEFT_META[what];
+            const leftIds = (left && Array.isArray(log[left.field])) ? log[left.field] : [];
+            const leftRows = leftIds.map(diaryRowHtml).join('');
+
+            //   벗어난 것이 있으면 그 셈을 먼저 알려준다 — 일지 칸 숫자가 왜 작은지가 이걸로 풀린다
+            if (leftIds.length) {
+                note = `오늘 ${count}개가 새로 들고 ${leftIds.length}개가 빠졌어요 — 일지 칸에는 그 차이(${shownCount})가 적혀요.`;
+            }
+            else if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
             else if (count && shownCount && count !== shownCount) {
                 note = (what === 'review' || what === 'practice')
                     ? `같은 것을 여러 번 푼 것은 하나로 묶었어요 (${shownCount}번 → ${count}개).`
@@ -1808,9 +1830,15 @@ let vocabulary = [];
             const bodyEl = document.getElementById('review-plan-body');
             if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} · ${meta.icon} ${meta.label} ${count}개`;
             if (subEl) subEl.innerText = note || '';
-            if (bodyEl) bodyEl.innerHTML = rows
+            const leftBlock = leftRows
+                ? `<div class="mt-4">
+                       <p class="px-0.5 mb-1.5 text-[11px] font-black text-slate-400">↩️ ${escapeHtml(left.label)} ${leftIds.length}개</p>
+                       <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden opacity-80">${leftRows}</div>
+                   </div>`
+                : '';
+            if (bodyEl) bodyEl.innerHTML = (rows
                 ? `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div>`
-                : `<p class="text-center text-sm text-slate-400 py-10">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`;
+                : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock;
             modal.classList.remove('hidden');
         }
 
@@ -4195,25 +4223,54 @@ let vocabulary = [];
             'new-idiom-weak': 'weakIdiomKeys', 'undo-new-idiom-weak': '-weakIdiomKeys',
             'review': 'reviewIds', 'practice': 'practiceIds'
         };
+        //   목록이 실제로 바뀌었는지 알려준다 (아래 숫자 칸이 이 답을 보고 움직인다)
         function diaryRecordId(day, type, id) {
-            if (!id) return;
+            if (!id) return false;
             const field = DIARY_ID_FIELD[type];
-            if (!field) return;
+            if (!field) return false;
             const remove = field[0] === '-';
             const key = remove ? field.slice(1) : field;
             const d = nyanyaDiary[day];
-            if (!d) return;
+            if (!d) return false;
             const list = Array.isArray(d[key]) ? d[key] : [];
             const i = list.indexOf(id);
-            if (remove) { if (i >= 0) list.splice(i, 1); }
-            else if (i < 0) list.push(id);
+            let changed = false;
+            if (remove) { if (i >= 0) { list.splice(i, 1); changed = true; } }
+            else if (i < 0) { list.push(id); changed = true; }
             if (list.length) d[key] = list; else delete d[key];
+            return changed;
         }
+
+        // ============================================================
+        // [냐냐 지적] "어제 풀린 걸 왜 오늘 앞에서 빼?" (2026-09-21)
+        //   일지 표의 숫자는 **그 날의 순증감** 이다 — 오늘 약점이 된 것에서 오늘 약점을 벗어난 것을 뺀다.
+        //   (오늘 4개가 약점이 되고, 어제까지 약점이던 3개가 풀리면 4−3=1.)
+        //   숫자는 그대로 두기로 했고, 대신 **벗어난 것도 목록으로 보여준다** — 냐냐님 말씀이다.
+        //   "그럼 약점에서 벗어난 단어를 보여주면 되잖아."
+        //   ⚠️ 같은 날 됐다가 풀린 것은 '된 것' 목록에서 빠질 뿐, 벗어난 목록에는 안 넣는다 —
+        //      그 날로 치면 아무 일도 없던 셈이라 숫자(0)와도 맞는다.
+        //   ⚠️ 옛 날짜(2026-09-18 이전)는 남겨둔 목록이 없어 숫자만 있다.
+        // ============================================================
+        const DIARY_UNDO_FIELD = {
+            'undo-new-mastered': 'unmasterWordIds', 'undo-new-weak': 'unweakWordIds',
+            'undo-new-idiom-mastered': 'unmasterIdiomKeys', 'undo-new-idiom-weak': 'unweakIdiomKeys',
+            'undo-new-grammar-mastered': 'unmasterGrammarIds', 'undo-new-grammar-weak': 'unweakGrammarIds'
+        };
 
         function logAction(type, extra, id) {
             touchDiarySnapshot();
             const today = getLocalDateString();
-            diaryRecordId(today, type, id);
+            const idTouched = diaryRecordId(today, type, id);
+            //   오늘 된 것이 아닌데 오늘 풀렸으면 '벗어난 것' 목록에 적어둔다
+            if (id && !idTouched && DIARY_UNDO_FIELD[type]) {
+                const key = DIARY_UNDO_FIELD[type];
+                const d = nyanyaDiary[today];
+                if (d) {
+                    const list = Array.isArray(d[key]) ? d[key] : [];
+                    if (list.indexOf(id) < 0) list.push(id);
+                    d[key] = list;
+                }
+            }
 
             if (type === 'quiz') {
                 nyanyaDiary[today].quizTotal++;
