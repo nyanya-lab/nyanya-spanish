@@ -2382,7 +2382,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             if (typeof saveToStorage === 'function') saveToStorage();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof updateStats === 'function') updateStats();
-            if (typeof showToast === 'function') showToast(`첨삭에 나온 낱말 ${added}개를 0점으로 넣었어요 📖`, 'info');
+            //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-21) — 칩에 ✓ 로 이미 보인다
         }
 
         function aiSuggestHtml() {
