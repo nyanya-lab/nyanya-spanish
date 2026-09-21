@@ -1369,6 +1369,14 @@ let vocabulary = [];
             renderEggCollectionSection();
         }
 
+        //   [냐냐 요청] 등급 딱지를 누르면 그 등급만 본다 (2026-09-21). 맨 앞에 '전체' 를 둔다.
+        //   같은 딱지를 다시 누르면 전체로 돌아온다.
+        let eggCollectionRarity = 'all';
+        function setEggRarityFilter(r) {
+            eggCollectionRarity = (eggCollectionRarity === r) ? 'all' : r;
+            renderEggCollectionSection();
+        }
+
         function renderCollectionGrid() {
             if (!eggState) eggState = defaultEggState();
             if (!Array.isArray(eggState.collection)) eggState.collection = [];
@@ -1380,14 +1388,22 @@ let vocabulary = [];
             let list = CREATURES.map((c, i) => ({ ...c, _i: i }))
                 .sort((a, b) => (RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity]) || (a._i - b._i));
             if (eggCollectionOwnedOnly) list = list.filter(c => owned.has(c.id));
+            if (eggCollectionRarity !== 'all') list = list.filter(c => c.rarity === eggCollectionRarity);
 
-            // 등급별 수집 현황 요약
-            const summary = ['legendary', 'epic', 'rare', 'common'].map(r => {
-                const info = RARITY_INFO[r];
-                const total = CREATURES.filter(c => c.rarity === r).length;
-                const got = CREATURES.filter(c => c.rarity === r && owned.has(c.id)).length;
-                return `<span class="text-[10px] font-bold ${info.color} ${info.bg} px-1.5 py-0.5 rounded-md">${info.star} ${info.label} ${got}/${total}</span>`;
-            }).join('');
+            // 등급별 수집 현황 요약 — 누르면 그 등급만 본다 (맨 앞은 '전체')
+            const chip = (key, star, label, color, bg, got, total) => {
+                const on = (eggCollectionRarity === key);
+                return `<button type="button" onclick="setEggRarityFilter('${key}')" title="${label}만 보기"
+                    class="text-[10px] font-bold ${color} ${bg} px-1.5 py-0.5 rounded-md border transition-all ${on ? 'border-slate-400 ring-1 ring-slate-300' : 'border-transparent hover:border-slate-200'}">${star} ${label} ${got}/${total}</button>`;
+            };
+            const summary = chip('all', '🗂️', '전체', 'text-slate-600', 'bg-slate-100',
+                    new Set(eggState.collection).size, CREATURES.length)
+                + ['legendary', 'epic', 'rare', 'common'].map(r => {
+                    const info = RARITY_INFO[r];
+                    const total = CREATURES.filter(c => c.rarity === r).length;
+                    const got = CREATURES.filter(c => c.rarity === r && owned.has(c.id)).length;
+                    return chip(r, info.star, info.label, info.color, info.bg, got, total);
+                }).join('');
 
             const cells = list.map(c => {
                 const has = owned.has(c.id);
@@ -1411,7 +1427,9 @@ let vocabulary = [];
             }).join('');
 
             const emptyMsg = (eggCollectionOwnedOnly && list.length === 0)
-                ? '<p class="text-xs text-slate-400 text-center py-6">아직 모은 생물이 없어요! 알을 부화시켜 보세요 🥚</p>' : '';
+                ? '<p class="text-xs text-slate-400 text-center py-6">아직 모은 생물이 없어요! 알을 부화시켜 보세요 🥚</p>'
+                : ((list.length === 0)
+                    ? '<p class="text-xs text-slate-400 text-center py-6">이 등급은 아직 없어요 🥚</p>' : '');
 
             return `
                 <div class="mt-3 space-y-2">
