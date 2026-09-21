@@ -3301,6 +3301,21 @@ let vocabulary = [];
             if (!hit) return null;
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
+            // ============================================================
+            // [냐냐 요청] 덤은 **악센트까지 똑같이 썼을 때만** 준다 (2026-09-21).
+            //   낱말 찾기는 악센트를 떼고라도 찾아준다 — 오타를 봐주려고 그렇게 해 뒀다.
+            //   그런데 덤은 "다른 낱말을 제대로 알고 썼다" 에 주는 상이라 잣대가 달라야 한다.
+            //   'carne'(고기)를 썼는데 단어장에 'el carné'(신분증)만 있으면, 찾기는 carné 를
+            //   집어 오지만 냐냐님이 쓰신 말은 그게 아니다 — 그런 때는 힌트만 주고 점수는 안 준다.
+            //   ⚠️ 관사는 상관없다 (normalizeSpanishAnswer 가 떼고 비교한다). 악센트만 본다.
+            //   ⚠️ **원형 그대로 맞은 때만** 잰다. 활용형·복수형으로 걸린 것(comidas → la comida)은
+            //      글자가 달라도 맞게 쓴 것이라 그대로 둔다 — 여기서 막으면 멀쩡한 덤이 사라진다.
+            // ============================================================
+            if (typeof normalizeSpanishAnswer === 'function') {
+                const bare = normalizeSpanishAnswer(userAnswer), bareHit = normalizeSpanishAnswer(hit.word);
+                if (bare && bare === bareHit
+                    && normalizeSpanishAnswer(userAnswer, true) !== normalizeSpanishAnswer(hit.word, true)) return null;
+            }
             //   뜻이 겹치지 않으면 덤이 아니다 (AI 가 '유의어' 라고 해도)
             if (!synonymClaimIsReal(userAnswer, askedWord, aiMeaning)) return null;
             if (_synonymAwarded.has(hit.id)) return null;
