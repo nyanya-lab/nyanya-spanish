@@ -2314,7 +2314,11 @@ let vocabulary = [];
                     it: w, wrong: w.lastWrongDate, review: w.lastReviewDate, keep: w.keepDueDate,
                     entered: w.curveEnteredDate || w.lastWrongDate,
                     stage: w.reviewStage || 0, sort: getScore(w),
-                    met: !!(w.lastWrongDate || w.lastReviewDate || (w.correctTotal || 0) || (w.wrongTotal || 0))
+                    //   [냐냐 지적] 쓰기 복습의 '안 만난' 개수와 안 맞았다 (2026-09-21).
+                    //   여기서는 날짜·정오답 횟수만 봐서, 첨삭 훑기나 등급 버튼으로 점수만 붙은 단어를
+                    //   '아직 안 만난 것' 으로 셌다 (607 ↔ 827, 220개 차이). 잣대를 한 곳으로 모은다.
+                    met: !((typeof isUntouchedWord === 'function') ? isUntouchedWord(w)
+                        : !(w.lastWrongDate || w.lastReviewDate || (w.correctTotal || 0) || (w.wrongTotal || 0)))
                 }));
             } else if (kind === 'idiom') {
                 (vocabulary || []).forEach(w => {
