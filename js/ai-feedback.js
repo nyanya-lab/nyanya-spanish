@@ -5181,7 +5181,10 @@ ${noteListText}
         //   냐냐 입장에서는 "분명히 쓴 단어에 점수가 안 붙는" 걸로 보였다.
         //   (그 단어에 점수가 안 붙는 데서 끝나지 않는다 — 엉뚱한 단어가 대신 받는다.)
         //   REG_FORM = 등록은 안 됐지만 '규칙형이면 이 꼴이 나온다' 고 계산해서 맞춘 것 (등록된 꼴보다 아래)
-        const FVBF_RANK = { WORD: 0, FORM: 1, NOUN_NUM: 2, REG_FORM: 3, REFLEXIVE: 4, ENCLITIC: 5, ENCLITIC_SE: 6, ADJ_STEM: 7 };
+        //   [냐냐 지적] 'carne'(고기)를 썼는데 'el carné'(신분증)가 점수를 받았다 (2026-09-21).
+        //     악센트를 떼고 맞추니 둘이 같은 낱말이 되고, 단어장에서 먼저 나온 carné 가 이겼다.
+        //     **악센트까지 똑같은 것** 이 있으면 그 쪽을 먼저 쓴다 (WORD_EXACT). 없으면 예전 그대로다.
+        const FVBF_RANK = { WORD_EXACT: -1, WORD: 0, FORM: 1, NOUN_NUM: 2, REG_FORM: 3, REFLEXIVE: 4, ENCLITIC: 5, ENCLITIC_SE: 6, ADJ_STEM: 7 };
 
         // [냐냐 요청] 동사 뒤에 붙여 쓰는 대명사를 뗀 형태도 만들어 둔다.
         //   "presentarles" → "presentar", "dármelo" → "dar", "hablándome" → "hablando"
@@ -5228,6 +5231,8 @@ ${noteListText}
         function findVocabWordByForm(rawWord) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return null;
+            //   악센트까지 남긴 꼴 — carne · carné 처럼 악센트만 다른 두 낱말을 가른다
+            const targetExact = normalizeSpanishAnswer(rawWord, true);
             // 재귀동사 대응: 앞의 재귀대명사(me/te/se/nos/os)를 뗀 형태도 준비
             //   예: "me llamo" → "llamo", "se llama" → "llama"
             const stripReflexive = (s) => s.replace(/^(me|te|se|nos|os)\s+/, '');
@@ -5240,10 +5245,14 @@ ${noteListText}
             const offer = (v, rank) => { if (rank < bestRank) { best = v; bestRank = rank; } };
 
             for (const v of vocabulary) {
-                if (bestRank === FVBF_RANK.WORD) break; // 더 좋은 게 나올 수 없다
+                if (bestRank === FVBF_RANK.WORD_EXACT) break; // 더 좋은 게 나올 수 없다
                 // 1) 원형/사전형 그대로 일치
                 const vWordN = normalizeSpanishAnswer(v.word);
-                if (vWordN === target) { offer(v, FVBF_RANK.WORD); continue; }
+                if (vWordN === target) {
+                    //   악센트까지 같으면 그 쪽이 이긴다 (carne → la carne, carné → el carné)
+                    offer(v, normalizeSpanishAnswer(v.word, true) === targetExact ? FVBF_RANK.WORD_EXACT : FVBF_RANK.WORD);
+                    continue;
+                }
                 // 1-2) 붙임 대명사를 뗀 원형과 일치 — "presentarles" → presentar
                 //   재귀형으로만 등록된 동사(presentarse)도 받아주되, 그냥 원형이 등록돼
                 //   있으면 그쪽이 이기도록 등급을 한 칸 낮춘다.
