@@ -1539,8 +1539,13 @@ let vocabulary = [];
             //   복습이 실제로 둘로 갈려 있다 — 단어·관용구는 쓰기 복습 한 묶음, 문법은 번역 미션이다.
             //   합쳐서 '12개' 만 보면 어느 쪽 12개인지 몰라 할 일이 안 그려졌다.
             //   누르면 팝업도 그 갈래로 바로 열린다 (팝업 안 탭은 그대로).
+            //   [냐냐 요청] '복습 예정' 은 줄 이름으로 위에 한 번만 쓰고, 버튼에는 갈래만 (2026-09-21).
+            //   ⚠️ 두 버튼 너비는 늘 반반이다 (flex-1) — 개수에 따라 들쑥날쑥하면 눈에 거슬린다.
+            //      대신 '단어·관용구' 가 길어서 좌우 여백을 px-1.5 로 줄였다. 이래야 세 자리(100개 넘는 날)도 안 잘린다.
+            //   색은 둘 다 복습 예정의 노랑으로 맞춘다 — 갈래는 글자로 이미 갈리니 색까지 나눌 이유가 없다.
+            const PLAN_TONE = 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100';
             const pill = (label, n, kind, mode, tone) =>
-                `<button onclick="openReviewPlanModal('${ds}', '${kind}', '${mode}')" class="flex-1 min-w-0 flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl border font-black transition-all active:scale-95 ${tone}">
+                `<button onclick="openReviewPlanModal('${ds}', '${kind}', '${mode}')" class="flex-1 min-w-0 flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-xl border font-black transition-all active:scale-95 ${tone}">
                     <span class="truncate">${label}</span><span class="shrink-0">${n}</span>
                  </button>`;
             const planWI = plan3 ? ((plan3.word || []).length + (plan3.idiom || []).length) : 0;
@@ -1550,12 +1555,14 @@ let vocabulary = [];
                 //   ⚠️ 셋을 한 줄에 두면 사이드바가 좁아 글씨가 다 잘린다 ('복… 91').
                 //      복습 예정 둘이 한 줄, 틀린 것은 그 밑에 한 줄 통째로.
                 planHtml = `
-                    <div class="mt-2 space-y-1.5 text-[11px]">
-                        <div class="flex items-stretch gap-1.5">
-                            ${plan3 && (planWI || !planG) ? pill('복습 예정', planWI, 'word', 'plan', 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100') : ''}
-                            ${planG ? pill('문법 복습', planG, 'grammar', 'plan', 'bg-[#f3f8fd] border-[#cfdeeb] text-[#2c5578] hover:bg-[#e4eff9]') : ''}
-                        </div>
-                        ${bad3 && bad3.total ? `<div class="flex items-stretch">${pill('틀린 것', bad3.total, 'word', 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100')}</div>` : ''}
+                    <div class="mt-2 space-y-1 text-[11px]">
+                        ${plan3 ? `
+                            <p class="px-0.5 text-[10px] font-black text-slate-400">📅 복습 예정</p>
+                            <div class="flex items-stretch gap-1.5">
+                                ${pill('단어·관용구', planWI, 'word', 'plan', PLAN_TONE)}
+                                ${pill('문법', planG, 'grammar', 'plan', PLAN_TONE)}
+                            </div>` : ''}
+                        ${bad3 && bad3.total ? `<div class="flex items-stretch pt-0.5">${pill('⚠️ 오늘 틀린 것', bad3.total, 'word', 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100')}</div>` : ''}
                     </div>`;
             }
 
