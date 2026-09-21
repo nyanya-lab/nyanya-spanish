@@ -3452,7 +3452,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 복습 탭 '쓰기' 설정 — 개수 / 범위 (단어만, 가볍게)
         // ============================================================
         //   [냐냐 요청] 기본 10 → 20. 1바퀴가 주관식이라 예전 개수로는 너무 짧다.
-        let writeCount = 20;
+        //   [냐냐 요청] 그 뒤 20 → 1 (2026-09-21). "그냥 무조건 1" — 늘 1개로 시작하신다.
+        //   기본값만 바꾼 것이고, 칸에 적어 바꾸는 것은 그대로다.
+        const WRITE_COUNT_DEFAULT = 1;
+        let writeCount = WRITE_COUNT_DEFAULT;
 
         // [냐냐 요청] 쓰기 복습에 관용구를 섞는다.
         //   단어 빈칸이 무거워서 잘 안 쓰게 되고, 그러면 관용구를 틀려도 다시 만날 일이 없었다.
@@ -3808,7 +3811,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const raw = parseInt(n, 10);
             // 지우는 중이면 아직 확정하지 않는다. 칸을 비운 채로 시작하면 그때 기본값으로 되돌린다
             if (fromInput && (!Number.isFinite(raw) || raw < WRITE_COUNT_MIN)) return;
-            writeCount = Math.max(WRITE_COUNT_MIN, Math.min(WRITE_COUNT_MAX, Number.isFinite(raw) ? raw : 20));
+            writeCount = Math.max(WRITE_COUNT_MIN, Math.min(WRITE_COUNT_MAX, Number.isFinite(raw) ? raw : WRITE_COUNT_DEFAULT));
             const input = document.getElementById('write-count-input');
             if (input && !fromInput) input.value = writeCount;
             document.querySelectorAll('.write-count-btn').forEach(b => {
@@ -3922,7 +3925,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         function resetWriteSetup() {
-            selectWriteCount(writeCount || 20);
+            selectWriteCount(writeCount || WRITE_COUNT_DEFAULT);
             selectWriteScope(writeScope || 'untouched');
             renderWriteTenses();
             const setup = document.getElementById('write-setup');
@@ -3940,7 +3943,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!pool.length && !P.idioms.length) { showToast("낼 단어·관용구가 없어요!", "error"); return; }
             // 칸을 비워둔 채 시작하면 기본값으로 (숫자가 없으면 몇 개를 뽑을지 알 수 없다)
             const input = document.getElementById('write-count-input');
-            if (input && !parseInt(input.value, 10)) selectWriteCount(20);
+            if (input && !parseInt(input.value, 10)) selectWriteCount(WRITE_COUNT_DEFAULT);
             const picked = buildWriteTasks(pool, writeCount, P.idioms);
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.add('hidden');
