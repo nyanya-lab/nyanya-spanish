@@ -3300,8 +3300,40 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (!id) return;
                 (vk.indexOf('::~') >= 0 ? vPhrases : vWords).set(vk, id);
             });
-            return { words, phrases, vWords, vPhrases };
+            // ============================================================
+            // [냐냐 지적] 'Esta mañana me ha sentado mal la leche' 가 역구조동사를 안 짚었다 (2026-09-21).
+            //   왜: 칸 글자를 그대로 찾는데, 노트엔 원형 'sentar' 가 적혀 있고 문장엔 'ha sentado' 다.
+            //   'me gusta' 류가 잡히던 건 첫 표에 활용형(gusta·gustan)이 적혀 있어서였다.
+            //   그래서 **원형 칸은 활용형도 같은 칸으로 친다** — 단어장 활용형 색인이 이미 안다.
+            //   ⚠️ 대신 **대명사(me·te·le·nos·os·les·se)가 문장에 있을 때만** 인정한다.
+            //      dar·quedar·tocar 처럼 보통 뜻으로도 흔한 동사가 아무 문장에나 걸리기 때문이다
+            //      ('¿Qué horas dan clases?' 가 역구조로 잡히던 것). 역구조·재귀는 대명사가 곧
+            //      그 문법이라, 조건을 붙이는 게 오히려 그 문법인지를 가려준다.
+            //   냐냐님 문장 163개로 재보니: 새로 잡힘 6개(역구조 4·재귀 2), 헛짚음 0.
+            //   ⚠️ 원형 칸이 있는 노트는 역구조동사·재귀동사 둘뿐이다 (재보고 넣었다).
+            //   ⚠️ 대명사를 안 써서 틀린 문장(Cuesto comer…)은 여기 안 걸린다 — 냐냐님과 그렇게 정했다.
+            // ============================================================
+            const nzs = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x) : nz(x);
+            const infOwner = new Map();
+            let allInf = null;
+            try { allInf = new Set(buildVerbFormIndex().lemma.values()); } catch (e) { allInf = null; }
+            if (allInf && allInf.size) {
+                (notes || []).forEach(t => {
+                    if (verbTitled.has(t.id)) return;      // 제목이 동사를 말하는 노트는 vWords 로만
+                    (typeof noteSpanishCells === 'function' ? noteSpanishCells(t) : []).forEach(c => {
+                        const k = nzs(c);
+                        if (!/^[a-záéíóúüñ]{3,}$/.test(k) || !allInf.has(k)) return;   // 단어장이 아는 원형만
+                        infOwner.set(k, infOwner.has(k) ? null : t.id);
+                    });
+                });
+            }
+            const lemmaWords = new Map();
+            infOwner.forEach((id, k) => { if (id) lemmaWords.set(k, id); });
+            return { words, phrases, vWords, vPhrases, lemmaWords };
         }
+        //   원형 칸을 열어주는 대명사 — 역구조(간접목적)·재귀 둘 다 여기 든다
+        const CLITIC_PRONOUNS = new Set(['me', 'te', 'le', 'les', 'nos', 'os', 'se']);
         // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
         function detectNoteCellsInText(text, notes) {
             const out = new Map();
@@ -3344,6 +3376,22 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         const cut = vk.split('::');
                         if (!verbs.has(cut[0])) return;
                         if (hay.indexOf(' ' + cut[1] + ' ') >= 0) out.set(id, cut[1]);
+                    });
+                }
+            }
+            //   원형 칸(역구조·재귀) — 활용형도 같은 칸으로 치되, 대명사가 있을 때만 (위 색인의 설명 참고)
+            const LW = _noteCellIndex.lemmaWords;
+            if (LW && LW.size && raws.some(r => CLITIC_PRONOUNS.has(nz(r)))) {
+                let lemma = null;
+                try { lemma = buildVerbFormIndex().lemma; } catch (e) { lemma = null; }
+                if (lemma) {
+                    const nzs = (x) => (typeof normalizeSpanishAnswer === 'function')
+                        ? normalizeSpanishAnswer(x) : nz(x);
+                    raws.forEach(raw => {
+                        const l = lemma.get(nzs(raw));
+                        if (!l) return;
+                        const id = LW.get(l);
+                        if (id && !out.has(id)) out.set(id, raw);   // 근거는 쓰신 그 활용형으로
                     });
                 }
             }
