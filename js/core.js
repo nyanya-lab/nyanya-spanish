@@ -2803,17 +2803,30 @@ let vocabulary = [];
         }
 
         // 한 칸 뒤로 (어디서 틀리든). 곡선 밖이었으면 0단계로 들여놓는다
-        function grammarReviewDemote(id) {
+        //   [냐냐 요청] 단어·관용구와 잣대를 맞춘다 (2026-09-21).
+        //     밖에서 틀리면 → 오늘 줄에 그대로 남긴다 (keepDueDate). 예전엔 날짜가 오늘로 덮여서
+        //     틀린 문법이 오늘 줄에서 사라졌다 — 잘 써도 빠지고 틀려도 빠지니 줄이 너무 빨리 줄었다.
+        //     복습 안에서 틀리면 → 오늘 몫은 푼 것이니 그대로 뺀다 (lastReviewDate 를 오늘로).
+        //   fromReview = 문법 복습 줄에서 낸 문제인가 (관용구의 idiomReviewDemote 와 같은 인자)
+        function grammarReviewDemote(id, fromReview) {
             if (!id) return;
             const rec = getGrammarReviewRec(id);
             const today = getLocalDateString();
+            //   오늘 차례였는데 복습 밖에서 틀렸으면 오늘 줄에 남긴다 (날짜를 덮어쓰기 전에 잰다)
+            if (!fromReview && rec.lastWrongDate
+                && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate)) {
+                rec.keepDueDate = today;
+            }
             if (!rec.lastWrongDate) rec.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만
-            if (rec.lastDemoteDate === today) return;   // 하루에 한 번만 (단어와 같은 규칙)
+            if (rec.lastDemoteDate === today) {         // 하루에 한 번만 (단어와 같은 규칙)
+                if (fromReview) rec.lastReviewDate = today;   // 칸은 안 밀어도 오늘 몫은 끝났다
+                return;
+            }
             rec.lastDemoteDate = today;
             const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
             rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;   // 처음 들어오면 0단계부터
             rec.lastWrongDate = today;
-            rec.lastReviewDate = null;
+            rec.lastReviewDate = fromReview ? today : null;
         }
 
         // 한 칸 앞으로 (곡선 안에 있을 때만)
@@ -2842,16 +2855,13 @@ let vocabulary = [];
 
         // 오늘 복습할 문법 노트 (약한 것부터)
         function getGrammarDueList() {
-            const today = getLocalDateString();
             const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            //   [냐냐 요청] 잣대는 curveIsDue 하나로 (2026-09-21) — 여기서 날짜를 따로 세던 탓에
+            //   '밖에서 틀려서 오늘 줄에 남긴 것'(keepDueDate)이 이 목록에만 안 나왔다.
             return tables.filter(t => {
                 const rec = grammarReview[t.id];
                 if (!rec || !rec.lastWrongDate) return false;
-                if (rec.lastReviewDate === today) return false;
-                const stage = rec.stage || 0;
-                if (stage >= REVIEW_INTERVALS.length) return false;      // 졸업
-                const base = rec.lastReviewDate || rec.lastWrongDate;
-                return daysSince(base) >= REVIEW_INTERVALS[stage];
+                return curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate);
             }).sort((a, b) => getGrammarScore(a.id) - getGrammarScore(b.id));
         }
 
@@ -2932,9 +2942,10 @@ let vocabulary = [];
                 stats.byStage[stage]++;
                 if (rec.lastReviewDate === today) { stats.waiting++; return; }
                 const gap = daysSince(rec.lastReviewDate || rec.lastWrongDate);
-                if (gap >= REVIEW_INTERVALS[stage]) {
+                const kept = (rec.keepDueDate === today);   // 밖에서 틀렸어도 남겨둔 오늘 몫 (관용구와 같게)
+                if (kept || gap >= REVIEW_INTERVALS[stage]) {
                     stats.due++;
-                    if (gap > REVIEW_INTERVALS[stage]) stats.overdue++;
+                    if (!kept && gap > REVIEW_INTERVALS[stage]) stats.overdue++;
                 } else {
                     stats.waiting++;
                 }

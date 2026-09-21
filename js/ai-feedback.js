@@ -2841,7 +2841,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (canMove && typeof grammarReviewAdvance === 'function') grammarReviewAdvance(id);
                 return;                                   // 복습 밖에서 잘 쓴 건 점수만
             }
-            if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id);
+            //   [냐냐 요청] 복습 안에서 틀린 건 오늘 몫을 푼 것이니 줄에서 빼고,
+            //   밖에서 틀린 건 오늘 줄에 남긴다 (2026-09-21, 단어·관용구와 같은 잣대).
+            //   ⚠️ 틀린 쪽에서 canMove 는 곧 '복습 줄 안'이다 — 배너가 지목한 노트(reviewId)이거나
+            //      오늘 복습 줄의 다른 노트(inQueue)일 때만 켜진다. 'dueToday' 는 제대로 썼을 때만 붙는다.
+            if (typeof grammarReviewDemote === 'function') grammarReviewDemote(id, !!canMove);
         }
 
         // ============================================================
