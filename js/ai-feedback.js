@@ -2295,7 +2295,20 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 return false;
             };
 
-            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm');
+            // ============================================================
+            // [냐냐 지적] AI 가 대신 골라 넣어준 낱말이 아무 데도 안 나왔다 (2026-09-21).
+            //   냐냐님 말씀 — "내가 tomar 을 썼는데 첨삭이 '이럴 땐 beber 를 써야 한다' 고 고치잖아.
+            //   그럼 beber 는 어디에도 점수를 안 주더라고."
+            //   왜: AI 가 넣은 낱말은 wordsAdded 로 오는데, 추천을 만들 때 그 칸을 안 봤다.
+            //     · 단어장에 **있으면** ④(알면서 못 꺼낸 것)가 −2 를 준다 — 그건 잘 돌고 있다.
+            //     · 단어장에 **없으면** 갈 데가 없었다. 고친 문장 훑기는 활용형(bebes)을 거르므로
+            //       거기서도 안 잡힌다. wordsAdded 는 사전형(beber)으로 오니 여기서 받으면 된다.
+            //   ⚠️ 거르는 규칙은 그대로다 — 이미 등록된 것 · 기능어 · 숫자 · 이름 · 문법 노트 낱말 ·
+            //      활용형은 아래에서 똑같이 빠진다. 칸 하나를 더 볼 뿐이다.
+            // ============================================================
+            //   ⚠️ flattenScoredList 는 칸 이름을 정해진 자리로만 받는다 — wordsAdded 는 따로 불러 붙인다
+            const list = flattenScoredList(feedback, 'wordsOk', 'wordsBad', 'usedWords', 'word', 'spelling', 'wordsForm')
+                .concat(flattenScoredList(feedback, 'wordsAdded'));
             const seen = new Set();
             list.forEach(item => {
                 const raw = String((item && item.name) || '').trim();
@@ -2305,6 +2318,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
                 if (isFunctionKey(key) || isNumberKey(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
+                //   [냐냐 지적] 이름을 'noun' 으로 보내오면 위 검사를 빠져나간다 (Carina·Youtube).
+                //   사전형은 소문자다 — 대문자로 시작해 오면 고유명사로 본다 (2026-09-21)
+                if (/^[A-ZÀ-Ü]/.test(raw)) return;
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;             // ser·ir·estar·haber 의 활용형
                 if (inGrammarNoteTable(raw)) return;                           // [냐냐 지적] 문법 노트로 익히는 것
                 if (looksConjugatedWord(key)) return;                          // 활용형 (불규칙 과거형 포함)
@@ -2338,6 +2354,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 if (IRREGULAR_AUX_FORMS.has(bareTok(key))) return;
                 if (inGrammarNoteTable(raw)) return;
                 if (reflexiveUsedHere(key)) return;                            // 재귀로 쓴 동사의 비재귀 원형
+                //   [냐냐 지적] 위에서 사전형으로 이미 받은 낱말의 활용형이 또 올라온다 (2026-09-21).
+                //   'ronronear' 를 받아놓고 문장의 'ronronea' 까지 권하면 둘이 따로 등록된다.
+                //   앞 여섯 글자가 같으면 같은 낱말로 보고 넘긴다 (사전형이 먼저 들어와 있다).
+                if (key.length >= 6 && out.newWords.some(x => norm(x.word).slice(0, 6) === key.slice(0, 6))) return;
                 seen.add(key);
                 out.newWords.push({ word: raw, mean: meanOf(raw) });
             });
