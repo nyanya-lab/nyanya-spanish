@@ -3452,9 +3452,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 복습 탭 '쓰기' 설정 — 개수 / 범위 (단어만, 가볍게)
         // ============================================================
         //   [냐냐 요청] 기본 10 → 20. 1바퀴가 주관식이라 예전 개수로는 너무 짧다.
-        //   [냐냐 요청] 그 뒤 20 → 1 (2026-09-21). "그냥 무조건 1" — 늘 1개로 시작하신다.
-        //   기본값만 바꾼 것이고, 칸에 적어 바꾸는 것은 그대로다.
-        const WRITE_COUNT_DEFAULT = 1;
+        //   [냐냐 확인] 2026-09-21 에 1 로 내렸다가 다시 20 — 그때 말씀하신 건
+        //   오늘의 복습 묶음(todayReviewBatch) 여서 여긴 원래대로 둔다.
+        const WRITE_COUNT_DEFAULT = 20;
         let writeCount = WRITE_COUNT_DEFAULT;
 
         // [냐냐 요청] 쓰기 복습에 관용구를 섞는다.

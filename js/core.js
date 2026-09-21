@@ -285,6 +285,8 @@ let vocabulary = [];
                 //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
                 //   아직 안 정한 상태(null)면 안 보낸다 — 딴 기기에서 골라둔 걸 덮으면 안 된다.
                 writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
+                //   [냐냐 요청] 오늘의 복습을 한 번에 몇 개씩 잡을지 (2026-09-21) — 동사 시제와 같은 대접
+                todayReviewBatch: (typeof todayReviewBatch === 'number' && todayReviewBatch > 0) ? todayReviewBatch : undefined,
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {},
                 //   [냐냐 요청] 문법 보기 설정 (필터·정렬·펼침·색인 숨김) — 폰과 PC 가 같은 모습으로 열리게
                 grammarPrefs: (typeof grammarPrefsSnapshot === 'function') ? grammarPrefsSnapshot() : undefined
@@ -461,6 +463,10 @@ let vocabulary = [];
                 grammarCellHighlights = payload.grammarCellHighlights || {};
                 grammarCellMarks = payload.grammarCellMarks || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
+                //   [냐냐 요청] 오늘의 복습 한 번에 몇 개씩 (없으면 지금 값 그대로 — 기본 100)
+                if (typeof setTodayReviewBatch === 'function' && Number.isFinite(Number(payload.todayReviewBatch))) {
+                    setTodayReviewBatch(payload.todayReviewBatch, { silent: true });
+                }
                 //   [냐냐 요청] 쓰기 복습 동사 시제 (없으면 null 로 둔다 — ensureWriteTenses 가 정한다)
                 if (typeof writeTenses !== 'undefined') {
                     writeTenses = Array.isArray(payload.writeTenses)

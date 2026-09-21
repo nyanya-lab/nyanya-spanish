@@ -1811,7 +1811,34 @@
         //   사이의 간격'이라, 10개면 방금 쓴 걸 열 개 뒤에 다시 물어보는 셈이라 잘 안 틀렸다.
         //   나누기 창에 처음 뜨는 횟수도 이 값으로 나눈다 — 25면 1~25개는 1번, 26~50개는 2번.
         //   [냐냐 요청] 처음 나눌 때 한 번에 30개씩 (2026-09-17, 예전 25)
-        const TODAY_REVIEW_BATCH = 30;
+        //   [냐냐 요청] 100개씩으로, 그리고 이 숫자를 냐냐님이 직접 고친다 (2026-09-21).
+        //     "매번 부탁하기 그러니까" — 나누기 창의 톱니바퀴에서 바꾼다.
+        //     ⚠️ 고른 값은 저장·동기화에 같이 실려서 폰에서도 따라온다 (동사 시제와 같은 대접).
+        let todayReviewBatch = 100;
+        const TODAY_REVIEW_BATCH_MIN = 5, TODAY_REVIEW_BATCH_MAX = 300;
+
+        //   숫자를 바꾼다. opts.silent 면 저장·다시 그리기를 건너뛴다 (불러올 때 쓴다)
+        function setTodayReviewBatch(n, opts) {
+            const raw = parseInt(n, 10);
+            if (!Number.isFinite(raw)) return;
+            todayReviewBatch = Math.max(TODAY_REVIEW_BATCH_MIN, Math.min(TODAY_REVIEW_BATCH_MAX, raw));
+            if (opts && opts.silent) return;
+            //   숫자를 바꾸면 '몇 번' 도 그 자리에서 다시 잡아준다 (창을 닫았다 열 필요 없이)
+            const due = getTodayReviewTasks();
+            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / todayReviewBatch)));
+            renderReviewSplitModal();
+            if (typeof saveToStorage === 'function') saveToStorage();
+        }
+
+        //   톱니바퀴 — 숫자 고치는 줄을 폈다 접는다
+        function toggleReviewBatchSetting() {
+            const box = document.getElementById('review-batch-setting');
+            if (!box) return;
+            const opening = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            const input = document.getElementById('review-batch-input');
+            if (opening && input) { input.value = todayReviewBatch; input.focus(); input.select(); }
+        }
 
         // [냐냐 요청] 밀린 복습을 몇 번에 나눠 할지 먼저 고르게 한다.
         //   딱 안 나눠지면 앞쪽부터 1개씩 더 준다: 83개를 4번 → 21 · 21 · 21 · 20
@@ -1851,7 +1878,7 @@
             todayReviewPlan = null;
             // [냐냐 요청] 적어도 창은 띄운다 (2026-09-08). 예전엔 스무 개 이하면 건너뛰었는데,
             //   이 창에 시제 고르는 자리가 생겨서 건너뛰면 그걸 만질 데가 없어진다.
-            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / TODAY_REVIEW_BATCH)));
+            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / todayReviewBatch)));
             renderReviewSplitModal();
             document.getElementById('review-split-modal').classList.remove('hidden');
         }
@@ -1879,6 +1906,9 @@
                 : `한 번에 ${counts[counts.length - 1]}~${counts[0]}개씩`;
             if (listEl) listEl.innerHTML = counts.map((c, i) =>
                 `<span class="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-700">${i + 1}회 ${c}개</span>`).join(' ');
+            //   톱니바퀴 줄의 숫자도 늘 지금 값으로 (다른 기기에서 고친 것이 따라왔을 수 있다)
+            const batchInput = document.getElementById('review-batch-input');
+            if (batchInput && document.activeElement !== batchInput) batchInput.value = todayReviewBatch;
             const minus = document.getElementById('review-split-minus');
             const plus = document.getElementById('review-split-plus');
             if (minus) minus.disabled = todayReviewParts <= 1;
@@ -1917,14 +1947,14 @@
         // 결과 화면의 '다음 N개 이어서' 버튼에 쓸 숫자 — 실제로 다음에 나올 개수와 맞춘다.
         function peekNextTodayReviewCount(remain, fallbackBatch) {
             const plan = todayReviewPlan;
-            const n = (plan && plan.counts[plan.index + 1]) || fallbackBatch || TODAY_REVIEW_BATCH;
+            const n = (plan && plan.counts[plan.index + 1]) || fallbackBatch || todayReviewBatch;
             return Math.min(remain, n);
         }
 
         // 이번 회차 개수만큼 뽑아서 시작. 계획을 다 썼으면 남은 만큼 한 번에.
         function runTodayReviewChunk(due) {
             const plan = todayReviewPlan;
-            const n = (plan && plan.counts[plan.index]) || Math.min(due.length, TODAY_REVIEW_BATCH);
+            const n = (plan && plan.counts[plan.index]) || Math.min(due.length, todayReviewBatch);
             const picked = shuffleArray(due.slice()).slice(0, n);
             if (typeof beginWritePractice === 'function') {
                 // idiomReview 를 같이 켠다 — 섞여 나온 관용구도 '관용구 복습' 으로 친다
