@@ -1557,7 +1557,11 @@ let vocabulary = [];
                 planHtml = `
                     <div class="mt-2 space-y-1 text-[11px]">
                         ${plan3 ? `
-                            <p class="px-0.5 text-[10px] font-black text-slate-400">📅 복습 예정</p>
+                            ${/* [냐냐 요청] 줄 이름 오른쪽에 둘을 합친 수도 회색으로 (2026-09-21) */''}
+                            <p class="flex items-baseline px-0.5 text-[10px] font-black text-slate-400">
+                                <span>📅 복습 예정</span>
+                                <span class="ml-auto text-slate-400">${planWI + planG}</span>
+                            </p>
                             <div class="flex items-stretch gap-1.5">
                                 ${pill('단어·관용구', planWI, 'word', 'plan', PLAN_TONE)}
                                 ${pill('문법', planG, 'grammar', 'plan', PLAN_TONE)}
