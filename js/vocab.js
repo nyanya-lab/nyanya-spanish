@@ -4572,13 +4572,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 s.retry = true;
                 s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 const shift = withTaskGradeShift(w, () => {
-                    if (!already && typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask,
-                        idiom: idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
+                    if (typeof addWordScore !== 'function') return;
+                    const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
+                    //   [냐냐 요청] 끝내 틀리면 합 −2.5 (2026-09-21, 예전 −2).
+                    //   익혀서 맞힌 −1.5 와 0.5 밖에 차이가 안 나서, 3바퀴에서 붙잡았는지가 점수에 안 남았다.
+                    //   ⚠️ 1바퀴에서 이미 −2 를 적었으면 여기서는 −0.5 만 더 얹는다 (맞힌 쪽의 +0.5 와 같은 모양).
+                    //      오답 횟수와 곡선은 그때 이미 밀었으므로 다시 세지 않는다.
+                    if (already) addWordScore(w.id, -0.5, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
+                    else addWordScore(w.id, -2.5, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2.5, ...shift });
                 //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
                 //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
                 if (typeof speakSpanishVoice === 'function') {
