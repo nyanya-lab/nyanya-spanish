@@ -1532,9 +1532,10 @@ let vocabulary = [];
             const practiceN = log.practiceCount || 0;
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
             //   [냐냐 요청] 숫자를 누르면 그 날 무엇이었는지 (openDiaryDetail)
-            const num = (v, color, what) => `<td class="${VLINE} p-0">${v > 0
-                ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${color} hover:bg-white rounded transition-colors">${v}</button>`
-                : `<span class="block py-1 text-center font-black text-slate-300">${v}</span>`}</td>`;
+            //   [냐냐 요청] 0 인 칸도 눌러서 열린다 (2026-09-22) — 팝업 안에서 탭으로 오가니
+            //   0 이라고 막아두면 그 갈래로 건너갈 길이 없다. 색만 흐리게 둔다.
+            const num = (v, color, what) => `<td class="${VLINE} p-0">
+                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v > 0 ? color : 'text-slate-300'} hover:bg-white rounded transition-colors">${v}</button></td>`;
             const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
                 ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
                 : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
@@ -1786,10 +1787,9 @@ let vocabulary = [];
         //   ⚠️ 갈래를 바꿔도 보던 갈래(단어/관용구/문법)를 기억한다. '마스터 단어' 에서
         //      '약점' 을 누르면 '약점 단어' 로 간다.
         // ============================================================
-        const DIARY_TAB_KINDS = [
-            ['reg', '📖 등록'], ['master', '🟢 마스터'], ['weak', '🔻 약점'],
-            ['review', '🔁 복습'], ['practice', '✍️ 연습'], ['ai', '🤖 첨삭']
-        ];
+        //   [냐냐 요청] 복습·연습·첨삭은 탭에서 뺀다 (2026-09-22) — 그 셋은 따로 만들 것이다.
+        //   [냐냐 요청] 갈래(단어·관용구·문법)를 위에, 무엇을(등록·마스터·약점)을 아래에 둔다.
+        const DIARY_TAB_KINDS = [['reg', '📖 등록'], ['master', '🟢 마스터'], ['weak', '🔻 약점']];
         const DIARY_TAB_COLS = [['word', '단어'], ['idiom', '관용구'], ['grammar', '문법']];
         const DIARY_COL_KINDS = ['reg', 'master', 'weak'];   // 갈래가 갈리는 것
         //   일지 표의 칸 숫자 (팝업 탭과 표가 같은 값을 쓰게 한 곳에 모아둔다)
@@ -1814,19 +1814,17 @@ let vocabulary = [];
             const dash = what.indexOf('-');
             const curKind = dash > 0 ? what.slice(0, dash) : what;
             const curCol = dash > 0 ? what.slice(dash + 1) : null;
+            if (!curCol) return '';        // 복습·연습·첨삭은 탭 없이 그 목록만 본다
             const btn = (target, label, n, on) => `<button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
                 class="py-1.5 rounded-xl text-[11px] font-black transition-all ${on ? 'bg-white text-slate-900 shadow-sm' : (n ? 'text-slate-500 hover:text-slate-800' : 'text-slate-300')}">${label} ${n}</button>`;
             const row = (inner) => `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">${inner}</div>`;
-            const kindRow = row(DIARY_TAB_KINDS.map(([k, label]) => {
-                const n = DIARY_COL_KINDS.indexOf(k) >= 0
-                    ? DIARY_TAB_COLS.reduce((t, [c]) => t + diaryTabCount(ds, log, k + '-' + c), 0)
-                    : diaryTabCount(ds, log, k);
-                const target = DIARY_COL_KINDS.indexOf(k) >= 0 ? (k + '-' + (curCol || 'word')) : k;
-                return btn(target, label, n, k === curKind);
-            }).join(''));
-            const colRow = curCol ? row(DIARY_TAB_COLS.map(([c, label]) =>
-                btn(curKind + '-' + c, label, diaryTabCount(ds, log, curKind + '-' + c), c === curCol)).join('')) : '';
-            return `<div class="${STICKY_TABS_WRAP}">${kindRow}${colRow ? '<div class="mt-1.5"></div>' + colRow : ''}</div>`;
+            //   갈래가 위 — 그 갈래 안에서 등록·마스터·약점을 오간다
+            const colRow = row(DIARY_TAB_COLS.map(([c, label]) =>
+                btn(curKind + '-' + c, label, diaryTabCount(ds, log, curKind + '-' + c), c === curCol)).join(''));
+            const kindRow = row(DIARY_TAB_KINDS.map(([k, label]) =>
+                btn(k + '-' + curCol, label, diaryTabCount(ds, log, k + '-' + curCol), k === curKind)).join(''));
+            //   ⚠️ 팝업 본문은 space-y-4 라 탭과 목록 사이가 너무 벌어진다 — 그만큼 당겨 붙인다
+            return `<div class="${STICKY_TABS_WRAP} -mb-2.5">${colRow}<div class="mt-1.5"></div>${kindRow}</div>`;
         }
 
         function openDiaryDetail(ds, what) {
