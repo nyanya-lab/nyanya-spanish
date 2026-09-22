@@ -2033,6 +2033,10 @@ ${koEsNoteListText}${refGrammar}${refWords}
         // ============================================================
         let aiLastEsKoGrammar = [];   // [{ note, usage, delta }] — 결과 화면에 보여주려고 기억
         let aiLastEsKoWords = [];     // [{ word, ok, delta }] — 스펠링 판정 결과
+        //   [냐냐 요청] AI 품사 정확도를 재려고 기록만 남긴다 (2026-09-22).
+        //   점수도 동작도 안 건드린다 — 첫삭 노트에 { n: 품사를 받은 낱말 수,
+        //   bad: [엇갈린 것] } 를 적어둔다. 일주일 쯤 쌓이면 숫자로 판단한다.
+        let aiLastPosStats = null;
 
         // [냐냐 요청] 자유 문장에 쓴 '내 단어장 단어' 의 스펠링 점수 — 맞으면 +2 / 틀리면 −2.
         //   AI 가 돌려준 단어를 실제 단어장과 이름으로 맞춰본다. 없는 단어는 버린다.
@@ -2543,10 +2547,15 @@ ${koEsNoteListText}${refGrammar}${refWords}
             const aiIds = new Set();
             //   [냐냐 요청] 품사가 엇갈리는 항목은 이 문장의 임자가 아니다 — 점수에서 뻐다 (aiPosConflict)
             const posMismatchIds = new Set();
+            aiLastPosStats = { n: 0, bad: [] };
             aiList.forEach(item => {
                 const w = resolve(item.name, item.pos);
                 if (!w) return;
-                if (aiPosConflict(w, item.pos)) { posMismatchIds.add(w.id); return; }
+                if (aiPosConflict(w, item.pos)) {
+                    posMismatchIds.add(w.id);
+                    aiLastPosStats.bad.push({ w: String(item.name || ''), ai: item.pos, v: String(w.pos || '') });
+                    return;
+                }
                 aiIds.add(w.id);
             });
             //   AI 가 짚은 동사가 이 문장에서 취할 수 있는 꼴들 → 그 동사
@@ -2622,7 +2631,17 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 //   '관사 달고 등록된 명사' 는 제외)이 el trabajador 를 떨괴내서 형용사가 +2 를 먹었다.
                 //   관사 규칙은 'un poco tarde'(부사)를 지키는 규칙이라 그대로 두고,
                 //   **품사가 엇갈리면 아무에게도 안 준다** — 틀린 항목에 주는 것보다 안 주는 게 낫다.
-                const guard = (w) => (w && aiPosConflict(w, aiPosByKey.get(k))) ? null : w;
+                const guard = (w) => {
+                    if (!w) return w;
+                    const ap = aiPosByKey.get(k);
+                    //   [냐냐 요청] 정확도를 재려고 세어둔다 (점수엔 안 쓴다)
+                    if (aiLastPosStats && ap && POS_STRICT.has(String(ap).toLowerCase())
+                        && POS_STRICT.has(String(w.pos || '').toLowerCase())) {
+                        aiLastPosStats.n++;
+                        if (aiPosConflict(w, ap)) aiLastPosStats.bad.push({ w: String(raw || ''), ai: ap, v: String(w.pos || '') });
+                    }
+                    return aiPosConflict(w, ap) ? null : w;
+                };
                 const hit = cands.find(w => aiIds.has(w.id));
                 if (hit) return guard(hit);
                 const verb = aiVerbForm.get(k);
@@ -4245,6 +4264,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 natural: plain(feedback.moreNatural),         // 더 자연스러운 표현 (있을 때만)
                 issue: (issue && issue !== '없음') ? issue : '',
                 gram: aiNoteGramHits(gramHits),               // [{ id, n(제목), ok }]
+                //   [냐냐 요청] AI 품사가 단어장과 어느 만큼 맞는지 재려고 남긴다 (점수엔 안 쓴다)
+                posx: (aiLastPosStats && aiLastPosStats.n) ? aiLastPosStats : undefined,
                 ok: !!feedback.isCorrect
             });
             if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;

@@ -4038,6 +4038,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
             const setup = document.getElementById('write-setup');
             if (setup) setup.classList.remove('hidden');
+            //   [냐냐 지적] 설정으로 돌아왔을 때 '단어 N개에서 나와요' 가 옛 숫자였다 (2026-09-22).
+            //   방금 푼 것들은 이제 '안 만난' 이 아닌데 숫자가 그대로였다 — 돌아올 때 다시 센다.
+            //   (새로고침 버튼을 따로 두지 않아도 되도록)
+            if (typeof renderWriteMix === 'function') renderWriteMix();
+            if (typeof renderWriteTenses === 'function') renderWriteTenses();
             if (typeof cb === 'function') { try { cb(); } catch (e) {} }
         }
 
