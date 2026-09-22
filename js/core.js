@@ -1804,8 +1804,11 @@ let vocabulary = [];
                 //   [냐냐 요청] 단어 바로 옆에 품사도 — 단어장과 같은 영어 약자·같은 색 (2026-09-22).
                 //   같은 철자가 품사만 다르게 등록된 낱말이 있어서 이름만으로는 어느 쪽인지 모른다.
                 //   [시험] 품사를 앞에 — 폭을 고정한 칸에 가운데로 두고 그 뒤에 단어를 세운다.
+                //   [냐냐 지적] 왼쪽이 치우쳐 보였다 (2026-09-22): 줄 여백 12px 에 칸 안 가운데맞춤이
+                //   또 12px 를 더해 왼쪽만 24px 였다. 이 줄만 왼쪽 여백을 빼서 가운데맞춤이
+                //   그 자리를 대신하게 한다 — 왼쪽·오른쪽이 12px 로 맞는다.
                 return `<button type="button" onclick="closeReviewPlanModal(); goToWord('${escapeAttr(String(w.id))}')"
-                    class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
+                    class="w-full flex items-center gap-2 pl-0 pr-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
                     <span class="shrink-0 w-11 flex justify-center">${wordPosChipHtml(w)}</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
