@@ -2366,44 +2366,9 @@ ${koEsNoteListText}${refGrammar}${refWords}
             return out;
         }
 
-        // ============================================================
-        // [냐냐 요청] 추천한 낱말은 0점으로 바로 단어장에 넣는다 (2026-09-21).
-        //   "첨삭에만 있는 단어 0점으로 일단 넣어주는 건 어때?"
-        //   **기존 로직은 그대로 둔다** — 이미 걸러낸 추천 목록(aiLastSuggest.newWords)을 등록만 한다.
-        //   그 목록은 고친 문장과 AI 가 준 사전형에서만 오고, 활용형·기능어·숫자·이름·
-        //   문법 노트 낱말은 buildAiSuggestions 가 이미 빼놨다 (최대 5개).
-        //   ⚠️ 뜻이 비면 넣지 않는다 — 뜻 없는 낱말은 쓰기 복습에서 빈 문제가 된다.
-        //   ⚠️ 품사는 비워 둔다. 뜻도 AI 추정이라 나중에 냐냐님이 손보시는 자리다.
-        //   ⚠️ 모양은 유의어 자동 등록(applySynonymLinks)과 같게 — 점수 0, 일지 등록 +1.
-        // ============================================================
-        function autoRegisterSuggestedWords() {
-            const list = ((aiLastSuggest || {}).newWords) || [];
-            if (!list.length || typeof vocabulary === 'undefined') return;
-            let added = 0;
-            list.forEach(x => {
-                const raw = String((x && x.word) || '').trim();
-                const mean = String((x && x.mean) || '').trim();
-                if (!raw || !mean) return;
-                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;   // 이미 있다
-                const w = {
-                    id: 'word-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-                    word: raw, meaning: mean, pos: '',
-                    idioms: [], example: '', exampleMeaning: '', notes: '',
-                    mastered: false, score: 0, synonyms: [],
-                    createdAt: Date.now(),
-                    fromAiFeedback: true          // 어디서 들어온 낱말인지 표시만 해 둔다
-                };
-                vocabulary.unshift(w);
-                added++;
-                if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(w.id);
-                if (typeof logAction === 'function') logAction('new-word', null, w.id);
-            });
-            if (!added) return;
-            if (typeof saveToStorage === 'function') saveToStorage();
-            if (typeof renderWordList === 'function') renderWordList();
-            if (typeof updateStats === 'function') updateStats();
-            //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-21) — 칩에 ✓ 로 이미 보인다
-        }
+        // [냐냐 요청] 추천 낱말을 0점으로 자동 등록하던 것은 걷어냈다 (2026-09-22) —
+        //   냐냐님이 원하신 건 '등록' 이 아니었다. 칩을 눌러 직접 등록하는 길만 남긴다.
+        //   ⚠️ 다시 넣자는 말씀이 없는 한 되살리지 않는다 (director → directora 같은 성 변형까지 들어왔다).
 
         function aiSuggestHtml() {
             const s = aiLastSuggest || { idioms: [], newWords: [] };
@@ -4565,7 +4530,6 @@ ${koEsNoteListText}${refGrammar}${refWords}
             applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK, isMission);
             applyEsKoWordScores(feedback, WORD_SPELL_OK);
             aiLastSuggest = buildAiSuggestions(feedback);   // [냐냐 요청] 추천은 점수 다음에 (쓴 관용구를 알아야 뺀다)
-            autoRegisterSuggestedWords();                  // [냐냐 요청] 추천한 낱말은 0점으로 바로 넣는다 (2026-09-21)
             renderEsKoGrammarRefs();
         }
         // 새 채점을 시작하기 전에 지난 결과 카드를 치운다

@@ -4005,7 +4005,6 @@ let vocabulary = [];
                      '−2 <span class="text-[10px] font-semibold text-slate-400">(철자를 틀림 · lemones → limones)</span>'],
                     ['고쳐진 낱말 <span class="text-[10px] font-semibold text-slate-400">(muchas → muchísimo)</span>',
                      '점수 없음', '점수 없음'],
-                    ['첨삭에 처음 나온 낱말 <span class="text-[10px] font-semibold text-slate-400">(단어장에 없는 것)</span>', '0점으로 단어장에 들어와요', '—'],
                     ['아는 단어인데 못 떠올림 <span class="text-[10px] font-semibold text-slate-400">(고친 문장에만 나온 내 단어)</span>', '—', '−2']
                 ]},
                 { group: '복습', color: 'text-amber-600 bg-amber-50 border-amber-200', rows: [
