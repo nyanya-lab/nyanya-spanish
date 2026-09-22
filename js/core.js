@@ -1985,8 +1985,13 @@ let vocabulary = [];
                        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden opacity-80">${leftRows}</div>
                    </div>`
                 : '';
+            //   [냐냐 요청] 위 목록에도 이름표를 단다 (2026-09-22) — 아래 '벗어난 것' 에만 있어서
+            //   위가 무슨 목록인지 이름이 없었다. 제목에서 뺀 말(마스터한 단어 3개)이 여기로 온 셈이다.
+            const headLabel = rows
+                ? `<p class="px-0.5 mb-1.5 text-[11px] font-black text-slate-500">${meta.icon} ${escapeHtml(meta.label)} ${count}개</p>`
+                : '';
             if (bodyEl) bodyEl.innerHTML = diaryTabsHtml(ds, log, what) + (rows
-                ? `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div>`
+                ? `<div>${headLabel}<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div></div>`
                 : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock;
             modal.classList.remove('hidden');
         }
