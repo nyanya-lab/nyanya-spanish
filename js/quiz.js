@@ -865,30 +865,15 @@ let quizSession = null;
                 return `<div class="flex items-center${justifyI} gap-1.5 flex-wrap">${chips.join('')}</div>`;
             }
 
-            if (word.pos === 'noun') {
-                if (word.gender === 'masculine') chips.push(B('bg-blue-100 text-blue-600', 'M.'));
-                else if (word.gender === 'feminine') chips.push(B('bg-rose-100 text-rose-600', 'F.'));
-                else chips.push(B('bg-slate-100 text-slate-600', 'N.'));
-            } else if (word.pos === 'verb') {
-                chips.push(B('bg-orange-100 text-orange-600', 'V.'));
-            } else if (word.pos === 'adjective') {
-                chips.push(B('bg-amber-100 text-amber-700', 'Adj.'));
+            //   [냐냐 요청] 품사 칩은 core.js 의 wordPosChip 한 곳에서 정한다 (2026-09-22) —
+            //   일지 목록도 같은 약자·같은 색을 써야 해서 둘로 나눠 두면 틀어진다.
+            const posChip = (typeof wordPosChip === 'function') ? wordPosChip(word) : null;
+            if (posChip) chips.push(B(posChip[0], posChip[1]));
+            if (word.pos === 'adjective') {
                 const AG = 'bg-amber-50 text-amber-600 border border-amber-200';
                 if (word.adjAgreement === 'no-gender') chips.push(B(AG, '성 변화 X'));
                 else if (word.adjAgreement === 'no-number') chips.push(B(AG, '수 변화 X'));
                 else if (word.adjAgreement === 'invariable') chips.push(B(AG, '변화 X'));
-            } else if (word.pos === 'adverb') {
-                chips.push(B('bg-emerald-100 text-emerald-700', 'Adv.'));
-            } else if (word.pos === 'preposition') {
-                chips.push(B('bg-teal-100 text-teal-700', 'Prep.'));
-            } else if (word.pos === 'conjunction') {
-                chips.push(B('bg-cyan-100 text-cyan-700', 'Conj.'));
-            } else if (word.pos === 'pronoun') {
-                chips.push(B('bg-pink-100 text-pink-700', 'Pron.'));
-            } else if (word.pos === 'interrogative') {
-                chips.push(B('bg-indigo-100 text-indigo-700', 'Int.'));
-            } else if (word.pos === 'phrase') {
-                chips.push(B('bg-purple-100 text-purple-600', 'Phr.'));
             }
 
             //   [냐냐 지적] 여기에 DELE 표시가 없었다 (2026-09-22) — 관용구 쪽엔 있는데 단어엔 빠져 있어서,

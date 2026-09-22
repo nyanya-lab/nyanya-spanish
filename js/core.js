@@ -1751,6 +1751,36 @@ let vocabulary = [];
             }));
             return out;
         }
+        // ============================================================
+        // [냐냐 요청] 품사 칩은 단어장과 똑같이 — 영어 약자에 그 색 (2026-09-22).
+        //   단어 카드·퀴즈 결과가 쓰던 그 칩을 여기 한 곳으로 모은다 (buildWordBadgesHtml 도 이걸 쓴다).
+        //   M. 파랑 · F. 분홍 · N. 회색 · V. 주황 · Adj. 호박 · Adv. 초록 · Prep. 청록 …
+        // ============================================================
+        const POS_CHIP = {
+            verb: ['bg-orange-100 text-orange-600', 'V.'],
+            adjective: ['bg-amber-100 text-amber-700', 'Adj.'],
+            adverb: ['bg-emerald-100 text-emerald-700', 'Adv.'],
+            preposition: ['bg-teal-100 text-teal-700', 'Prep.'],
+            conjunction: ['bg-cyan-100 text-cyan-700', 'Conj.'],
+            pronoun: ['bg-pink-100 text-pink-700', 'Pron.'],
+            interrogative: ['bg-indigo-100 text-indigo-700', 'Int.'],
+            phrase: ['bg-purple-100 text-purple-600', 'Phr.']
+        };
+        function wordPosChip(w) {
+            if (!w) return null;
+            if (w.pos === 'noun') {
+                if (w.gender === 'masculine') return ['bg-blue-100 text-blue-600', 'M.'];
+                if (w.gender === 'feminine') return ['bg-rose-100 text-rose-600', 'F.'];
+                return ['bg-slate-100 text-slate-600', 'N.'];
+            }
+            return POS_CHIP[w.pos] || null;
+        }
+        //   목록 줄에 붙이는 작은 꼴 (단어 카드의 칩보다 한 치수 작다)
+        function wordPosChipHtml(w) {
+            const c = wordPosChip(w);
+            return c ? `<span class="shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-black ${c[0]}">${c[1]}</span>` : '';
+        }
+
         //   열쇠 하나를 보여줄 줄로 (단어 id · 표현 열쇠 둘 다 받는다)
         function diaryRowHtml(key) {
             const sep = String(key).indexOf('::');
@@ -1771,13 +1801,12 @@ let vocabulary = [];
             const w = (vocabulary || []).find(v => String(v.id) === String(key));
             if (w) {
                 const gi = GRADE_INFO[getWordGrade(w)] || GRADE_INFO.normal;
-                //   [냐냐 요청] 단어 바로 옆에 품사도 (2026-09-22) — 복습 예정 팝업과 같은 모양.
+                //   [냐냐 요청] 단어 바로 옆에 품사도 — 단어장과 같은 영어 약자·같은 색 (2026-09-22).
                 //   같은 철자가 품사만 다르게 등록된 낱말이 있어서 이름만으로는 어느 쪽인지 모른다.
-                const pos = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
                 return `<button type="button" onclick="closeReviewPlanModal(); goToWord('${escapeAttr(String(w.id))}')"
                     class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
-                    ${pos ? `<span class="shrink-0 text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5">${escapeHtml(pos)}</span>` : ''}
+                    ${wordPosChipHtml(w)}
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
@@ -1919,6 +1948,9 @@ let vocabulary = [];
             const body = document.getElementById('review-plan-body');
             if (head) { head.classList.toggle('p-5', !on); head.classList.toggle('px-5', on); head.classList.toggle('pt-4', on); head.classList.toggle('pb-2', on); }
             if (body) { body.classList.toggle('pt-3', on); }
+            //   [냐냐 요청] 스크롤바가 생겨도 내용 너비가 안 바뀌게 자리를 늘 비워둔다 (2026-09-22).
+            //   탭을 오갈 때 목록이 길어지면 스크롤바가 나타나면서 표가 좁아졌다 넓어졌다 했다.
+            if (body) body.style.scrollbarGutter = 'stable';
             //   [냐냐 요청] 탭을 오갈 때마다 창 크기가 들쎄날쎄해서 키를 고정한다 (2026-09-22).
             //   목록이 길면 안에서 굴러간다. 복습 예정 팝업은 예전처럼 내용만큼만 높아진다.
             //   ⚠️ 클래스(h-[70vh])로는 안 먹는다 — 태풍은 처음에 본 클래스만 만들어 둔다.
