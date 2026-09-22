@@ -1847,21 +1847,40 @@ let vocabulary = [];
                 default: return 0;
             }
         }
+        //   [냐냐 요청] 탭 두 줄 대신 **일지 표 그대로** (2026-09-22).
+        //   사이드바에서 보던 그 3×3 표를 팝업 안에 넣고, 칸을 누르면 그 목록이 뜬다.
+        //   두 줄이 한 덩이로 줄고, 지금 어느 칸을 보고 있는지도 표 위에서 바로 보인다.
+        //   색 규칙은 사이드바 표와 같다 (0 은 연회색, 음수는 뜻이 뒤집히니 색도 뒤집는다).
         function diaryTabsHtml(ds, log, what) {
             const dash = what.indexOf('-');
             const curKind = dash > 0 ? what.slice(0, dash) : what;
             const curCol = dash > 0 ? what.slice(dash + 1) : null;
-            if (!curCol) return '';        // 복습·연습·첨삭은 탭 없이 그 목록만 본다
-            const btn = (target, label, n, on) => `<button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
-                class="py-1.5 rounded-xl text-[11px] font-black transition-all ${on ? 'bg-white text-slate-900 shadow-sm' : (n ? 'text-slate-500 hover:text-slate-800' : 'text-slate-300')}">${label} ${n}</button>`;
-            const row = (inner) => `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">${inner}</div>`;
-            //   갈래가 위 — 그 갈래 안에서 등록·마스터·약점을 오간다
-            const colRow = row(DIARY_TAB_COLS.map(([c, label]) =>
-                btn(curKind + '-' + c, label, diaryTabCount(ds, log, curKind + '-' + c), c === curCol)).join(''));
-            const kindRow = row(DIARY_TAB_KINDS.map(([k, label]) =>
-                btn(k + '-' + curCol, label, diaryTabCount(ds, log, k + '-' + curCol), k === curKind)).join(''));
-            //   ⚠️ 팝업 본문은 space-y-4 라 탭과 목록 사이가 너무 벌어진다 — 그만큼 당겨 붙인다
-            return `<div class="${STICKY_TABS_WRAP} -mb-2.5">${colRow}<div class="mt-1.5"></div>${kindRow}</div>`;
+            if (!curCol) return '';        // 복습·연습·첨삭은 표 없이 그 목록만 본다
+            const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
+            const MINUS = { weak: 'text-emerald-500', master: 'text-rose-400', reg: 'text-rose-400' };
+            const VLINE = 'border-l border-slate-200';
+            const cell = (k, c, color) => {
+                const target = k + '-' + c, v = diaryTabCount(ds, log, target), on = (target === what);
+                const tone = v > 0 ? color : (v < 0 ? MINUS[k] : 'text-slate-300');
+                return `<td class="${VLINE} p-0.5">
+                    <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
+                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${on ? 'bg-white shadow-sm ring-1 ring-slate-300' : 'hover:bg-white/70'}">${v}</button></td>`;
+            };
+            return `<div class="${STICKY_TABS_WRAP} -mb-2.5">
+                <table class="w-full table-fixed bg-slate-100 rounded-2xl border border-slate-200 p-1">
+                    <colgroup><col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%"></colgroup>
+                    <thead><tr>
+                        <th></th>
+                        ${DIARY_TAB_COLS.map(([, label]) => `<th class="text-center pt-1.5 pb-0.5 text-[10px] font-black text-slate-500 ${VLINE}">${label}</th>`).join('')}
+                    </tr></thead>
+                    <tbody>
+                        ${ROWS.map(([k, label, color]) => `<tr class="border-t border-slate-200">
+                            <td class="text-center py-1 text-[11px] font-bold ${color}">${label}</td>
+                            ${DIARY_TAB_COLS.map(([c]) => cell(k, c, color)).join('')}
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`;
         }
 
         //   [냐냐 요청] 일지 팝업은 제목 밑에 바로 탭이 오게 (2026-09-22). 두 팝업이 껍데기를
@@ -1942,7 +1961,20 @@ let vocabulary = [];
             //   [냐냐 요청] 제목에 '마스터한 단어 3개' 를 또 적지 않는다 (2026-09-22) —
             //   바로 밑 탭이 이미 그 말을 하고 있다. 날짜만 남긴다.
             //   할 말이 없으면 설명 줄을 통째로 숨긴다 (빈 줄이 공백으로 남아 있었다).
-            if (titleEl) titleEl.innerText = fmtDateSlash(ds);
+            //   [냐냐 요청] 날짜 옆 ◀ ▶ 로 팝업을 닫지 않고 어제·내일로 넘긴다 (2026-09-22).
+            //   앞날은 일지가 없으니 오늘에서 멈춘다.
+            if (titleEl) {
+                const prev = addDaysToDateString(ds, -1), next = addDaysToDateString(ds, 1);
+                const canNext = ds < getLocalDateString();
+                const arrow = (target, icon, on) => on
+                    ? `<button type="button" onclick="openDiaryDetail('${target}', '${what}')" class="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><i class="fa-solid ${icon} text-[11px]"></i></button>`
+                    : `<span class="w-7 h-7 inline-flex items-center justify-center text-slate-200"><i class="fa-solid ${icon} text-[11px]"></i></span>`;
+                titleEl.innerHTML = `<span class="flex items-center gap-1">
+                    ${arrow(prev, 'fa-chevron-left', true)}
+                    <span class="font-bold text-slate-900">${fmtDateSlash(ds)}</span>
+                    ${arrow(next, 'fa-chevron-right', canNext)}
+                </span>`;
+            }
             if (subEl) { subEl.innerText = note || ''; subEl.classList.toggle('hidden', !note); }
             //   머리와 본문의 위아래 여백도 줄인다 — 이 팝업은 탭이 바로 와야 한다.
             //   (복습 예정 팝업은 openReviewPlanModal 이 원래대로 되돌린다)
