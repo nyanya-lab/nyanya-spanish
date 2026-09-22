@@ -1518,7 +1518,10 @@ let vocabulary = [];
                 weak:   [log.newWeakCount || 0, log.newIdiomWeakCount || 0, log.newGrammarWeakCount || 0]
             };
             const reviewN = log.reviewCount || 0;
-            const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + b, 0)
+            //   [냐냐 결정] 마스터·약점 칸은 넷팅이라 음수가 될 수 있다 (2026-09-22).
+            //   '총 N개 활동' 에서는 음수를 0 으로 본다 — 약점이 풀린 건 활동이 아니라 결과이고,
+            //   그 활동(복습·첨삭)은 아래 줄에서 이미 세고 있다.
+            const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + Math.max(0, b), 0)
                 + reviewN + (log.practiceCount || 0) + (log.aiSessions || 0);
             //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
             const total = shownTotal + (log.quizTotal || 0) + (log.gameCount || 0);   // 퀴즈·게임은 표에 없지만 활동이다
@@ -1878,10 +1881,9 @@ let vocabulary = [];
             const leftIds = (left && Array.isArray(log[left.field])) ? log[left.field] : [];
             const leftRows = leftIds.map(diaryRowHtml).join('');
 
-            //   [냐냐 지적] 예전엔 "그 차이가 적혀요" 라고 했는데 칸 숫자는 차이가 아니었다 (2026-09-22).
-            //   이제 칸은 '그 날 그렇게 된 개수' 다. 벗어난 것은 아래 목록으로 따로 본다.
+            //   [냐냐 결정] 칸은 넷팅이다 (2026-09-22). 이제 0 밑으로도 가니 셈이 그대로 맞는다.
             if (leftIds.length) {
-                note = `오늘 ${count}개가 새로 들었고, 따로 ${leftIds.length}개가 여기서 빠졌어요 (아래).`;
+                note = `오늘 ${count}개가 새로 들고 ${leftIds.length}개가 빠졌어요 — 일지 칸은 그 차이(${shownCount})예요.`;
             }
             else if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
             else if (count && shownCount && count !== shownCount) {
@@ -4328,23 +4330,20 @@ let vocabulary = [];
         };
 
         // ============================================================
-        // [냐냐 지적] "된 게 2개, 벗어난 게 1개면 넷팅치면 1 아닌가?" (2026-09-22)
-        //   맞는 말씀인데 칸에는 2 가 적혀 있었다. 숫자가 '순증감' 이면서 0 밑으로는 안 내려가서다 —
-        //   오늘 estirar 가 먼저 풀릴 때 0 에서 −1 이 되려다 잘리고, 그 뒤 두 개가 들어와 2 가 됐다.
-        //   빼기도 아니고 개수도 아닌 어정쩡한 숫자였다.
-        //   → **칸은 '그 날 그렇게 된 개수' 로 한다** (냐냐님 첫 반응이 그거였다 —
-        //     "어제 풀린 걸 왜 오늘 앞에서 빼?"). 벗어난 것은 팝업에 목록으로 따로 보여준다.
-        //   규칙: 그 날 목록이 실제로 움직였을 때만 숫자도 움직인다.
-        //     · 같은 날 됐다가 풀리면 목록에서 빠지고 숫자도 −1 (그 날로 치면 없던 일)
-        //     · 어제 것이 오늘 풀리면 오늘 목록에 없으니 숫자는 그대로, 아래 '벗어난 것' 에만 남는다
-        //   ⚠️ 복습·연습은 여기 안 든다 — 같은 것을 여러 번 풀면 그만큼 세야 한다 (목록만 묶는다).
-        //   ⚠️ 열쇠 없이 부르는 옛 자리(단어 삭제 등)는 예전처럼 그냥 센다.
+        // [냐냐 결정] 마스터·약점 칸은 **그 날의 넷팅** 이다 (2026-09-22).
+        //   "그냥 약점이 풀린 거잖아" — 어제까지 약점이던 것이 오늘 풀렸으면 오늘 −1 이 맞다.
+        //   예전엔 0 밑으로 안 내려가게 막아둬서, 먼저 풀린 하나가 조용히 잘리고 (0 에서 −1 이
+        //   되려다 0) 그 뒤에 든 둘만 남아 2 가 됐다 — 빼기도 개수도 아닌 숫자였다.
+        //   → **0 밑으로도 내려간다.** 하루 종일 풀기만 했으면 −3 이라고 적힌다.
+        //   ⚠️ 등록 칸은 그대로 0 에서 멈춘다 — 옛날에 등록한 단어를 오늘 지운 것을
+        //      '오늘 −1 등록' 이라고 할 수는 없다 (그 날 한 일이 아니다).
+        //   ⚠️ '총 N개 활동' 을 셀 때는 음수를 0 으로 본다 (아래 showCalendarDayDetail).
+        //      약점이 풀린 건 활동이 아니라 결과다 — 그 활동은 복습·첨삭으로 이미 세어져 있다.
         // ============================================================
-        const DIARY_ID_GATED = new Set([
-            'new-word', 'undo-new-word', 'new-mastered', 'undo-new-mastered', 'new-weak', 'undo-new-weak',
-            'new-grammar', 'undo-new-grammar', 'new-grammar-mastered', 'undo-new-grammar-mastered',
-            'new-grammar-weak', 'undo-new-grammar-weak',
-            'new-idiom-mastered', 'undo-new-idiom-mastered', 'new-idiom-weak', 'undo-new-idiom-weak'
+        const DIARY_NET_COUNTERS = new Set([
+            'newMasteredCount', 'newWeakCount',
+            'newIdiomMasteredCount', 'newIdiomWeakCount',
+            'newGrammarMasteredCount', 'newGrammarWeakCount'
         ]);
 
         function logAction(type, extra, id) {
@@ -4361,14 +4360,6 @@ let vocabulary = [];
                     d[key] = list;
                 }
             }
-            //   그 날 목록이 안 움직였으면 숫자도 그대로 둔다 (위 설명 참고)
-            if (id && DIARY_ID_GATED.has(type) && !idTouched) {
-                saveToStorage();
-                renderDiary();
-                if (typeof updateEggProgress === 'function') updateEggProgress();
-                return;
-            }
-
             if (type === 'quiz') {
                 nyanyaDiary[today].quizTotal++;
                 if (extra) nyanyaDiary[today].quizCorrect++;
@@ -4401,14 +4392,16 @@ let vocabulary = [];
             } else if (type === 'undo-new-word') {
                 nyanyaDiary[today].newWordsCount = Math.max(0, (nyanyaDiary[today].newWordsCount || 0) - 1); // [냐냐 PATCH] 단어 삭제 시 오늘 등록 취소
             } else if (type === 'undo-new-mastered') {
-                nyanyaDiary[today].newMasteredCount = Math.max(0, (nyanyaDiary[today].newMasteredCount || 0) - 1); // [냐냐 PATCH] 단어 마스터 해제/삭제
+                //   [냐냐 결정] 마스터·약점은 넷팅이라 0 밑으로도 간다 (2026-09-22)
+                nyanyaDiary[today].newMasteredCount = (nyanyaDiary[today].newMasteredCount || 0) - 1;
             } else if (type === 'undo-new-grammar') {
                 nyanyaDiary[today].newGrammarCount = Math.max(0, (nyanyaDiary[today].newGrammarCount || 0) - 1); // [냐냐 PATCH] 문법표 삭제
             } else if (type === 'undo-new-grammar-mastered') {
-                nyanyaDiary[today].newGrammarMasteredCount = Math.max(0, (nyanyaDiary[today].newGrammarMasteredCount || 0) - 1); // [냐냐 PATCH] 문법표 마스터 해제/삭제
+                nyanyaDiary[today].newGrammarMasteredCount = (nyanyaDiary[today].newGrammarMasteredCount || 0) - 1;
             } else {
                 //   [냐냐 요청] 일지 표(등록·마스터·약점 × 단어·관용구·문법)를 채우는 새 칸들 (2026-09-17).
-                //   마스터와 같은 방식 — 들어가면 +1, 빠지면 −1 (0 밑으로는 안 간다). 이 날부터 쌓인다.
+                //   마스터와 같은 방식 — 들어가면 +1, 빠지면 −1. 이 날부터 쌓인다.
+                //   [냐냐 결정] 마스터·약점은 0 밑으로도 간다 (DIARY_NET_COUNTERS) — 넷팅이다.
                 const COUNTERS = {
                     'new-weak': ['newWeakCount', 1],                 'undo-new-weak': ['newWeakCount', -1],
                     'new-idiom-mastered': ['newIdiomMasteredCount', 1], 'undo-new-idiom-mastered': ['newIdiomMasteredCount', -1],
@@ -4416,7 +4409,10 @@ let vocabulary = [];
                     'new-grammar-weak': ['newGrammarWeakCount', 1],   'undo-new-grammar-weak': ['newGrammarWeakCount', -1]
                 };
                 const c = COUNTERS[type];
-                if (c) nyanyaDiary[today][c[0]] = Math.max(0, (nyanyaDiary[today][c[0]] || 0) + c[1]);
+                if (c) {
+                    const next = (nyanyaDiary[today][c[0]] || 0) + c[1];
+                    nyanyaDiary[today][c[0]] = DIARY_NET_COUNTERS.has(c[0]) ? next : Math.max(0, next);
+                }
             }
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
