@@ -1864,6 +1864,15 @@ let vocabulary = [];
             return `<div class="${STICKY_TABS_WRAP} -mb-2.5">${colRow}<div class="mt-1.5"></div>${kindRow}</div>`;
         }
 
+        //   [냐냐 요청] 일지 팝업은 제목 밑에 바로 탭이 오게 (2026-09-22). 두 팝업이 껍데기를
+        //   같이 쓰므로 여백만 좁혔다 폈다 한다 — 복습 예정 팝업은 예전 여백 그대로다.
+        function setPlanModalCompact(modal, on) {
+            const head = modal.querySelector('.border-b');
+            const body = document.getElementById('review-plan-body');
+            if (head) { head.classList.toggle('p-5', !on); head.classList.toggle('px-5', on); head.classList.toggle('pt-4', on); head.classList.toggle('pb-2', on); }
+            if (body) { body.classList.toggle('pt-3', on); }
+        }
+
         function openDiaryDetail(ds, what) {
             const meta = DIARY_DETAIL_META[what];
             const modal = document.getElementById('review-plan-modal');
@@ -1930,8 +1939,14 @@ let vocabulary = [];
             const titleEl = document.getElementById('review-plan-title');
             const subEl = document.getElementById('review-plan-sub');
             const bodyEl = document.getElementById('review-plan-body');
-            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} · ${meta.icon} ${meta.label} ${count}개`;
-            if (subEl) subEl.innerText = note || '';
+            //   [냐냐 요청] 제목에 '마스터한 단어 3개' 를 또 적지 않는다 (2026-09-22) —
+            //   바로 밑 탭이 이미 그 말을 하고 있다. 날짜만 남긴다.
+            //   할 말이 없으면 설명 줄을 통째로 숨긴다 (빈 줄이 공백으로 남아 있었다).
+            if (titleEl) titleEl.innerText = fmtDateSlash(ds);
+            if (subEl) { subEl.innerText = note || ''; subEl.classList.toggle('hidden', !note); }
+            //   머리와 본문의 위아래 여백도 줄인다 — 이 팝업은 탭이 바로 와야 한다.
+            //   (복습 예정 팝업은 openReviewPlanModal 이 원래대로 되돌린다)
+            setPlanModalCompact(modal, true);
             const leftBlock = leftRows
                 ? `<div class="mt-4">
                        <p class="px-0.5 mb-1.5 text-[11px] font-black text-slate-400">↩️ ${escapeHtml(left.label)} ${leftIds.length}개</p>
@@ -1966,11 +1981,15 @@ let vocabulary = [];
             const isToday = ds === getLocalDateString();
 
             if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} ${isWrong ? '틀린 것' : '복습 예정'} · ${cur.icon} ${cur.label} ${cur.list.length}개`;
-            if (subEl) subEl.innerText = isWrong
-                ? '오늘 어디서든 틀린 것이에요 — 퀴즈·게임·복습·첨삭 전부요.'
-                : (isToday
-                    ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
-                    : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.');
+            setPlanModalCompact(modal, false);      // 일지 팝업이 좁혀두고 갔을 수 있다
+            if (subEl) {
+                subEl.classList.remove('hidden');   // 일지 팝업이 숨겨두고 갔을 수 있다
+                subEl.innerText = isWrong
+                    ? '오늘 어디서든 틀린 것이에요 — 퀴즈·게임·복습·첨삭 전부요.'
+                    : (isToday
+                        ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
+                        : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.');
+            }
 
             // [냐냐 요청] 팝업 안에서 '복습 예정 ↔ 틀린 것' 도 오간다 (2026-09-04).
             //   달력에서는 버튼 하나만 누르지만, 들어와서 반대쪽도 볼 수 있어야 한다.
