@@ -2578,7 +2578,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             // 유의어 링크도 고른 쪽 기준으로 다시 연결
             const synResult = applySynonymLinks(target, chosen._synRows || []);
-            if (synResult.newIds.length > 0) _synonymFillQueue = [...synResult.newIds];
+            //   [냐냐 지적] 채우는 중이면 큐를 덮어쓰지 않고 뒤에 붙인다 (2026-09-22, saveWord 와 같은 규칙)
+            if (synResult.newIds.length > 0) {
+                const fresh = synResult.newIds.filter(id => _synonymFillQueue.indexOf(id) < 0);
+                _synonymFillQueue = _inSynonymFill ? _synonymFillQueue.concat(fresh) : fresh;
+            }
 
             // [냐냐 PATCH] 수정하다가 중복이 된 경우 → 두 단어를 하나로 합치고, 고치던 쪽은 삭제
             //   점수는 더 높은 쪽, 정답/오답 횟수는 합산해서 보존
@@ -2743,8 +2747,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (synResult.linkedNames.length > 0) {
                 showToast(`${synResult.linkedNames.join(', ')}에도 자동으로 연결했어요 🔗`, "info");
             }
+            // ============================================================
+            // [냐냐 지적] 유의어를 채우다가 또 유의어가 뜨면, 앞에서 기다리던 것이 사라졌다 (2026-09-22).
+            //   여기서 큐를 통째로 덮어쓰고 있었다:
+            //     A 저장 → 큐 [B, C] → B 를 채우다 D 가 새로 등록 → 큐 [D] (C 가 증발)
+            //   C 는 자동 등록 때 넣은 뜻·품사만 남은 채로 영영 안 열린다.
+            //   → 채우는 중이면 **뒤에 붙인다**. 기다리던 것을 다 채운 뒤 새로 생긴 것으로 넘어간다.
+            //   ⚠️ 이미 줄 서 있는 것은 다시 안 넣는다 (같은 낱말이 두 번 열리지 않게).
+            // ============================================================
             if (synResult.newIds.length > 0) {
-                _synonymFillQueue = [...synResult.newIds];
+                const fresh = synResult.newIds.filter(id => _synonymFillQueue.indexOf(id) < 0);
+                _synonymFillQueue = _inSynonymFill ? _synonymFillQueue.concat(fresh) : fresh;
             }
 
             renderWordList();
