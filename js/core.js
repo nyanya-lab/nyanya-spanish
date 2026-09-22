@@ -1869,13 +1869,17 @@ let vocabulary = [];
             if (!curCol) return '';        // 복습·연습·첨삭은 표 없이 그 목록만 본다
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
             const VLINE = 'border-l border-slate-200';
+            //   [냐냐 지적] 굵은 테두리가 칸 안쪽에 떠 있어서 표 선과 안 맞았다 (2026-09-22).
+            //   버튼이 아니라 **칸(td) 자체**에 두르고, 안쪽으로(ring-inset) 그린다 —
+            //   그래야 격자선과 딱 맞고, 맨 끝 칸(문법·약점)처럼 모서리에 붙은 칸도 어긋나지 않는다.
+            //   바탕색도 칸에 칠해서 버튼 모서리가 아니라 칸 전체가 채워지게 한다.
             const cell = (k, c, color) => {
                 const target = k + '-' + c, v = diaryTabCount(ds, log, target), on = (target === what);
                 const tone = (v === 0) ? 'text-slate-300' : color;        // 글자는 줄 색
                 const bg = diaryCellBg(k, v);                             // 바탕은 좋은 일/아쉬운 일 (사이드바와 같다)
-                return `<td class="${VLINE} p-0.5">
+                return `<td class="${VLINE} p-0 ${bg} ${on ? 'ring-2 ring-inset ring-slate-400' : ''}">
                     <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
-                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${bg} ${on ? 'ring-2 ring-slate-400' : 'hover:ring-1 hover:ring-slate-300'}">${v}</button></td>`;
+                        class="w-full py-1.5 text-center text-xs font-black transition-colors ${tone} ${on ? '' : 'hover:bg-white/60'}">${v}</button></td>`;
             };
             return `<div class="${STICKY_TABS_WRAP} -mb-2.5">
                 ${/* [냐냐 지적] 표 바깥에 회색 테두리가 하나 더 있었다 — 표 자체의 테두리와
