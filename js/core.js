@@ -1985,7 +1985,7 @@ let vocabulary = [];
                 rows = list.map(e => diaryRowHtml(idiomKey(e.w.id, e.it.idiom))).join('');
             } else if (what === 'ai') {
                 const notes = (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes))
-                    ? aiNotes.filter(n => n && String(n.t || '').slice(0, 10) === ds) : [];
+                    ? aiNotes.filter(n => n && n.t && getLocalDateString(new Date(n.t)) === ds) : [];
                 count = notes.length;
                 rows = notes.map(n => `<div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
                         <p class="text-[10px] font-black text-indigo-500">${escapeHtml(((typeof AI_NOTE_MODES !== 'undefined' && AI_NOTE_MODES[n.mode]) || {}).label || n.mode || '')}</p>
@@ -4909,7 +4909,8 @@ let vocabulary = [];
                 parts.write.c += (d.writeCorrect || 0);
             });
             (typeof aiNotes !== 'undefined' ? aiNotes : []).forEach(x => {
-                const ds = String((x && x.t) || '').slice(0, 10);
+                //   t 는 UTC 라 앞 10글자를 자르면 한국 새벽 0~9시가 전날로 간다
+                const ds = (x && x.t) ? getLocalDateString(new Date(x.t)) : '';
                 if (!ds || ds < from) return;
                 parts.ai.t++;
                 if (x.ok) parts.ai.c++;
