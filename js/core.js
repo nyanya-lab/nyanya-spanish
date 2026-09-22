@@ -1542,9 +1542,12 @@ let vocabulary = [];
             //   [냐냐 요청] 음수는 뜻이 뒤집히니 색도 뒤집는다 (2026-09-22):
             //     약점 −1 = 약점이 줄었다 (좋은 일) → 연초록 / 마스터 −1 = 마스터가 풀렸다 → 연빨강.
             //     0 은 '아무 일 없음' 자리라 연회색 그대로.
-            const MINUS_COLOR = { weak: 'text-emerald-500', master: 'text-rose-400', reg: 'text-rose-400' };
+            //   [냐냐 결정] 음수는 **배경만** 아주 연하게 칠한다 (2026-09-22, 3번).
+            //     글자 색을 뒤집었더니 줄 색과 헷갈렸다 — 이제 글자는 그 줄 색 그대로 두고
+            //     칸 바탕으로만 방향을 말한다 (약점이 줄면 연초록, 마스터가 풀리면 연빨강).
+            const MINUS_BG = { weak: 'bg-emerald-50', master: 'bg-rose-50', reg: 'bg-rose-50' };
             const num = (v, color, what) => `<td class="${VLINE} p-0">
-                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v > 0 ? color : (v < 0 ? (MINUS_COLOR[String(what).split('-')[0]] || 'text-slate-400') : 'text-slate-300')} hover:bg-white rounded transition-colors">${v}</button></td>`;
+                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v === 0 ? 'text-slate-300' : color} ${v < 0 ? (MINUS_BG[String(what).split('-')[0]] || '') : ''} hover:bg-white rounded transition-colors">${v}</button></td>`;
             const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
                 ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
                 : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
@@ -1857,17 +1860,20 @@ let vocabulary = [];
             const curCol = dash > 0 ? what.slice(dash + 1) : null;
             if (!curCol) return '';        // 복습·연습·첨삭은 표 없이 그 목록만 본다
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
-            const MINUS = { weak: 'text-emerald-500', master: 'text-rose-400', reg: 'text-rose-400' };
+            const MINUS_BG = { weak: 'bg-emerald-50', master: 'bg-rose-50', reg: 'bg-rose-50' };
             const VLINE = 'border-l border-slate-200';
             const cell = (k, c, color) => {
                 const target = k + '-' + c, v = diaryTabCount(ds, log, target), on = (target === what);
-                const tone = v > 0 ? color : (v < 0 ? MINUS[k] : 'text-slate-300');
+                const tone = (v === 0) ? 'text-slate-300' : color;        // 글자는 줄 색
+                const minusBg = v < 0 ? (MINUS_BG[k] || '') : '';         // 방향은 바탕으로
                 return `<td class="${VLINE} p-0.5">
                     <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
-                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${on ? 'bg-white shadow-sm ring-1 ring-slate-300' : 'hover:bg-white/70'}">${v}</button></td>`;
+                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${on ? 'bg-white shadow-sm ring-1 ring-slate-300' : (minusBg || 'hover:bg-white/70')}">${v}</button></td>`;
             };
             return `<div class="${STICKY_TABS_WRAP} -mb-2.5">
-                <table class="w-full table-fixed bg-slate-100 rounded-2xl border border-slate-200 p-1">
+                ${/* [냐냐 지적] 표 바깥에 회색 테두리가 하나 더 있었다 — 표 자체의 테두리와
+                     안쪽 여백(p-1) 때문에 줄 선과 두 겹으로 보였다. 바탕과 둥근 모서리만 남긴다. */''}
+                <table class="w-full table-fixed bg-slate-100 rounded-2xl overflow-hidden">
                     <colgroup><col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%"></colgroup>
                     <thead><tr>
                         <th></th>
@@ -1890,6 +1896,12 @@ let vocabulary = [];
             const body = document.getElementById('review-plan-body');
             if (head) { head.classList.toggle('p-5', !on); head.classList.toggle('px-5', on); head.classList.toggle('pt-4', on); head.classList.toggle('pb-2', on); }
             if (body) { body.classList.toggle('pt-3', on); }
+            //   [냐냐 요청] 탭을 오갈 때마다 창 크기가 들쎄날쎄해서 키를 고정한다 (2026-09-22).
+            //   목록이 길면 안에서 굴러간다. 복습 예정 팝업은 예전처럼 내용만큼만 높아진다.
+            //   ⚠️ 클래스(h-[70vh])로는 안 먹는다 — 태풍은 처음에 본 클래스만 만들어 둔다.
+            //   높이는 직접 적어 넣는다.
+            const panel = modal.firstElementChild;
+            if (panel) panel.style.height = on ? '70vh' : '';
         }
 
         function openDiaryDetail(ds, what) {
