@@ -1542,12 +1542,16 @@ let vocabulary = [];
             //   [냐냐 요청] 음수는 뜻이 뒤집히니 색도 뒤집는다 (2026-09-22):
             //     약점 −1 = 약점이 줄었다 (좋은 일) → 연초록 / 마스터 −1 = 마스터가 풀렸다 → 연빨강.
             //     0 은 '아무 일 없음' 자리라 연회색 그대로.
-            //   [냐냐 결정] 음수는 **배경만** 아주 연하게 칠한다 (2026-09-22, 3번).
-            //     글자 색을 뒤집었더니 줄 색과 헷갈렸다 — 이제 글자는 그 줄 색 그대로 두고
-            //     칸 바탕으로만 방향을 말한다 (약점이 줄면 연초록, 마스터가 풀리면 연빨강).
-            const MINUS_BG = { weak: 'bg-emerald-50', master: 'bg-rose-50', reg: 'bg-rose-50' };
+            //   [냐냐 결정] 바탕은 **좋은 일 / 아쉬운 일**, 글자는 **어느 줄인지** (2026-09-22).
+            //     마스터 +·약점 − → 연초록 / 약점 +·마스터 − → 연빨강. 0 은 바탕 없이 연회색.
+            //     등록 줄은 중립이다 — 좋고 나쁨이 아니라 그냥 한 일이라 바탕을 안 칠한다.
+            const toneBg = (k, v) => {
+                if (!v || k === 'reg') return '';
+                const good = (k === 'master') ? (v > 0) : (v < 0);
+                return good ? 'bg-emerald-50' : 'bg-rose-50';
+            };
             const num = (v, color, what) => `<td class="${VLINE} p-0">
-                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v === 0 ? 'text-slate-300' : color} ${v < 0 ? (MINUS_BG[String(what).split('-')[0]] || '') : ''} hover:bg-white rounded transition-colors">${v}</button></td>`;
+                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v === 0 ? 'text-slate-300' : color} ${toneBg(String(what).split('-')[0], v)} hover:bg-white rounded transition-colors">${v}</button></td>`;
             const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
                 ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
                 : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
@@ -1955,12 +1959,12 @@ let vocabulary = [];
             const leftIds = (left && Array.isArray(log[left.field])) ? log[left.field] : [];
             const leftRows = leftIds.map(diaryRowHtml).join('');
 
-            //   [냐냐 결정] 칸은 넷팅이다 (2026-09-22). 이제 0 밑으로도 가니 셈이 그대로 맞는다.
-            if (leftIds.length) {
-                note = `오늘 ${count}개가 새로 들고 ${leftIds.length}개가 빠졌어요 — 일지 칸은 그 차이(${shownCount})예요.`;
-            }
-            else if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
-            else if (count && shownCount && count !== shownCount) {
+            //   [냐냐 요청] '오늘 N개가 새로 들고…' 안내는 없앤다 (2026-09-22) —
+            //   표와 두 목록이 이미 그 말을 하고 있다.
+            if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
+            //   ⚠️ 벗어난 것이 있어서 숫자가 다른 것은 안내하지 않는다 — 아래 목록이 그 사정이다.
+            //      (예전 "일지엔 5개인데 지금 남아 있는 건 6개예요" 가 여기서 나왔다. 지워진 게 아니다)
+            else if (count && shownCount && count !== shownCount && !leftIds.length) {
                 note = (what === 'review' || what === 'practice')
                     ? `같은 것을 여러 번 푼 것은 하나로 묶었어요 (${shownCount}번 → ${count}개).`
                     //   등록은 지운 것이 빠지고, 유의어 자동 등록처럼 등록일이 없는 것도 빠진다
