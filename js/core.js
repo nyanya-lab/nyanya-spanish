@@ -2000,7 +2000,9 @@ let vocabulary = [];
                     ${arrow(next, 'fa-chevron-right', canNext)}
                 </span>`;
             }
-            if (subEl) { subEl.innerText = note || ''; subEl.classList.toggle('hidden', !note); }
+            //   [냐냐 요청] 안내는 제목 밑이 아니라 **맨 아래**에 (2026-09-22) —
+            //   있다 없다 할 때마다 표가 위아래로 밀려서 눈에 거슬렸다. 아래에 두면 표는 늘 같은 자리다.
+            if (subEl) { subEl.innerText = ''; subEl.classList.add('hidden'); }
             //   머리와 본문의 위아래 여백도 줄인다 — 이 팝업은 탭이 바로 와야 한다.
             //   (복습 예정 팝업은 openReviewPlanModal 이 원래대로 되돌린다)
             setPlanModalCompact(modal, true);
@@ -2015,9 +2017,13 @@ let vocabulary = [];
             const headLabel = rows
                 ? `<p class="px-0.5 mb-1.5 text-[11px] font-black text-slate-500">${meta.icon} ${escapeHtml(meta.label)} ${count}개</p>`
                 : '';
+            //   할 말이 있으면 맨 아래에 한 줄 (표 자리를 밀지 않는다)
+            const noteBlock = note
+                ? `<p class="px-0.5 pt-1 text-[11px] font-semibold text-slate-400">${escapeHtml(note)}</p>`
+                : '';
             if (bodyEl) bodyEl.innerHTML = diaryTabsHtml(ds, log, what) + (rows
                 ? `<div>${headLabel}<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div></div>`
-                : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock;
+                : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock + noteBlock;
             modal.classList.remove('hidden');
         }
 
