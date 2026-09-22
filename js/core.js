@@ -1539,8 +1539,12 @@ let vocabulary = [];
             //   [냐냐 요청] 숫자를 누르면 그 날 무엇이었는지 (openDiaryDetail)
             //   [냐냐 요청] 0 인 칸도 눌러서 열린다 (2026-09-22) — 팝업 안에서 탭으로 오가니
             //   0 이라고 막아두면 그 갈래로 건너갈 길이 없다. 색만 흐리게 둔다.
+            //   [냐냐 요청] 음수는 뜻이 뒤집히니 색도 뒤집는다 (2026-09-22):
+            //     약점 −1 = 약점이 줄었다 (좋은 일) → 연초록 / 마스터 −1 = 마스터가 풀렸다 → 연빨강.
+            //     0 은 '아무 일 없음' 자리라 연회색 그대로.
+            const MINUS_COLOR = { weak: 'text-emerald-500', master: 'text-rose-400', reg: 'text-rose-400' };
             const num = (v, color, what) => `<td class="${VLINE} p-0">
-                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v > 0 ? color : 'text-slate-300'} hover:bg-white rounded transition-colors">${v}</button></td>`;
+                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v > 0 ? color : (v < 0 ? (MINUS_COLOR[String(what).split('-')[0]] || 'text-slate-400') : 'text-slate-300')} hover:bg-white rounded transition-colors">${v}</button></td>`;
             const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
                 ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
                 : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
