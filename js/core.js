@@ -1803,10 +1803,11 @@ let vocabulary = [];
                 const gi = GRADE_INFO[getWordGrade(w)] || GRADE_INFO.normal;
                 //   [냐냐 요청] 단어 바로 옆에 품사도 — 단어장과 같은 영어 약자·같은 색 (2026-09-22).
                 //   같은 철자가 품사만 다르게 등록된 낱말이 있어서 이름만으로는 어느 쪽인지 모른다.
+                //   [시험] 품사를 앞에 — 폭을 고정한 칸에 가운데로 두고 그 뒤에 단어를 세운다.
                 return `<button type="button" onclick="closeReviewPlanModal(); goToWord('${escapeAttr(String(w.id))}')"
                     class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
+                    <span class="shrink-0 w-11 flex justify-center">${wordPosChipHtml(w)}</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
-                    ${wordPosChipHtml(w)}
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
