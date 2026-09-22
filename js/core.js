@@ -1877,8 +1877,12 @@ let vocabulary = [];
                 const target = k + '-' + c, v = diaryTabCount(ds, log, target), on = (target === what);
                 const tone = (v === 0) ? 'text-slate-300' : color;        // 글자는 줄 색
                 const bg = diaryCellBg(k, v);                             // 바탕은 좋은 일/아쉬운 일 (사이드바와 같다)
-                return `<td class="${VLINE} p-0 ${bg} ${on ? 'ring-2 ring-inset ring-slate-400' : ''}">
-                    <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
+                //   ⚠️ 표는 모서리가 둥글다. 오른쪽 아래 칸(문법·약점)은 그 둥근 모서리에 걸쳐 있어서
+                //      네모난 테두리를 그리면 밖으로 삐져나온다 — 그 칸만 모서리를 같이 둥글린다.
+                //   ⚠️ 클래스(rounded-br-2xl)로는 안 먹는다 — 태풍은 처음에 본 클래스만 만들어 둔다. 직접 적는다.
+                const corner = (k === 'weak' && c === 'grammar') ? ' style="border-bottom-right-radius:1rem"' : '';
+                return `<td class="${VLINE} p-0 ${bg} ${on ? 'ring-2 ring-inset ring-slate-400' : ''}"${corner}>
+                    <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"${corner}
                         class="w-full py-1.5 text-center text-xs font-black transition-colors ${tone} ${on ? '' : 'hover:bg-white/60'}">${v}</button></td>`;
             };
             return `<div class="${STICKY_TABS_WRAP} -mb-2.5">
