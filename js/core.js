@@ -5559,6 +5559,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             const goto = document.getElementById('grammar-peek-goto');
             if (goto) goto.onclick = () => { closeGrammarPeek(); goToGrammarNote(id); };
+            //   [냐냐 요청] 그 자리에서 바로 고친다 (2026-09-22) — 첨삭에서 노트를 들춰보다
+            //   고칠 게 보이면 문법 탭까지 나갔다 오지 않아도 된다. 편집창은 탭과 상관없이 뜬다.
+            const edit = document.getElementById('grammar-peek-edit');
+            if (edit) edit.onclick = () => { closeGrammarPeek(); openGrammarEditor(id); };
 
             document.getElementById('grammar-peek-modal').classList.remove('hidden');
         }
