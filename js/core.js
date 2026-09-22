@@ -1771,9 +1771,13 @@ let vocabulary = [];
             const w = (vocabulary || []).find(v => String(v.id) === String(key));
             if (w) {
                 const gi = GRADE_INFO[getWordGrade(w)] || GRADE_INFO.normal;
+                //   [냐냐 요청] 단어 바로 옆에 품사도 (2026-09-22) — 복습 예정 팝업과 같은 모양.
+                //   같은 철자가 품사만 다르게 등록된 낱말이 있어서 이름만으로는 어느 쪽인지 모른다.
+                const pos = (typeof POS_LABELS !== 'undefined' && POS_LABELS[w.pos]) ? POS_LABELS[w.pos] : (w.pos || '');
                 return `<button type="button" onclick="closeReviewPlanModal(); goToWord('${escapeAttr(String(w.id))}')"
                     class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
+                    ${pos ? `<span class="shrink-0 text-[9px] font-bold text-violet-600 bg-violet-50 rounded-md px-1.5 py-0.5">${escapeHtml(pos)}</span>` : ''}
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
@@ -1884,7 +1888,7 @@ let vocabulary = [];
                 //   [냐냐 요청] 고른 칸 테두리는 **살짝 비치는 보라** (2026-09-22).
                 //      보라는 이 앱에서 '지금 고른 것' 색이고, 초록·빨강(좋은 일·아쉬운 일)과 안 겹친다.
                 const cornerCss = (k === 'weak' && c === 'grammar') ? 'border-bottom-right-radius:1rem' : '';
-                const tdCss = [cornerCss, on ? 'box-shadow: inset 0 0 0 2px rgba(139,92,246,.55)' : ''].filter(Boolean).join(';');
+                const tdCss = [cornerCss, on ? 'box-shadow: inset 0 0 0 2px rgba(139,92,246,.8)' : ''].filter(Boolean).join(';');
                 return `<td class="${VLINE} p-0 ${bg}"${tdCss ? ` style="${tdCss}"` : ''}>
                     <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"${cornerCss ? ` style="${cornerCss}"` : ''}
                         class="w-full py-1.5 text-center text-xs font-black transition-colors ${tone} ${on ? '' : 'hover:bg-white/60'}">${v}</button></td>`;
@@ -1919,8 +1923,10 @@ let vocabulary = [];
             //   목록이 길면 안에서 굴러간다. 복습 예정 팝업은 예전처럼 내용만큼만 높아진다.
             //   ⚠️ 클래스(h-[70vh])로는 안 먹는다 — 태풍은 처음에 본 클래스만 만들어 둔다.
             //   높이는 직접 적어 넣는다.
+            //   [냐냐 요청] 일지 팝업만 옆으로 조금 넓힌다 (2026-09-22, 32rem → 36rem) —
+            //   단어·품사·뜻·점수가 한 줄에 들어가야 해서 복습 예정 팝업보다 자리가 더 든다.
             const panel = modal.firstElementChild;
-            if (panel) panel.style.height = on ? '70vh' : '';
+            if (panel) { panel.style.height = on ? '70vh' : ''; panel.style.maxWidth = on ? '36rem' : ''; }
         }
 
         function openDiaryDetail(ds, what) {
