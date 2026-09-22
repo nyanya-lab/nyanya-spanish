@@ -2051,6 +2051,24 @@ ${koEsNoteListText}${refGrammar}${refWords}
             'article', 'determiner', 'numeral', 'number', 'interjection', 'expression', 'idiom', 'other',
             // [냐냐 지적] 'Nancy|proper noun' 이 '|' 를 못 뗀 채로 추천 칩에 그대로 떴다
             'proper noun', 'proper-noun', 'propernoun', 'proper', 'name']);
+        // ============================================================
+        // [냐냐 지적] trabajador 를 명사(근로자)로 썼는데 형용사(부지런한) 항목이 +2 를 받았다 (2026-09-22).
+        //   낱말 훑기는 철자만 보고 단어장을 찾는다. AI 는 'trabajador|noun' 으로 품사까지 알려주는데
+        //   그걸 점수 붙일 때는 안 보고 있었다.
+        //   → **둘 다 품사를 아는데 서로 다르면 그 항목은 딱 그 낱말이 아니다** — 점수를 안 주고,
+        //     대신 '아직 단어장에 없어요' 추천으로 띄운다 (명사 trabajador 를 새로 등록하시라고).
+        //   ⚠️ 둘 다 알 때만 따진다 — 단어장 항목의 품사가 비어 있거나 AI 가 품사를 안 줌면 예전대로.
+        //   ⚠️ 이름(proper) · 관사·지시사 같은 꺼더기 품사는 빼다 — AI 가 제각각으로 부른다.
+        // ============================================================
+        const POS_STRICT = new Set(['noun', 'verb', 'adjective', 'adverb']);
+        function aiPosConflict(w, aiPos) {
+            const a = String(aiPos || '').toLowerCase();
+            const b = String((w && w.pos) || '').toLowerCase();
+            if (!a || !b) return false;
+            if (!POS_STRICT.has(a) || !POS_STRICT.has(b)) return false;
+            return a !== b;
+        }
+
         // 사람·지명 이름은 단어장에 넣을 것이 아니다 (뜻도 없고 외울 것도 없다)
         const AI_PROPER_POS = new Set(['proper noun', 'proper-noun', 'propernoun', 'proper', 'name']);
         //   [냐냐 요청] neutralKey 는 '점수를 안 주는' 칸이다 (ok === null).
@@ -2314,8 +2332,14 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 const raw = String((item && item.name) || '').trim();
                 const key = norm(raw);
                 if (!key || key.length < 2 || seen.has(key)) return;
-                if (have.has(key)) return;                                     // 이미 단어장에 있음
-                if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(raw)) return;
+                //   [냐냐 요청] 품사가 다르면 '있는 낱말' 로 치지 않는다 (2026-09-22) —
+                //   단어장엔 형용사 trabajador 만 있고 명사로 쓰셨으면, 명사 쪽을 새로 권한다.
+                const matched = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(raw) : null;
+                const posDiff = aiPosConflict(matched, item.pos);
+                if (!posDiff) {
+                    if (have.has(key)) return;                                 // 이미 단어장에 있음
+                    if (matched) return;
+                }
                 if (isFunctionKey(key) || isNumberKey(key)) return;
                 if (AI_PROPER_POS.has(item.pos)) return;                       // [냐냐 지적] 이름은 등록할 낱말이 아니다
                 //   [냐냐 지적] 이름을 'noun' 으로 보내오면 위 검사를 빠져나간다 (Carina·Youtube).
@@ -2517,12 +2541,27 @@ ${koEsNoteListText}${refGrammar}${refWords}
             //   문장 안에서 그 낱말이 어느 품사였는지를 아는 건 AI 뿐이니(사전형|품사 로 받는다)
             //   그 목록에 든 항목을 이 문장의 임자로 친다.
             const aiIds = new Set();
+            //   [냐냐 요청] 품사가 엇갈리는 항목은 이 문장의 임자가 아니다 — 점수에서 뻐다 (aiPosConflict)
+            const posMismatchIds = new Set();
             aiList.forEach(item => {
                 const w = resolve(item.name, item.pos);
-                if (w) aiIds.add(w.id);
+                if (!w) return;
+                if (aiPosConflict(w, item.pos)) { posMismatchIds.add(w.id); return; }
+                aiIds.add(w.id);
             });
             //   AI 가 짚은 동사가 이 문장에서 취할 수 있는 꼴들 → 그 동사
             //   (등록된 활용형 + 규칙 현재분사·과거분사. 키는 norm 으로 맞춰야 악센트가 안 엇갈린다)
+            //   [냐냐 요청] 토막 하나를 AI 가 어느 품사로 봤는지 (사전형 기준). 아래 resolveHere 가 쓴다.
+            const aiPosByKey = new Map();
+            aiList.forEach(item => {
+                if (!item.pos) return;
+                const k = norm(item.name);
+                if (!k || aiPosByKey.has(k)) return;
+                aiPosByKey.set(k, item.pos);
+                if (typeof spanishFormVariants === 'function') {
+                    spanishFormVariants(k).forEach(v => { if (!aiPosByKey.has(v)) aiPosByKey.set(v, item.pos); });
+                }
+            });
             const aiVerbForm = new Map();
             const formKey = (s) => norm(s).replace(/^(me|te|se|nos|os)\s+/, '');
             vocabulary.forEach(v => {
@@ -2578,18 +2617,25 @@ ${koEsNoteListText}${refGrammar}${refWords}
                         if (noArt.length) cands = noArt;
                     }
                 }
+                //   [냐냐 지적] 고른 항목의 품사가 AI 말과 다르면 점수를 안 준다 (2026-09-22).
+                //   'es trabajador' 을 AI 는 명사로 봤는데, 관사 규칙(앞에 관사·지시사가 없으면
+                //   '관사 달고 등록된 명사' 는 제외)이 el trabajador 를 떨괴내서 형용사가 +2 를 먹었다.
+                //   관사 규칙은 'un poco tarde'(부사)를 지키는 규칙이라 그대로 두고,
+                //   **품사가 엇갈리면 아무에게도 안 준다** — 틀린 항목에 주는 것보다 안 주는 게 낫다.
+                const guard = (w) => (w && aiPosConflict(w, aiPosByKey.get(k))) ? null : w;
                 const hit = cands.find(w => aiIds.has(w.id));
-                if (hit) return hit;
+                if (hit) return guard(hit);
                 const verb = aiVerbForm.get(k);
-                if (verb) return verb;
+                if (verb) return guard(verb);
                 //   위에서 걸러낸 후보가 있으면 그 안에서 고른다 (resolve 는 거르기 전 목록을 본다)
-                if (cands.length) { const p = pickByPos(cands, ''); if (p) return p; }
-                return resolve(raw, '');
+                if (cands.length) { const p = pickByPos(cands, ''); if (p) return guard(p); }
+                return guard(resolve(raw, ''));
             };
 
             const done = new Set();
             const push = (w, survived, forceBad) => {
                 if (!w || done.has(w.id)) return;
+                if (posMismatchIds.has(w.id)) return;   // 품사가 다른 낱말 — 점수 대신 추천으로 간다
                 done.add(w.id);
                 // [냐냐 기준] 고쳐진 낱말은 점수를 안 준다(0). 철자를 틀린 것만 −2.
                 const isBad = !!forceBad || badIds.has(w.id);
