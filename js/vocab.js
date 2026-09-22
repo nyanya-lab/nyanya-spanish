@@ -962,7 +962,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const idiomBox = document.getElementById('idiom-fields-box');
                 const idiomIcon = document.getElementById('idiom-toggle-icon');
                 if (idiomList.length > 0) {
-                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
+                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, item.iid || ''));
                     if (idiomBox) idiomBox.classList.remove('hidden');
                     if (idiomIcon) idiomIcon.className = "fa-solid fa-minus text-xs";
                 } else {
@@ -1080,13 +1080,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 PATCH] 관용구를 여러 개 등록할 수 있도록 행(row) 추가/삭제
         let idiomRowCounter = 0;
-        function addIdiomRow(idiomText = '', meaningText = '') {
+        //   [냐냐 지적] 표현 글자를 고치면 점수·곱선이 날아갔다 (2026-09-23).
+        //   점수는 표현마다 붙은 내부 번호(iid)로 저장하는데, 저장할 때 그 번호를
+        //   **글자로 찾아** 다시 붙였다 — 글자가 바뀜으면 못 찾고 새 번호를 받았다.
+        //   → 편집창 줄에 번호를 실어두고, 저장할 때 그 번호로 이어 붙인다.
+        //   ⚠️ 새로 시작하고 싶으면 그 줄을 지우고 다시 적으면 된다 (번호가 새로 나온다).
+        function addIdiomRow(idiomText = '', meaningText = '', iid = '') {
             const entriesBox = document.getElementById('idiom-entries-box');
             if (!entriesBox) { console.warn('idiom-entries-box 엘리먼트를 찾을 수 없음 — index.html이 최신 버전이 아닐 수 있어요'); return; }
             const rowId = 'idiom-row-' + (idiomRowCounter++);
             const row = document.createElement('div');
             row.id = rowId;
             row.className = 'flex gap-2 items-start';
+            if (iid) row.dataset.iid = iid;
             row.innerHTML = `
                 <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
@@ -1202,7 +1208,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const meaningInput = row.querySelector('[data-idiom-field="meaning"]');
                 const idiomVal = idiomInput ? idiomInput.value.trim() : '';
                 if (idiomVal) {
-                    result.push({ idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' });
+                    const row0 = { idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' };
+                    if (row.dataset && row.dataset.iid) row0.iid = row.dataset.iid;   // 글자를 고쳐도 점수가 따라오게
+                    result.push(row0);
                 }
             });
             return result;
@@ -1215,12 +1223,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function stampIdiomDates(rows, prevWord) {
             const norm = (t) => String(t || '').trim().toLowerCase();
             const before = new Map();
+            const beforeById = new Map();
             (prevWord && Array.isArray(prevWord.idioms) ? prevWord.idioms : []).forEach(it => {
-                if (it && it.idiom) before.set(norm(it.idiom), it);
+                if (!it) return;
+                if (it.idiom) before.set(norm(it.idiom), it);
+                if (it.iid) beforeById.set(it.iid, it);
             });
             const now = Date.now();
             (rows || []).forEach(r => {
-                const old = before.get(norm(r.idiom));
+                //   번호로 먼저 찾는다 — 글자를 고친 줄도 등록일·DELE·점수가 따라온다
+                const old = (r.iid && beforeById.get(r.iid)) || before.get(norm(r.idiom));
                 if (old) {
                     if (old.addedAt) r.addedAt = old.addedAt;   // 있던 줄은 그대로
                     if (old.dele && !r.dele) r.dele = old.dele;  // DELE 뱃지도 지키고
