@@ -1843,9 +1843,10 @@ let vocabulary = [];
             const leftIds = (left && Array.isArray(log[left.field])) ? log[left.field] : [];
             const leftRows = leftIds.map(diaryRowHtml).join('');
 
-            //   벗어난 것이 있으면 그 셈을 먼저 알려준다 — 일지 칸 숫자가 왜 작은지가 이걸로 풀린다
+            //   [냐냐 지적] 예전엔 "그 차이가 적혀요" 라고 했는데 칸 숫자는 차이가 아니었다 (2026-09-22).
+            //   이제 칸은 '그 날 그렇게 된 개수' 다. 벗어난 것은 아래 목록으로 따로 본다.
             if (leftIds.length) {
-                note = `오늘 ${count}개가 새로 들고 ${leftIds.length}개가 빠졌어요 — 일지 칸에는 그 차이(${shownCount})가 적혀요.`;
+                note = `오늘 ${count}개가 새로 들었고, 따로 ${leftIds.length}개가 여기서 빠졌어요 (아래).`;
             }
             else if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
             else if (count && shownCount && count !== shownCount) {
@@ -4291,6 +4292,26 @@ let vocabulary = [];
             'undo-new-grammar-mastered': 'unmasterGrammarIds', 'undo-new-grammar-weak': 'unweakGrammarIds'
         };
 
+        // ============================================================
+        // [냐냐 지적] "된 게 2개, 벗어난 게 1개면 넷팅치면 1 아닌가?" (2026-09-22)
+        //   맞는 말씀인데 칸에는 2 가 적혀 있었다. 숫자가 '순증감' 이면서 0 밑으로는 안 내려가서다 —
+        //   오늘 estirar 가 먼저 풀릴 때 0 에서 −1 이 되려다 잘리고, 그 뒤 두 개가 들어와 2 가 됐다.
+        //   빼기도 아니고 개수도 아닌 어정쩡한 숫자였다.
+        //   → **칸은 '그 날 그렇게 된 개수' 로 한다** (냐냐님 첫 반응이 그거였다 —
+        //     "어제 풀린 걸 왜 오늘 앞에서 빼?"). 벗어난 것은 팝업에 목록으로 따로 보여준다.
+        //   규칙: 그 날 목록이 실제로 움직였을 때만 숫자도 움직인다.
+        //     · 같은 날 됐다가 풀리면 목록에서 빠지고 숫자도 −1 (그 날로 치면 없던 일)
+        //     · 어제 것이 오늘 풀리면 오늘 목록에 없으니 숫자는 그대로, 아래 '벗어난 것' 에만 남는다
+        //   ⚠️ 복습·연습은 여기 안 든다 — 같은 것을 여러 번 풀면 그만큼 세야 한다 (목록만 묶는다).
+        //   ⚠️ 열쇠 없이 부르는 옛 자리(단어 삭제 등)는 예전처럼 그냥 센다.
+        // ============================================================
+        const DIARY_ID_GATED = new Set([
+            'new-word', 'undo-new-word', 'new-mastered', 'undo-new-mastered', 'new-weak', 'undo-new-weak',
+            'new-grammar', 'undo-new-grammar', 'new-grammar-mastered', 'undo-new-grammar-mastered',
+            'new-grammar-weak', 'undo-new-grammar-weak',
+            'new-idiom-mastered', 'undo-new-idiom-mastered', 'new-idiom-weak', 'undo-new-idiom-weak'
+        ]);
+
         function logAction(type, extra, id) {
             touchDiarySnapshot();
             const today = getLocalDateString();
@@ -4304,6 +4325,13 @@ let vocabulary = [];
                     if (list.indexOf(id) < 0) list.push(id);
                     d[key] = list;
                 }
+            }
+            //   그 날 목록이 안 움직였으면 숫자도 그대로 둔다 (위 설명 참고)
+            if (id && DIARY_ID_GATED.has(type) && !idTouched) {
+                saveToStorage();
+                renderDiary();
+                if (typeof updateEggProgress === 'function') updateEggProgress();
+                return;
             }
 
             if (type === 'quiz') {
