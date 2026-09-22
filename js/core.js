@@ -1954,7 +1954,9 @@ let vocabulary = [];
             if (body) { body.classList.toggle('pt-3', on); }
             //   [냐냐 요청] 스크롤바가 생겨도 내용 너비가 안 바뀌게 자리를 늘 비워둔다 (2026-09-22).
             //   탭을 오갈 때 목록이 길어지면 스크롤바가 나타나면서 표가 좁아졌다 넓어졌다 했다.
-            if (body) body.style.scrollbarGutter = 'stable';
+            //   ⚠️ 'stable' 만 주면 오른쪽에만 자리를 비워서 왼쪽보다 여백이 넓어 보인다.
+            //      'both-edges' 로 양쪽에 같이 비워 둔다 — 스크롤바가 있든 없든 좌우가 같다.
+            if (body) body.style.scrollbarGutter = 'stable both-edges';
             //   [냐냐 요청] 탭을 오갈 때마다 창 크기가 들쎄날쎄해서 키를 고정한다 (2026-09-22).
             //   목록이 길면 안에서 굴러간다. 복습 예정 팝업은 예전처럼 내용만큼만 높아진다.
             //   ⚠️ 클래스(h-[70vh])로는 안 먹는다 — 태풍은 처음에 본 클래스만 만들어 둔다.
