@@ -1778,6 +1778,57 @@ let vocabulary = [];
             }
             return `<div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-100 last:border-0">지워진 항목이에요</div>`;
         }
+        // ============================================================
+        // [냐냐 요청] 아홉 칸이 저마다 팝업을 열던 것을 하나로 합치고 탭으로 오간다 (2026-09-22).
+        //   윗줄 = 무엇을 (등록·마스터·약점 · 복습·연습·첨삭), 아랫줄 = 어느 갈래 (단어·관용구·문법).
+        //   갈래가 없는 것(복습·연습·첨삭)은 아랫줄을 안 낸다.
+        //   ⚠️ 탭에 적는 숫자는 일지 표에 적힌 그 숫자를 그대로 쓴다 — 두 화면이 어긋나면 안 된다.
+        //   ⚠️ 갈래를 바꿔도 보던 갈래(단어/관용구/문법)를 기억한다. '마스터 단어' 에서
+        //      '약점' 을 누르면 '약점 단어' 로 간다.
+        // ============================================================
+        const DIARY_TAB_KINDS = [
+            ['reg', '📖 등록'], ['master', '🟢 마스터'], ['weak', '🔻 약점'],
+            ['review', '🔁 복습'], ['practice', '✍️ 연습'], ['ai', '🤖 첨삭']
+        ];
+        const DIARY_TAB_COLS = [['word', '단어'], ['idiom', '관용구'], ['grammar', '문법']];
+        const DIARY_COL_KINDS = ['reg', 'master', 'weak'];   // 갈래가 갈리는 것
+        //   일지 표의 칸 숫자 (팝업 탭과 표가 같은 값을 쓰게 한 곳에 모아둔다)
+        function diaryTabCount(ds, log, what) {
+            switch (what) {
+                case 'reg-word': return log.newWordsCount || 0;
+                case 'reg-idiom': return diaryIdiomsAddedOn(ds).length;
+                case 'reg-grammar': return log.newGrammarCount || 0;
+                case 'master-word': return log.newMasteredCount || 0;
+                case 'master-idiom': return log.newIdiomMasteredCount || 0;
+                case 'master-grammar': return log.newGrammarMasteredCount || 0;
+                case 'weak-word': return log.newWeakCount || 0;
+                case 'weak-idiom': return log.newIdiomWeakCount || 0;
+                case 'weak-grammar': return log.newGrammarWeakCount || 0;
+                case 'review': return log.reviewCount || 0;
+                case 'practice': return log.practiceCount || 0;
+                case 'ai': return log.aiSessions || 0;
+                default: return 0;
+            }
+        }
+        function diaryTabsHtml(ds, log, what) {
+            const dash = what.indexOf('-');
+            const curKind = dash > 0 ? what.slice(0, dash) : what;
+            const curCol = dash > 0 ? what.slice(dash + 1) : null;
+            const btn = (target, label, n, on) => `<button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
+                class="py-1.5 rounded-xl text-[11px] font-black transition-all ${on ? 'bg-white text-slate-900 shadow-sm' : (n ? 'text-slate-500 hover:text-slate-800' : 'text-slate-300')}">${label} ${n}</button>`;
+            const row = (inner) => `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">${inner}</div>`;
+            const kindRow = row(DIARY_TAB_KINDS.map(([k, label]) => {
+                const n = DIARY_COL_KINDS.indexOf(k) >= 0
+                    ? DIARY_TAB_COLS.reduce((t, [c]) => t + diaryTabCount(ds, log, k + '-' + c), 0)
+                    : diaryTabCount(ds, log, k);
+                const target = DIARY_COL_KINDS.indexOf(k) >= 0 ? (k + '-' + (curCol || 'word')) : k;
+                return btn(target, label, n, k === curKind);
+            }).join(''));
+            const colRow = curCol ? row(DIARY_TAB_COLS.map(([c, label]) =>
+                btn(curKind + '-' + c, label, diaryTabCount(ds, log, curKind + '-' + c), c === curCol)).join('')) : '';
+            return `<div class="${STICKY_TABS_WRAP}">${kindRow}${colRow ? '<div class="mt-1.5"></div>' + colRow : ''}</div>`;
+        }
+
         function openDiaryDetail(ds, what) {
             const meta = DIARY_DETAIL_META[what];
             const modal = document.getElementById('review-plan-modal');
@@ -1809,22 +1860,8 @@ let vocabulary = [];
             }
 
             //   숫자는 있는데 목록이 없으면 (적어두기 전 날) 그 사정을 적어준다
-            const shownCount = (() => {
-                switch (what) {
-                    case 'reg-word': return log.newWordsCount || 0;
-                    case 'reg-grammar': return log.newGrammarCount || 0;
-                    case 'master-word': return log.newMasteredCount || 0;
-                    case 'master-idiom': return log.newIdiomMasteredCount || 0;
-                    case 'master-grammar': return log.newGrammarMasteredCount || 0;
-                    case 'weak-word': return log.newWeakCount || 0;
-                    case 'weak-idiom': return log.newIdiomWeakCount || 0;
-                    case 'weak-grammar': return log.newGrammarWeakCount || 0;
-                    case 'review': return log.reviewCount || 0;
-                    case 'practice': return log.practiceCount || 0;
-                    case 'ai': return log.aiSessions || 0;
-                    default: return count;
-                }
-            })();
+            //   ⚠️ 표·탭과 같은 숫자를 써야 한다 — 셈은 diaryTabCount 한 곳에만 둔다
+            const shownCount = (what === 'reg-idiom') ? count : diaryTabCount(ds, log, what);
             // ============================================================
             // [냐냐 요청] 그 날 **벗어난 것**도 같이 보여준다 (2026-09-21).
             //   일지 칸의 숫자는 순증감이라 '된 것' 목록보다 작을 수 있다 (4개 됐는데 3개 풀리면 1).
@@ -1867,7 +1904,7 @@ let vocabulary = [];
                        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden opacity-80">${leftRows}</div>
                    </div>`
                 : '';
-            if (bodyEl) bodyEl.innerHTML = (rows
+            if (bodyEl) bodyEl.innerHTML = diaryTabsHtml(ds, log, what) + (rows
                 ? `<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div>`
                 : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock;
             modal.classList.remove('hidden');
