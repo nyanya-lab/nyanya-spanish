@@ -891,6 +891,14 @@ let quizSession = null;
                 chips.push(B('bg-purple-100 text-purple-600', 'Phr.'));
             }
 
+            //   [냐냐 지적] 여기에 DELE 표시가 없었다 (2026-09-22) — 관용구 쪽엔 있는데 단어엔 빠져 있어서,
+            //   쓰기 복습 2바퀴(익히기) 카드에서 단어만 레벨을 알 수 없었다. 같은 자리(품사 다음)에 붙인다.
+            //   ⚠️ 활용형 과제는 과제 객체가 아니라 원래 낱말에 레벨이 적혀 있다 (_conjOf).
+            if (typeof deleLevelBadgeHtml === 'function') {
+                const dl = deleLevelBadgeHtml(((word._conjOf || word) || {}).deleLevel);
+                if (dl) chips.push(`<span class="inline-flex items-center">${dl}</span>`);
+            }
+
             // [냐냐 요청] 망각곡선을 끝까지 마친 단어에 표시. 예전엔 복습 목록에서 조용히
             //   사라지기만 해서, 졸업했는지 아직 안 걸린 건지 구별할 수가 없었다.
             //   틀리면 한 칸 뒤로 물리므로(demoteReviewStage) 배지도 같이 사라진다.
