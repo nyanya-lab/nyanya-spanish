@@ -1545,13 +1545,8 @@ let vocabulary = [];
             //   [냐냐 결정] 바탕은 **좋은 일 / 아쉬운 일**, 글자는 **어느 줄인지** (2026-09-22).
             //     마스터 +·약점 − → 연초록 / 약점 +·마스터 − → 연빨강. 0 은 바탕 없이 연회색.
             //     등록 줄은 중립이다 — 좋고 나쁨이 아니라 그냥 한 일이라 바탕을 안 칠한다.
-            const toneBg = (k, v) => {
-                if (!v || k === 'reg') return '';
-                const good = (k === 'master') ? (v > 0) : (v < 0);
-                return good ? 'bg-emerald-50' : 'bg-rose-50';
-            };
             const num = (v, color, what) => `<td class="${VLINE} p-0">
-                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v === 0 ? 'text-slate-300' : color} ${toneBg(String(what).split('-')[0], v)} hover:bg-white rounded transition-colors">${v}</button></td>`;
+                <button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1 text-center font-black ${v === 0 ? 'text-slate-300' : color} ${diaryCellBg(String(what).split('-')[0], v)} hover:bg-white rounded transition-colors">${v}</button></td>`;
             const cellBtn = (v, what, span) => `<td ${span ? `colspan="${span}"` : ''} class="${VLINE} p-0">${v > 0
                 ? `<button type="button" onclick="openDiaryDetail('${ds}', '${what}')" class="w-full py-1.5 text-center font-black text-slate-700 hover:bg-white rounded transition-colors">${v}</button>`
                 : `<span class="block py-1.5 text-center font-black text-slate-300">${v}</span>`}</td>`;
@@ -1835,6 +1830,15 @@ let vocabulary = [];
             return log[m[2]] || 0;
         }
 
+        //   [냐냐 결정] 칸 바탕 색 — 사이드바 표와 팝업 표가 같은 규칙을 쓴다 (2026-09-22).
+        //     마스터 + · 약점 − → 연초록 (좋은 일) / 약점 + · 마스터 − → 연빨강 (아쉬운 일).
+        //     등록 줄과 0 은 칠하지 않는다.
+        function diaryCellBg(kind, v) {
+            if (!v || kind === 'reg') return '';
+            const good = (kind === 'master') ? (v > 0) : (v < 0);
+            return good ? 'bg-emerald-50' : 'bg-rose-50';
+        }
+
         //   일지 표의 칸 숫자 (팝업 탭과 표가 같은 값을 쓰게 한 곳에 모아둔다)
         function diaryTabCount(ds, log, what) {
             if (DIARY_FLAG_LISTS[what]) return diaryFlagCount(ds, log, what);
@@ -1864,15 +1868,14 @@ let vocabulary = [];
             const curCol = dash > 0 ? what.slice(dash + 1) : null;
             if (!curCol) return '';        // 복습·연습·첨삭은 표 없이 그 목록만 본다
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
-            const MINUS_BG = { weak: 'bg-emerald-50', master: 'bg-rose-50', reg: 'bg-rose-50' };
             const VLINE = 'border-l border-slate-200';
             const cell = (k, c, color) => {
                 const target = k + '-' + c, v = diaryTabCount(ds, log, target), on = (target === what);
                 const tone = (v === 0) ? 'text-slate-300' : color;        // 글자는 줄 색
-                const minusBg = v < 0 ? (MINUS_BG[k] || '') : '';         // 방향은 바탕으로
+                const bg = diaryCellBg(k, v);                             // 바탕은 좋은 일/아쉬운 일 (사이드바와 같다)
                 return `<td class="${VLINE} p-0.5">
                     <button type="button" onclick="openDiaryDetail('${ds}', '${target}')"
-                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${on ? 'bg-white shadow-sm ring-1 ring-slate-300' : (minusBg || 'hover:bg-white/70')}">${v}</button></td>`;
+                        class="w-full py-1 text-center text-xs font-black rounded-lg transition-all ${tone} ${bg} ${on ? 'ring-2 ring-slate-400' : 'hover:ring-1 hover:ring-slate-300'}">${v}</button></td>`;
             };
             return `<div class="${STICKY_TABS_WRAP} -mb-2.5">
                 ${/* [냐냐 지적] 표 바깥에 회색 테두리가 하나 더 있었다 — 표 자체의 테두리와
@@ -1961,7 +1964,13 @@ let vocabulary = [];
 
             //   [냐냐 요청] '오늘 N개가 새로 들고…' 안내는 없앤다 (2026-09-22) —
             //   표와 두 목록이 이미 그 말을 하고 있다.
-            if (!count && shownCount) note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
+            //   ⚠️ '무엇이었는지 안 적어뒀어요' 는 목록이 없던 옛 날짜에만 할 말이다 (2026-09-22).
+            //      오늘치 '약점 관용구 −1' 에서 "−1개를 했는데…" 가 뜨고 있었다 —
+            //      목록으로 세는 칸(DIARY_FLAG_LISTS)은 목록이 온전한 날부터 이 안내를 안 낸다.
+            const listedCell = !!DIARY_FLAG_LISTS[what] && String(ds) >= DIARY_LIST_FROM;
+            if (!count && !leftIds.length && shownCount > 0 && !listedCell) {
+                note = `${shownCount}개를 했는데 무엇이었는지는 안 적어뒀어요 — 2026-09-18 부터 남겨요.`;
+            }
             //   ⚠️ 벗어난 것이 있어서 숫자가 다른 것은 안내하지 않는다 — 아래 목록이 그 사정이다.
             //      (예전 "일지엔 5개인데 지금 남아 있는 건 6개예요" 가 여기서 나왔다. 지워진 게 아니다)
             else if (count && shownCount && count !== shownCount && !leftIds.length) {
