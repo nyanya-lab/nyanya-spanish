@@ -1514,8 +1514,10 @@ let vocabulary = [];
             };
             const cells = {
                 reg:    [log.newWordsCount || 0, idiomRegOn(ds), log.newGrammarCount || 0],
-                master: [log.newMasteredCount || 0, log.newIdiomMasteredCount || 0, log.newGrammarMasteredCount || 0],
-                weak:   [log.newWeakCount || 0, log.newIdiomWeakCount || 0, log.newGrammarWeakCount || 0]
+                //   [냐냐 지적] 마스터·약점은 적어둔 숫자 대신 그 날 목록으로 센다 (diaryFlagCount).
+                //   그래야 셈을 고칠 때 지난 날도 같이 맞는다 — 목록이 온전한 날부터다.
+                master: ['master-word', 'master-idiom', 'master-grammar'].map(k => diaryFlagCount(ds, log, k)),
+                weak:   ['weak-word', 'weak-idiom', 'weak-grammar'].map(k => diaryFlagCount(ds, log, k))
             };
             const reviewN = log.reviewCount || 0;
             //   [냐냐 결정] 마스터·약점 칸은 넷팅이라 음수가 될 수 있다 (2026-09-22).
@@ -1795,8 +1797,36 @@ let vocabulary = [];
         const DIARY_TAB_KINDS = [['reg', '📖 등록'], ['master', '🟢 마스터'], ['weak', '🔻 약점']];
         const DIARY_TAB_COLS = [['word', '단어'], ['idiom', '관용구'], ['grammar', '문법']];
         const DIARY_COL_KINDS = ['reg', 'master', 'weak'];   // 갈래가 갈리는 것
+        // ============================================================
+        // [냐냐 지적] "수식을 바꾸는 건데 왜 문제가 생겨?" (2026-09-22)
+        //   칸 숫자는 화면에서 세는 게 아니라, 일이 벌어질 때마다 더하고 빼서 적어둔 값이었다.
+        //   그래서 규칙(넷팅)을 바꿔도 이미 적힌 값은 옛 잘림이 섞인 채 그대로 남았다.
+        //   → 목록이 온전한 날부터는 **그 자리에서 목록으로 센다** (된 것 − 벗어난 것).
+        //     이러면 규칙을 고칠 때마다 지난 날도 저절로 맞고, 데이터를 손댈 일이 없다.
+        //   ⚠️ 그 전 날은 목록이 없거나 중간부터라 적어둔 숫자를 그대로 쓴다.
+        //   ⚠️ 적어두는 것(logAction)은 그대로 둔다 — 옛 날짜와 딴 기기가 그 숫자를 본다.
+        // ============================================================
+        const DIARY_LIST_FROM = '2026-09-22';     // 된 것·벗어난 것 목록이 하루치로 온전해진 날
+        const DIARY_FLAG_LISTS = {
+            'master-word':    ['masterWordIds',    'unmasterWordIds',    'newMasteredCount'],
+            'weak-word':      ['weakWordIds',      'unweakWordIds',      'newWeakCount'],
+            'master-idiom':   ['masterIdiomKeys',  'unmasterIdiomKeys',  'newIdiomMasteredCount'],
+            'weak-idiom':     ['weakIdiomKeys',    'unweakIdiomKeys',    'newIdiomWeakCount'],
+            'master-grammar': ['masterGrammarIds', 'unmasterGrammarIds', 'newGrammarMasteredCount'],
+            'weak-grammar':   ['weakGrammarIds',   'unweakGrammarIds',   'newGrammarWeakCount']
+        };
+        function diaryFlagCount(ds, log, what) {
+            const m = DIARY_FLAG_LISTS[what];
+            if (!m) return 0;
+            if (String(ds) >= DIARY_LIST_FROM) {
+                return ((log[m[0]] || []).length) - ((log[m[1]] || []).length);
+            }
+            return log[m[2]] || 0;
+        }
+
         //   일지 표의 칸 숫자 (팝업 탭과 표가 같은 값을 쓰게 한 곳에 모아둔다)
         function diaryTabCount(ds, log, what) {
+            if (DIARY_FLAG_LISTS[what]) return diaryFlagCount(ds, log, what);
             switch (what) {
                 case 'reg-word': return log.newWordsCount || 0;
                 case 'reg-idiom': return diaryIdiomsAddedOn(ds).length;
