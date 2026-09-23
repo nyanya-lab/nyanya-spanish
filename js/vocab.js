@@ -4105,7 +4105,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 if (dateEl) {
                     dateEl.innerText = st.kind === 'doing' ? ` · ${writeExamShortDate(writeExamOf(sc).cur.start)}` : '';
-                    dateEl.className = 'text-amber-600';
+                    dateEl.className = 'text-[10px] text-amber-600';   // 범위 이름보다 작게
                 }
                 if (sub) {
                     let text;
@@ -4113,10 +4113,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         const cur = writeExamOf(sc).cur;
                         text = writeExamSplitText(writeExamSplit(cur.keys, k => k in cur.seen));
                     } else if (st.kind === 'new') {
+                        //   [냐냐 요청] 처음·끝남도 단어·관용구를 갈라 적는다 (진행 중과 같은 꼴)
                         const r = writeExamRosterNow(sc);
-                        text = `처음 · ${r.words.length + r.idioms.length}개`;
+                        text = `처음 · 단어 ${r.words.length}${r.idioms.length ? ` · 관용구 ${r.idioms.length}` : ''}`;
                     } else {
-                        text = `${st.days === 0 ? '오늘' : `${st.days}일 전`} · ${writeExamPct(st.last)}%`;
+                        const L = st.last;
+                        const when = st.days === 0 ? '오늘' : `${st.days}일 전`;
+                        text = (L.tw != null)
+                            ? `${when} · ${writeExamSplitText({ w: [L.ow, L.tw], i: [L.oi || 0, L.ti || 0] })}`
+                            : `${when} · ${L.ok}/${L.total}`;   // 갈라 세기 전 기록
                     }
                     sub.innerText = text;
                     sub.className = 'block text-[10px] font-bold mt-0.5 ' + (st.kind === 'doing' ? 'text-amber-600'
