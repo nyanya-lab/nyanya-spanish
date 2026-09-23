@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>냐냐의 스페인어 공부방 📖</title>
     
-    <!-- [냐냐 요청] 탭 아이콘도 머리 줄 로고와 같은 '책 여러 권' (2026-09-23).
-         머리 줄 로고와 같은 진한 둥근 네모 + 흰 그림 (왓치로그 방식) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%232e1065'/><g transform='translate(3.6 3.6) scale(0.7)' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z'/><path d='M9 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z'/><path d='M5 8h4'/><path d='M9 16h4'/><path d='M13.803 4.56l2.184 -.53c.562 -.135 1.133 .19 1.282 .732l3.695 13.418a1.02 1.02 0 0 1 -.634 1.219l-.133 .041l-2.184 .53c-.562 .135 -1.133 -.19 -1.282 -.732l-3.695 -13.418a1.02 1.02 0 0 1 .634 -1.219l.133 -.041z'/><path d='M14 9l4 -1'/><path d='M16 16l3.923 -.98'/></g></svg>">
-    <link class="apple-touch-icon" rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%232e1065'/><g transform='translate(3.6 3.6) scale(0.7)' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z'/><path d='M9 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z'/><path d='M5 8h4'/><path d='M9 16h4'/><path d='M13.803 4.56l2.184 -.53c.562 -.135 1.133 .19 1.282 .732l3.695 13.418a1.02 1.02 0 0 1 -.634 1.219l-.133 .041l-2.184 .53c-.562 .135 -1.133 -.19 -1.282 -.732l-3.695 -13.418a1.02 1.02 0 0 1 .634 -1.219l.133 -.041z'/><path d='M14 9l4 -1'/><path d='M16 16l3.923 -.98'/></g></svg>">
+    <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
+         앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
+         manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202609231830">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202609231830">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202609231830">
+    <link rel="manifest" href="manifest.webmanifest?v=202609231830">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -64,10 +67,10 @@
             <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
                 <!-- 왼쪽: 로고 + 제목 + 통계 -->
                 <div class="flex items-center gap-3 min-w-0">
-                    <!-- [냐냐 요청] 로고는 책 여러 권 (2026-09-23). 왓치로그처럼 진한 둥근 네모 안에 흰 그림 —
-                         잉크처럼 보이게 보라를 아주 진하게 눌렀다(#2e1065). 탭 아이콘도 같은 그림. 누르면 새로고침 -->
-                    <div id="header-logo" class="w-9 h-9 bg-[#2e1065] text-white rounded-[10px] flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z"/><path d="M9 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z"/><path d="M5 8h4"/><path d="M9 16h4"/><path d="M13.803 4.56l2.184 -.53c.562 -.135 1.133 .19 1.282 .732l3.695 13.418a1.02 1.02 0 0 1 -.634 1.219l-.133 .041l-2.184 .53c-.562 .135 -1.133 -.19 -1.282 -.732l-3.695 -13.418a1.02 1.02 0 0 1 .634 -1.219l.133 -.041z"/><path d="M14 9l4 -1"/><path d="M16 16l3.923 -.98"/></svg>
+                    <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 그림에 둥근 네모 바탕이 들어 있어
+                         진한 네모는 걷었다. 누르면 새로고침 -->
+                    <div id="header-logo" class="w-9 h-9 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
+                        <img src="img/icon-192.png?v=202609231830" alt="" width="36" height="36" class="w-9 h-9 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
