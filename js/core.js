@@ -10750,15 +10750,35 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             ['Qué maja', '착하다! (스페인 말투)'],
             ['Otro día más', '오늘도 하루 더!']
         ];
+        //   [냐냐 요청] 글꼴도 날마다 바뀐다 (2026-09-23) — 손글씨 간판 넷 + 세로형·통통 넷.
+        //   문구(111개)와 따로 돌아서 조합이 매일 달라진다. 크기는 글꼴마다 눈으로 맞췄다.
+        //   ⚠️ 모두 영어·스페인어 글꼴이라 이름은 'Ñaña' 로 쓴다 — 한글을 섞으면 다른 글꼴로 대신 그려져 깨져 보였다.
+        //   세로형 둘은 얇게 해달라고 하셔서 Bebas Neue·Anton(굵기가 하나뿐) 대신 Oswald·Antonio 300.
+        const DAILY_TITLE_FONTS = [
+            { family: "'Lobster', cursive", size: 24 },
+            { family: "'Pacifico', cursive", size: 21 },
+            { family: "'Kaushan Script', cursive", size: 23 },
+            { family: "'Leckerli One', cursive", size: 22 },
+            { family: "'Oswald', sans-serif", size: 25, weight: 300, upper: true, spacing: '.04em' },
+            { family: "'Antonio', sans-serif", size: 25, weight: 300, upper: true, spacing: '.03em' },
+            { family: "'Shrikhand', cursive", size: 21 },
+            { family: "'Chewy', cursive", size: 25 }
+        ];
         function renderDailyTitle() {
             const el = document.getElementById('app-title');
             if (!el) return;
             const [y, m, d] = getLocalDateString().split('-').map(Number);
             //   2026-09-23(처음 단 날)을 목록 첫 줄(Poco a poco)로 잡고 하루에 한 줄씩
-            const n = DAILY_TITLES.length;
             const dayNo = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(2026, 8, 23)) / 86400000);
-            const [es, ko] = DAILY_TITLES[((dayNo % n) + n) % n];
-            el.innerHTML = `<span class="text-[#D85A30]">¡${escapeHtml(es)},</span> 냐냐!`;
+            const pick = (list) => list[((dayNo % list.length) + list.length) % list.length];
+            const [es, ko] = pick(DAILY_TITLES);
+            const f = pick(DAILY_TITLE_FONTS);
+            el.innerHTML = `<span class="text-[#D85A30]">¡${escapeHtml(es)},</span> <span class="text-[#534AB7]">Ñaña!</span>`;
+            el.style.fontFamily = f.family;
+            el.style.fontSize = f.size + 'px';
+            el.style.fontWeight = f.weight || 400;
+            el.style.textTransform = f.upper ? 'uppercase' : 'none';
+            el.style.letterSpacing = f.spacing || 'normal';
             el.title = ko;
         }
         renderDailyTitle();
