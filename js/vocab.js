@@ -4319,7 +4319,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   total - wrongCount 로 세면 '건너뛰기'가 성공으로 잡혔다 (전부 건너뛰어도 "3개 중 3개 성공").
                 const ok = (s.results || []).filter(r => r.correct).length;
                 const skipped = Math.max(0, total - (s.results || []).length);
-                const reviewNote = `<p class="text-xs font-bold text-violet-600">📖 복습·점수에 반영했어요 (단어당 1회)</p>`;
                 let nextBtn = '';
                 const batch = s.batchSize || total;
                 if (s.isTodayReview && typeof getTodayReviewTasks === 'function') {
@@ -4403,7 +4402,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <p class="text-lg font-bold text-slate-900">${total}개 중 ${ok}개 성공!${skipped ? `<span class="text-sm font-bold text-slate-400"> · 건너뜀 ${skipped}개</span>` : ''}</p>
                         ${examLine}
                         ${scoreLine}
-                        ${reviewNote}
                         ${shiftLists}
                         ${resultLists}
                         ${nextBtn}
@@ -4874,7 +4872,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     idiom: w._isIdiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
             });
             // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
-            if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+            //   [냐냐 요청] 곡선을 한 칸 앞으로 미는 건 **오늘의 복습에서만** (2026-09-23).
+            //   자유 연습·시험에서 맞히면 점수만 받는다. 마스터 시험에서 30일 기다리던 valor 가
+            //   8일 만에 맞혀서 졸업해버렸다. 단어 빈칸·관용구와 같은 기준이다. 틀린 쪽(한 칸 뒤)은 그대로.
+            if (!w._isIdiomTask && s.isTodayReview && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', true); }
             s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
             writeExamMark(s, w, true);
