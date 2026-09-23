@@ -3566,6 +3566,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   [냐냐 요청] 섞어서는 총 개수를 먼저 적고 내역은 괄호로 묶는다
                         : `${fbNote.length ? `해당 ${fbNote.join('·')}가 없어서 ${fbNote.join('·')}는 전체에서 나와요 · ` : ''}${wordN + n}개를 섞어서 내요 (단어 ${wordN} · 관용구 ${n})`));
             }
+            //   시험 범위면 위 안내를 시험 안내로 덮는다 — 그래서 여기서 같이 그린다
+            if (typeof renderWriteExamUi === 'function') renderWriteExamUi();
         }
         //   [냐냐 지적] 전체 개수를 적어서, 범위를 좁혀도 관용구는 그대로인 것처럼 보였다.
         //   지금 고른 범위 안에서 실제로 나올 수 있는 표현만 센다.
@@ -3925,7 +3927,206 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 b.classList.toggle('text-slate-600', !on);
             });
             // [냐냐 요청] 범위 밑의 개수 줄은 없앴다 — 문제 유형 밑 한 줄이 단어·관용구를 같이 적는다
-            if (typeof renderWriteMix === 'function') renderWriteMix();
+            if (typeof renderWriteMix === 'function') renderWriteMix();   // 시험 버튼도 여기서 같이 그린다
+        }
+
+        // ============================================================
+        // [냐냐 요청] 쓰기 시험 — 마스터 · 약점 · 곡선 졸업 (2026-09-23).
+        //   한 번에 다 보기엔 많아서, 복습처럼 회차로 나눠 푼다.
+        //   - 시작하는 날 명단을 고정한다. 도중에 새로 마스터된 것은 다음 시험으로 간다.
+        //   - 한 번 낸 것은 이 시험이 끝날 때까지 다시 안 낸다. 회차 크기는 고른 개수.
+        //   - 날을 넘겨 이어서 한다 (저장·동기화에 싣는다).
+        //   - 단어·관용구를 한 명단에 넣는다 — 문제 유형 설정은 안 탄다.
+        //   - '봤음' 은 1바퀴 판정 순간에 적는다 (점수를 적는 순간과 같다). 건너뛴 건 다음 회차로.
+        //   - 다 보면 기록을 남기고, 끝난 지 30일이 넘으면 버튼을 빨갛게 한다 (마감이 아니라 알림).
+        // ============================================================
+        const WRITE_EXAM_SCOPES = ['mastered', 'weak', 'graduated'];
+        const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '곡선 졸업' };
+        const WRITE_EXAM_REMIND_DAYS = 30;
+        const WRITE_EXAM_HISTORY_MAX = 36;
+        //   { scope: { cur: { start, keys: [], seen: { key: 1|0 } } | null, history: [{ start, end, total, ok, wrong: [{ w, m, i }] }] } }
+        let writeExams = {};
+
+        function isWriteExamScope(sc) { return WRITE_EXAM_SCOPES.includes(sc); }
+        function writeExamOf(sc) {
+            if (!writeExams || typeof writeExams !== 'object') writeExams = {};
+            const ex = writeExams[sc] || (writeExams[sc] = { cur: null, history: [] });
+            if (!Array.isArray(ex.history)) ex.history = [];
+            return ex;
+        }
+        function writeExamShortDate(ds) {
+            const p = String(ds || '').split('-');
+            return p.length === 3 ? `${Number(p[1])}/${Number(p[2])}` : String(ds || '');
+        }
+        //   지금 범위에서 명단을 뽑는다 (단어 + 관용구). writeScope 가 그 범위일 때 부른다.
+        function writeExamRosterNow() {
+            const words = getWriteScopePool().filter(w => w && w.word).map(w => String(w.id));
+            const idioms = writeScopeIdiomEntries().map(e => idiomKey(e.w.id, e.it.iid || e.it.idiom));
+            return { words, idioms };
+        }
+        //   명단의 열쇠 하나를 문제로. 단어장에서 지워진 것은 null.
+        function writeExamTaskOf(key) {
+            const cut = key.indexOf('::');
+            const wordId = cut >= 0 ? key.slice(0, cut) : key;
+            const w = (vocabulary || []).find(v => String(v.id) === wordId);
+            if (!w || !w.word) return null;
+            if (cut < 0) return toWriteVerbTask(w);
+            const it = findIdiomByKeyPart(w, key.slice(cut + 2));
+            return it ? makeWriteIdiomTask(w, it) : null;
+        }
+        //   아직 안 본 문제들. 지워진 것은 명단에서도 뺀다 (전체 개수가 그만큼 준다).
+        function writeExamPending(sc) {
+            const cur = writeExamOf(sc).cur;
+            if (!cur) return [];
+            const out = [], gone = [];
+            cur.keys.forEach(k => {
+                if (k in cur.seen) return;
+                const t = writeExamTaskOf(k);
+                if (t) out.push(t); else gone.push(k);
+            });
+            if (gone.length) cur.keys = cur.keys.filter(k => !gone.includes(k));
+            return out;
+        }
+        function writeExamSeenCount(cur) {
+            return cur ? cur.keys.filter(k => k in cur.seen).length : 0;
+        }
+        function writeExamStatus(sc) {
+            const ex = writeExamOf(sc);
+            if (ex.cur) return { kind: 'doing', seen: writeExamSeenCount(ex.cur), total: ex.cur.keys.length };
+            const last = ex.history[0];
+            if (!last) return { kind: 'new' };
+            const days = Math.max(0, daysSince(last.end));
+            return { kind: days >= WRITE_EXAM_REMIND_DAYS ? 'old' : 'done', days, last };
+        }
+
+        //   1바퀴 판정 순간에 부른다 — 이 판이 시험이고, 명단에 있고, 아직 안 적은 것만
+        function writeExamMark(s, w, ok) {
+            if (!s || !s.examScope) return;
+            const cur = writeExamOf(s.examScope).cur;
+            if (!cur) return;
+            const k = String(writeTaskKey(w));
+            if (!cur.keys.includes(k) || (k in cur.seen)) return;
+            cur.seen[k] = ok ? 1 : 0;
+            if (cur.keys.every(x => x in cur.seen)) s.examFinished = finishWriteExam(s.examScope);
+        }
+        //   틀린 것은 이름을 적어둔다 — 나중에 단어장에서 지우거나 고쳐도 기록은 그대로 남게
+        //   ⚠️ 동사는 원형으로 적는다. 여기서 문제를 다시 만들면 활용형이 새로 뽑혀서 그때 물은 꼴과 다르다.
+        function finishWriteExam(sc) {
+            const ex = writeExamOf(sc);
+            const cur = ex.cur;
+            if (!cur) return null;
+            const wrong = cur.keys.filter(k => cur.seen[k] === 0).map(k => {
+                const t = writeExamTaskOf(k);
+                const base = (t && t._conjOf) || t;
+                return t ? { w: base.word, m: String(base.meaning || '').split('\n')[0], i: t._isIdiomTask ? 1 : 0 } : null;
+            }).filter(Boolean);
+            const rec = {
+                start: cur.start, end: getLocalDateString(), total: cur.keys.length,
+                ok: cur.keys.filter(k => cur.seen[k] === 1).length, wrong
+            };
+            ex.history.unshift(rec);
+            if (ex.history.length > WRITE_EXAM_HISTORY_MAX) ex.history.length = WRITE_EXAM_HISTORY_MAX;
+            ex.cur = null;
+            return rec;
+        }
+        function writeExamPct(rec) { return rec && rec.total ? Math.round(rec.ok / rec.total * 100) : 0; }
+
+        function startWriteExamRound() {
+            const sc = writeScope;
+            const ex = writeExamOf(sc);
+            if (!ex.cur) {
+                const r = writeExamRosterNow();
+                const keys = r.words.concat(r.idioms);
+                if (!keys.length) { showToast(`${WRITE_EXAM_LABELS[sc]} 명단이 비어 있어요`, 'error'); return; }
+                ex.cur = { start: getLocalDateString(), keys, seen: {} };
+            }
+            const pending = writeExamPending(sc);
+            if (!pending.length) {
+                //   남은 게 다 지워진 것뿐이었으면 여기서 마무리한다
+                finishWriteExam(sc);
+                writePracticeSave();
+                renderWriteExamUi();
+                showToast('남은 문제가 없어서 시험을 마쳤어요', 'info');
+                return;
+            }
+            writePracticeSave();
+            const input = document.getElementById('write-count-input');
+            if (input && !parseInt(input.value, 10)) selectWriteCount(WRITE_COUNT_DEFAULT);
+            const setup = document.getElementById('write-setup');
+            if (setup) setup.classList.add('hidden');
+            beginWritePractice(shuffleArray(pending).slice(0, writeCount), {
+                isTodayReview: false,
+                batchSize: writeCount,
+                scopeContinue: true,
+                examScope: sc,
+                onClose: () => { if (setup) setup.classList.remove('hidden'); }
+            });
+        }
+
+        // [냐냐 요청] 시험 버튼 — 늘 보이는 짧은 글씨 + 상태 바탕색, 고르면 밑에 자세한 한 줄
+        //   진행 중 = 연노랑 · 끝난 지 30일 넘음 = 연빨강 · 처음·최근 끝남 = 바탕 없음
+        function renderWriteExamUi() {
+            WRITE_EXAM_SCOPES.forEach(sc => {
+                const st = writeExamStatus(sc);
+                const btn = document.querySelector(`.write-scope-btn[data-write-scope="${sc}"]`);
+                const sub = document.querySelector(`[data-exam-sub="${sc}"]`);
+                const on = writeScope === sc;
+                if (btn) {
+                    btn.classList.remove('bg-indigo-50', 'bg-amber-50', 'bg-rose-50');
+                    const bg = st.kind === 'doing' ? 'bg-amber-50' : (st.kind === 'old' ? 'bg-rose-50' : (on ? 'bg-indigo-50' : ''));
+                    if (bg) btn.classList.add(bg);
+                }
+                if (sub) {
+                    sub.innerText = st.kind === 'doing' ? `${st.seen}/${st.total}`
+                        : st.kind === 'new' ? '처음'
+                        : (st.days === 0 ? '오늘' : `${st.days}일 전`);
+                    sub.className = 'block text-[10px] font-bold mt-0.5 ' + (st.kind === 'doing' ? 'text-amber-600'
+                        : st.kind === 'old' ? 'text-rose-500' : 'text-slate-400');
+                }
+            });
+
+            const exam = isWriteExamScope(writeScope);
+            const mixBlock = document.getElementById('write-mix-block');
+            if (mixBlock) { mixBlock.classList.toggle('opacity-40', exam); mixBlock.classList.toggle('pointer-events-none', exam); }
+            if (exam) {
+                const hint = document.getElementById('write-mix-hint');
+                if (hint) hint.innerText = '시험은 문제 유형과 상관없이 단어·관용구를 다 내요';
+            }
+            const startBtn = document.getElementById('write-start-btn');
+            const info = document.getElementById('write-exam-info');
+            if (!exam) {
+                if (info) info.classList.add('hidden');
+                if (startBtn) startBtn.innerText = '쓰기 시작하기';
+                return;
+            }
+            const st = writeExamStatus(writeScope);
+            const ex = writeExamOf(writeScope);
+            let head;
+            if (st.kind === 'doing') {
+                const okN = ex.cur.keys.filter(k => ex.cur.seen[k] === 1).length;
+                head = `📌 <b>${writeExamShortDate(ex.cur.start)}</b> 명단 고정 · ${st.total}개 중 <b>${st.seen}개</b> 봤어요${st.seen ? ` <span class="text-slate-400">(한 번에 ${okN}개)</span>` : ''}`;
+                if (startBtn) startBtn.innerText = `시험 이어서 · 남은 ${st.total - st.seen}개`;
+            } else {
+                const r = writeExamRosterNow();
+                const n = r.words.length + r.idioms.length;
+                const nowLine = `지금 ${n}개${r.idioms.length ? ` (단어 ${r.words.length} · 관용구 ${r.idioms.length})` : ''}`;
+                head = st.kind === 'new'
+                    ? `시작하면 오늘 명단이 고정돼요 · ${nowLine}`
+                    : `마지막 시험 <b>${writeExamShortDate(st.last.end)}</b> · ${st.last.total}개 중 ${st.last.ok}개 한 번에 (${writeExamPct(st.last)}%)<br><span class="text-slate-400">시작하면 오늘 명단으로 새로 봐요 · ${nowLine}</span>`;
+                if (startBtn) startBtn.innerText = '시험 시작하기';
+            }
+            const hist = ex.history.map(rec => {
+                const wrongChips = (rec.wrong || []).map(x => `<span class="inline-block m-0.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">${x.i ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(x.w)}<span class="font-semibold text-slate-400"> ${escapeHtml(x.m || '')}</span></span>`).join('');
+                const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${writeExamShortDate(rec.end)}`;
+                const line = `${range} · ${rec.total}개 중 ${rec.ok}개 <span class="text-emerald-600">(${writeExamPct(rec)}%)</span>`;
+                return wrongChips
+                    ? `<details class="border-t border-slate-200 pt-1"><summary class="cursor-pointer">${line} <span class="text-rose-400">· 틀린 ${rec.wrong.length}개</span></summary><div class="-m-0.5 pt-1">${wrongChips}</div></details>`
+                    : `<div class="border-t border-slate-200 pt-1">${line}</div>`;
+            }).join('');
+            if (info) {
+                info.innerHTML = `<div>${head}</div>${hist ? `<details><summary class="cursor-pointer text-indigo-500">지난 시험 기록 ${ex.history.length}번</summary><div class="space-y-1 pt-1">${hist}</div></details>` : ''}`;
+                info.classList.remove('hidden');
+            }
         }
 
         function getWriteScopePool() {
@@ -3962,6 +4163,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 요청] 쓰기는 '단어'만. 관용구·예문은 단어 빈칸이 이미 다루므로 여기선 안 씀.
         function startWriteReview() {
+            if (isWriteExamScope(writeScope)) { startWriteExamRound(); return; }
             //   [냐냐 요청] 범위에 그 갈래가 없으면 그 갈래 전체에서 낸다 (writeEffectivePools)
             const P = writeEffectivePools();
             const pool = P.words;
@@ -4030,6 +4232,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 isTodayReview: !!(opts && opts.isTodayReview),
                 // [냐냐 기준] 관용구 곡선을 앞으로 미는 건 '관용구 복습' 으로 시작했을 때만
                 idiomReview: !!(opts && opts.idiomReview),
+                examScope: (opts && opts.examScope) || null,   // 쓰기 시험 회차면 그 범위 (writeExamMark)
+                examFinished: null,                            // 이 회차에서 시험이 끝났으면 그 기록
                 onClose: (opts && opts.onClose) || null
             };
 
@@ -4128,6 +4332,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             ? peekNextTodayReviewCount(remain, batch) : Math.min(remain, batch);
                         nextBtn = `<button onclick="closeWritePractice(); continueTodayReview();" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${nextN}개 이어서 →</button>`;
                     }
+                } else if (s.examScope) {
+                    //   시험은 명단에서 아직 안 본 것만 이어서 (끝났으면 이을 게 없다)
+                    const left = writeExamPending(s.examScope).length;
+                    if (left > 0) {
+                        nextBtn = `<button onclick="closeWritePractice(); startWriteReview();" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">다음 ${Math.min(left, batch)}개 이어서 → <span class="font-semibold opacity-80">(남은 ${left}개)</span></button>`;
+                    }
                 } else if (s.scopeContinue && typeof getWriteScopePool === 'function') {
                     // [냐냐 요청] 쓰기연습 탭에서 시작 → 같은 범위에서 '내가 고른 개수'만큼 이어서
                     const poolLeft = (typeof writeEffectivePools === 'function')
@@ -4168,6 +4378,18 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
                 const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
 
+                //   [냐냐 요청] 쓰기 시험 — 이 회차로 끝났으면 기록 한 줄, 아니면 어디까지 왔는지
+                let examLine = '';
+                if (s.examScope) {
+                    const label = WRITE_EXAM_LABELS[s.examScope] || '';
+                    const rec = s.examFinished;
+                    if (rec) {
+                        examLine = `<div class="bg-emerald-50 border border-emerald-200 rounded-2xl px-3 py-2.5 text-sm font-bold text-emerald-700">🏁 ${label} 시험 끝! ${rec.total}개 중 <b>${rec.ok}개</b> 한 번에 맞혔어요 (${writeExamPct(rec)}%)</div>`;
+                    } else {
+                        const cur = writeExamOf(s.examScope).cur;
+                        if (cur) examLine = `<p class="text-xs font-bold text-amber-600">📌 ${label} 시험 ${cur.keys.length}개 중 ${writeExamSeenCount(cur)}개 봤어요</p>`;
+                    }
+                }
                 const resultLists = (okList.length || learnedList.length || noList.length) ? `
                     <div class="pt-2 mt-2 border-t border-slate-100 space-y-3">
                         ${listBlock('✅ 바로 맞힌 단어', okList, true)}
@@ -4179,6 +4401,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <div class="text-center space-y-4 py-6">
                         <div class="text-5xl">🎉</div>
                         <p class="text-lg font-bold text-slate-900">${total}개 중 ${ok}개 성공!${skipped ? `<span class="text-sm font-bold text-slate-400"> · 건너뜀 ${skipped}개</span>` : ''}</p>
+                        ${examLine}
                         ${scoreLine}
                         ${reviewNote}
                         ${shiftLists}
@@ -4654,6 +4877,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!w._isIdiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
             if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', true); }
             s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
+            writeExamMark(s, w, true);
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '', base: writeBaseForm(w) };
             writePracticeSave();
             renderWritePractice();
@@ -4694,6 +4918,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   [냐냐 요청] 1바퀴 결과를 정답률에도 넣는다. 이 가드 안이라 한 낱말당 한 번이다
                 if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', false); }
             }
+            writeExamMark(s, w, false);
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻

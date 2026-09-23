@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609230841">
+    <link rel="stylesheet" href="css/style.css?v=202609230905">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -747,7 +747,7 @@
 
                             <div class="max-w-sm mx-auto text-left space-y-3">
                                 <!-- [냐냐 요청] 관용구 섞기 — 기본 0% (지금까지처럼 단어 뜻만) -->
-                                <div class="space-y-1.5">
+                                <div id="write-mix-block" class="space-y-1.5 transition-opacity">
                                     <label class="block text-xs font-bold text-slate-500">문제 유형</label>
                                     <div class="grid grid-cols-3 gap-2">
                                         <button onclick="setWriteMixMode('word')" data-write-mix="word" class="write-mix-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-violet-300 transition-all">✏️ 단어만</button>
@@ -768,15 +768,22 @@
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold text-slate-500">범위</label>
-                                    <div class="grid grid-cols-2 gap-2">
+                                    <!-- [냐냐 요청] 자유 연습 / 시험 으로 가른다 (2026-09-23).
+                                         시험은 명단을 고정하고 회차로 나눠서 다 본다 (vocab.js writeExams) -->
+                                    <p class="text-[10px] font-bold text-slate-400">자유 연습 · 매번 새로 뽑아요</p>
+                                    <div class="grid grid-cols-3 gap-2">
                                         <button onclick="selectWriteScope('untouched')" data-write-scope="untouched" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🆕 안 만난</button>
-                                        <button onclick="selectWriteScope('weak')" data-write-scope="weak" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점</button>
                                         <button onclick="selectWriteScope('not-mastered')" data-write-scope="not-mastered" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">📖 안 외운</button>
                                         <button onclick="selectWriteScope('all')" data-write-scope="all" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🗂️ 전체</button>
-                                        <button onclick="selectWriteScope('mastered')" data-write-scope="mastered" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🟩 마스터</button>
-                                        <!-- [냐냐 요청] 곡선을 졸업하면 어디에도 안 잡혀서 레이더에서 사라진다 -->
-                                        <button onclick="selectWriteScope('graduated')" data-write-scope="graduated" class="write-scope-btn py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🎓 곡선 졸업</button>
                                     </div>
+                                    <p class="text-[10px] font-bold text-slate-400 pt-1">시험 · 명단을 고정하고 나눠서 다 봐요</p>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <button onclick="selectWriteScope('mastered')" data-write-scope="mastered" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🟩 마스터<span data-exam-sub="mastered" class="block text-[10px] font-bold mt-0.5"></span></button>
+                                        <button onclick="selectWriteScope('weak')" data-write-scope="weak" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점<span data-exam-sub="weak" class="block text-[10px] font-bold mt-0.5"></span></button>
+                                        <!-- [냐냐 요청] 곡선을 졸업하면 어디에도 안 잡혀서 레이더에서 사라진다 -->
+                                        <button onclick="selectWriteScope('graduated')" data-write-scope="graduated" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🎓 곡선 졸업<span data-exam-sub="graduated" class="block text-[10px] font-bold mt-0.5"></span></button>
+                                    </div>
+                                    <div id="write-exam-info" class="hidden text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 space-y-1.5"></div>
                                 </div>
 
                                 <!-- [냐냐 요청] 동사를 어느 시제로 물어볼지 고른다 (안 고르면 아무거나) -->
@@ -791,7 +798,7 @@
 
                             </div>
 
-                            <button onclick="startWriteReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">쓰기 시작하기</button>
+                            <button id="write-start-btn" onclick="startWriteReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm">쓰기 시작하기</button>
                         </div>
 
                         <!-- [냐냐 요청] 팝업 폐지 → 다른 복습 모드처럼 탭 안에서 진행 -->
@@ -2563,13 +2570,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609230841"></script>
-    <script src="js/creatures.js?v=202609230841"></script>
-    <script src="js/core.js?v=202609230841"></script>
-    <script src="js/vocab.js?v=202609230841"></script>
-    <script src="js/flashcards.js?v=202609230841"></script>
-    <script src="js/quiz.js?v=202609230841"></script>
-    <script src="js/games.js?v=202609230841"></script>
-    <script src="js/ai-feedback.js?v=202609230841"></script>
+    <script src="js/dictionary-data.js?v=202609230905"></script>
+    <script src="js/creatures.js?v=202609230905"></script>
+    <script src="js/core.js?v=202609230905"></script>
+    <script src="js/vocab.js?v=202609230905"></script>
+    <script src="js/flashcards.js?v=202609230905"></script>
+    <script src="js/quiz.js?v=202609230905"></script>
+    <script src="js/games.js?v=202609230905"></script>
+    <script src="js/ai-feedback.js?v=202609230905"></script>
 </body>
 </html>

@@ -287,6 +287,8 @@ let vocabulary = [];
                 writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
                 //   [냐냐 요청] 오늘의 복습을 한 번에 몇 개씩 잡을지 (2026-09-21) — 동사 시제와 같은 대접
                 todayReviewBatch: (typeof todayReviewBatch === 'number' && todayReviewBatch > 0) ? todayReviewBatch : undefined,
+                //   [냐냐 요청] 쓰기 시험 명단·진행·기록 (2026-09-23) — 날을 넘기고 기기를 바꿔도 이어서
+                writeExams: (typeof writeExams !== 'undefined' && writeExams) ? writeExams : undefined,
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {},
                 //   [냐냐 요청] 문법 보기 설정 (필터·정렬·펼침·색인 숨김) — 폰과 PC 가 같은 모습으로 열리게
                 grammarPrefs: (typeof grammarPrefsSnapshot === 'function') ? grammarPrefsSnapshot() : undefined
@@ -471,6 +473,9 @@ let vocabulary = [];
                 if (typeof writeTenses !== 'undefined') {
                     writeTenses = Array.isArray(payload.writeTenses)
                         ? payload.writeTenses.filter(x => typeof x === 'string') : null;
+                }
+                if (typeof writeExams !== 'undefined') {
+                    writeExams = (payload.writeExams && typeof payload.writeExams === 'object') ? payload.writeExams : {};
                 }
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
