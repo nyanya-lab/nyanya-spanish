@@ -4375,7 +4375,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const shiftRows = res.map(r => r.isIdiom ? { ...r }
                     : { ...r, word: r.baseWord || r.word, meaning: r.baseMeaning || r.meaning });
                 const shiftInner = (typeof gradeShiftHtml === 'function') ? gradeShiftHtml(shiftRows) : '';
-                const shiftLists = shiftInner ? `<div class="pt-2 mt-2 border-t border-slate-100">${shiftInner}</div>` : '';
+                //   [냐냐 요청] 이번 복습으로 망각곡선을 졸업한 것 (2026-09-23) — 등급 변화보다 먼저
+                const gradRows = shiftRows.filter(r => r.graduated);
+                const gradInner = gradRows.length ? `
+                    <div class="text-left">
+                        <p class="text-xs font-black text-indigo-700 mb-1.5">🎓 망각곡선 졸업 ${gradRows.length}개</p>
+                        <div class="-m-0.5">${gradRows.map(r => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold bg-indigo-50 border-indigo-300 text-indigo-800">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}${r.meaning ? `<span class="font-semibold text-slate-400"> ${escapeHtml(String(r.meaning).split('\n')[0])}</span>` : ''}</span>`).join('')}</div>
+                    </div>` : '';
+                const shiftLists = (gradInner || shiftInner) ? `<div class="pt-2 mt-2 border-t border-slate-100 space-y-3">${gradInner}${shiftInner}</div>` : '';
 
                 //   [냐냐 요청] 쓰기 시험 — 이 회차로 끝났으면 기록 한 줄, 아니면 어디까지 왔는지
                 let examLine = '';
@@ -4861,6 +4868,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
+            //   [냐냐 요청] 이번에 곡선을 졸업했는지 결과 화면에 짚는다 (2026-09-23) — 밀기 전후 칸을 잰다
+            const curveStage = () => {
+                if (w._isIdiomTask && w._idiomOf) {
+                    const rec = (idiomReview || {})[idiomKey(w._idiomOf.id, w.word)];
+                    return rec ? (rec.stage || 0) : 0;
+                }
+                const real = (vocabulary || []).find(v => v.id === w.id);
+                return real ? (real.reviewStage || 0) : 0;
+            };
+            const stageBefore = curveStage();
             // [냐냐 기준] 그 표현을 맞혔으면 곡선을 한 칸 앞으로 — 단, 관용구 복습으로 시작했을 때만.
             //   단어 복습에 섞여 나온 관용구나 퀴즈에서 맞힌 건 점수만 준다 (단어·문법과 같은 기준).
             if (w._isIdiomTask && w._idiomOf) {
@@ -4876,8 +4893,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   자유 연습·시험에서 맞히면 점수만 받는다. 마스터 시험에서 30일 기다리던 valor 가
             //   8일 만에 맞혀서 졸업해버렸다. 단어 빈칸·관용구와 같은 기준이다. 틀린 쪽(한 칸 뒤)은 그대로.
             if (!w._isIdiomTask && s.isTodayReview && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, true);
+            const graduated = stageBefore < REVIEW_INTERVALS.length && curveStage() >= REVIEW_INTERVALS.length;
             if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', true); }
-            s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, ...shift });
+            s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: true, gain, graduated, ...shift });
             writeExamMark(s, w, true);
             s.feedback = { correct: true, gain, answer: w.word, meaning: w.meaning || '', mine: '', base: writeBaseForm(w) };
             writePracticeSave();
