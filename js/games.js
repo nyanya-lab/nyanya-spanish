@@ -1202,7 +1202,7 @@
                     html += `<div class="relative ${cellCls} focus-within:z-10">
                         ${numA ? `<span class="${numCls} left-[3px] text-teal-600">${numA}</span>` : ''}
                         ${numD ? `<span class="${numCls} right-[3px] text-indigo-500">${numD}</span>` : ''}
-                        <input id="cw-${r}-${c}" data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
+                        <input id="cw-${r}-${c}" data-es data-r="${r}" data-c="${c}" maxlength="1" autocomplete="off" inputmode="latin"
                             oninput="cwInput(this)" onkeydown="cwKeydown(event, this)" onfocus="cwFocus(this)" onclick="cwClick(this)"
                             class="cw-cell w-full h-full text-center text-sm font-black uppercase bg-white border-2 border-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 relative">
                     </div>`;

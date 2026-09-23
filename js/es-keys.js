@@ -94,7 +94,10 @@
                 return t[vowel] || null;
             };
 
-            const isEsField = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
+            //   [냐냐 요청] PC 에서만 (2026-09-23). 폰은 한글 자판 배열이 제각각이라 키 자리 짝이 안 맞고,
+            //   조합을 끊으려고 포커스를 빼면 폰 자판이 내려가 버린다. 폰은 자판을 직접 바꿔 쓴다.
+            const ES_KEYS_ON = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            const isEsField = (el) => ES_KEYS_ON && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
                 && el.hasAttribute('data-es') && !el.readOnly && !el.disabled;
             const composing = new WeakSet();
             window.esKeysComposing = (el) => composing.has(el);
@@ -108,23 +111,45 @@
                 const pend = el._esPending;
                 if (pend && Date.now() - pend.at > 1000) el._esPending = null;
                 else if (pend && caret > 0 && v[caret - 1] === pend.us) {
-                    v = v.slice(0, caret - 1) + pend.es + v.slice(caret);
+                    const isDead = pend.es === DEAD_ACUTE || pend.es === DEAD_DIAER;
+                    v = v.slice(0, caret - 1) + (isDead ? '' : pend.es) + v.slice(caret);
+                    if (isDead) { caret--; setDead(el, pend.es, v.length); }
                     el._esPending = null;
                 }
-                const nv = esKeysConvert(v);
-                if (nv === el.value) return false;
+                let nv = esKeysConvert(v);
                 caret = Math.min(caret, v.length);
-                const newCaret = esKeysConvert(v.slice(0, caret)).length;
+                let newCaret = esKeysConvert(v.slice(0, caret)).length;
+                //   악센트 키를 누른 뒤 새로 들어온 첫 글자가 모음이면 악센트를 얹는다
+                const dead = el._esDead;
+                if (dead && nv.length > dead.len) {
+                    const t = dead.ch === DEAD_DIAER ? DIAER : ACUTE;
+                    const ch = nv[newCaret - 1];
+                    if (newCaret > 0 && t[ch]) nv = nv.slice(0, newCaret - 1) + t[ch] + nv.slice(newCaret);
+                    el._esDead = null;
+                }
+                if (nv === el.value) return false;
                 el.value = nv;
                 try { el.setSelectionRange(newCaret, newCaret); } catch (e) {}
                 return true;
             }
+            //   악센트 키는 칸에 아무것도 안 넣고 기억만 해둔다 (한 칸 한 글자인 십자말풀이도 되게)
+            function setDead(el, ch, len) { el._esDead = { ch, len: (len == null ? el.value.length : len) }; }
 
             function insertAtCaret(el, text) {
                 const s = el.selectionStart, e = el.selectionEnd;
                 el.setRangeText(text, s, e, 'end');
-                convertField(el);   // 앞에 악센트 자리표가 있으면 모음과 합친다
+                convertField(el);
                 el.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            //   [냐냐 요청] 치자마자 바꾼다 (2026-09-23) — 한글 조합이 시작되면 그 자리에서 끊는다.
+            //   포커스를 잠깐 빼면 브라우저가 조합을 확정하고(compositionend) 거기서 바꾼다.
+            //   글자가 '호' 로 뭉칠 틈이 없어서, 한 키 = 한 글자로 바로 바뀐다.
+            //   ⚠️ 칸 주인이 그사이 다른 칸으로 옮겨갔으면(십자말풀이) 되돌아오지 않는다.
+            function commitComposition(el) {
+                el.blur();
+                const a = document.activeElement;
+                if (!a || a === document.body) el.focus();
             }
 
             document.addEventListener('compositionstart', (e) => {
@@ -134,12 +159,18 @@
                 const el = e.target;
                 if (!isEsField(el)) return;
                 composing.delete(el);
-                //   조합이 끝난 뒤엔 input 이 안 올 수 있다 — 바꿨으면 칸 주인에게 알려준다
-                if (convertField(el)) el.dispatchEvent(new Event('input', { bubbles: true }));
+                //   조합이 끝난 뒤엔 input 이 안 올 수 있다 — 칸 주인에게 바뀐 값을 알려준다
+                convertField(el);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
             }, true);
             document.addEventListener('input', (e) => {
                 const el = e.target;
-                if (!isEsField(el) || e.isComposing || composing.has(el)) return;
+                if (!isEsField(el) || !e.isTrusted) return;
+                if (e.isComposing || composing.has(el)) {
+                    e.stopImmediatePropagation();   // 칸 주인은 바뀐 값만 받는다 (compositionend 가 다시 보낸다)
+                    commitComposition(el);
+                    return;
+                }
                 convertField(el);
             }, true);
 
@@ -175,6 +206,7 @@
                     return;
                 }
                 e.preventDefault();
+                if (es === DEAD_ACUTE || es === DEAD_DIAER) { setDead(el, es); return; }
                 insertAtCaret(el, es);
             }, true);
         })();
