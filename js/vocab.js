@@ -4114,7 +4114,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     let doneText = '';
                     if (st.last) {
                         const took = Math.max(0, daysSince(st.last.start) - daysSince(st.last.end));
-                        doneText = ` · ${st.days === 0 ? '오늘' : `${st.days}일 전`}${took >= WRITE_EXAM_LONG_DAYS ? ` 📌+${took}` : ''}`;
+                        //   [냐냐 요청] '49일 전' 이 길어서 'D+49' 로 (2026-09-23). 오늘 끝났으면 '오늘'
+                        doneText = ` · ${st.days === 0 ? '오늘' : `D+${st.days}`}${took >= WRITE_EXAM_LONG_DAYS ? ` 📌+${took}` : ''}`;
                     }
                     dateEl.innerText = st.kind === 'doing' ? ` · 📌 ${writeExamShortDate(writeExamOf(sc).cur.start)}`
                         : st.kind === 'new' ? ' · 처음'
