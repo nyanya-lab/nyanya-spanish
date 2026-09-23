@@ -4203,8 +4203,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const cards = h.map((rec, idx) => {
                 const round = h.length - idx;
                 const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${writeExamShortDate(rec.end)}`;
-                //   [냐냐 요청] 해가 바뀌는 자리에 '26년' 줄 — 날짜마다 연도를 붙이면 길어서
-                const year = String(rec.end || '').slice(2, 4);
+                //   [냐냐 요청] 해가 바뀌는 자리에 '26년' 줄 — 날짜마다 연도를 붙이면 길어서.
+                //   시작한 해(명단 고정일)로 가른다 — 12/20 ~ 1/3 은 25년 묶음에 들어간다.
+                const year = String(rec.start || rec.end || '').slice(2, 4);
                 const yearLine = (year && year !== lastYear)
                     ? `<div class="flex items-center gap-2 pt-1 text-[10px] font-black text-slate-400"><span>${year}년</span><span class="flex-1 border-t border-slate-200"></span></div>` : '';
                 lastYear = year;
