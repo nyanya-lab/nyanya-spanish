@@ -4105,7 +4105,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 //   [냐냐 요청] 시점은 전부 이름 옆에 (2026-09-23) — 📌 고정일 / 처음 / N일 전.
                 //   이름보다 작게 (10px). 개수는 밑줄에만.
-                const tone = st.kind === 'doing' ? 'text-amber-600' : (st.kind === 'old' ? 'text-rose-500' : 'text-slate-400');
+                //   [냐냐 요청] 날짜·개수 글씨는 회색 하나로 (2026-09-23) — 상태는 바탕색이 말한다
+                const tone = 'text-slate-400';
                 if (dateEl) {
                     dateEl.innerText = st.kind === 'doing' ? ` · 📌 ${writeExamShortDate(writeExamOf(sc).cur.start)}`
                         : st.kind === 'new' ? ' · 처음'
@@ -4117,19 +4118,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (st.kind === 'doing') {
                         const cur = writeExamOf(sc).cur;
                         text = writeExamSplitText(writeExamSplit(cur.keys, k => k in cur.seen));
-                    } else if (st.kind === 'new') {
-                        //   [냐냐 요청] 처음·끝남도 단어·관용구를 갈라 적는다 (진행 중과 같은 꼴)
+                    } else {
+                        //   [냐냐 요청] 처음·끝남은 '지금 누르면 나올 목록' 의 개수 (2026-09-23).
+                        //   끝난 시험의 성적은 📜 기록에서 본다.
                         const r = writeExamRosterNow(sc);
                         text = `단어 ${r.words.length}${r.idioms.length ? ` · 관용구 ${r.idioms.length}` : ''}`;
-                    } else {
-                        const L = st.last;
-                        text = (L.tw != null)
-                            ? writeExamSplitText({ w: [L.ow, L.tw], i: [L.oi || 0, L.ti || 0] })
-                            : `${L.ok}/${L.total}`;   // 갈라 세기 전 기록
                     }
                     sub.innerText = text;
-                    sub.className = 'block text-[10px] font-bold mt-0.5 ' + (st.kind === 'doing' ? 'text-amber-600'
-                        : st.kind === 'old' ? 'text-rose-500' : 'text-slate-400');
+                    sub.className = 'block text-[10px] font-bold mt-0.5 ' + tone;
                 }
             });
             renderWriteExamHistory();
