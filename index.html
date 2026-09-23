@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609231151">
+    <link rel="stylesheet" href="css/style.css?v=202609231357">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -62,49 +62,36 @@
             <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
                 <!-- 왼쪽: 로고 + 제목 + 통계 -->
                 <div class="flex items-center gap-3 min-w-0">
-                    <div id="header-logo" class="w-9 h-9 bg-gradient-to-br from-violet-400 to-violet-600 text-white rounded-lg flex items-center justify-center text-lg shadow-md shadow-violet-100 cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        📖
+                    <!-- [냐냐 요청] 로고는 책 여러 권, 바탕 없이 보라 (2026-09-23). 누르면 새로고침은 그대로 —
+                         버튼인 게 보이게 마우스를 올리면 옅은 바탕이 깔린다 -->
+                    <div id="header-logo" class="w-9 h-9 text-violet-600 hover:bg-violet-50 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z"/><path d="M9 5a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z"/><path d="M5 8h4"/><path d="M9 16h4"/><path d="M13.803 4.56l2.184 -.53c.562 -.135 1.133 .19 1.282 .732l3.695 13.418a1.02 1.02 0 0 1 -.634 1.219l-.133 .041l-2.184 .53c-.562 .135 -1.133 -.19 -1.282 -.732l-3.695 -13.418a1.02 1.02 0 0 1 .634 -1.219l.133 -.041z"/><path d="M14 9l4 -1"/><path d="M16 16l3.923 -.98"/></svg>
                     </div>
                     <h1 class="text-base md:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">냐냐의 스페인어 공부방</h1>
                     <!-- 통계: 단어 그룹 / 문법 그룹 시각적 분리 (PC · 한 줄) -->
                     <div class="hidden lg:flex items-center gap-2 ml-1 shrink-0">
-                        <div class="flex items-center gap-2.5 bg-violet-50 px-3 py-1 rounded-2xl border border-violet-200">
-                            <span class="text-[10px] font-black text-violet-500 tracking-widest">단어</span>
-                            <!-- [냐냐 요청] 눌러서 그 목록으로 바로 간다 (2026-09-16) -->
-                            <button type="button" onclick="jumpToVocabStat('all')" title="단어장 전체 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-violet-400 font-bold">보유</span>
-                                <span id="header-total-vocab" class="text-sm font-extrabold text-violet-700">0개</span>
-                            </button>
-                            <button type="button" onclick="jumpToVocabStat('mastered')" title="마스터한 단어만 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-violet-400 font-bold">마스터</span>
-                                <span id="header-mastered-vocab" class="text-sm font-extrabold text-emerald-600">0개</span>
-                            </button>
-                            <button type="button" onclick="jumpToVocabStat('weak')" title="약점 단어만 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-violet-400 font-bold">약점</span>
-                                <span id="header-weak-vocab" class="text-sm font-extrabold text-rose-600">0개</span>
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-2.5 bg-sky-50 px-3 py-1 rounded-2xl border border-sky-200">
-                            <span class="text-[10px] font-black text-[#4a85bb] tracking-widest">문법</span>
-                            <!-- [냐냐 요청] 눌러서 그 목록으로 바로 간다 (2026-09-16) -->
-                            <button type="button" onclick="jumpToGrammarStat('all')" title="문법 노트 전체 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-[#5896cb] font-bold">보유</span>
-                                <span id="header-total-grammar" class="text-sm font-extrabold text-[#3f74a8]">0개</span>
-                            </button>
-                            <button type="button" onclick="jumpToGrammarStat('mastered')" title="마스터한 노트만 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-[#5896cb] font-bold">마스터</span>
-                                <span id="header-mastered-grammar" class="text-sm font-extrabold text-emerald-600">0개</span>
-                            </button>
-                            <button type="button" onclick="jumpToGrammarStat('weak')" title="약점 노트만 보기"
-                                class="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-lg hover:bg-white/70 transition-colors cursor-pointer">
-                                <span class="text-[10px] text-[#5896cb] font-bold">약점</span>
-                                <span id="header-weak-grammar" class="text-sm font-extrabold text-rose-600">0개</span>
-                            </button>
+                        <!-- [냐냐 요청] 단어·관용구·문법을 한 박스로 (2026-09-23). '보유·마스터·약점' 글자는 빼고
+                             숫자 색으로 가른다 — 검정 보유 · 초록 마스터 · 빨강 약점. 마우스를 올리면 이름이 뜬다.
+                             숫자를 누르면 그 목록으로 바로 간다 (2026-09-16 부터) -->
+                        <div id="header-stat-box" class="flex items-center bg-slate-50 py-1 rounded-2xl border border-slate-200">
+                            <div class="flex items-center gap-0.5 px-2.5">
+                                <span class="text-[10px] font-black text-slate-400 tracking-widest mr-1">단어</span>
+                                <button type="button" onclick="jumpToVocabStat('all')" data-stat-name="단어 보유" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-total-vocab" class="text-sm font-extrabold text-slate-800">0</span></button>
+                                <button type="button" onclick="jumpToVocabStat('mastered')" data-stat-name="단어 마스터" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-mastered-vocab" class="text-sm font-extrabold text-emerald-600">0</span></button>
+                                <button type="button" onclick="jumpToVocabStat('weak')" data-stat-name="단어 약점" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-weak-vocab" class="text-sm font-extrabold text-rose-600">0</span></button>
+                            </div>
+                            <div class="flex items-center gap-0.5 px-2.5 border-l border-slate-200">
+                                <span class="text-[10px] font-black text-slate-400 tracking-widest mr-1">관용구</span>
+                                <button type="button" onclick="jumpToIdiomStat('all')" data-stat-name="관용구 보유" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-total-idiom" class="text-sm font-extrabold text-slate-800">0</span></button>
+                                <button type="button" onclick="jumpToIdiomStat('mastered')" data-stat-name="관용구 마스터" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-mastered-idiom" class="text-sm font-extrabold text-emerald-600">0</span></button>
+                                <button type="button" onclick="jumpToIdiomStat('weak')" data-stat-name="관용구 약점" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-weak-idiom" class="text-sm font-extrabold text-rose-600">0</span></button>
+                            </div>
+                            <div class="flex items-center gap-0.5 px-2.5 border-l border-slate-200">
+                                <span class="text-[10px] font-black text-slate-400 tracking-widest mr-1">문법</span>
+                                <button type="button" onclick="jumpToGrammarStat('all')" data-stat-name="문법 노트 보유" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-total-grammar" class="text-sm font-extrabold text-slate-800">0</span></button>
+                                <button type="button" onclick="jumpToGrammarStat('mastered')" data-stat-name="문법 노트 마스터" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-mastered-grammar" class="text-sm font-extrabold text-emerald-600">0</span></button>
+                                <button type="button" onclick="jumpToGrammarStat('weak')" data-stat-name="문법 노트 약점" class="px-1 rounded-md hover:bg-white transition-colors cursor-pointer"><span id="header-weak-grammar" class="text-sm font-extrabold text-rose-600">0</span></button>
+                            </div>
                         </div>
                         <!-- [냐냐 요청] 오늘의 복습 (단어·문법 통계 뒤). 단어·문법을 따로 누른다.
                              각각 복습할 게 있으면 활성, 없으면 회색 '완료' -->
@@ -2588,14 +2575,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609231151"></script>
-    <script src="js/creatures.js?v=202609231151"></script>
-    <script src="js/core.js?v=202609231151"></script>
-    <script src="js/vocab.js?v=202609231151"></script>
-    <script src="js/flashcards.js?v=202609231151"></script>
-    <script src="js/quiz.js?v=202609231151"></script>
-    <script src="js/games.js?v=202609231151"></script>
-    <script src="js/ai-feedback.js?v=202609231151"></script>
-    <script src="js/es-keys.js?v=202609231151"></script>
+    <script src="js/dictionary-data.js?v=202609231357"></script>
+    <script src="js/creatures.js?v=202609231357"></script>
+    <script src="js/core.js?v=202609231357"></script>
+    <script src="js/vocab.js?v=202609231357"></script>
+    <script src="js/flashcards.js?v=202609231357"></script>
+    <script src="js/quiz.js?v=202609231357"></script>
+    <script src="js/games.js?v=202609231357"></script>
+    <script src="js/ai-feedback.js?v=202609231357"></script>
+    <script src="js/es-keys.js?v=202609231357"></script>
 </body>
 </html>

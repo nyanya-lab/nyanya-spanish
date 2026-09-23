@@ -10646,13 +10646,35 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 ? getAllGrammarTables().filter(t => ['weak', 'critical'].includes(getGrammarGrade(t.id))).length
                 : 0;
 
-            const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
-            setTxt('header-total-vocab', `${total}개`);
-            setTxt('header-mastered-vocab', `${mastered}개`);
-            setTxt('header-weak-vocab', `${weak}개`);
-            setTxt('header-total-grammar', `${grammarTotal}개`);
-            setTxt('header-mastered-grammar', `${grammarMastered}개`);
-            setTxt('header-weak-grammar', `${grammarWeak}개`);
+            //   [냐냐 요청] 관용구도 머리 줄에 (2026-09-23) — 등급으로 센다 (일지 스냅샷과 같은 셈)
+            let idiomTotal = 0, idiomMastered = 0, idiomWeak = 0;
+            if (typeof wordIdiomList === 'function' && typeof getIdiomGrade === 'function') {
+                vocabulary.forEach(w => wordIdiomList(w).forEach(it => {
+                    if (!it || !it.idiom) return;
+                    idiomTotal++;
+                    const g = getIdiomGrade(w.id, it.iid || it.idiom);
+                    if (g === 'mastered' || g === 'perfect') idiomMastered++;
+                    else if (g === 'weak' || g === 'critical') idiomWeak++;
+                }));
+            }
+
+            //   숫자만 적고, 무슨 숫자인지는 마우스를 올리면 뜬다 ('단어 마스터 158개')
+            const setTxt = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = val;
+                const btn = el.closest('[data-stat-name]');
+                if (btn) btn.title = `${btn.dataset.statName} ${val}개 — 눌러서 보기`;
+            };
+            setTxt('header-total-vocab', total);
+            setTxt('header-mastered-vocab', mastered);
+            setTxt('header-weak-vocab', weak);
+            setTxt('header-total-idiom', idiomTotal);
+            setTxt('header-mastered-idiom', idiomMastered);
+            setTxt('header-weak-idiom', idiomWeak);
+            setTxt('header-total-grammar', grammarTotal);
+            setTxt('header-mastered-grammar', grammarMastered);
+            setTxt('header-weak-grammar', grammarWeak);
             // 모바일 핵심 통계
             setTxt('header-total-vocab-m', `${total}`);
             setTxt('header-mastered-vocab-m', `${mastered}`);

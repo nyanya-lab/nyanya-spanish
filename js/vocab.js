@@ -860,6 +860,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   [냐냐 요청] 토스트는 안 띄운다 (2026-09-16) — 요약줄에 이미 적혀 있다
         }
 
+        //   [냐냐 요청] 머리 줄의 관용구 숫자 → 관용구 사전 보기로, 같은 거르개를 걸어서 (2026-09-23)
+        function jumpToIdiomStat(kind) {
+            jumpToVocabStat(kind);
+            if (typeof vocabMode !== 'undefined' && vocabMode !== 'idiom' && typeof toggleVocabMode === 'function') toggleVocabMode();
+        }
+
         //   단어장의 + 버튼 — 여기서 연 것만 '계속 등록?' 을 묻는다
         function openWordModalFromVocab() {
             openWordModal();
