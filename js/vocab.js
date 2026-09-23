@@ -3943,6 +3943,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         const WRITE_EXAM_SCOPES = ['mastered', 'weak', 'graduated'];
         const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '곡선 졸업' };
         const WRITE_EXAM_REMIND_DAYS = 45;   // [냐냐 결정] 30 → 45 (2026-09-23)
+        const WRITE_EXAM_LONG_DAYS = 15;     // [냐냐 결정] 이만큼 넘게 걸린 시험은 '📌+N' 을 붙인다
         const WRITE_EXAM_HISTORY_MAX = 36;
         //   { scope: { cur: { start, keys: [], seen: { key: 1|0 } } | null, history: [{ start, end, total, ok, wrong: [{ w, m, i }] }] } }
         let writeExams = {};
@@ -4105,12 +4106,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 //   [냐냐 요청] 시점은 전부 이름 옆에 (2026-09-23) — 📌 고정일 / 처음 / N일 전.
                 //   이름보다 작게 (10px). 개수는 밑줄에만.
-                //   [냐냐 요청] 날짜·개수 글씨는 회색 하나로 (2026-09-23) — 상태는 바탕색이 말한다
-                const tone = 'text-slate-400';
+                //   [냐냐 요청] 글씨색은 상태색 (회색 하나로 해봤다가 되돌렸다 — 상태색이 더 잘 읽힌다)
+                const tone = st.kind === 'doing' ? 'text-amber-600' : (st.kind === 'old' ? 'text-rose-500' : 'text-slate-400');
                 if (dateEl) {
+                    //   [냐냐 결정] 'N일 전' 은 다 푼 날부터 센다 (2026-09-23). 다만 시험이 15일 넘게 걸렸으면
+                    //   명단이 그만큼 더 오래됐다는 걸 '📌+60' 으로 붙인다 — 두 달 걸린 시험이 '1일 전' 으로만 보이지 않게.
+                    let doneText = '';
+                    if (st.last) {
+                        const took = Math.max(0, daysSince(st.last.start) - daysSince(st.last.end));
+                        doneText = ` · ${st.days === 0 ? '오늘' : `${st.days}일 전`}${took >= WRITE_EXAM_LONG_DAYS ? ` 📌+${took}` : ''}`;
+                    }
                     dateEl.innerText = st.kind === 'doing' ? ` · 📌 ${writeExamShortDate(writeExamOf(sc).cur.start)}`
                         : st.kind === 'new' ? ' · 처음'
-                        : ` · ${st.days === 0 ? '오늘' : `${st.days}일 전`}`;
+                        : doneText;
                     dateEl.className = 'text-[10px] ' + tone;
                 }
                 if (sub) {
