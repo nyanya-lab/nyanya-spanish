@@ -1972,6 +1972,19 @@ let vocabulary = [];
             if (panel) { panel.style.height = on ? '70vh' : ''; panel.style.maxWidth = on ? '36rem' : ''; }
         }
 
+        //   그 날 받은 첨삭 기록 (시각은 UTC 로 적혀 있어서 한국 날짜로 바꿔 가른다)
+        function diaryAiNotesOn(ds) {
+            return (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes))
+                ? aiNotes.filter(n => n && n.t && getLocalDateString(new Date(n.t)) === ds) : [];
+        }
+        function diaryAiNoteRowHtml(n) {
+            const label = n.rv ? '문법 복습 번역' : ((((typeof AI_NOTE_MODES !== 'undefined' && AI_NOTE_MODES[n.mode]) || {}).label) || n.mode || '');
+            return `<div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
+                        <p class="text-[10px] font-black text-indigo-500">${escapeHtml(label)}</p>
+                        <p class="text-sm font-bold text-slate-700 break-words">${escapeHtml(n.mine || '')}</p>
+                        ${n.fixed ? `<p class="text-xs text-emerald-600 break-words">→ ${escapeHtml(n.fixed)}</p>` : ''}
+                    </div>`;
+        }
         function openDiaryDetail(ds, what) {
             const meta = DIARY_DETAIL_META[what];
             const modal = document.getElementById('review-plan-modal');
@@ -1989,17 +2002,19 @@ let vocabulary = [];
                 count = list.length;
                 rows = list.map(e => diaryRowHtml(idiomKey(e.w.id, e.it.idiom))).join('');
             } else if (what === 'ai') {
-                const notes = (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes))
-                    ? aiNotes.filter(n => n && n.t && getLocalDateString(new Date(n.t)) === ds) : [];
+                //   [냐냐 지적] 문법 복습으로 푼 번역은 일지에서 '복습' 으로 센다 — 첨삭 목록에선 뺀다 (2026-09-23)
+                const notes = diaryAiNotesOn(ds).filter(n => !n.rv);
                 count = notes.length;
-                rows = notes.map(n => `<div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
-                        <p class="text-[10px] font-black text-indigo-500">${escapeHtml(((typeof AI_NOTE_MODES !== 'undefined' && AI_NOTE_MODES[n.mode]) || {}).label || n.mode || '')}</p>
-                        <p class="text-sm font-bold text-slate-700 break-words">${escapeHtml(n.mine || '')}</p>
-                        ${n.fixed ? `<p class="text-xs text-emerald-600 break-words">→ ${escapeHtml(n.fixed)}</p>` : ''}
-                    </div>`).join('');
+                rows = notes.map(diaryAiNoteRowHtml).join('');
             } else {
                 const ids = log[meta.field] || [];
                 count = ids.length; rows = ids.map(diaryRowHtml).join('');
+                //   복습 목록엔 문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것)
+                if (what === 'review') {
+                    const rv = diaryAiNotesOn(ds).filter(n => n.rv);
+                    count += rv.length;
+                    rows += rv.map(diaryAiNoteRowHtml).join('');
+                }
             }
 
             //   숫자는 있는데 목록이 없으면 (적어두기 전 날) 그 사정을 적어준다

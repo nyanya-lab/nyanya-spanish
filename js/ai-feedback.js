@@ -1777,7 +1777,8 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 ];
                 renderChatThread();
 
-                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback);
+                //   복습으로 센 번역은 노트에 표시해 둔다 — 일지에서 첨삭 목록이 아니라 복습 목록에 나오게
+                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback, undefined, countAsReview);
                 logAction(countAsReview ? 'review' : 'ai');
                 saveToStorage();
                 updateStats();
@@ -3441,11 +3442,19 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     if (hay.indexOf(' ' + key + ' ') >= 0) out.set(id, key);
                 });
             }
+            //   [냐냐 지적] 원형 칸을 원형 그대로 써도 대명사가 있어야 한다 (2026-09-23).
+            //   'Vamos a quedar en la…'(만나기로 하다)가 역구조동사 +1 을 받았다 — 대명사 조건이
+            //   활용형(아래)에만 걸리고, 원형 글자가 칸과 똑같으면 여기서 그냥 걸렸다.
+            //   '-se' 로 끝나는 원형(levantarse)은 대명사를 제 안에 달고 있으니 그대로 둔다.
+            const LW0 = _noteCellIndex.lemmaWords;
+            const hasClitic = raws.some(r => CLITIC_PRONOUNS.has(nz(r)));
             raws.forEach(raw => {
                 const k = nz(raw);
                 if (!k) return;
                 const id = _noteCellIndex.words.get(k);
-                if (id && !out.has(id)) out.set(id, raw);
+                if (!id || out.has(id)) return;
+                if (LW0 && LW0.get(k) === id && !hasClitic && !/se$/.test(k)) return;
+                out.set(id, raw);
             });
             // 표 이름이 동사를 말하는 칸 — 그 동사가 문장에 같이 있을 때만 인정한다.
             //   'hace calor' 는 날씨, 'tengo calor' 는 tener 노트. 겹치는 낱말을 이렇게 가른다.
@@ -4245,7 +4254,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
         //   제목은 채점 단계에서 이미 걸러진 뒤라, 여기 오는 건 전부 실제로 있는 노트다.
         let _lastAiNoteKey = null;   // 방금 남긴 노트 (점수를 해제하면 이 노트에서 빼야 한다)
 
-        function recordAiNote(mode, ask, mine, feedback, gramHits) {
+        function recordAiNote(mode, ask, mine, feedback, gramHits, asReview) {
             if (typeof aiNotes === 'undefined' || !feedback) return;
             const plain = (v) => String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
             const mineText = plain(mine);
@@ -4266,6 +4275,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 gram: aiNoteGramHits(gramHits),               // [{ id, n(제목), ok }]
                 //   [냐냐 요청] AI 품사가 단어장과 어느 만큼 맞는지 재려고 남긴다 (점수엔 안 쓴다)
                 posx: (aiLastPosStats && aiLastPosStats.n) ? aiLastPosStats : undefined,
+                rv: asReview ? 1 : undefined,                 // 문법 복습으로 푼 번역 (일지에선 복습)
                 ok: !!feedback.isCorrect
             });
             if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;
