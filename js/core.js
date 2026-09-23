@@ -10630,6 +10630,38 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             go();
         }
+        // ============================================================
+        // [냐냐 요청] 머리 줄 제목이 날마다 바뀐다 (2026-09-23) — '¡○○, 냐냐!'
+        //   날짜로 고르니 하루 동안은 같고, 폰과 PC 에서도 같은 문구다. 마우스를 올리면 뜻.
+        //   ⚠️ 머리 줄 폭 때문에 짧은 표현만 넣는다.
+        // ============================================================
+        const DAILY_TITLES = [
+            ['Poco a poco', '조금씩 조금씩'],
+            ['Paso a paso', '한 걸음씩'],
+            ['Vamos', '가자!'],
+            ['Ánimo', '힘내!'],
+            ['Tú puedes', '넌 할 수 있어!'],
+            ['Sigue así', '그대로 쭉!'],
+            ['Qué bien', '잘하고 있어!'],
+            ['Buen día', '좋은 하루!'],
+            ['Hola', '안녕!'],
+            ['A por ello', '해보자!']
+        ];
+        function renderDailyTitle() {
+            const el = document.getElementById('app-title');
+            if (!el) return;
+            const [y, m, d] = getLocalDateString().split('-').map(Number);
+            //   2026-09-23(처음 단 날)을 목록 첫 줄(Poco a poco)로 잡고 하루에 한 줄씩
+            const n = DAILY_TITLES.length;
+            const dayNo = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(2026, 8, 23)) / 86400000);
+            const [es, ko] = DAILY_TITLES[((dayNo % n) + n) % n];
+            el.innerHTML = `<span class="text-[#D85A30]">¡${escapeHtml(es)},</span> 냐냐!`;
+            el.title = ko;
+        }
+        renderDailyTitle();
+        //   켜둔 채로 날짜가 넘어가면 다시 보러 왔을 때 바꾼다
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderDailyTitle(); });
+
         function logoClicked() {
             triggerPunchLogo();
             setTimeout(hardReloadApp, 180);   // 펀치 효과를 잠깐 보여주고 새로고침
