@@ -3941,7 +3941,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   - 다 보면 기록을 남기고, 끝난 지 45일이 넘으면 버튼을 빨갛게 한다 (마감이 아니라 알림).
         // ============================================================
         const WRITE_EXAM_SCOPES = ['mastered', 'weak', 'graduated'];
-        const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '곡선 졸업' };
+        const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '졸업' };
+        const WRITE_EXAM_ICONS = { mastered: '🟩', weak: '⭐', graduated: '🎓' };
         const WRITE_EXAM_REMIND_DAYS = 45;   // [냐냐 결정] 30 → 45 (2026-09-23)
         const WRITE_EXAM_LONG_DAYS = 15;     // [냐냐 결정] 이만큼 넘게 걸린 시험은 '📌+N' 을 붙인다
         const WRITE_EXAM_HISTORY_MAX = 36;
@@ -4087,11 +4088,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // [냐냐 요청] 시험 버튼 — 상태를 버튼 안에 다 넣는다 (2026-09-23, 밑의 설명 줄은 없앴다).
         //   진행 중: '🟩 마스터 · 9/23'(명단 고정일) / '단어 60/158 · 관용구 10/12' · 연노랑
         //   처음·끝남: 이름 옆에 '처음' / 'N일 전', 밑줄은 지금 목록 개수 · 끝난 지 45일 넘으면 연빨강
-        let writeExamHistoryOpen = false;
-        function toggleWriteExamHistory() {
-            writeExamHistoryOpen = !writeExamHistoryOpen;
-            renderWriteExamUi();
-        }
         function renderWriteExamUi() {
             WRITE_EXAM_SCOPES.forEach(sc => {
                 const st = writeExamStatus(sc);
@@ -4154,34 +4150,63 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
         }
 
-        //   지난 시험 기록 — '📜 기록' 을 눌렀을 때만 편다. 세 시험을 갈래별로 모아 보여준다.
+        // ============================================================
+        // [냐냐 요청] 시험 기록은 팝업으로 — 마스터 · 약점 · 졸업 탭 (2026-09-23).
+        //   탭마다 몇 바퀴 돌았는지 적고, 기록마다 몇 바퀴째였는지 붙인다 (1바퀴 = 첫 시험).
+        //   ⚠️ 여기서 '바퀴' 는 시험을 한 번 다 돈 것이다 — 쓰기 한 판 안의 1·2·3바퀴와는 다르다.
+        // ============================================================
+        let writeExamHistoryTab = 'mastered';
         function renderWriteExamHistory() {
+            //   '📜 기록' 버튼은 시험을 한 번이라도 시작했으면 (진행 중인 바퀴도 팝업에 뜬다)
             const btn = document.getElementById('write-exam-history-btn');
-            const box = document.getElementById('write-exam-history');
-            const any = WRITE_EXAM_SCOPES.some(sc => writeExamOf(sc).history.length);
-            if (btn) {
-                btn.classList.toggle('hidden', !any);
-                btn.innerText = writeExamHistoryOpen ? '📜 기록 접기' : '📜 기록';
-            }
-            if (!box) return;
-            if (!any || !writeExamHistoryOpen) { box.classList.add('hidden'); return; }
-            const recLine = (rec) => {
+            if (btn) btn.classList.toggle('hidden', !WRITE_EXAM_SCOPES.some(sc => { const ex = writeExamOf(sc); return ex.cur || ex.history.length; }));
+        }
+        function openWriteExamHistory(sc) {
+            writeExamHistoryTab = sc || (isWriteExamScope(writeScope) ? writeScope : 'mastered');
+            renderWriteExamHistoryModal();
+            const m = document.getElementById('write-exam-history-modal');
+            if (m) m.classList.remove('hidden');
+        }
+        function closeWriteExamHistory() {
+            const m = document.getElementById('write-exam-history-modal');
+            if (m) m.classList.add('hidden');
+        }
+        function renderWriteExamHistoryModal() {
+            const tabs = document.getElementById('write-exam-history-tabs');
+            const body = document.getElementById('write-exam-history-body');
+            if (tabs) tabs.innerHTML = WRITE_EXAM_SCOPES.map(sc => {
+                const on = sc === writeExamHistoryTab;
+                const n = writeExamOf(sc).history.length;
+                return `<button type="button" onclick="openWriteExamHistory('${sc}')" class="py-2 rounded-xl border-2 text-xs font-bold transition-all ${on ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'}">${WRITE_EXAM_ICONS[sc]} ${WRITE_EXAM_LABELS[sc]}<span class="block text-[10px] font-bold mt-0.5 ${on ? 'text-indigo-400' : 'text-slate-400'}">${n}바퀴</span></button>`;
+            }).join('');
+            if (!body) return;
+            const ex = writeExamOf(writeExamHistoryTab);
+            const h = ex.history;
+            //   지금 돌고 있는 바퀴가 있으면 맨 위에 (다음 번호로)
+            const doing = ex.cur ? `
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                    <p class="text-amber-700"><b>${h.length + 1}바퀴</b> · 진행 중 · 📌 ${writeExamShortDate(ex.cur.start)}</p>
+                    <p class="text-[11px] text-amber-600 mt-0.5">${writeExamSplitText(writeExamSplit(ex.cur.keys, k => k in ex.cur.seen))} 봤어요</p>
+                </div>` : '';
+            const cards = h.map((rec, idx) => {
+                const round = h.length - idx;
                 const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${writeExamShortDate(rec.end)}`;
                 //   예전 기록(갈라 세기 전)은 합친 숫자로
                 const counts = (rec.tw != null)
                     ? writeExamSplitText({ w: [rec.ow, rec.tw], i: [rec.oi || 0, rec.ti || 0] })
-                    : `${rec.total}개 중 ${rec.ok}개`;
-                const line = `${range} · ${counts} <span class="text-emerald-600">(${writeExamPct(rec)}%)</span>`;
+                    : `${rec.ok}/${rec.total}`;
                 const wrongChips = (rec.wrong || []).map(x => `<span class="inline-block m-0.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">${x.i ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(x.w)}<span class="font-semibold text-slate-400"> ${escapeHtml(x.m || '')}</span></span>`).join('');
-                return wrongChips
-                    ? `<details class="border-t border-slate-200 pt-1"><summary class="cursor-pointer">${line} <span class="text-rose-400">· 틀린 ${rec.wrong.length}개</span></summary><div class="-m-0.5 pt-1">${wrongChips}</div></details>`
-                    : `<div class="border-t border-slate-200 pt-1">${line}</div>`;
-            };
-            box.innerHTML = WRITE_EXAM_SCOPES.map(sc => {
-                const h = writeExamOf(sc).history;
-                return h.length ? `<div class="space-y-1"><p class="font-black text-slate-700">${WRITE_EXAM_LABELS[sc]}</p>${h.map(recLine).join('')}</div>` : '';
+                return `
+                <div class="rounded-2xl border border-slate-200 px-3 py-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="text-slate-700"><b>${round}바퀴</b> · ${range}</p>
+                        <span class="text-emerald-600 shrink-0">${writeExamPct(rec)}%</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-0.5">한 번에 맞힘 ${counts}</p>
+                    ${wrongChips ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-rose-400">틀린 ${rec.wrong.length}개</summary><div class="-m-0.5 pt-1">${wrongChips}</div></details>` : ''}
+                </div>`;
             }).join('');
-            box.classList.remove('hidden');
+            body.innerHTML = (doing + cards) || '<p class="text-slate-400 text-center py-6">아직 끝낸 시험이 없어요</p>';
         }
 
         function getWriteScopePool() {

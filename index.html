@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609231026">
+    <link rel="stylesheet" href="css/style.css?v=202609231030">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -779,16 +779,14 @@
                                     </div>
                                     <div class="flex items-center justify-between gap-2 pt-1">
                                         <p class="text-[10px] font-bold text-slate-400">시험 · 명단을 고정하고 나눠서 다 봐요</p>
-                                        <button type="button" id="write-exam-history-btn" onclick="toggleWriteExamHistory()" class="hidden text-[10px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors shrink-0">📜 기록</button>
+                                        <button type="button" id="write-exam-history-btn" onclick="openWriteExamHistory()" class="hidden text-[10px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors shrink-0">📜 기록</button>
                                     </div>
                                     <div class="grid grid-cols-3 gap-2">
                                         <button onclick="selectWriteScope('mastered')" data-write-scope="mastered" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🟩 마스터<span data-exam-date="mastered"></span><span data-exam-sub="mastered" class="block text-[10px] font-bold mt-0.5"></span></button>
                                         <button onclick="selectWriteScope('weak')" data-write-scope="weak" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">⭐ 약점<span data-exam-date="weak"></span><span data-exam-sub="weak" class="block text-[10px] font-bold mt-0.5"></span></button>
                                         <!-- [냐냐 요청] 곡선을 졸업하면 어디에도 안 잡혀서 레이더에서 사라진다 -->
-                                        <button onclick="selectWriteScope('graduated')" data-write-scope="graduated" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🎓 곡선 졸업<span data-exam-date="graduated"></span><span data-exam-sub="graduated" class="block text-[10px] font-bold mt-0.5"></span></button>
+                                        <button onclick="selectWriteScope('graduated')" data-write-scope="graduated" class="write-scope-btn py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-300 transition-all">🎓 졸업<span data-exam-date="graduated"></span><span data-exam-sub="graduated" class="block text-[10px] font-bold mt-0.5"></span></button>
                                     </div>
-                                    <!-- 지난 시험 기록 — 위 '📜 기록' 을 눌렀을 때만 편다 -->
-                                    <div id="write-exam-history" class="hidden text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 space-y-2"></div>
                                 </div>
 
                                 <!-- [냐냐 요청] 동사를 어느 시제로 물어볼지 고른다 (안 고르면 아무거나) -->
@@ -1948,6 +1946,20 @@
         </div>
     </div>
 
+    <!-- [냐냐 요청] 쓰기 시험 기록 — 마스터 · 약점 · 졸업 탭 (vocab.js openWriteExamHistory) -->
+    <div id="write-exam-history-modal" onclick="if (event.target === this) closeWriteExamHistory()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-lg rounded-3xl max-h-[85vh] shadow-2xl flex flex-col">
+            <div class="p-5 pb-3 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-900">📜 쓰기 시험 기록</h3>
+                <button onclick="closeWriteExamHistory()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="write-exam-history-tabs" class="px-5 grid grid-cols-3 gap-2"></div>
+            <div id="write-exam-history-body" class="p-5 overflow-y-auto space-y-2 text-xs font-bold text-slate-600"></div>
+        </div>
+    </div>
+
     <div id="help-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -2575,13 +2587,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609231026"></script>
-    <script src="js/creatures.js?v=202609231026"></script>
-    <script src="js/core.js?v=202609231026"></script>
-    <script src="js/vocab.js?v=202609231026"></script>
-    <script src="js/flashcards.js?v=202609231026"></script>
-    <script src="js/quiz.js?v=202609231026"></script>
-    <script src="js/games.js?v=202609231026"></script>
-    <script src="js/ai-feedback.js?v=202609231026"></script>
+    <script src="js/dictionary-data.js?v=202609231030"></script>
+    <script src="js/creatures.js?v=202609231030"></script>
+    <script src="js/core.js?v=202609231030"></script>
+    <script src="js/vocab.js?v=202609231030"></script>
+    <script src="js/flashcards.js?v=202609231030"></script>
+    <script src="js/quiz.js?v=202609231030"></script>
+    <script src="js/games.js?v=202609231030"></script>
+    <script src="js/ai-feedback.js?v=202609231030"></script>
 </body>
 </html>
