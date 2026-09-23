@@ -1961,7 +1961,7 @@
         </div>
     </div>
 
-    <div id="help-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div id="help-modal" onclick="if(event.target===this) closeHelpModal()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-3xl rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
                 <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -2457,7 +2457,7 @@
     </div>
 
     <!-- [냐냐 요청] 복습 배너 → 몇 번에 나눠 할지 먼저 고르기 -->
-    <div id="review-split-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div id="review-split-modal" onclick="if(event.target===this) closeReviewSplitModal()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-5 text-center max-h-[90vh] overflow-y-auto">
             <div class="relative">
                 <div class="text-4xl">📖</div>
@@ -2518,7 +2518,7 @@
     </div>
 
     <!-- [냐냐 요청] 달력에서 '단어 보기' → 그날 복습 예정 단어를 망각곡선 단계별로 -->
-    <div id="review-plan-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div id="review-plan-modal" onclick="if(event.target===this) closeReviewPlanModal()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[85vh] flex flex-col">
             <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
                 <div class="min-w-0">
