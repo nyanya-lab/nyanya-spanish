@@ -4668,7 +4668,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     ` : `
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold text-slate-500">${s.grading ? '<i class="fa-solid fa-spinner animate-spin"></i> 채점 중...' : inputLabel}</label>
-                        <input id="write-practice-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                        <input id="write-practice-input" data-es type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
                             onkeydown="writePracticeKeydown(event)" ${s.grading ? 'disabled' : ''}
                             class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2 disabled:opacity-50"
                             placeholder="${escapeHtml(placeholder)}">

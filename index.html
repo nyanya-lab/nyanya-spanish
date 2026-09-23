@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609231043">
+    <link rel="stylesheet" href="css/style.css?v=202609231053">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -986,7 +986,7 @@
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
                             <div class="relative">
-                                <textarea id="ai-user-input" rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitAiTranslationKoEs();}" placeholder="스페인어로 직접 머릿속으로 작문한 후 정답을 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
+                                <textarea id="ai-user-input" data-es rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitAiTranslationKoEs();}" placeholder="스페인어로 직접 머릿속으로 작문한 후 정답을 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
                                 <button type="button" onclick="clearInputField('ai-user-input')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
                             </div>
                         </div>
@@ -1012,7 +1012,7 @@
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">스페인어 문장 자유 입력</label>
                             <div class="relative">
-                                <textarea id="ai-free-input-es" rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitAiTranslationEsKo();}" placeholder="예: No tengo los libros ahora. (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
+                                <textarea id="ai-free-input-es" data-es rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitAiTranslationEsKo();}" placeholder="예: No tengo los libros ahora. (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"></textarea>
                                 <button type="button" onclick="clearInputField('ai-free-input-es')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
                             </div>
                         </div>
@@ -1087,7 +1087,7 @@
 
                         <div class="space-y-1.5">
                             <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변</label>
-                            <textarea id="question-answer-input" rows="3" onkeydown="handleQuestionAnswerKeydown(event)" placeholder="스페인어로 답을 작성해보세요... (Enter로 제출, Shift+Enter 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold" style="padding-top:0.625rem;padding-bottom:0.625rem"></textarea>
+                            <textarea id="question-answer-input" data-es rows="3" onkeydown="handleQuestionAnswerKeydown(event)" placeholder="스페인어로 답을 작성해보세요... (Enter로 제출, Shift+Enter 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold" style="padding-top:0.625rem;padding-bottom:0.625rem"></textarea>
                         </div>
 
                         <div class="flex gap-2 justify-end flex-wrap !mt-2">
@@ -1129,7 +1129,7 @@
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
                             <div class="relative">
-                                <textarea id="ai-example-input" rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitExampleMission();}" placeholder="스페인어로 직접 작문한 후 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
+                                <textarea id="ai-example-input" data-es rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitExampleMission();}" placeholder="스페인어로 직접 작문한 후 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
                                 <button type="button" onclick="clearInputField('ai-example-input')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
                             </div>
                         </div>
@@ -2588,13 +2588,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609231043"></script>
-    <script src="js/creatures.js?v=202609231043"></script>
-    <script src="js/core.js?v=202609231043"></script>
-    <script src="js/vocab.js?v=202609231043"></script>
-    <script src="js/flashcards.js?v=202609231043"></script>
-    <script src="js/quiz.js?v=202609231043"></script>
-    <script src="js/games.js?v=202609231043"></script>
-    <script src="js/ai-feedback.js?v=202609231043"></script>
+    <script src="js/dictionary-data.js?v=202609231053"></script>
+    <script src="js/creatures.js?v=202609231053"></script>
+    <script src="js/core.js?v=202609231053"></script>
+    <script src="js/vocab.js?v=202609231053"></script>
+    <script src="js/flashcards.js?v=202609231053"></script>
+    <script src="js/quiz.js?v=202609231053"></script>
+    <script src="js/games.js?v=202609231053"></script>
+    <script src="js/ai-feedback.js?v=202609231053"></script>
+    <script src="js/es-keys.js?v=202609231053"></script>
 </body>
 </html>

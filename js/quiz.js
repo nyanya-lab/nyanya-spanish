@@ -562,6 +562,9 @@ let quizSession = null;
                 const input = document.getElementById('quiz-subjective-input');
                 input.value = '';
                 input.disabled = false;
+                //   [냐냐 요청] 스페인어로 답하는 문제면 한글 자판으로 쳐도 스페인어로 (es-keys.js).
+                //   관용구 뜻을 한국어로 쓰는 문제만 뺀다.
+                input.toggleAttribute('data-es', !(q.type === 'idiom-subjective' && q.subDir !== 'ko-es'));
                 const synHint = document.getElementById('quiz-synonym-hint');
                 if (synHint) synHint.classList.add('hidden'); // 새 문제면 동의어 힌트 숨김
                 document.getElementById('quiz-subjective-submit-btn').disabled = false;

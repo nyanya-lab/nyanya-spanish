@@ -267,7 +267,7 @@
                         <p id="rf-question" class="text-2xl font-black text-slate-900">-</p>
                         <p id="rf-feedback" class="text-sm font-bold mt-2 h-5"></p>
                     </div>
-                    <input type="text" id="rf-input" autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-rose-400">
+                    <input type="text" id="rf-input" data-es autocomplete="off" placeholder="스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-rose-400">
                     <p class="text-center text-xs text-slate-400">남은 시간 <span id="rf-time" class="font-bold text-slate-600">60</span>초</p>
                 </div>
             `);
@@ -440,7 +440,7 @@
                     <div id="fall-area" class="relative bg-gradient-to-b from-sky-50 to-emerald-50 border border-slate-100 rounded-2xl overflow-hidden" style="height: min(68vh, 640px); min-height: 480px;">
                         <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-300"></div>
                     </div>
-                    <input type="text" id="fall-input" autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                    <input type="text" id="fall-input" data-es autocomplete="off" placeholder="떨어지는 단어의 스페인어 입력 후 Enter" class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400">
                 </div>
             `);
 
@@ -654,7 +654,7 @@
                         <p class="text-xs text-slate-400">속도를 바꾸고 스피커를 다시 눌러요</p>
                         <p id="listen-feedback" class="text-sm font-bold h-5"></p>
                     </div>
-                    <textarea id="listen-input" rows="2" placeholder="들은 문장을 입력하세요..." class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-semibold focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
+                    <textarea id="listen-input" data-es rows="2" placeholder="들은 문장을 입력하세요..." class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-center text-base font-semibold focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
                     <!-- [냐냐 PATCH-2차잔여] 확인 후 이 문장의 단어 정보(유의어 포함) -->
                     <div id="listen-detail-box" class="hidden"></div>
                     <button onclick="listeningSubmit()" class="w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl text-sm font-bold transition-all">확인</button>
@@ -802,10 +802,19 @@
             if (hangmanKeysBound) return;
             hangmanKeysBound = true;
             //   한 번만 달아두고 게임 중일 때만 받는다 (판마다 달면 겹쳐 쌓인다)
+            //   [냐냐 요청] 한글 자판이어도 스페인어(스페인) 자판 자리대로 (2026-09-23, es-keys.js).
+            //   한글 자판이면 e.key 가 'Process'·자모로 와서 예전엔 아무 글자도 안 잡혔다 — 키 자리로 읽는다.
+            //   악센트 키(ñ 오른쪽)를 누르면 다음 모음에 악센트를 붙인다.
+            let dead = null;
             document.addEventListener('keydown', (e) => {
                 if (!gameState || gameState.type !== 'hangman') return;
                 if (e.ctrlKey || e.metaKey || e.altKey) return;
-                const k = String(e.key || '').toLowerCase();
+                let k = String(e.key || '');
+                if (!(k.length === 1 && /[a-záéíóúüñ]/i.test(k)) && typeof esKeyChar === 'function') k = esKeyChar(e) || k;
+                if (k === '´' || k === '¨') { e.preventDefault(); dead = k; return; }
+                k = k.toLowerCase();
+                if (dead && /^[aeiou]$/.test(k) && typeof esApplyDead === 'function') k = esApplyDead(dead, k) || k;
+                dead = null;
                 if (k.length === 1 && /[a-záéíóúüñ]/.test(k)) { e.preventDefault(); hangmanGuess(k); }
             });
         }
@@ -1636,7 +1645,7 @@
                         ${blk.rows.map(r => `
                         <div class="space-y-1">
                             ${r.personLabel ? `<span class="block text-[10px] font-bold text-slate-400 text-center">${escapeHtml(r.personLabel)}</span>` : ''}
-                            <input type="text" id="vconj-input-${r.idx}" onkeydown="vconjInputKeydown(event, ${r.idx})" autocomplete="off" autocapitalize="off" spellcheck="false"
+                            <input type="text" id="vconj-input-${r.idx}" data-es onkeydown="vconjInputKeydown(event, ${r.idx})" autocomplete="off" autocapitalize="off" spellcheck="false"
                                 class="vconj-cell w-full bg-white px-2 py-2 rounded-lg border border-slate-200 text-sm text-center font-bold focus:outline-none focus:border-indigo-400">
                             <div id="vconj-mark-${r.idx}" class="hidden text-[11px] text-center font-bold"></div>
                         </div>`).join('')}
@@ -2010,7 +2019,8 @@
             if (bi >= 0) {
                 // [냐냐 요청] 입력칸을 옆으로 쭉 늘림 (w-full)
                 const cls = inputClass || 'inline-block w-full';
-                return `<input id="fill-input-${bi}" type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input ${cls} px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
+                //   [냐냐 요청] 스페인어 빈칸이면 한글 자판으로 쳐도 스페인어로 (es-keys.js)
+                return `<input id="fill-input-${bi}" ${problem.lang === 'es' ? 'data-es' : ''} type="text" autocomplete="off" onkeydown="fillInputKeydown(event, ${bi})" class="fill-input ${cls} px-2 py-1 rounded-lg border-2 border-indigo-300 bg-indigo-50/40 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?">`;
             }
             return `<span class="${extraClass || ''}">${escapeHtml(text || '')}</span>`;
         }
@@ -2544,7 +2554,7 @@ Return JSON only, no markdown.`;
                         const key = `${bi}-${ri}-${ci}`;
                         if (key in blankIndexOf) {
                             const idx = blankIndexOf[key];
-                            return `<td class="px-1 py-1 align-middle border border-[#c3d9ec] ${rowBg}"${spanAttr}><input id="gfill-input-${idx}" type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${idx})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
+                            return `<td class="px-1 py-1 align-middle border border-[#c3d9ec] ${rowBg}"${spanAttr}><input id="gfill-input-${idx}" ${/[가-힣]/.test(String(c || '')) ? '' : 'data-es'} type="text" autocomplete="off" onkeydown="gfillInputKeydown(event, ${idx})" class="gfill-input w-full min-w-[70px] px-1.5 py-1 rounded border-2 border-indigo-300 bg-indigo-50/40 text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="?"></td>`;
                         }
                         return `<td class="px-2 py-1.5 text-xs text-center align-middle border border-[#c3d9ec] ${colHl}"${spanAttr}>${escapeHtml(c || '')}</td>`;
                     }).join('');
