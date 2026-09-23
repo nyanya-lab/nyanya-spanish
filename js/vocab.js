@@ -4024,7 +4024,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const wrong = cur.keys.filter(k => cur.seen[k] === 0).map(k => {
                 const t = writeExamTaskOf(k);
                 const base = (t && t._conjOf) || t;
-                return t ? { w: base.word, m: String(base.meaning || '').split('\n')[0], i: t._isIdiomTask ? 1 : 0 } : null;
+                //   id = 눌렀을 때 열 단어 (관용구면 그 표현이 달린 단어)
+                return t ? { w: base.word, m: String(base.meaning || '').split('\n')[0], i: t._isIdiomTask ? 1 : 0,
+                             id: String((t._idiomOf || t._conjOf || t).id) } : null;
             }).filter(Boolean);
             const sp = writeExamSplit(cur.keys, k => cur.seen[k] === 1);
             const rec = {
@@ -4188,21 +4190,37 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <p class="text-amber-700"><b>${h.length + 1}바퀴</b> · 진행 중 · 📌 ${writeExamShortDate(ex.cur.start)}</p>
                     <p class="text-[11px] text-amber-600 mt-0.5">${writeExamSplitText(writeExamSplit(ex.cur.keys, k => k in ex.cur.seen))} 봤어요</p>
                 </div>` : '';
+            //   [냐냐 요청] 틀린 단어를 누르면 단어 상세 (기록 팝업 위에 뜬다).
+            //   예전 기록은 id 가 없어서 글자로 찾는다 — 관용구면 그 표현을 가진 단어.
+            const wrongWordId = (x) => {
+                if (x.id && (vocabulary || []).some(v => String(v.id) === String(x.id))) return String(x.id);
+                const hit = x.i
+                    ? (vocabulary || []).find(v => wordIdiomList(v).some(it => String(it.idiom).trim() === x.w))
+                    : (vocabulary || []).find(v => String(v.word).trim() === x.w);
+                return hit ? String(hit.id) : '';
+            };
+            let lastYear = '';
             const cards = h.map((rec, idx) => {
                 const round = h.length - idx;
                 const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${writeExamShortDate(rec.end)}`;
-                //   예전 기록(갈라 세기 전)은 합친 숫자로
-                const counts = (rec.tw != null)
-                    ? writeExamSplitText({ w: [rec.ow, rec.tw], i: [rec.oi || 0, rec.ti || 0] })
-                    : `${rec.ok}/${rec.total}`;
-                const wrongChips = (rec.wrong || []).map(x => `<span class="inline-block m-0.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">${x.i ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(x.w)}<span class="font-semibold text-slate-400"> ${escapeHtml(x.m || '')}</span></span>`).join('');
-                return `
+                //   [냐냐 요청] 해가 바뀌는 자리에 '26년' 줄 — 날짜마다 연도를 붙이면 길어서
+                const year = String(rec.end || '').slice(2, 4);
+                const yearLine = (year && year !== lastYear)
+                    ? `<div class="flex items-center gap-2 pt-1 text-[10px] font-black text-slate-400"><span>${year}년</span><span class="flex-1 border-t border-slate-200"></span></div>` : '';
+                lastYear = year;
+                const wrongChips = (rec.wrong || []).map(x => {
+                    const id = wrongWordId(x);
+                    const inner = `${x.i ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(x.w)}<span class="font-semibold text-slate-400"> ${escapeHtml(x.m || '')}</span>`;
+                    return id
+                        ? `<button type="button" onclick="openWordView('${escapeAttr(id)}')" class="inline-block m-0.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors">${inner}</button>`
+                        : `<span class="inline-block m-0.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">${inner}</span>`;
+                }).join('');
+                return `${yearLine}
                 <div class="rounded-2xl border border-slate-200 px-3 py-2.5">
                     <div class="flex items-center justify-between gap-2">
-                        <p class="text-slate-700"><b>${round}바퀴</b> · ${range}</p>
+                        <p class="text-slate-700"><b>${round}바퀴</b> · ${rec.total}개 · ${range}</p>
                         <span class="text-emerald-600 shrink-0">${writeExamPct(rec)}%</span>
                     </div>
-                    <p class="text-[11px] text-slate-500 mt-0.5">한 번에 맞힘 ${counts}</p>
                     ${wrongChips ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-rose-400">틀린 ${rec.wrong.length}개</summary><div class="-m-0.5 pt-1">${wrongChips}</div></details>` : ''}
                 </div>`;
             }).join('');

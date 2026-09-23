@@ -18,7 +18,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609231030">
+    <link rel="stylesheet" href="css/style.css?v=202609231034">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -1948,15 +1948,16 @@
 
     <!-- [냐냐 요청] 쓰기 시험 기록 — 마스터 · 약점 · 졸업 탭 (vocab.js openWriteExamHistory) -->
     <div id="write-exam-history-modal" onclick="if (event.target === this) closeWriteExamHistory()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="bg-white w-full max-w-lg rounded-3xl max-h-[85vh] shadow-2xl flex flex-col">
-            <div class="p-5 pb-3 flex items-center justify-between">
+        <!-- [냐냐 요청] 크기 고정 — 탭을 바꿔도 창이 줄었다 늘었다 하지 않게 -->
+        <div class="bg-white w-full max-w-lg h-[70vh] rounded-3xl shadow-2xl flex flex-col">
+            <div class="p-5 pb-3 flex items-center justify-between shrink-0">
                 <h3 class="text-lg font-bold text-slate-900">📜 쓰기 시험 기록</h3>
                 <button onclick="closeWriteExamHistory()" class="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <div id="write-exam-history-tabs" class="px-5 grid grid-cols-3 gap-2"></div>
-            <div id="write-exam-history-body" class="p-5 overflow-y-auto space-y-2 text-xs font-bold text-slate-600"></div>
+            <div id="write-exam-history-tabs" class="px-5 grid grid-cols-3 gap-2 shrink-0"></div>
+            <div id="write-exam-history-body" class="p-5 flex-1 min-h-0 overflow-y-auto space-y-2 text-xs font-bold text-slate-600"></div>
         </div>
     </div>
 
@@ -2587,13 +2588,13 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609231030"></script>
-    <script src="js/creatures.js?v=202609231030"></script>
-    <script src="js/core.js?v=202609231030"></script>
-    <script src="js/vocab.js?v=202609231030"></script>
-    <script src="js/flashcards.js?v=202609231030"></script>
-    <script src="js/quiz.js?v=202609231030"></script>
-    <script src="js/games.js?v=202609231030"></script>
-    <script src="js/ai-feedback.js?v=202609231030"></script>
+    <script src="js/dictionary-data.js?v=202609231034"></script>
+    <script src="js/creatures.js?v=202609231034"></script>
+    <script src="js/core.js?v=202609231034"></script>
+    <script src="js/vocab.js?v=202609231034"></script>
+    <script src="js/flashcards.js?v=202609231034"></script>
+    <script src="js/quiz.js?v=202609231034"></script>
+    <script src="js/games.js?v=202609231034"></script>
+    <script src="js/ai-feedback.js?v=202609231034"></script>
 </body>
 </html>
