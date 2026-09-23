@@ -4103,9 +4103,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     const bg = st.kind === 'doing' ? 'bg-amber-50' : (st.kind === 'old' ? 'bg-rose-50' : (on ? 'bg-indigo-50' : ''));
                     if (bg) btn.classList.add(bg);
                 }
+                //   [냐냐 요청] 시점은 전부 이름 옆에 (2026-09-23) — 📌 고정일 / 처음 / N일 전.
+                //   이름보다 작게 (10px). 개수는 밑줄에만.
+                const tone = st.kind === 'doing' ? 'text-amber-600' : (st.kind === 'old' ? 'text-rose-500' : 'text-slate-400');
                 if (dateEl) {
-                    dateEl.innerText = st.kind === 'doing' ? ` · ${writeExamShortDate(writeExamOf(sc).cur.start)}` : '';
-                    dateEl.className = 'text-[10px] text-amber-600';   // 범위 이름보다 작게
+                    dateEl.innerText = st.kind === 'doing' ? ` · 📌 ${writeExamShortDate(writeExamOf(sc).cur.start)}`
+                        : st.kind === 'new' ? ' · 처음'
+                        : ` · ${st.days === 0 ? '오늘' : `${st.days}일 전`}`;
+                    dateEl.className = 'text-[10px] ' + tone;
                 }
                 if (sub) {
                     let text;
@@ -4115,13 +4120,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     } else if (st.kind === 'new') {
                         //   [냐냐 요청] 처음·끝남도 단어·관용구를 갈라 적는다 (진행 중과 같은 꼴)
                         const r = writeExamRosterNow(sc);
-                        text = `처음 · 단어 ${r.words.length}${r.idioms.length ? ` · 관용구 ${r.idioms.length}` : ''}`;
+                        text = `단어 ${r.words.length}${r.idioms.length ? ` · 관용구 ${r.idioms.length}` : ''}`;
                     } else {
                         const L = st.last;
-                        const when = st.days === 0 ? '오늘' : `${st.days}일 전`;
                         text = (L.tw != null)
-                            ? `${when} · ${writeExamSplitText({ w: [L.ow, L.tw], i: [L.oi || 0, L.ti || 0] })}`
-                            : `${when} · ${L.ok}/${L.total}`;   // 갈라 세기 전 기록
+                            ? writeExamSplitText({ w: [L.ow, L.tw], i: [L.oi || 0, L.ti || 0] })
+                            : `${L.ok}/${L.total}`;   // 갈라 세기 전 기록
                     }
                     sub.innerText = text;
                     sub.className = 'block text-[10px] font-bold mt-0.5 ' + (st.kind === 'doing' ? 'text-amber-600'
