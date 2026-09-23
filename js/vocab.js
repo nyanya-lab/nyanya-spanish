@@ -3938,11 +3938,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   - 날을 넘겨 이어서 한다 (저장·동기화에 싣는다).
         //   - 단어·관용구를 한 명단에 넣는다 — 문제 유형 설정은 안 탄다.
         //   - '봤음' 은 1바퀴 판정 순간에 적는다 (점수를 적는 순간과 같다). 건너뛴 건 다음 회차로.
-        //   - 다 보면 기록을 남기고, 끝난 지 30일이 넘으면 버튼을 빨갛게 한다 (마감이 아니라 알림).
+        //   - 다 보면 기록을 남기고, 끝난 지 45일이 넘으면 버튼을 빨갛게 한다 (마감이 아니라 알림).
         // ============================================================
         const WRITE_EXAM_SCOPES = ['mastered', 'weak', 'graduated'];
         const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '곡선 졸업' };
-        const WRITE_EXAM_REMIND_DAYS = 30;
+        const WRITE_EXAM_REMIND_DAYS = 45;   // [냐냐 결정] 30 → 45 (2026-09-23)
         const WRITE_EXAM_HISTORY_MAX = 36;
         //   { scope: { cur: { start, keys: [], seen: { key: 1|0 } } | null, history: [{ start, end, total, ok, wrong: [{ w, m, i }] }] } }
         let writeExams = {};
@@ -4085,7 +4085,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         // [냐냐 요청] 시험 버튼 — 상태를 버튼 안에 다 넣는다 (2026-09-23, 밑의 설명 줄은 없앴다).
         //   진행 중: '🟩 마스터 · 9/23'(명단 고정일) / '단어 60/158 · 관용구 10/12' · 연노랑
-        //   처음: '처음 · 158개' / 끝남: '12일 전 · 89%' · 끝난 지 30일 넘으면 연빨강
+        //   처음·끝남: 이름 옆에 '처음' / 'N일 전', 밑줄은 지금 목록 개수 · 끝난 지 45일 넘으면 연빨강
         let writeExamHistoryOpen = false;
         function toggleWriteExamHistory() {
             writeExamHistoryOpen = !writeExamHistoryOpen;
