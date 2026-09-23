@@ -3,7 +3,7 @@
         //   ; → ñ · ' → 악센트(다음 모음에 붙는다) · = → ¡ · Shift+= → ¿ · - → ' · Shift+- → ? …
         //   키 자리(e.code)와 찍힌 글자(e.key)로 가른다 — 진짜 스페인어 자판으로 치면 e.key 가 이미
         //   'ñ' 'Dead' 라서 손대지 않는다. 글자로 가르면 스페인 자판의 ';' '?' 까지 바꿔버린다.
-        //   붙이는 곳: data-es 가 달린 칸 (스페인어 답을 쓰는 칸만. 한국어 칸·검색창은 안 붙인다)
+        //   붙이는 곳: 지금은 모든 글 칸 (아래 ES_KEYS_EVERYWHERE). 끄면 data-es 가 달린 스페인어 칸만.
         //
         //   ⚠️ 한글 자판으로 친 것을 바꾸는 건 두 번 해보고 걷어냈다 (2026-09-23).
         //   한글 입력기가 키를 먼저 쥐고 글자를 조립해서, 웹페이지는 조립이 끝난 뒤에야 손댈 수 있다.
@@ -69,8 +69,16 @@
             };
 
             const ES_KEYS_ON = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-            const isEsField = (el) => ES_KEYS_ON && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
-                && el.hasAttribute('data-es') && !el.readOnly && !el.disabled;
+            //   [냐냐 요청] 우선 사이트 모든 글 칸에 켠다 (2026-09-23) — 써보고 한국어 칸을 뺄지 정하기로.
+            //   ⚠️ 한국어 칸에서도 기호가 바뀐다 (/ → -, ~ → ª, ( → ) …). false 로 두면 data-es 칸만.
+            //   비밀번호·API 키(type=password)와 동기화 주소(data-no-es)는 늘 뺀다 — 틀리면 동기화가 끊긴다.
+            const ES_KEYS_EVERYWHERE = true;
+            const isEsField = (el) => {
+                if (!ES_KEYS_ON || !el || el.readOnly || el.disabled || el.hasAttribute('data-no-es')) return false;
+                const textLike = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'search'));
+                if (!textLike) return false;
+                return ES_KEYS_EVERYWHERE || el.hasAttribute('data-es');
+            };
 
             //   악센트 키는 칸에 아무것도 안 넣고 기억만 했다가, 다음에 들어온 첫 글자가 모음이면 얹는다
             //   (한 칸 한 글자인 십자말풀이에서도 되게)
