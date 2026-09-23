@@ -4202,7 +4202,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             let lastYear = '';
             const cards = h.map((rec, idx) => {
                 const round = h.length - idx;
-                const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${writeExamShortDate(rec.end)}`;
+                //   [냐냐 요청] 해를 넘긴 시험은 끝난 날에 연도를 붙인다 — '12/20 ~ 26/1/3'
+                const crossYear = String(rec.start || '').slice(0, 4) !== String(rec.end || '').slice(0, 4);
+                const endText = crossYear ? `${String(rec.end).slice(2, 4)}/${writeExamShortDate(rec.end)}` : writeExamShortDate(rec.end);
+                const range = rec.start === rec.end ? writeExamShortDate(rec.end) : `${writeExamShortDate(rec.start)} ~ ${endText}`;
                 //   [냐냐 요청] 해가 바뀌는 자리에 '26년' 줄 — 날짜마다 연도를 붙이면 길어서.
                 //   시작한 해(명단 고정일)로 가른다 — 12/20 ~ 1/3 은 25년 묶음에 들어간다.
                 const year = String(rec.start || rec.end || '').slice(2, 4);
