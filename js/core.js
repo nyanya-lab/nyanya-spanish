@@ -1604,27 +1604,25 @@ let vocabulary = [];
             const planWI = plan3 ? ((plan3.word || []).length + (plan3.idiom || []).length) : 0;
             const planG = plan3 ? (plan3.grammar || []).length : 0;
             // ============================================================
-            // [냐냐 요청] 틀린 개수 말고 정답률을 (2026-09-24).
+            // [냐냐 요청] '오늘 틀린 것' 버튼 자리에 정답률을 (2026-09-24).
             //   셈은 15일 정답률과 같다 — 퀴즈 한 문제·쓰기 한 낱말·첨삭 한 문장이 저마다 한 번.
-            //   ⚠️ '틀린 것' 버튼은 그대로 둔다 — 그건 숫자가 아니라 틀린 목록으로 가는 문이다.
-            //      둘은 세는 게 다르다 (정답률 = 푼 횟수, 틀린 것 = 낱말 수. 같은 걸 두 번 틀리면 2번 · 1개).
-            //   지난 날도 나온다 — 재료가 날마다 남아 있다 (틀린 것 목록은 오늘만).
+            //   누르면 팝업에서 갈래별 정답률과 오늘 틀린 목록을 본다 (예전 '틀린 것' 팝업 그대로).
+            //   지난 날도 나온다 — 재료가 날마다 남아 있다 (틀린 목록은 오늘만).
             // ============================================================
             const acc = (typeof accuracyBetween === 'function') ? accuracyBetween(ds, ds) : null;
-            const accTone = !acc || acc.pct === null ? '' : acc.pct < 50 ? 'text-rose-500' : acc.pct < 80 ? 'text-amber-600' : 'text-emerald-600';
-            const accBits = acc ? [['퀴즈', acc.parts.quiz], ['쓰기', acc.parts.write], ['첨삭', acc.parts.ai]]
-                .filter(([, p]) => p.t).map(([label, p]) => `${label} ${p.pct}`) : [];
-            //   ⚠️ 사이드바가 좁아 한 줄에 다 넣으면 잘린다 — 갈래별 숫자는 밑줄로 내린다.
-            const accHtml = (acc && acc.pct !== null) ? `
-                <p class="flex items-baseline px-0.5 text-[10px] font-black text-slate-400">
-                    <span class="whitespace-nowrap">🎯 정답률</span>
-                    <span class="ml-auto text-xs ${accTone}">${acc.pct}%</span>
-                </p>
-                ${accBits.length > 1 ? `<p class="px-0.5 text-right text-[10px] font-bold text-slate-400">${accBits.join(' · ')}</p>` : ''}` : '';
+            const hasAcc = !!(acc && acc.pct !== null);
+            const hasBad = !!(bad3 && bad3.total);
+            //   정답률로 색을 나눈다 — 반도 못 맞히면 빨강, 8할 넘으면 초록 (약한 문법 칩과 같은 잣대)
+            const accTone = !hasAcc ? 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                : acc.pct < 50 ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                : acc.pct < 80 ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100';
+            //   틀린 게 있는 갈래로 바로 연다
+            const accKind = hasBad ? (['word', 'idiom', 'grammar'].find(k => (bad3[k] || []).length) || 'word') : 'word';
             let planHtml = '';
-            if (plan3 || bad3 || accHtml) {
+            if (plan3 || hasAcc || hasBad) {
                 //   ⚠️ 셋을 한 줄에 두면 사이드바가 좁아 글씨가 다 잘린다 ('복… 91').
-                //      복습 예정 둘이 한 줄, 틀린 것은 그 밑에 한 줄 통째로.
+                //      복습 예정 둘이 한 줄, 정답률은 그 밑에 한 줄 통째로.
                 planHtml = `
                     <div class="mt-2 space-y-1 text-[11px]">
                         ${plan3 ? `
@@ -1637,8 +1635,7 @@ let vocabulary = [];
                                 ${pill('단어·관용구', planWI, 'word', 'plan', PLAN_TONE)}
                                 ${pill('문법', planG, 'grammar', 'plan', PLAN_TONE)}
                             </div>` : ''}
-                        ${accHtml ? `<div class="pt-1">${accHtml}</div>` : ''}
-                        ${bad3 && bad3.total ? `<div class="flex items-stretch pt-0.5">${pill('⚠️ 오늘 틀린 것', bad3.total, 'word', 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100')}</div>` : ''}
+                        ${(hasAcc || hasBad) ? `<div class="flex items-stretch pt-0.5">${pill('🎯 정답률', hasAcc ? acc.pct + '%' : '—', accKind, 'wrong', accTone)}</div>` : ''}
                     </div>`;
             }
 
@@ -2124,11 +2121,17 @@ let vocabulary = [];
 
         function openReviewPlanModal(ds, kind, mode) {
             const isWrong = (mode === 'wrong');
+            const isToday = ds === getLocalDateString();
+            //   [냐냐 요청] 'wrong' 은 이제 정답률 팝업이다 (2026-09-24) — 위에 갈래별 정답률, 밑에 오늘 틀린 목록.
+            //   틀린 목록은 마지막으로 틀린 날 하나만 남아서 오늘만 온전하다 — 지난 날은 정답률만 본다.
+            const NO_LIST = { word: [], idiom: [], grammar: [], total: 0 };
             const plan = isWrong
-                ? ((typeof getAllWrongOn === 'function') ? getAllWrongOn(ds) : null)
+                ? (isToday && typeof getAllWrongOn === 'function' ? getAllWrongOn(ds) : NO_LIST)
                 : ((typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null);
             const modal = document.getElementById('review-plan-modal');
             if (!plan || !modal) return;
+            const acc = (isWrong && typeof accuracyBetween === 'function') ? accuracyBetween(ds, ds) : null;
+            const accPctText = (acc && acc.pct !== null) ? acc.pct + '%' : '—';
 
             // [냐냐 요청] 셋 다 여기서 본다. 곡선이 셋인데 단어만 열리면 나머지는 개수만 보고 끝이었다.
             const KINDS = [
@@ -2141,14 +2144,15 @@ let vocabulary = [];
             const titleEl = document.getElementById('review-plan-title');
             const subEl = document.getElementById('review-plan-sub');
             const bodyEl = document.getElementById('review-plan-body');
-            const isToday = ds === getLocalDateString();
 
-            if (titleEl) titleEl.innerText = `${fmtDateSlash(ds)} ${isWrong ? '틀린 것' : '복습 예정'} · ${cur.icon} ${cur.label} ${cur.list.length}개`;
+            if (titleEl) titleEl.innerText = isWrong
+                ? `${fmtDateSlash(ds)} 정답률 ${accPctText}`
+                : `${fmtDateSlash(ds)} 복습 예정 · ${cur.icon} ${cur.label} ${cur.list.length}개`;
             setPlanModalCompact(modal, false);      // 일지 팝업이 좁혀두고 갔을 수 있다
             if (subEl) {
                 subEl.classList.remove('hidden');   // 일지 팝업이 숨겨두고 갔을 수 있다
                 subEl.innerText = isWrong
-                    ? '오늘 어디서든 틀린 것이에요 — 퀴즈·게임·복습·첨삭 전부요.'
+                    ? '퀴즈 한 문제 · 쓰기 한 낱말 · 첨삭 한 문장을 한 번씩 세요.'
                     : (isToday
                         ? '밀린 복습까지 포함한 숫자예요. 약한 것부터 보여드려요.'
                         : '오늘 걸 제때 다 했을 때 기준이에요. 밀리면 이 날로 더 넘어와요.');
@@ -2162,20 +2166,24 @@ let vocabulary = [];
                     ? ((typeof getAllScheduledOn === 'function' ? getAllScheduledOn(ds) : null) || {}).total
                     : ((typeof getAllWrongOn === 'function' ? getAllWrongOn(ds) : null) || {}).total)
                 : null;
-            const modeTab = (isToday && (plan.total || otherTotal))
+            //   정답률 탭엔 개수 대신 정답률을 적는다 (사이드바 버튼과 같은 값)
+            const wrongTabText = isWrong ? accPctText
+                : ((typeof accuracyBetween === 'function' && accuracyBetween(ds, ds).pct !== null) ? accuracyBetween(ds, ds).pct + '%' : '—');
+            const modeTab = isToday
                 ? `<div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 mb-1.5">
-                    ${[['plan', '📅 복습 예정', isWrong ? otherTotal : plan.total],
-                       ['wrong', '⚠️ 틀린 것', isWrong ? plan.total : otherTotal]].map(([m, label, n]) =>
-                        `<button onclick="openReviewPlanModal('${ds}', '${cur.key}', '${m}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${((m === 'wrong') === isWrong) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${label} ${n || 0}</button>`).join('')}
+                    ${[['plan', '📅 복습 예정', (isWrong ? otherTotal : plan.total) || 0],
+                       ['wrong', '🎯 정답률', wrongTabText]].map(([m, label, n]) =>
+                        `<button onclick="openReviewPlanModal('${ds}', '${cur.key}', '${m}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${((m === 'wrong') === isWrong) ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${label} ${n}</button>`).join('')}
                    </div>`
                 : '';
 
             // 셋을 오가는 줄. 0개인 것은 눌러도 볼 게 없으니 흐리게 둔다.
-            const tabs = `<div class="${STICKY_TABS_WRAP}">` + modeTab + `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+            const kindTabs = `<div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                 ${KINDS.map(k => k.list.length
                     ? `<button onclick="openReviewPlanModal('${ds}', '${k.key}', '${isWrong ? 'wrong' : 'plan'}')" class="py-2 rounded-xl text-[11px] font-black transition-all ${k.key === cur.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}">${k.icon} ${k.label} ${k.list.length}</button>`
                     : `<div class="py-2 rounded-xl text-[11px] font-black text-slate-300 text-center">${k.icon} ${k.label} 0</div>`).join('')}
-            </div></div>`;
+            </div>`;
+            const tabs = `<div class="${STICKY_TABS_WRAP}">` + modeTab + kindTabs + `</div>`;
 
             // 단계는 셋 다 같은 자리에 들어 있지만 꺼내는 길이 다르다
             const stageOf = (it) => cur.key === 'word' ? (it.reviewStage || 0)
@@ -2193,9 +2201,28 @@ let vocabulary = [];
             const label = (stage) => stage === 0 ? '처음 틀린 뒤 첫 복습' : `${stage}번 복습한 ${cur.unit}`;
 
             if (isWrong) {
-                bodyEl.innerHTML = tabs + (cur.list.length
-                    ? `<div class="space-y-1.5">${cur.list.map(itemHtml).join('')}</div>`
-                    : '<p class="text-slate-400 text-center text-xs py-4">이 갈래는 오늘 틀린 게 없어요 ✨</p>');
+                //   갈래별 정답률 — 푼 게 있는 갈래만 한 줄씩 (맞힌 수/푼 수 · %)
+                const accTone = (pct) => pct < 50 ? 'text-rose-500' : pct < 80 ? 'text-amber-600' : 'text-emerald-600';
+                const accRows = acc ? [['❓ 퀴즈', acc.parts.quiz], ['✍️ 쓰기 (복습·연습)', acc.parts.write], ['🤖 첨삭', acc.parts.ai]]
+                    .filter(([, p]) => p.t)
+                    .map(([label, p]) => `<div class="flex items-baseline gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
+                        <span class="text-xs font-bold text-slate-600">${label}</span>
+                        <span class="ml-auto text-[11px] font-bold text-slate-400">${p.c}/${p.t}</span>
+                        <span class="w-10 text-right text-sm font-black ${accTone(p.pct)}">${p.pct}%</span>
+                    </div>`).join('') : '';
+                const accBox = accRows
+                    ? `<div class="border border-slate-200 rounded-xl mb-3">${accRows}</div>`
+                    : '<p class="text-slate-400 text-center text-xs py-3">이 날은 퀴즈·쓰기·첨삭을 안 했어요.</p>';
+                //   틀린 목록은 오늘만 — 탭도 오늘만 낸다
+                //   ⚠️ 붙박이 줄엔 위 탭(복습 예정 ↔ 정답률)만 둔다. 갈래 탭까지 넣으면
+                //      정답률 표가 그 밑으로 밀려서 팝업을 열자마자 틀린 목록부터 보인다.
+                const listPart = isToday
+                    ? `<p class="px-0.5 pt-1 pb-1.5 text-[10px] font-black text-slate-400">⚠️ 오늘 틀린 것 ${plan.total} <span class="font-bold">— 퀴즈·게임·복습·첨삭 전부요</span></p>`
+                      + `<div class="mb-1.5">${kindTabs}</div>` + (cur.list.length
+                        ? `<div class="space-y-1.5">${cur.list.map(itemHtml).join('')}</div>`
+                        : '<p class="text-slate-400 text-center text-xs py-4">이 갈래는 오늘 틀린 게 없어요 ✨</p>')
+                    : '';
+                bodyEl.innerHTML = (modeTab ? `<div class="${STICKY_TABS_WRAP}">${modeTab}</div>` : '') + accBox + listPart;
                 modal.classList.remove('hidden');
                 return;
             }
