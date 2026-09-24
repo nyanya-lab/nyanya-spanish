@@ -1603,8 +1603,26 @@ let vocabulary = [];
                  </button>`;
             const planWI = plan3 ? ((plan3.word || []).length + (plan3.idiom || []).length) : 0;
             const planG = plan3 ? (plan3.grammar || []).length : 0;
+            // ============================================================
+            // [냐냐 요청] 틀린 개수 말고 정답률을 (2026-09-24).
+            //   셈은 15일 정답률과 같다 — 퀴즈 한 문제·쓰기 한 낱말·첨삭 한 문장이 저마다 한 번.
+            //   ⚠️ '틀린 것' 버튼은 그대로 둔다 — 그건 숫자가 아니라 틀린 목록으로 가는 문이다.
+            //      둘은 세는 게 다르다 (정답률 = 푼 횟수, 틀린 것 = 낱말 수. 같은 걸 두 번 틀리면 2번 · 1개).
+            //   지난 날도 나온다 — 재료가 날마다 남아 있다 (틀린 것 목록은 오늘만).
+            // ============================================================
+            const acc = (typeof accuracyBetween === 'function') ? accuracyBetween(ds, ds) : null;
+            const accTone = !acc || acc.pct === null ? '' : acc.pct < 50 ? 'text-rose-500' : acc.pct < 80 ? 'text-amber-600' : 'text-emerald-600';
+            const accBits = acc ? [['퀴즈', acc.parts.quiz], ['쓰기', acc.parts.write], ['첨삭', acc.parts.ai]]
+                .filter(([, p]) => p.t).map(([label, p]) => `${label} ${p.pct}`) : [];
+            //   ⚠️ 사이드바가 좁아 한 줄에 다 넣으면 잘린다 — 갈래별 숫자는 밑줄로 내린다.
+            const accHtml = (acc && acc.pct !== null) ? `
+                <p class="flex items-baseline px-0.5 text-[10px] font-black text-slate-400">
+                    <span class="whitespace-nowrap">🎯 정답률</span>
+                    <span class="ml-auto text-xs ${accTone}">${acc.pct}%</span>
+                </p>
+                ${accBits.length > 1 ? `<p class="px-0.5 text-right text-[10px] font-bold text-slate-400">${accBits.join(' · ')}</p>` : ''}` : '';
             let planHtml = '';
-            if (plan3 || bad3) {
+            if (plan3 || bad3 || accHtml) {
                 //   ⚠️ 셋을 한 줄에 두면 사이드바가 좁아 글씨가 다 잘린다 ('복… 91').
                 //      복습 예정 둘이 한 줄, 틀린 것은 그 밑에 한 줄 통째로.
                 planHtml = `
@@ -1619,6 +1637,7 @@ let vocabulary = [];
                                 ${pill('단어·관용구', planWI, 'word', 'plan', PLAN_TONE)}
                                 ${pill('문법', planG, 'grammar', 'plan', PLAN_TONE)}
                             </div>` : ''}
+                        ${accHtml ? `<div class="pt-1">${accHtml}</div>` : ''}
                         ${bad3 && bad3.total ? `<div class="flex items-stretch pt-0.5">${pill('⚠️ 오늘 틀린 것', bad3.total, 'word', 'wrong', 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100')}</div>` : ''}
                     </div>`;
             }
@@ -4918,10 +4937,16 @@ let vocabulary = [];
         //   한 숫자로 뭉치면 무엇 때문에 낮은지 알 수가 없다.
         function recentAccuracy(days) {
             const n = days || ACC_WINDOW_DAYS;
-            const from = addDaysToDateString(getLocalDateString(), -(n - 1));
+            const today = getLocalDateString();
+            return Object.assign({ days: n }, accuracyBetween(addDaysToDateString(today, -(n - 1)), today));
+        }
+
+        // [냐냐 요청] 일지에 그 날 정답률을 낸다 (2026-09-24). 15일 정답률과 같은 셈을 하루치로.
+        //   from ~ to (둘 다 포함) 의 퀴즈·쓰기 복습·첨삭.
+        function accuracyBetween(from, to) {
             const parts = { quiz: { t: 0, c: 0 }, ai: { t: 0, c: 0 }, write: { t: 0, c: 0 } };
             Object.keys(nyanyaDiary || {}).forEach(ds => {
-                if (ds < from) return;
+                if (ds < from || ds > to) return;
                 const d = nyanyaDiary[ds] || {};
                 parts.quiz.t += (d.quizTotal || 0);
                 parts.quiz.c += (d.quizCorrect || 0);
@@ -4931,7 +4956,7 @@ let vocabulary = [];
             (typeof aiNotes !== 'undefined' ? aiNotes : []).forEach(x => {
                 //   t 는 UTC 라 앞 10글자를 자르면 한국 새벽 0~9시가 전날로 간다
                 const ds = (x && x.t) ? getLocalDateString(new Date(x.t)) : '';
-                if (!ds || ds < from) return;
+                if (!ds || ds < from || ds > to) return;
                 parts.ai.t++;
                 if (x.ok) parts.ai.c++;
             });
@@ -4940,7 +4965,7 @@ let vocabulary = [];
             });
             const total = parts.quiz.t + parts.ai.t + parts.write.t;
             const correct = parts.quiz.c + parts.ai.c + parts.write.c;
-            return { days: n, total, correct, pct: total ? Math.round((correct / total) * 100) : null, parts };
+            return { total, correct, pct: total ? Math.round((correct / total) * 100) : null, parts };
         }
 
         //   [냐냐 지적] 정답률은 등급으로 옮기기 어렵다 — 퀴즈가 쉬우면 B2 가 나오고 어려우면 A2 가
