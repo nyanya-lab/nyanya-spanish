@@ -8,10 +8,10 @@
     <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
          앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
          manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202609241637">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202609241637">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202609241637">
-    <link rel="manifest" href="manifest.webmanifest?v=202609241637">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202609260010">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202609260010">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202609260010">
+    <link rel="manifest" href="manifest.webmanifest?v=202609260010">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202609241637">
+    <link rel="stylesheet" href="css/style.css?v=202609260010">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -71,7 +71,7 @@
                          진한 네모는 걷었다. 누르면 새로고침.
                          크기는 44px — 줄 높이(52px)는 그대로 두라셔서 위아래를 4px 씩 여백 쪽으로 내민다(-my-1) -->
                     <div id="header-logo" class="w-11 h-11 -my-1 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <img src="img/icon-192.png?v=202609241637" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
+                        <img src="img/icon-192.png?v=202609260010" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
@@ -2584,14 +2584,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202609241637"></script>
-    <script src="js/creatures.js?v=202609241637"></script>
-    <script src="js/core.js?v=202609241637"></script>
-    <script src="js/vocab.js?v=202609241637"></script>
-    <script src="js/flashcards.js?v=202609241637"></script>
-    <script src="js/quiz.js?v=202609241637"></script>
-    <script src="js/games.js?v=202609241637"></script>
-    <script src="js/ai-feedback.js?v=202609241637"></script>
-    <script src="js/es-keys.js?v=202609241637"></script>
+    <script src="js/dictionary-data.js?v=202609260010"></script>
+    <script src="js/creatures.js?v=202609260010"></script>
+    <script src="js/core.js?v=202609260010"></script>
+    <script src="js/vocab.js?v=202609260010"></script>
+    <script src="js/flashcards.js?v=202609260010"></script>
+    <script src="js/quiz.js?v=202609260010"></script>
+    <script src="js/games.js?v=202609260010"></script>
+    <script src="js/ai-feedback.js?v=202609260010"></script>
+    <script src="js/es-keys.js?v=202609260010"></script>
 </body>
 </html>

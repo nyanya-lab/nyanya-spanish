@@ -4771,7 +4771,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   갈림이 있으면 그 꼴들과도 대본다 ("salir mal" 을 악센트만 틀리게 쓴 것도 같은 대접)
             const cands = (typeof spanishAnswerVariants === 'function')
                 ? spanishAnswerVariants(correctRaw, true) : [normalizeWriteAnswer(correctRaw)];
-            return cands.some(c => stripAccentMarks(u) === stripAccentMarks(c));
+            if (cands.some(c => stripAccentMarks(u) === stripAccentMarks(c))) return true;
+            //   틀을 채워 쓴 답도 악센트만 빼면 맞는 경우 (templateFilledMatches)
+            return (typeof templateFilledMatches === 'function') && templateFilledMatches(userRaw, correctRaw, false);
         }
 
         // [냐냐 지적] 채점이 오래 걸린다. 재보니 AI 한 번 왕복이 빠를 때 1초, 밀릴 땐 5~8초다.

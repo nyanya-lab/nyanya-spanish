@@ -771,7 +771,66 @@ let quizSession = null;
         function spanishAnswerMatches(userRaw, correctRaw, keepAccents) {
             const u = normalizeSpanishAnswer(userRaw, keepAccents);
             if (!u) return false;
-            return spanishAnswerVariants(correctRaw, keepAccents).indexOf(u) >= 0;
+            if (spanishAnswerVariants(correctRaw, keepAccents).indexOf(u) >= 0) return true;
+            return templateFilledMatches(userRaw, correctRaw, keepAccents);
+        }
+
+        // ============================================================
+        // [냐냐 지적] 틀을 채워 쓴 답도 맞다 (2026-09-25).
+        //   "¿Qué ser [지시대명사]/[지시형용사+명사]?" 에 "qué es esto/eso/aquello" 를 썼는데 틀렸다고 했다.
+        //   예전엔 빈칸을 비우고 원형 그대로 "qué ser" 라고 써야만 맞았다.
+        //   → 빈칸 자리엔 무엇을 채워도(안 채워도) 되고, 틀의 동사 원형은 활용해 써도 된다.
+        //     고정된 낱말은 빠짐없이 그 차례대로 있어야 한다.
+        //   빈칸을 비운 답을 이미 받아주고 있으니, 채운 답을 받아준다고 더 헐거워지는 건 아니다.
+        //   동사 활용은 단어장에 적힌 활용표로 알아본다 (es → ser).
+        //   lenientVerbs: 동사 자리는 아무 낱말이나 — '낱말이 빠졌나' 만 보고 동사 판정은 AI 에게 맡길 때
+        // ============================================================
+        function templateTokens(raw, keepAccents) {
+            let s = String(raw || '').toLowerCase().trim().normalize('NFC').replace(RE_QA_MARKER, '');
+            if (!keepAccents) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            //   자리표시자는 대문자 표지로 (답은 이미 소문자라 부딪힐 일이 없다)
+            s = s.replace(RE_LEADING_ARTICLE, '').replace(RE_PLACEHOLDER, ' SLOTX ').replace(RE_HANGUL, ' ');
+            const out = [];
+            s.split(/\s+/).forEach(tok => {
+                if (tok === 'SLOTX') {
+                    //   "[A]/[B]" 는 빈칸 하나다 — 붙은 빈칸은 하나로 합친다
+                    if (!out.length || !out[out.length - 1].slot) out.push({ slot: true });
+                    return;
+                }
+                const clean = tok.replace(/[^\p{L}\p{N}\/]/gu, '');
+                if (!clean.replace(/\//g, '')) return;          // 빈칸 사이의 '/' 같은 기호만 남은 조각
+                const alts = spanishTokenAlts(clean).map(a => a.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+                out.push({ alts, verb: alts.some(a => a.length >= 3 && /(ar|er|ir|ír)(se)?$/.test(a)) });
+            });
+            return out;
+        }
+        function templateFilledMatches(userRaw, correctRaw, keepAccents, lenientVerbs) {
+            if (String(correctRaw || '').search(RE_PLACEHOLDER) < 0) return false;
+            const T = templateTokens(correctRaw, keepAccents);
+            if (!T.some(t => t.slot) || !T.some(t => !t.slot)) return false;
+            const U = normalizeSpanishAnswer(userRaw, keepAccents).split(' ').filter(Boolean);
+            if (!U.length) return false;
+            const verbOk = (t, u) => {
+                if (lenientVerbs) return true;
+                const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(u) : null;
+                return !!hit && t.alts.indexOf(normalizeSpanishAnswer(hit.word, keepAccents)) >= 0;
+            };
+            const tokOk = (t, u) => t.alts.indexOf(u) >= 0 || (t.verb && verbOk(t, u));
+            const memo = new Map();
+            const go = (ti, ui) => {
+                if (ti === T.length) return ui === U.length;
+                const key = ti * 1000 + ui;
+                if (memo.has(key)) return memo.get(key);
+                let ok = false;
+                if (T[ti].slot) {
+                    for (let k = ui; k <= U.length && !ok; k++) ok = go(ti + 1, k);   // 빈칸은 0개 이상
+                } else {
+                    ok = ui < U.length && tokOk(T[ti], U[ui]) && go(ti + 1, ui + 1);
+                }
+                memo.set(key, ok);
+                return ok;
+            };
+            return go(0, 0);
         }
 
         function submitMcAnswer(choice, btnEl) {
@@ -1160,6 +1219,7 @@ let quizSession = null;
 - "wrong": anything else (different meaning, gibberish, blank).
 Prefer "typo" over "synonym" when the answer is not a real Spanish word.
 If the target is a multi-word expression, EVERY word must be there. A missing or extra word — a preposition especially (target "en diagonal a", answer "diagonal a") — is NOT "correct": use "typo" if it is clearly an attempt at the same expression, otherwise "wrong".
+If the target is a TEMPLATE with slots in [ ] or ( ) (e.g. "¿Qué ser [지시대명사]?", "antes de [명사/동사원형]"), the student may fill the slots with fitting words and conjugate the template's infinitive to fit — "qué es esto" for "¿Qué ser [지시대명사]?" is "correct". The fixed words must still all be there; words filling a slot are not "extra".
 Also report whether the student's answer is itself a real Spanish word, and what it means — the learner needs to know if they wrote a different real word or just gibberish.
 Return JSON only.`;
                 // [냐냐 지적] 활용형 문제는 원형을 안 보여주고 뜻만 준다. 그래서 학생이 다른 동사를
@@ -1200,6 +1260,11 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
         //   여기서 다르면 진짜로 낱말이 빠졌거나 더 붙은 것이다.
         //   (악센트만 다른 경우는 AI를 부르기 전에 따로 처리된다 — 여기까지 오지 않는다)
         function phraseAnswerIncomplete(userRaw, correctRaw) {
+            //   [냐냐 지적] 틀 표현은 빈칸을 채워 쓰면 글자가 달라지는 게 당연하다 (2026-09-25).
+            //   고정 낱말이 다 있는지만 보고, 동사를 맞게 활용했는지는 AI 판정을 믿는다.
+            if (String(correctRaw || '').search(RE_PLACEHOLDER) >= 0) {
+                return !templateFilledMatches(userRaw, correctRaw, false, true);
+            }
             const c = normalizeSpanishAnswer(correctRaw);
             if (!c.includes(' ')) return false;      // 한 낱말짜리는 이 규칙과 상관없다
             return normalizeSpanishAnswer(userRaw) !== c;
