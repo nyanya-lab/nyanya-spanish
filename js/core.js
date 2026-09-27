@@ -6053,6 +6053,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return { min: lo, max: lo + span };
         }
 
+        // [냐냐 요청] 성장 그래프(단어장·문법표·관용구)의 꺾은선은 점선으로 (2026-09-28)
+        const GROWTH_LINE_DASH = '5 4';
+
         // [냐냐 PATCH] 오른쪽 축 라벨 (막대 그래프 기준선). 왼쪽=꺾은선 축, 오른쪽=막대 축
         // [냐냐 요청] 비율 축을 데이터에 맞춰 줄인다 — 20 단위로 올림 (2026-09-15).
         //   늘 0~100 으로 잡아두니 마스터 8% · 약점 1% 짜리 막대가 바닥에 붙어 안 보였다.
@@ -6161,8 +6164,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 ['#8b5cf6', '등록 단어(개)'],
                 ['#10b981', '마스터 비율(완벽 포함)'],
                 ['#f43f5e', '약점 비율(치명적 포함)']
-            ].map(([c, l]) =>
-                `<span class="inline-flex items-center gap-1"><span style="width:9px;height:9px;border-radius:2px;background:${c};display:inline-block;"></span><span class="text-[10px] font-bold text-slate-600">${l}</span></span>`
+            ].map(([c, l], k) =>
+                //   첫째(등록 단어)는 꺾은선이라 점선 표시
+                `<span class="inline-flex items-center gap-1"><span style="${k === 0 ? `width:12px;height:0;border-top:2px dashed ${c};` : `width:9px;height:9px;border-radius:2px;background:${c};`}display:inline-block;"></span><span class="text-[10px] font-bold text-slate-600">${l}</span></span>`
             ).join('<span class="mx-1.5"></span>');
 
             container.innerHTML = `
@@ -6172,7 +6176,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#10b981')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${GROWTH_LINE_DASH}"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
@@ -6389,7 +6393,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const mRatio = (i) => totOf(i) > 0 ? ((series[i].idiomMasteredTotal || 0) / totOf(i)) * 100 : 0;
             const wRatio = (i) => totOf(i) > 0 ? ((series[i].idiomWeakTotal || 0) / totOf(i)) * 100 : 0;
 
-            const axis = growthAxisRange(series.map((d, i) => totOf(i)));
+            //   [냐냐 지적] 왼쪽 축이 0부터 시작했다 (2026-09-28). 스냅샷이 9/15 부터라 그 전 날짜가
+            //   0 으로 들어가 축 바닥을 끌어내리고, 꺾은선도 0 에서 솟아 있었다.
+            //   → 축도 선도 스냅샷이 있는 날만 쓴다 (단어장·문법표처럼 '처음 적힌 날의 개수' 가 바닥).
+            const dataIdx = series.map((d, i) => i).filter(i => totOf(i) > 0);
+            const axis = growthAxisRange(dataIdx.map(i => totOf(i)));
             const gMin = axis.min, maxVal = axis.max;
             const xInset = Math.min(14, chartW * 0.06);
             const xSpan = chartW - xInset * 2;
@@ -6412,8 +6420,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 bars += `<rect x="${(xOf(i) - Math.max(barWidth, 14) / 2).toFixed(1)}" y="${padding.top}" width="${Math.max(barWidth, 14).toFixed(1)}" height="${chartH.toFixed(1)}" fill="transparent" style="cursor:pointer" onclick="showChartTooltip(event, 'record-idiom-chart-tooltip', '${text}')"/>`;
             });
 
-            const linePath = series.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(totOf(i)).toFixed(1)}`).join(' ');
-            const lineDots = series.map((d, i) => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfCount(totOf(i)).toFixed(1)}" r="2.5" fill="#8b5cf6"/>`).join('');
+            const linePath = dataIdx.map((i, k) => `${k === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOfCount(totOf(i)).toFixed(1)}`).join(' ');
+            const lineDots = dataIdx.map(i => `<circle cx="${xOf(i).toFixed(1)}" cy="${yOfCount(totOf(i)).toFixed(1)}" r="2.5" fill="#8b5cf6"/>`).join('');
 
             container.innerHTML = `
                 ${recordChartTooltipDiv('record-idiom-chart-tooltip')}
@@ -6422,7 +6430,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#8b5cf6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${linePath}" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${GROWTH_LINE_DASH}"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
@@ -6505,7 +6513,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     ${recordChartRightAxis(pctMax, padding, chartH, width, '%', '#14b8a6')}
                     <line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#cbd5e1" stroke-width="1"/>
                     ${bars}
-                    <path d="${linePath}" fill="none" stroke="#5896cb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${linePath}" fill="none" stroke="#5896cb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${GROWTH_LINE_DASH}"/>
                     ${lineDots}
                     ${recordChartXLabels(series, xOf, height)}
                 </svg>
