@@ -4304,6 +4304,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //      3바퀴는 점수 차액만 얹는다 (익혀서 맞힘 +0.5 / 끝내 틀림 −0.5). 중간에 그만둬도 틀린 기록은 남는다.
         //      (예전엔 틀린 것을 3바퀴가 끝나야 한꺼번에 적었다 — 그만두면 통째로 사라져서 바꿨다)
         //   마스터 자격(subjectivePassed)도 1바퀴 정답에만 준다 — 힌트 없이 떠올린 것만 인정.
+        //   (쓰기 복습 밖에선 퀴즈 주관식·표 빈칸, 2026-09-28 부터 첨삭에서 제대로 쓴 것도 자격을 준다)
         //   [냐냐 요청] 팝업 폐지 → 복습 탭 '✍️ 쓰기' 영역 안에서 진행.
         //     단어장 ✍️ 버튼·헤더 📖 복습 배너에서 불러도 복습 탭으로 이동해서 거기서 푼다.
         function beginWritePractice(pool, opts) {

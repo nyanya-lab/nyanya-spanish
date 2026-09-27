@@ -2665,7 +2665,11 @@ ${koEsNoteListText}${refGrammar}${refWords}
                 // [냐냐 요청] 되돌릴 수 있게 반영 '전' 상태를 통째로 떠둔다.
                 const prev = snapshotWordScoreState(w);
                 const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-                if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
+                //   [냐냐 요청] 첨삭에서 제대로 쓴 것도 마스터 자격(subjectivePassed)으로 친다 (2026-09-28).
+                //   제 문장에 힌트 없이 떠올려 쓴 것이라 쓰기 복습 1바퀴 정답과 같다.
+                //   예전엔 자격이 안 붙어서 hablar·comer 가 +10 인데도 마스터가 아니었다 (54개).
+                //   ↺ 로 되돌리면 snapshotWordScoreState 가 자격까지 원래대로 돌린다.
+                if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok, subjective: ok });
                 aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             };
 
@@ -2680,7 +2684,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
                     const delta = noScore ? 0 : (ok ? gainOk : WORD_SPELL_BAD);
                     const prev = snapshotWordScoreState(w);
                     const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-                    if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok });
+                    if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok, subjective: ok });
                     aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
                 });
                 return;
@@ -4723,7 +4727,7 @@ ${koEsNoteListText}${refGrammar}${refWords}
             e.ok = delta > 0;
             e.noScore = (delta === 0);
             e.undone = (delta === 0);
-            if (delta) addWordScore(e.word, delta, { correct: delta > 0 });
+            if (delta) addWordScore(e.word, delta, { correct: delta > 0, subjective: delta > 0 });
 
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();

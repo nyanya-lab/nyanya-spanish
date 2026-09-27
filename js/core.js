@@ -4119,7 +4119,7 @@ let vocabulary = [];
                 <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-violet-500"></i> 등급 5단계</h4>
                 <table class="w-full text-xs"><tbody>${gradeRows}</tbody></table>
                 <p class="text-[11px] text-slate-500 font-semibold leading-relaxed pt-1">
-                    ⚠️ <b>마스터·완벽은 점수만으로는 안 돼요.</b> <b class="text-violet-600">주관식으로 한 번은 맞혀야</b> 마스터가 열려요.
+                    ⚠️ <b>마스터·완벽은 점수만으로는 안 돼요.</b> <b class="text-violet-600">주관식으로 한 번은 맞히거나 첨삭에서 한 번은 제대로 써야</b> 마스터가 열려요.
                     (미니게임만 돌려서는 마스터를 못 뚫습니다)
                 </p>
             </div>
