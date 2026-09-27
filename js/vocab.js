@@ -1969,7 +1969,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   없는 정보라 그대로 남긴다.
                     notes: { type: "STRING", description: "정말 도움되는 특이사항(혼동 단어 차이, ser/estar 구분, 역구조동사 같은 문장 구조, 뉘앙스, 예외 용법)만 · 불릿 2줄 이내로. 없으면 빈 문자열. 금지: 동사 활용·불규칙 변화 패턴 전부(활용은 시제 표에 이미 있음 — '1인칭 단수 z→c', '어간 o가 ue로 변함', '-ucir 동사의 전형적 불규칙', '어간변화 동사' 같은 서술 절대 금지), 뻔한 품사/뜻 분류('사람의 성품 묘사' 등), 형용사 성·수 변화 여부, 성별/관사, 전치사 콜로케이션(이건 idioms로). 명사형으로 끝낼 것" }
                 },
-                required: ["meaning", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
+                //   [냐냐 지적] máma 를 몇 번을 눌러도 mamá 로 안 고쳐줬다 (2026-09-28).
+                //   재보니 AI 가 다섯 번에 두 번은 correctedSpelling 칸을 아예 빼고 답했다 —
+                //   필수가 아니라서 빠지면 '오타 없음' 으로 지나갔다. 필수로 두면 오타가 없을 땐 빈 문자열이 온다.
+                required: ["meaning", "correctedSpelling", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
             };
 
             try {
