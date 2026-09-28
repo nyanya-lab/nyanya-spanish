@@ -3158,6 +3158,7 @@ let vocabulary = [];
             if (!id) return;
             const rec = getGrammarReviewRec(id);
             const today = getLocalDateString();
+            delete rec.handCurveUndo;   // 진짜로 틀렸다 — 손으로 넣은 곡선을 되돌릴 일이 없다
             //   오늘 차례였는데 복습 밖에서 틀렸으면 오늘 줄에 남긴다 (날짜를 덮어쓰기 전에 잰다)
             if (!fromReview && rec.lastWrongDate
                 && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate)) {
@@ -3992,7 +3993,8 @@ let vocabulary = [];
         //     되돌린다. 그 사이 진짜로 틀렸거나(표시를 지운다) 복습했으면 안 되돌린다.
         //     약점에 멈춘 채 날을 넘기면 그건 진짜 약점이다 — 표시는 다음 손질 때 치운다.
         const HAND_CURVE_FIELDS = { word: ['reviewStage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'],
-                                    idiom: ['stage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'] };
+                                    idiom: ['stage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'],
+                                    grammar: ['stage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'] };
         function curveNeedsHandEntry(lastWrongDate, stage) {
             return !lastWrongDate || (stage || 0) >= REVIEW_INTERVALS.length;
         }
@@ -4025,17 +4027,24 @@ let vocabulary = [];
         }
         function putWordInCurveByHand(w) { enterCurveByHand(w, 'word'); }
         function wordHandGradeCurve(w) { if (w) handGradeCurve(w, 'word', getWordGrade(w)); }
-        function idiomHandGradeCurve(wordId, ref) {
-            const key = idiomKey(wordId, ref), grade = getIdiomGrade(wordId, ref);
+        //   관용구·문법은 곡선 기록이 따로 있다 (idiomReview / grammarReview) — 모양이 같아서 같이 쓴다
+        function recHandGradeCurve(store, key, kind, grade, makeRec) {
             //   약점이 아니면 되돌릴 기록만 본다 — 없는 기록을 빈 채로 만들지 않는다
-            const rec = isWeakGrade(grade) ? getIdiomReviewRec(key) : (idiomReview || {})[key];
+            const rec = isWeakGrade(grade) ? makeRec(key) : (store || {})[key];
             if (!rec) return;
-            handGradeCurve(rec, 'idiom', grade);
+            handGradeCurve(rec, kind, grade);
             //   되돌리고 나니 빈 껍데기뿐이면 (손으로 넣으며 새로 만든 기록) 통째로 치운다
             if (!isWeakGrade(grade) && !rec.handCurveUndo
                 && Object.keys(rec).every(k => ['stage', 'lastWrongDate', 'lastReviewDate'].includes(k) && !rec[k])) {
-                delete idiomReview[key];
+                delete store[key];
             }
+        }
+        function idiomHandGradeCurve(wordId, ref) {
+            recHandGradeCurve(idiomReview, idiomKey(wordId, ref), 'idiom', getIdiomGrade(wordId, ref), getIdiomReviewRec);
+        }
+        //   [냐냐 요청] 문법 노트 약점도 똑같이 곡선에 (2026-09-28)
+        function grammarHandGradeCurve(id) {
+            if (id) recHandGradeCurve(grammarReview, id, 'grammar', getGrammarGrade(id), getGrammarReviewRec);
         }
         const isWeakGrade = (g) => g === 'weak' || g === 'critical';
 
@@ -7499,6 +7508,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const master = (to === 'mastered' || to === 'perfect');
             setGrammarScore(id, GRADE_CYCLE_SCORE[to], master ? { transUsed: true } : {});
             if (to === 'normal') delete grammarTransUsed[id];
+            grammarHandGradeCurve(id);   // [냐냐 요청] 손으로 누른 약점은 곡선에, 지나가기만 했으면 되돌림
             if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
             showToast(gradeCycleToast(title, to), to === 'normal' ? 'info' : 'success');
             if (typeof logAction === 'function') logAction('snapshot');
@@ -7546,6 +7556,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 setGrammarScore(id, SCORE_WEAK);
                 showToast(`"${title}" 약점 문법표로 표시했어요 🟨`, "success");
             }
+            grammarHandGradeCurve(id);   // [냐냐 요청] 약점이면 곡선에, 해제면 같은 날 넣은 것 되돌림
             if (typeof logAction === 'function') logAction('snapshot');
             renderGrammarTables();
             saveToStorage();
@@ -7573,6 +7584,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (typeof AudioFX !== 'undefined') AudioFX.playBell();
                 showToast(`"${title}" 마스터 완료! ✅ (5점)`, "success");
             }
+            grammarHandGradeCurve(id);   // 마스터 쪽 손질은 곡선을 안 바꾼다 (지나가며 넣은 것만 되돌림)
             renderGrammarTables();
             saveToStorage();
             if (typeof updateStats === 'function') updateStats(); // 헤더 마스터 문법 개수 갱신
