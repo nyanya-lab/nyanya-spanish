@@ -8702,6 +8702,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const wantRed = fgRed || (hadRed && !fgBlue);
                     const wantBlue = fgBlue || (hadBlue && !fgRed);
                     const wantBold = /font-weight\s*:\s*(bold|[7-9]00)/i.test(style);
+                    //   [냐냐 지적] 붙여넣으면 ej. 예문의 기울임이 풀렸다 (2026-09-28). 굵게처럼 글씨체 설정으로
+                    //   온 기울임(font-style: italic — 다른 곳에서 복사하면 대개 이 꼴)도 <i> 로 살린다.
+                    const wantItalic = /font-style\s*:\s*(italic|oblique)/i.test(style);
 
                     // 속성 전부 제거 (class는 아래에서 다시 지정)
                     Array.from(child.attributes).forEach(a => child.removeAttribute(a.name));
@@ -8728,6 +8731,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         const bb = doc.createElement('b');
                         while (target.firstChild) bb.appendChild(target.firstChild);
                         target.appendChild(bb);
+                    }
+                    if (wantItalic && !['I', 'EM'].includes(child.tagName)) {
+                        const ii = doc.createElement('i');
+                        while (target.firstChild) ii.appendChild(target.firstChild);
+                        target.appendChild(ii);
                     }
                     // 의미 없는 빈 span 은 껍데기 제거
                     if (child.tagName === 'SPAN' && !child.className) {
