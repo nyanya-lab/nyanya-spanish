@@ -8371,6 +8371,68 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function escapeAttr(s) {
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
+
+        // ============================================================
+        // [냐냐 요청] 뜻의 (역)·(재) 를 동그라미 글자로 보여준다 (2026-09-28).
+        //   역 = 역구조동사로 쓰는 뜻 (tocar: ~가 당첨되다(역)), 재 = 재귀로 쓰는 뜻.
+        //   '역'·'재' 원문자는 유니코드에 없어서(㉮~㉻ 14자뿐) 화면에서 그린다.
+        //   뜻이 나오는 곳이 50군데가 넘어서 하나씩 고치지 않고, 화면에 그 글자가 나타나면 바꿔 그린다.
+        //   - 저장된 뜻은 '(역)' 그대로다. 괄호는 글자 크기 0 으로 숨겨서 복사해도 '(역)' 이 간다.
+        //   - 직접 쓰는 칸(contenteditable)·입력칸은 안 건드린다 — 거기서는 글자로 고쳐야 한다.
+        // ============================================================
+        const MEAN_MARK_RE = /\((역|재)\)/;
+        const MEAN_MARK_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'TITLE']);
+        function meanMarkSkip(node) {
+            for (let n = node.parentNode; n && n.nodeType === 1; n = n.parentNode) {
+                if (MEAN_MARK_SKIP.has(n.tagName) || n.isContentEditable || (n.classList && n.classList.contains('mean-mark'))) return true;
+            }
+            return false;
+        }
+        function markMeaningText(tn) {
+            const text = tn.nodeValue;
+            if (!text || text.indexOf('(') < 0 || !MEAN_MARK_RE.test(text) || meanMarkSkip(tn)) return;
+            const frag = document.createDocumentFragment();
+            const re = /\((역|재)\)/g;
+            let last = 0, m;
+            while ((m = re.exec(text))) {
+                if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                const sp = document.createElement('span');
+                sp.className = 'mean-mark';
+                sp.dataset.m = m[1];
+                sp.title = m[1] === '역' ? '역구조동사로 쓰는 뜻' : '재귀동사로 쓰는 뜻';
+                sp.innerHTML = `<span class="mm-p">(</span>${m[1]}<span class="mm-p">)</span>`;
+                frag.appendChild(sp);
+                last = m.index + m[0].length;
+            }
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+            tn.parentNode.replaceChild(frag, tn);
+        }
+        function markMeaningMarks(root) {
+            if (!root) return;
+            if (root.nodeType === 3) { markMeaningText(root); return; }
+            if (root.nodeType !== 1 || MEAN_MARK_SKIP.has(root.tagName) || root.isContentEditable) return;
+            if ((root.textContent || '').indexOf('(') < 0) return;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const hits = [];
+            for (let n = walker.nextNode(); n; n = walker.nextNode()) if (MEAN_MARK_RE.test(n.nodeValue || '')) hits.push(n);
+            hits.forEach(markMeaningText);
+        }
+        (function watchMeaningMarks() {
+            let queue = [], scheduled = false;
+            const flush = () => { scheduled = false; const q = queue; queue = []; q.forEach(n => { if (n.isConnected) markMeaningMarks(n); }); };
+            const start = () => {
+                markMeaningMarks(document.body);
+                new MutationObserver(muts => {
+                    muts.forEach(mu => {
+                        if (mu.type === 'characterData') queue.push(mu.target);
+                        else mu.addedNodes.forEach(n => queue.push(n));
+                    });
+                    //   ⚠️ requestAnimationFrame 은 창이 가려져 있으면 안 돈다 (재봤다) — 바로 뒤 틈(microtask)에 처리한다
+                    if (queue.length && !scheduled) { scheduled = true; Promise.resolve().then(flush); }
+                }).observe(document.body, { childList: true, subtree: true, characterData: true });
+            };
+            if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+        })();
         function updateGeHeader(bi, hi, ci, val) {
             const b = geBlock(bi);
             if (b && b.headerRows[hi]) b.headerRows[hi][ci] = val;
