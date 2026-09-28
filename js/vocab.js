@@ -3595,7 +3595,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 case 'untouched':
                     return (typeof isUntouchedIdiom === 'function') ? isUntouchedIdiom(id, text) : true;
                 case 'mastered':     return mastered;
-                case 'promotion':    return !mastered && getIdiomScore(id, text) >= WRITE_PROMOTION_MIN;
                 case 'weak':         return (grade === 'weak' || grade === 'critical');
                 case 'not-mastered': return !mastered;
                 case 'graduated': {
@@ -3809,10 +3808,27 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   표현이 여럿이어도 한 번에 하나밖에 못 나왔고, 표현이 많은 단어가 오히려 손해였다.
         //   이제 '표현' 하나하나를 후보로 놓고 전체에서 고른다 (관용구 1113개가 다 대상).
         //   같은 단어가 단어 문제와 관용구 문제로 겹쳐 나오지는 않게 한다.
+        // ============================================================
+        // [냐냐 요청] '안 외운' 에서는 +5 이상인데 마스터가 아닌 것을 먼저 낸다 (2026-09-28).
+        //   따로 둔 '🏆 승급 대기' 버튼(+3 이상)은 없앴다 — 냐냐님 결정.
+        //   점수는 찼는데 마스터 자격만 없는 것들이다 (게임·객관식처럼 자격을 안 주는 곳에서 모은 점수).
+        //   한 번 나오면 저절로 빠진다 — 맞히면 마스터가 되어 범위를 떠나고, 틀리면 −2 로 +5 아래가 된다.
+        //   그래서 예전 퀴즈 승급 대기처럼 같은 단어가 매 판 나오는 일은 없다 (건너뛴 것만 다시 앞에 선다).
+        // ============================================================
+        const WRITE_PRIORITY_MIN = 5;
+        function writeFrontFirst(list, scoreOf) {
+            const shuffled = shuffleArray(list.slice());
+            if (writeScope !== 'not-mastered') return shuffled;
+            const front = shuffled.filter(x => scoreOf(x) >= WRITE_PRIORITY_MIN);
+            return front.length ? front.concat(shuffled.filter(x => scoreOf(x) < WRITE_PRIORITY_MIN)) : shuffled;
+        }
+        const writeWordScoreOf = (w) => getScore(w);
+        const writeIdiomScoreOf = (e) => getIdiomScore(e.w.id, e.it.idiom);
+
         function buildWriteTasks(pool, count, idiomEntries) {
             //   관용구가 아예 없으면 비율과 상관없이 단어만
             const pct = (idiomEntries && !idiomEntries.length) ? 0 : writeIdiomPct();
-            if (pct <= 0) return shuffleArray(pool.slice()).slice(0, count).map(toWriteVerbTask);
+            if (pct <= 0) return writeFrontFirst(pool, writeWordScoreOf).slice(0, count).map(toWriteVerbTask);
 
             const wantIdiom = Math.round(count * pct / 100);
             const entries = [];
@@ -3823,12 +3839,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   [냐냐 지적] 다른 범위도 표현 제 등급으로 거른다 (idiomEntryInWriteScope)
             //   [냐냐 요청] 범위에 없으면 관용구 전체에서 — 부르는 쪽이 넘겨준다 (writeEffectivePools)
             (idiomEntries || writeScopeIdiomEntries()).forEach(e => entries.push(e));
-            const idiomTasks = shuffleArray(entries).slice(0, wantIdiom)
+            const idiomTasks = writeFrontFirst(entries, writeIdiomScoreOf).slice(0, wantIdiom)
                 .map(e => makeWriteIdiomTask(e.w, e.it));
 
             // 관용구로 이미 나온 단어는 단어 문제에서 뺀다
             const used = new Set(idiomTasks.map(t => t._idiomOf.id));
-            const rest = shuffleArray(pool.filter(w => !used.has(w.id)))
+            const rest = writeFrontFirst(pool.filter(w => !used.has(w.id)), writeWordScoreOf)
                 .slice(0, Math.max(0, count - idiomTasks.length));
             return shuffleArray(idiomTasks.concat(rest.map(toWriteVerbTask)));
         }
@@ -3842,10 +3858,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         const WRITE_COUNT_MAX = 200;
         //   [냐냐 요청] 쓰기 복습 범위 기본값은 '안 만난' (2026-09-17, 예전 '안 외운')
         let writeScope = 'untouched';
-        // [냐냐 요청] 자유 연습에 '승급 대기' (2026-09-28) — 점수 +3 이상인데 아직 마스터가 아닌 것.
-        //   퀴즈의 승급 대기(quiz.js promotionWords)와 같은 잣대다. 1바퀴에서 맞히면 +2 와 마스터 자격이
-        //   같이 붙어서, +3 이상은 한 번만 맞히면 마스터가 된다.
-        const WRITE_PROMOTION_MIN = 3;
 
         // fromInput = 직접 적는 칸에서 부른 것 (그 칸의 값은 건드리지 않는다 — 타이핑 중이라)
         function selectWriteCount(n, fromInput) {
@@ -4261,7 +4273,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length);
             }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
-            if (writeScope === 'promotion') return vocabulary.filter(w => !w.mastered && getScore(w) >= WRITE_PROMOTION_MIN);
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice();
