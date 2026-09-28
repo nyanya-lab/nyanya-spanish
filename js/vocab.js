@@ -3601,7 +3601,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 case 'untouched':
                     return (typeof isUntouchedIdiom === 'function') ? isUntouchedIdiom(id, text) : true;
                 case 'mastered':     return mastered;
-                case 'not-mastered': return !mastered;
+                case 'not-mastered': {
+                    //   [냐냐 요청] 단어와 같이 곡선 안의 표현은 뺀다 (2026-09-28)
+                    if (mastered) return false;
+                    const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
+                    const rec = key ? (idiomReview || {})[key] : null;
+                    return !(rec && rec.lastWrongDate && (rec.stage || 0) < REVIEW_INTERVALS.length);
+                }
                 case 'graduated': {
                     const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
                     const rec = key ? (idiomReview || {})[key] : null;
@@ -4282,7 +4288,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length);
             }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
-            if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
+            //   [냐냐 요청] 곡선 안에 있는 단어는 뺀다 (2026-09-28) — 이미 오늘의 복습이 맡고 있다.
+            //   자유 연습에서 맞히면 점수만 붙고 곡선은 안 가서, 복습 날 전에 미리 풀면 곡선이 흐려진다.
+            //   (재보니 1216개 중 304개가 곡선 안이었다. 졸업한 것은 곡선 밖이라 남긴다.)
+            if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered
+                && !(w.lastWrongDate && (w.reviewStage || 0) < REVIEW_INTERVALS.length));
             return vocabulary.slice();
         }
 
