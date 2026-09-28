@@ -4842,6 +4842,33 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return null;
         }
 
+        // [냐냐 요청] 유의어 짝에 적어둔 '차이' 를 정답 쪽 / 내가 쓴 쪽으로 가른다 (2026-09-28).
+        //   글은 'feliz : 마음속 지속적 행복 | alegre : 겉으로 드러나는 밝음' 꼴이다 (AI 추천이 이 꼴로 채운다).
+        //   정답 단어의 기록에 있으면 그걸, 없으면 유의어 쪽 기록에서 거꾸로 찾는다.
+        //   ⚠️ 정답 쪽 이름은 돌려주지 않는다 — 그대로 보여주면 답이 드러난다.
+        //   정답 쪽 설명을 못 찾으면 null (부르는 쪽이 예전 안내로 돌아간다).
+        function writeSynonymDiff(w, syn) {
+            const base = (w && (w._idiomOf || w._conjOf || w)) || w;
+            if (!base || !syn) return null;
+            const find = (from, toId) => ((from && Array.isArray(from.synonyms)) ? from.synonyms : [])
+                .find(x => x && x.id === toId && String(x.difference || '').trim());
+            const rec = find(base, syn.id) || find(syn, base.id);
+            const text = rec ? String(rec.difference).trim() : '';
+            if (!text) return null;
+            const key = (x) => normalizeWriteAnswer(String(x || '').replace(/\([^)]*\)/g, ' '));
+            const baseKey = key(base.word), synKey = key(syn.word);
+            let target = '', mine = '';
+            text.split('|').forEach(part => {
+                const at = part.indexOf(':');
+                if (at < 0) return;
+                const who = key(part.slice(0, at)), desc = part.slice(at + 1).trim();
+                if (!desc) return;
+                if (who && who === baseKey) target = desc;
+                else if (who && who === synKey) mine = desc;
+            });
+            return target ? { target, mine } : null;
+        }
+
         // [냐냐 요청] 활용형 문제를 틀리면 2바퀴(익히기)는 '원형' 으로 익힌다 (2026-09-03).
         //   활용을 틀렸다는 건 대개 원형부터 흔들린다는 뜻이라, 익히기 바퀴에서 뿌리를 잡는다.
         //   3바퀴는 1바퀴에 냈던 그 시제로 다시 묻는다 — 과제 객체를 그대로 쓰므로 저절로 같다.
@@ -5217,6 +5244,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   '다른 낱말이에요' 만 듣고 뭘 떠올려야 할지 알 수가 없었다.
                     const p = writePrefixHint(userAnswer, w.word);
                     const got = awardSynonymScore(userAnswer, w);
+                    //   [냐냐 요청] 등록해 둔 '차이' 가 있으면 두 줄로 같이 보여준다 (2026-09-28).
+                    //     💡 alegre 도 맞는 말이에요! 다시 한 번 써볼까요?
+                    //     · f… : 마음속 지속적 행복        ← 정답 낱말은 앞글자로 가린다
+                    //     · alegre : 겉으로 드러나는 밝음
+                    //   차이 글이 없거나 나눌 수 없으면 예전처럼 'f… 로 시작해요'.
+                    const diff = writeSynonymDiff(w, syn);
+                    if (diff && p) {
+                        const row = (label, text) => `<div class="mt-1 flex items-baseline gap-1.5"><span class="shrink-0">·</span><span>${label} : <span class="font-semibold">${escapeHtml(text)}</span></span></div>`;
+                        const pBox = `<span class="inline-block align-baseline px-1.5 py-[1px] rounded-md bg-violet-100 border border-violet-200 text-violet-700 font-black tracking-[0.08em]">${escapeHtml(p)}…</span>`;
+                        writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이에요! 다시 한 번 써볼까요?${synonymAwardNote(got)}`
+                            + row(pBox, diff.target)
+                            + (diff.mine ? row(`<b>${escapeHtml(syn.word)}</b>`, diff.mine) : ''), userAnswer);
+                        return;
+                    }
                     writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?${synonymAwardNote(got)}`, userAnswer);
                     return;
                 }
