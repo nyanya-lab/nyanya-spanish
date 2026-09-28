@@ -36,11 +36,10 @@
            괄호는 글자 크기 0 으로 숨긴다 — 복사하면 '(역)' 그대로 간다 */
         /* ⚠️ inline-flex 로 하면 복사할 때 '(' '역' ')' 가 줄바꿈으로 갈라진다 — inline-block 으로 */
         .mean-mark { display: inline-block; text-align: center; box-sizing: border-box;
-            width: 1.5em; height: 1.5em; line-height: calc(1.5em - 3px); border-radius: 9999px; border: 1.5px solid currentColor;
-            font-size: 0.8em; font-weight: 800; margin: 0 0.1em 0 0.2em; white-space: nowrap;
+            width: 1.5em; height: 1.5em; line-height: calc(1.5em - 2px); border-radius: 9999px; border: 1px solid currentColor;
+            font-size: 0.68em; font-weight: 800; margin: 0 0.1em 0 0.2em; white-space: nowrap;
             vertical-align: 0.15em; font-style: normal; text-indent: 0; }
-        .mean-mark[data-m="역"] { color: #7c3aed; }
-        .mean-mark[data-m="재"] { color: #0d9488; }
+        /* [냐냐 요청] 색은 둘레 글씨와 같게, 크기는 조금 작게 (2026-09-29) — 보라·청록은 뺐다 */
         .mean-mark .mm-p { font-size: 0; }
     </style>
 </head>
