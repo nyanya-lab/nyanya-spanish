@@ -9489,11 +9489,37 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             for (let i = 0; i < Math.max(0, lv - 1); i++) { try { document.execCommand('indent'); } catch (e) {} }
         }
         // [냐냐 요청] ej. / Q. / A. 같은 표시를 커서 위치에 넣기 (서식 없이 그냥 글자로)
+        //   [냐냐 요청] ej. 는 표시와 그 뒤 예문을 기울임꼴로 (2026-09-28).
+        //     누르면 'ej. ' 를 기울여 넣고 기울임을 켠 채로 둔다 → 이어 치는 예문도 기울어진다.
+        //     줄을 바꾸면(엔터) 기울임을 끈다 — 다음 줄은 보통 글이다 (rtKeydown).
+        let rtEjItalicOn = null;   // 기울임을 켜둔 편집칸 id
         function rtInsertLabel(id, txt) {
             const el = rtFocusEditor(id);
             if (!el) return;
             try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
-            try { document.execCommand('insertHTML', false, `${escapeHtml(txt)}&nbsp;`); } catch (e) {}
+            if (String(txt).toLowerCase() === 'ej.') {
+                //   ⚠️ '기울여 치기' 를 명령(execCommand italic)으로 켜두면 엔터 뒤 새 줄까지 따라갔다 (재봤다).
+                //      그래서 <i> 를 직접 끼우고 커서를 그 **안쪽 끝** 에 둔다 — 이어 치는 글이 태그 안으로 들어간다.
+                try {
+                    const sel = window.getSelection();
+                    if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
+                        const r = sel.getRangeAt(0);
+                        r.deleteContents();
+                        const it = document.createElement('i');
+                        const tx = document.createTextNode(txt + ' ');
+                        it.appendChild(tx);
+                        r.insertNode(it);
+                        const c = document.createRange();
+                        c.setStart(tx, tx.length); c.collapse(true);
+                        sel.removeAllRanges(); sel.addRange(c);
+                    } else {
+                        document.execCommand('insertHTML', false, `<i>${escapeHtml(txt)}&nbsp;</i>`);
+                    }
+                } catch (e) {}
+                rtEjItalicOn = id;
+            } else {
+                try { document.execCommand('insertHTML', false, `${escapeHtml(txt)}&nbsp;`); } catch (e) {}
+            }
             rtSyncState(id);
         }
 
@@ -9503,7 +9529,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             { ch: '·', title: '가운데 점' },
             { ch: '/', title: '빗금' },
             { ch: '[', title: '대괄호 열기' },
-            { ch: ']', title: '대괄호 닫기' }
+            { ch: ']', title: '대괄호 닫기' },
+            { ch: '→', title: '화살표' }   // [냐냐 요청] 2026-09-28
         ];
 
         function rtInsertSymbol(id, ch) {
@@ -9547,11 +9574,49 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (e.shiftKey) rtOutdent(id); else rtIndent(id);
                 return;
             }
+            //   [냐냐 요청] ej. 로 켠 기울임은 줄을 바꾸면 끝낸다 (2026-09-28).
+            //   ⚠️ 새 줄이 생긴 뒤에 기울임을 끄거나 <i> 를 벗기는 식은 안 됐다 (재봤다) — 브라우저가
+            //      '기울여 치기' 를 기억해 두었다가 첫 글자에 다시 입힌다. 그래서 순서를 뒤집는다:
+            //      커서를 <i> **밖으로 먼저 빼고** 줄을 바꾼다. 새 줄은 처음부터 기울임 밖이다.
+            //   ⚠️ 한글 조합 중(isComposing) 엔터는 글자 확정이라 건드리지 않는다
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && rtEjItalicOn === id) {
+                rtEjItalicOn = null;
+                if (rtEnterOutOfItalic(id)) { e.preventDefault(); rtSyncState(id); return; }
+            }
             // [냐냐 요청] 소제목 줄에서 엔터 → 다음 줄은 보통 글로.
             //   한글 조합 중(isComposing)에는 손대지 않는다 — 그 엔터는 글자를 확정하는 엔터다
             if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 if (rtEnter(id)) { e.preventDefault(); rtSyncState(id); }
             }
+        }
+        //   커서가 <i>/<em> 끝에 있으면 그 뒤로 빼고 줄을 바꾼다. 해냈으면 true.
+        function rtEnterOutOfItalic(id) {
+            try {
+                const ed = document.getElementById(id);
+                const sel = window.getSelection();
+                if (!ed || !sel || !sel.rangeCount || !sel.isCollapsed) return false;
+                let n = sel.anchorNode, italicEl = null;
+                while (n && n !== ed) { if (n.nodeType === 1 && (n.tagName === 'I' || n.tagName === 'EM')) italicEl = n; n = n.parentNode; }
+                if (!italicEl || !ed.contains(italicEl)) return false;
+                //   예문 한가운데서 엔터를 치면(커서 뒤에 기울임 글자가 남음) 브라우저에 맡긴다
+                const tail = document.createRange();
+                tail.setStart(sel.anchorNode, sel.anchorOffset);
+                tail.setEndAfter(italicEl);
+                if (tail.toString().replace(/ /g, ' ').trim()) return false;
+                //   ⚠️ 줄 바꾸기 명령(insertParagraph)은 앞 글자의 기울임을 새 줄로 옮겨 붙였다 (재봤다).
+                //      그래서 빈 줄을 직접 끼운다. 그 줄 = 편집칸 바로 아래 칸(첫 줄은 맨 글자라 <i> 자체).
+                //      목록(LI) 안이면 브라우저에 맡긴다 — 목록 칸은 모양이 달라서.
+                let line = italicEl;
+                while (line.parentNode && line.parentNode !== ed) line = line.parentNode;
+                if (line.nodeType === 1 && line.tagName === 'UL') return false;
+                const nl = document.createElement('div');
+                nl.appendChild(document.createElement('br'));
+                line.parentNode.insertBefore(nl, line.nextSibling);
+                const r = document.createRange();
+                r.setStart(nl, 0); r.collapse(true);
+                sel.removeAllRanges(); sel.addRange(r);
+                return true;
+            } catch (err) { return false; }
         }
 
         // 붙여넣기는 항상 정화해서 삽입 (웹에서 복사한 서식이 통째로 딸려오는 것 방지)
