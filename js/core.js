@@ -3973,6 +3973,37 @@ let vocabulary = [];
             return w.score;
         }
 
+        // ============================================================
+        // [냐냐 요청] 손으로 약점·치명적을 누르면 곡선에도 넣는다 (2026-09-28).
+        //   예전엔 점수만 −5/−8 로 박혀서, 곡선 밖이면 오늘의 복습에 한 번도 안 나왔다.
+        //   약점 시험을 없애면서(약점은 늘 곡선 안이라 복습과 겹쳤다) 이 구멍을 막는다.
+        //   - 곡선 밖(처음이거나 졸업)이면 첫 칸에 오늘 날짜로 → 내일 복습에 나온다
+        //   - 이미 곡선 안이면 그대로 둔다 (벌써 복습이 잡혀 있다)
+        //   - 틀린 횟수·정답률은 안 건드린다 (실제로 틀린 게 아니다)
+        //   - 약점을 해제해도 곡선에서 빼지 않는다 (들어간 복습은 돌다가 끝난다)
+        // ============================================================
+        function curveNeedsHandEntry(lastWrongDate, stage) {
+            return !lastWrongDate || (stage || 0) >= REVIEW_INTERVALS.length;
+        }
+        function putWordInCurveByHand(w) {
+            if (!w || !curveNeedsHandEntry(w.lastWrongDate, w.reviewStage)) return;
+            const today = getLocalDateString();
+            if (!w.lastWrongDate) w.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만 (addWordScore 와 같은 규칙)
+            w.reviewStage = 0;
+            w.lastWrongDate = today;
+            w.lastReviewDate = null;
+        }
+        function putIdiomInCurveByHand(wordId, ref) {
+            const rec = getIdiomReviewRec(idiomKey(wordId, ref));
+            if (!curveNeedsHandEntry(rec.lastWrongDate, rec.stage)) return;
+            const today = getLocalDateString();
+            if (!rec.lastWrongDate) rec.curveEnteredDate = today;
+            rec.stage = 0;
+            rec.lastWrongDate = today;
+            rec.lastReviewDate = null;
+        }
+        const isWeakGrade = (g) => g === 'weak' || g === 'critical';
+
         // 기존 데이터 → 통합 점수로 1회 변환 (score = 마스터점수 - 약점점수)
         function migrateWordScores() {
             if (!Array.isArray(vocabulary)) return;
@@ -7456,6 +7487,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const to = nextGradeInCycle(getIdiomGrade(wordId, ref));
             const master = (to === 'mastered' || to === 'perfect');
             setIdiomScore(wordId, ref, GRADE_CYCLE_SCORE[to], { subjectivePassed: master ? true : (to === 'normal' ? false : undefined) });
+            if (isWeakGrade(to)) putIdiomInCurveByHand(wordId, ref);   // [냐냐 요청] 손으로 누른 약점도 곡선에
             if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
             showToast(gradeCycleToast(String(ref), to), to === 'normal' ? 'info' : 'success');
             if (typeof renderWordList === 'function') renderWordList();

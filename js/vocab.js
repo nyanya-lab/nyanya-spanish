@@ -2915,6 +2915,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const to = nextGradeInCycle(getWordGrade(w));
             const master = (to === 'mastered' || to === 'perfect');
             setWordScore(w, GRADE_CYCLE_SCORE[to], master ? { subjectivePassed: true } : {});
+            if (isWeakGrade(to)) putWordInCurveByHand(w);   // [냐냐 요청] 손으로 누른 약점도 곡선에 (2026-09-28)
             if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
             showToast(gradeCycleToast(w.word, to), to === 'normal' ? 'info' : 'success');
             logAction('snapshot');
@@ -2935,9 +2936,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     showToast(`"${w.word}" 약점 표시를 해제했어요`, "info");
                 } else if (grade === 'weak') {
                     setWordScore(w, SCORE_CRITICAL);
+                    putWordInCurveByHand(w);   // [냐냐 요청] 손으로 누른 약점도 곡선에 (2026-09-28)
                     showToast(`"${w.word}" 치명적 약점으로 표시했어요 🟥`, "success");
                 } else {
                     setWordScore(w, SCORE_WEAK);
+                    putWordInCurveByHand(w);
                     showToast(`"${w.word}" 약점 단어로 표시했어요 🟨`, "success");
                 }
                 logAction('snapshot');
@@ -3595,7 +3598,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 case 'untouched':
                     return (typeof isUntouchedIdiom === 'function') ? isUntouchedIdiom(id, text) : true;
                 case 'mastered':     return mastered;
-                case 'weak':         return (grade === 'weak' || grade === 'critical');
                 case 'not-mastered': return !mastered;
                 case 'graduated': {
                     const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
@@ -3966,9 +3968,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   - '봤음' 은 1바퀴 판정 순간에 적는다 (점수를 적는 순간과 같다). 건너뛴 건 다음 회차로.
         //   - 다 보면 기록을 남기고, 끝난 지 45일이 넘으면 버튼을 빨갛게 한다 (마감이 아니라 알림).
         // ============================================================
-        const WRITE_EXAM_SCOPES = ['mastered', 'weak', 'graduated'];
-        const WRITE_EXAM_LABELS = { mastered: '마스터', weak: '약점', graduated: '졸업' };
-        const WRITE_EXAM_ICONS = { mastered: '🟩', weak: '⭐', graduated: '🎓' };
+        //   [냐냐 결정] 약점 시험은 없앴다 (2026-09-28). 약점은 전부 곡선 안이라(재보니 28개 중 28개)
+        //   명단이 오늘의 복습과 통째로 겹쳤고, 시험에서 맞히면 곡선은 안 밀고 점수만 붙었다.
+        //   손으로 누른 약점도 이제 곡선에 들어간다 (core.js putWordInCurveByHand).
+        //   ⚠️ 저장된 writeExams.weak 은 비어 있어서 그냥 둔다 (읽는 곳이 없다).
+        const WRITE_EXAM_SCOPES = ['mastered', 'graduated'];
+        const WRITE_EXAM_LABELS = { mastered: '마스터', graduated: '졸업' };
+        const WRITE_EXAM_ICONS = { mastered: '🟩', graduated: '🎓' };
         const WRITE_EXAM_REMIND_DAYS = 45;   // [냐냐 결정] 30 → 45 (2026-09-23)
         const WRITE_EXAM_LONG_DAYS = 15;     // [냐냐 결정] 이만큼 넘게 걸린 시험은 '📌+N' 을 붙인다
         const WRITE_EXAM_HISTORY_MAX = 36;
@@ -4179,7 +4185,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         }
 
         // ============================================================
-        // [냐냐 요청] 시험 기록은 팝업으로 — 마스터 · 약점 · 졸업 탭 (2026-09-23).
+        // [냐냐 요청] 시험 기록은 팝업으로 — 마스터 · 졸업 탭 (2026-09-23, 약점은 9/28 에 뺐다).
         //   탭마다 몇 바퀴 돌았는지 적고, 기록마다 몇 바퀴째였는지 붙인다 (1바퀴 = 첫 시험).
         //   ⚠️ 여기서 '바퀴' 는 시험을 한 번 다 돈 것이다 — 쓰기 한 판 안의 1·2·3바퀴와는 다르다.
         // ============================================================
@@ -4273,7 +4279,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length);
             }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
-            if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice();
         }
