@@ -1803,13 +1803,14 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             triggerAiAutofill();
         }
 
-        //   뜻을 쉼표로 가른 한 칸씩 — '(역)가 당첨되다' → '가 당첨되다(역)', '입다 (역)' → '입다(역)'
+        //   뜻을 쉼표로 가른 한 칸씩 — '~가 당첨되다(역)' → '(역)~가 당첨되다', '입다(옷이) (역)' → '(역)입다(옷이)'
+        //   ⚠️ 한 칸에 표시가 둘이면 순서대로 다 앞으로. 가운데 들어간 것도 앞으로 모은다.
         function normalizeMeaningMarks(meaning) {
             return String(meaning || '').split(',').map(part => {
-                let p = part.trim();
-                const lead = p.match(/^\((역|재)\)\s*(.+)$/);
-                if (lead) p = `${lead[2]}(${lead[1]})`;
-                return p.replace(/\s+\((역|재)\)/g, '($1)');
+                const marks = [];
+                const rest = part.replace(/\s*\((역|재)\)\s*/g, (m, k) => { if (!marks.includes(k)) marks.push(k); return ' '; })
+                    .replace(/\s+/g, ' ').replace(/\s+([.,;:!?)])/g, '$1').trim();   // '있다(역).' → '있다.' (빈칸 없이)
+                return marks.map(k => `(${k})`).join('') + rest;
             }).join(', ');
         }
 
@@ -1864,9 +1865,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             - **의문사(qué, quién, dónde, cuándo, cómo, cuánto, por qué, cuál 등)와 의문사가 들어간 의문 구문은 품사를 무조건 pos="interrogative"(의문사)로 할 것.** 부사/대명사/구문으로 분류하지 말 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
             - **meaning 의 뜻 하나하나에 쓰임 표시를 붙일 것 (동사일 때):**
-              · 그 뜻이 **역구조동사**(gustar 처럼 '간접목적대명사 + 동사 + 주어' 로 쓰는 뜻)면 그 뜻 바로 뒤에 "(역)"
-              · 그 뜻이 **재귀형(-se)으로만** 쓰이면 그 뜻 바로 뒤에 "(재)"
-              · 예: tocar → "만지다, 연주하다, ~가 당첨되다(역), ~가 할 차례다(역)" / quedar → "남다, 만나기로 하다, 머무르다(재)"
+              · 그 뜻이 **역구조동사**(gustar 처럼 '간접목적대명사 + 동사 + 주어' 로 쓰는 뜻)면 그 뜻 바로 **앞**에 "(역)"
+              · 그 뜻이 **재귀형(-se)으로만** 쓰이면 그 뜻 바로 **앞**에 "(재)"
+              · 예: tocar → "만지다, 연주하다, (역)~가 당첨되다, (역)~가 할 차례다" / quedar → "남다, 만나기로 하다, (재)머무르다"
               · 입력 단어가 이미 -se 로 끝나는 재귀동사면 (재)는 붙이지 말 것 (전부 재귀라 뜻이 없다). 그 밖의 뜻엔 아무것도 붙이지 말 것.
             - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
             - adjMasculineBase: 형용사인데 입력이 여성형/복수형이면 사전 표제형인 남성 단수형을 여기에(관사 없이). 이미 남성 단수형이거나 성별로 안 변하는 형용사(feliz, azul 등)면 빈 문자열. 오타 교정(correctedSpelling)과는 별개로, 형태만 여성→남성으로 바꾸는 용도임.
@@ -1904,7 +1905,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    meaning: { type: "STRING", description: "핵심 한글 뜻. 동사면 역구조로 쓰는 뜻 뒤에 (역), 재귀형으로만 쓰는 뜻 뒤에 (재) — 예: 만지다, ~가 당첨되다(역)" },
+                    meaning: { type: "STRING", description: "핵심 한글 뜻. 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다" },
                     correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
@@ -1995,8 +1996,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
-                //   [냐냐 요청] (역)·(재) 는 뜻 **뒤** 에 (2026-09-28). AI 가 '(역)필요 이상으로 많다' 처럼
-                //   앞에 붙여 오기도 해서(재봤다) 뜻마다 뒤로 옮기고, 앞 칸의 띄어쓰기도 붙인다.
+                //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
+                //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
 
                 // [냐냐 PATCH] 오타 감지: AI가 교정한 철자가 입력과 다르면 확인 팝업
