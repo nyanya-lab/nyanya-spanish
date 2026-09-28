@@ -2915,7 +2915,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const to = nextGradeInCycle(getWordGrade(w));
             const master = (to === 'mastered' || to === 'perfect');
             setWordScore(w, GRADE_CYCLE_SCORE[to], master ? { subjectivePassed: true } : {});
-            if (isWeakGrade(to)) putWordInCurveByHand(w);   // [냐냐 요청] 손으로 누른 약점도 곡선에 (2026-09-28)
+            wordHandGradeCurve(w);   // [냐냐 요청] 손으로 누른 약점은 곡선에, 지나가기만 했으면 되돌림 (2026-09-28)
             if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
             showToast(gradeCycleToast(w.word, to), to === 'normal' ? 'info' : 'success');
             logAction('snapshot');
@@ -2933,6 +2933,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // (주관식 통과 이력은 건드리지 않음 — 나중에 점수가 다시 오르면 마스터 복귀 가능)
                 if (grade === 'critical') {
                     setWordScore(w, 0);
+                    wordHandGradeCurve(w);     // 같은 날 지나가며 넣은 곡선은 되돌린다
                     showToast(`"${w.word}" 약점 표시를 해제했어요`, "info");
                 } else if (grade === 'weak') {
                     setWordScore(w, SCORE_CRITICAL);
@@ -2958,6 +2959,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const gradeM = getWordGrade(w);
                 if (gradeM === 'perfect') {
                     setWordScore(w, 0);
+                    wordHandGradeCurve(w);     // [냐냐 지적] 마스터 쪽 손질은 곡선을 안 바꾼다 (지나가며 넣은 것만 되돌림)
                     showToast(`"${w.word}" 마스터를 해제했어요`, "info");
                 } else if (gradeM === 'mastered') {
                     setWordScore(w, SCORE_PERFECT, { subjectivePassed: true }); // 8점
@@ -2965,6 +2967,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     showToast(`"${w.word}" 완벽 단어로 올렸어요! 🏆 (8점)`, "success");
                 } else {
                     setWordScore(w, SCORE_MASTER, { subjectivePassed: true }); // 5점
+                    wordHandGradeCurve(w);
                     AudioFX.playBell();
                     showToast(`"${w.word}" 마스터 완료! ✅ (5점)`, "success");
                 }

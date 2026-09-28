@@ -3018,6 +3018,7 @@ let vocabulary = [];
             const key = idiomKey(wordId, idiomText);
             const rec = getIdiomReviewRec(key);
             const today = getLocalDateString();
+            delete rec.handCurveUndo;   // 진짜로 틀렸다 — 손으로 넣은 곡선을 되돌릴 일이 없다
             //   오늘 차례였는데 복습 밖에서 틀렸으면 오늘 줄에 남긴다 (날짜를 덮어쓰기 전에 잰다)
             if (!fromReview && rec.lastWrongDate
                 && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate)) {
@@ -3752,6 +3753,7 @@ let vocabulary = [];
             if (opts.correct === true) {
                 if (opts.subjective) w.subjectivePassed = true; // 마스터 필수 조건
             } else if (opts.correct === false) {
+                delete w.handCurveUndo;   // 진짜로 틀렸다 — 손으로 넣은 곡선을 되돌릴 일이 없다
                 // [냐냐 요청] skipReviewDate가 true면 망각곡선 복습 대상에서 제외
                 //   (단어빈칸에서 관용구/예문 칸만 틀린 경우 등)
                 if (!opts.skipReviewDate) {
@@ -3982,25 +3984,58 @@ let vocabulary = [];
         //   - 틀린 횟수·정답률은 안 건드린다 (실제로 틀린 게 아니다)
         //   - 약점을 해제해도 곡선에서 빼지 않는다 (들어간 복습은 돌다가 끝난다)
         // ============================================================
+        //
+        //   [냐냐 지적] 마스터는 곡선이 변하면 안 된다 — 마스터에서 0점으로 내리는 것도 (2026-09-28).
+        //   등급 버튼은 일반 → 마스터 → 완벽 → 약점 → 치명적 → 일반 으로 돈다. 마스터를 0점으로
+        //   내리려면 약점·치명적을 **지나가야** 해서, 지나가는 순간 곡선에 들어가 버렸다.
+        //   → 넣기 전 모습을 handCurveUndo 에 떠두고, **같은 날** 손으로 약점 아닌 등급까지 돌리면
+        //     되돌린다. 그 사이 진짜로 틀렸거나(표시를 지운다) 복습했으면 안 되돌린다.
+        //     약점에 멈춘 채 날을 넘기면 그건 진짜 약점이다 — 표시는 다음 손질 때 치운다.
+        const HAND_CURVE_FIELDS = { word: ['reviewStage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'],
+                                    idiom: ['stage', 'lastWrongDate', 'lastReviewDate', 'curveEnteredDate'] };
         function curveNeedsHandEntry(lastWrongDate, stage) {
             return !lastWrongDate || (stage || 0) >= REVIEW_INTERVALS.length;
         }
-        function putWordInCurveByHand(w) {
-            if (!w || !curveNeedsHandEntry(w.lastWrongDate, w.reviewStage)) return;
+        function enterCurveByHand(obj, kind) {
+            const stageKey = HAND_CURVE_FIELDS[kind][0];
+            if (!obj || !curveNeedsHandEntry(obj.lastWrongDate, obj[stageKey])) return;
             const today = getLocalDateString();
-            if (!w.lastWrongDate) w.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만 (addWordScore 와 같은 규칙)
-            w.reviewStage = 0;
-            w.lastWrongDate = today;
-            w.lastReviewDate = null;
+            const snap = { on: today };
+            HAND_CURVE_FIELDS[kind].forEach(k => { snap[k] = (obj[k] === undefined) ? null : obj[k]; });
+            obj.handCurveUndo = snap;
+            if (!obj.lastWrongDate) obj.curveEnteredDate = today;   // 곡선 밖 → 안, 그 한 번만 (addWordScore 와 같은 규칙)
+            obj[stageKey] = 0;
+            obj.lastWrongDate = today;
+            obj.lastReviewDate = null;
         }
-        function putIdiomInCurveByHand(wordId, ref) {
-            const rec = getIdiomReviewRec(idiomKey(wordId, ref));
-            if (!curveNeedsHandEntry(rec.lastWrongDate, rec.stage)) return;
-            const today = getLocalDateString();
-            if (!rec.lastWrongDate) rec.curveEnteredDate = today;
-            rec.stage = 0;
-            rec.lastWrongDate = today;
-            rec.lastReviewDate = null;
+        function undoHandCurve(obj, kind) {
+            const u = obj && obj.handCurveUndo;
+            if (!u) return;
+            delete obj.handCurveUndo;
+            const stageKey = HAND_CURVE_FIELDS[kind][0];
+            const untouched = u.on === getLocalDateString() && obj.lastWrongDate === u.on
+                && !obj.lastReviewDate && !(obj[stageKey] || 0);
+            if (!untouched) return;
+            HAND_CURVE_FIELDS[kind].forEach(k => { if (u[k] === null) delete obj[k]; else obj[k] = u[k]; });
+        }
+        //   손으로 등급을 바꾼 뒤 부른다 — 약점이면 곡선에 넣고, 아니면 지나가며 넣은 것을 되돌린다
+        function handGradeCurve(obj, kind, grade) {
+            if (isWeakGrade(grade)) enterCurveByHand(obj, kind);
+            else undoHandCurve(obj, kind);
+        }
+        function putWordInCurveByHand(w) { enterCurveByHand(w, 'word'); }
+        function wordHandGradeCurve(w) { if (w) handGradeCurve(w, 'word', getWordGrade(w)); }
+        function idiomHandGradeCurve(wordId, ref) {
+            const key = idiomKey(wordId, ref), grade = getIdiomGrade(wordId, ref);
+            //   약점이 아니면 되돌릴 기록만 본다 — 없는 기록을 빈 채로 만들지 않는다
+            const rec = isWeakGrade(grade) ? getIdiomReviewRec(key) : (idiomReview || {})[key];
+            if (!rec) return;
+            handGradeCurve(rec, 'idiom', grade);
+            //   되돌리고 나니 빈 껍데기뿐이면 (손으로 넣으며 새로 만든 기록) 통째로 치운다
+            if (!isWeakGrade(grade) && !rec.handCurveUndo
+                && Object.keys(rec).every(k => ['stage', 'lastWrongDate', 'lastReviewDate'].includes(k) && !rec[k])) {
+                delete idiomReview[key];
+            }
         }
         const isWeakGrade = (g) => g === 'weak' || g === 'critical';
 
@@ -7487,7 +7522,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const to = nextGradeInCycle(getIdiomGrade(wordId, ref));
             const master = (to === 'mastered' || to === 'perfect');
             setIdiomScore(wordId, ref, GRADE_CYCLE_SCORE[to], { subjectivePassed: master ? true : (to === 'normal' ? false : undefined) });
-            if (isWeakGrade(to)) putIdiomInCurveByHand(wordId, ref);   // [냐냐 요청] 손으로 누른 약점도 곡선에
+            idiomHandGradeCurve(wordId, ref);   // [냐냐 요청] 손으로 누른 약점은 곡선에, 지나가기만 했으면 되돌림
             if (master && typeof AudioFX !== 'undefined') AudioFX.playBell();
             showToast(gradeCycleToast(String(ref), to), to === 'normal' ? 'info' : 'success');
             if (typeof renderWordList === 'function') renderWordList();
