@@ -3595,6 +3595,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 case 'untouched':
                     return (typeof isUntouchedIdiom === 'function') ? isUntouchedIdiom(id, text) : true;
                 case 'mastered':     return mastered;
+                case 'promotion':    return !mastered && getIdiomScore(id, text) >= WRITE_PROMOTION_MIN;
                 case 'weak':         return (grade === 'weak' || grade === 'critical');
                 case 'not-mastered': return !mastered;
                 case 'graduated': {
@@ -3841,6 +3842,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         const WRITE_COUNT_MAX = 200;
         //   [냐냐 요청] 쓰기 복습 범위 기본값은 '안 만난' (2026-09-17, 예전 '안 외운')
         let writeScope = 'untouched';
+        // [냐냐 요청] 자유 연습에 '승급 대기' (2026-09-28) — 점수 +3 이상인데 아직 마스터가 아닌 것.
+        //   퀴즈의 승급 대기(quiz.js promotionWords)와 같은 잣대다. 1바퀴에서 맞히면 +2 와 마스터 자격이
+        //   같이 붙어서, +3 이상은 한 번만 맞히면 마스터가 된다.
+        const WRITE_PROMOTION_MIN = 3;
 
         // fromInput = 직접 적는 칸에서 부른 것 (그 칸의 값은 건드리지 않는다 — 타이핑 중이라)
         function selectWriteCount(n, fromInput) {
@@ -4256,6 +4261,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return vocabulary.filter(w => w.lastWrongDate && (w.reviewStage || 0) >= REVIEW_INTERVALS.length);
             }
             if (writeScope === 'mastered') return vocabulary.filter(w => w.mastered);
+            if (writeScope === 'promotion') return vocabulary.filter(w => !w.mastered && getScore(w) >= WRITE_PROMOTION_MIN);
             if (writeScope === 'weak') return vocabulary.filter(w => w.weak && !w.mastered);
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered);
             return vocabulary.slice();
