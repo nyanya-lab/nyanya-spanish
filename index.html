@@ -36,7 +36,9 @@
            괄호는 글자 크기 0 으로 숨긴다 — 복사하면 '(역)' 그대로 간다 */
         /* ⚠️ inline-flex 로 하면 복사할 때 '(' '역' ')' 가 줄바꿈으로 갈라진다 — inline-block 으로 */
         .mean-mark { display: inline-block; text-align: center; box-sizing: border-box;
-            width: 1.5em; height: 1.5em; line-height: calc(1.5em - 2px); border-radius: 9999px; border: 1px solid currentColor;
+            width: 1.5em; height: 1.5em; line-height: calc(1.5em - 2px); border-radius: 9999px;
+            /* [냐냐 지적] 글씨는 얇은데 동그라미만 두꺼워 보였다 (2026-09-29) — 테두리를 가늘고 옅게 */
+            border: 0.75px solid color-mix(in srgb, currentColor 55%, transparent);
             font-size: 0.68em; font-weight: 400; /* [냐냐 요청] 굵게 풀기 — 뜻이 굵어도 동그라미 글자는 보통 굵기 */
             margin: 0 0.25em 0 0.05em; white-space: nowrap;   /* 뜻 앞에 온다 (2026-09-29) — 여백은 오른쪽에 */
             /* [냐냐 지적] 동그라미가 옆 글자보다 밑에 있어 보였다 — 재보니 2px 쯤 낮았다 (2026-09-29).
