@@ -1380,7 +1380,7 @@ let vocabulary = [];
         }
 
         // [냐냐 PATCH] 도감: 희귀도(모으기 힘든 순) 정렬 + '모은 것만 보기' 필터
-        let eggCollectionOwnedOnly = false;
+        let eggCollectionOwnedOnly = true;   // [냐냐 요청] 처음엔 모은 것만 (2026-09-29). 버튼으로 전체를 본다
         const RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, common: 3 }; // 힘든 순
         function toggleEggOwnedOnly() {
             eggCollectionOwnedOnly = !eggCollectionOwnedOnly;
@@ -6308,9 +6308,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             // [냐냐 PATCH-0배치] 등록(보라, 왼쪽축) + 마스터(초록) + 완벽(찐초록) 막대 3개 (오른쪽축)
             let bars = '';
             series.forEach((d, i) => {
-                const rH = (d._newTotal / leftMax) * chartH;
-                const mH = (d._newMasteredTotal / rightMax) * chartH;
-                const pH = ((d.newPerfectCount || 0) / rightMax) * chartH;
+                //   [냐냐 확인] 마스터는 넷팅이라 풀린 날엔 음수다 (9/26 −2). 음수 높이는 SVG 오류라
+                //   막대는 0 에서 멈추고, 실제 숫자는 눌렀을 때 뜨는 풀이에 그대로 적힌다 (2026-09-29).
+                const rH = Math.max(0, d._newTotal / leftMax) * chartH;
+                const mH = Math.max(0, d._newMasteredTotal / rightMax) * chartH;
+                const pH = Math.max(0, (d.newPerfectCount || 0) / rightMax) * chartH;
                 const bx = xOf(i) - barWidth * 1.5 - 1.5;  // 등록 (보라)
                 const mx = xOf(i) - barWidth / 2;           // 마스터 (초록)
                 const px = xOf(i) + barWidth / 2 + 1.5;     // 완벽 (찐초록)
