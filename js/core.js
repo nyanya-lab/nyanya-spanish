@@ -1427,7 +1427,7 @@ let vocabulary = [];
                 const has = owned.has(c.id);
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
-                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'}">
+                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''}">
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
                         <span class="text-3xl">${c.emoji}</span>

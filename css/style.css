@@ -4,8 +4,17 @@ html {
             overflow-y: scroll;
             scrollbar-gutter: stable;
         }
+        /* [냐냐 요청] 윈도우는 국기 이모지를 못 그려서 🇪🇸 가 'ES' 글자로 나왔다 (2026-09-29).
+           국기만 담긴 글꼴을 국기 글자에만 쓴다 — unicode-range 밖의 글자는 원래 글꼴로 가고,
+           국기가 화면에 나올 때만 받아온다. */
+        @font-face {
+            font-family: 'Twemoji Country Flags';
+            unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+            src: url('https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/TwemojiCountryFlags.woff2') format('woff2');
+            font-display: swap;
+        }
         body {
-            font-family: 'Gowun Dodum', 'Inter', sans-serif;
+            font-family: 'Twemoji Country Flags', 'Gowun Dodum', 'Inter', sans-serif;
             background-color: #f8fafc;
         }
         /* [냐냐 PATCH-모바일 줌 버그 수정] iOS Safari는 글자 크기가 16px보다 작은
@@ -37,6 +46,19 @@ html {
             100% { transform: scale(1) translateX(0); }
         }
         .punch-effect-right { animation: punch-right 0.2s ease-out; }
+        /* [냐냐 요청] 도감의 전설 카드 — 빛줄기가 몇 초마다 비스듬히 스쳐 간다 (2026-09-29) */
+        .legend-shine { overflow: hidden; }
+        .legend-shine::after {
+            content: ''; position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+            background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%);
+            transform: skewX(-20deg); pointer-events: none;
+            animation: legend-shine 4s ease-in-out infinite;
+        }
+        @keyframes legend-shine {
+            0% { left: -60%; }
+            35%, 100% { left: 130%; }   /* 앞 1.4초에 스치고 나머지는 쉰다 */
+        }
+        @media (prefers-reduced-motion: reduce) { .legend-shine::after { animation: none; display: none; } }
         /* [냐냐 PATCH] 사이드바 고정 시 스크롤바 숨김 (내용은 스크롤 가능) */
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
