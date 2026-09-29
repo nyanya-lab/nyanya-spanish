@@ -2753,6 +2753,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (index !== -1) {
                     // [냐냐 PATCH-0배치] 수정해도 점수·학습기록은 그대로 보존 (안 그러면 수정할 때마다 점수가 0으로 리셋됨)
                     const prev = vocabulary[index];
+                    // [냐냐 지적] 창에 없는 기록은 원래 단어에서 통째로 가져온다 (2026-09-29).
+                    //   예전엔 아래에 적은 몇 개만 옮겨서 곡선 칸·복습한 날·DELE 레벨이 날아갔다.
+                    //   곡선이 1일차로 돌아가 옛날 틀린 날부터 세니, 고치는 순간 '밀린 복습'으로 떴다
+                    //   (activo·arreglarse). 품사 칸은 창이 정하는 것이라 품사를 바꾸면 버린다.
+                    const FORM_OWNED = ['gender', 'adjAgreement', 'conjugations', 'conjugationsByTense',
+                                        'irregularByTense', 'verbClassByTense', 'verbClass', 'irregularType'];
+                    Object.keys(prev).forEach(k => {
+                        if (!(k in wordObj) && !FORM_OWNED.includes(k)) wordObj[k] = prev[k];
+                    });
                     wordObj.score = (typeof prev.score === 'number') ? prev.score : 0;
                     wordObj.mastered = prev.mastered || false;
                     wordObj.perfect = prev.perfect || false;
@@ -2760,7 +2769,6 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     wordObj.subjectivePassed = prev.subjectivePassed || false;
                     wordObj.correctTotal = prev.correctTotal || 0;
                     wordObj.wrongTotal = prev.wrongTotal || 0;
-                    if (prev.lastWrongDate) wordObj.lastWrongDate = prev.lastWrongDate;
                     wordObj.synonyms = Array.isArray(prev.synonyms) ? prev.synonyms : [];
                     // [냐냐 PATCH] 등록순 유지 — 수정해도 배열 위치를 그대로 둠 (맨 앞으로 안 올림)
                     //   등록일(createdAt)은 보존, 수정일(updatedAt)만 갱신 (정렬엔 안 쓰지만 데이터로 남김)
