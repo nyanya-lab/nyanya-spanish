@@ -5639,7 +5639,8 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
             return Object.assign({}, byTense, { presente: v.conjugations });
         }
 
-        function findVocabWordByForm(rawWord) {
+        //   pool 을 주면 그 안에서만 찾는다 (유의어로 등록해 둔 낱말들 등). 안 주면 단어장 전체.
+        function findVocabWordByForm(rawWord, pool) {
             const target = normalizeSpanishAnswer(rawWord);
             if (!target) return null;
             //   악센트까지 남긴 꼴 — carne · carné 처럼 악센트만 다른 두 낱말을 가른다
@@ -5655,7 +5656,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
             // 같은 등급이면 단어장에서 먼저 나온 것을 쓴다 (예전과 같은 순서)
             const offer = (v, rank) => { if (rank < bestRank) { best = v; bestRank = rank; } };
 
-            for (const v of vocabulary) {
+            for (const v of (pool || vocabulary)) {
                 if (bestRank === FVBF_RANK.WORD_EXACT) break; // 더 좋은 게 나올 수 없다
                 // 1) 원형/사전형 그대로 일치
                 const vWordN = normalizeSpanishAnswer(v.word);

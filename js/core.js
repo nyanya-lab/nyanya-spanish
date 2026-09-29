@@ -3631,10 +3631,28 @@ let vocabulary = [];
         //   그래서 코드가 한 번 더 본다 — 등록된 유의어이거나 뜻이 겹칠 때만 덤이다.
         //   ⚠️ 오타로 보지 않는다 (냐냐님 확인). 뜻이 다르면 그냥 오답이다.
         // ============================================================
+        //   [냐냐 지적] 한 꼴이 두 낱말에 걸칠 수 있다 — levantado 는 levantar 의 것도, levantarse 의
+        //   것도 된다 (2026-09-29). 단어장 전체에서 찾으면 먼저 나온 levantar(들어 올리다)만 집어 와서,
+        //   despertarse 에 유의어로 걸어둔 levantarse 를 못 보고 오답이 됐다.
+        //   → 물어본 낱말에 등록해 둔 유의어 중에 그 꼴이 있으면 그쪽을 먼저 쓴다.
+        function registeredSynonymByForm(userAnswer, asked) {
+            if (!asked || typeof findVocabWordByForm !== 'function' || typeof vocabulary === 'undefined') return null;
+            const pool = (Array.isArray(asked.synonyms) ? asked.synonyms : [])
+                .filter(sy => sy && sy.type !== 'antonym')
+                .map(sy => vocabulary.find(x => x.id === sy.id))
+                .filter(Boolean);
+            return pool.length ? findVocabWordByForm(userAnswer, pool) : null;
+        }
+        //   내가 쓴 꼴이 가리키는 낱말 — 등록된 유의어가 먼저, 없으면 단어장 전체에서
+        function synonymHitByForm(userAnswer, asked) {
+            return registeredSynonymByForm(userAnswer, asked)
+                || ((typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null);
+        }
+
         function synonymClaimIsReal(userAnswer, askedWord, aiMeaning) {
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (!asked) return false;
-            const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+            const hit = synonymHitByForm(userAnswer, asked);
             if (!hit || hit.id === asked.id) return false;
             //   ① 내가 등록해 둔 유의어 (반의어는 빼고)
             const syns = Array.isArray(asked.synonyms) ? asked.synonyms : [];
@@ -3653,9 +3671,9 @@ let vocabulary = [];
 
         function awardSynonymScore(userAnswer, askedWord, aiMeaning) {
             if (typeof findVocabWordByForm !== 'function' || typeof addWordScore !== 'function') return null;
-            const hit = findVocabWordByForm(userAnswer);
-            if (!hit) return null;
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
+            const hit = synonymHitByForm(userAnswer, asked);   // 덤도 등록된 유의어 쪽에 (levantar 말고 levantarse)
+            if (!hit) return null;
             if (asked && hit.id === asked.id) return null;      // 물어본 그 낱말이면 덤이 아니다
             // ============================================================
             // [냐냐 요청] 덤은 **악센트까지 똑같이 썼을 때만** 준다 (2026-09-21).

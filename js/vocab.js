@@ -4876,6 +4876,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const v = vocabulary.find(x => x.id === sy.id);
                 if (v && normalizeWriteAnswer(v.word) === u) return v;
             }
+            //   [냐냐 지적] 활용형 문제는 원형이 아니라 활용형으로 쓴다 — despertarse 과거분사에
+            //   levantado 라고 쓰면 levantarse 의 꼴이다 (2026-09-29). 유의어들의 활용형까지 본다.
+            if (w && w._isConjTask && typeof registeredSynonymByForm === 'function') {
+                return registeredSynonymByForm(userRaw, base);
+            }
             return null;
         }
 
