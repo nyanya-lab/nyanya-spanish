@@ -1200,7 +1200,9 @@ let vocabulary = [];
             common:    { label: '일반',   color: 'text-slate-500',  bg: 'bg-slate-100',   star: '⭐' },
             rare:      { label: '레어',   color: 'text-blue-600',   bg: 'bg-blue-50',     star: '⭐⭐' },
             epic:      { label: '에픽',   color: 'text-violet-600', bg: 'bg-violet-50',   star: '⭐⭐⭐' },
-            legendary: { label: '전설',   color: 'text-amber-600',  bg: 'bg-amber-50',    star: '👑' },
+            // [냐냐 지적] 도감 칸 배경이 amber-50→yellow-50 이라 전설 카드(amber-50)가 묻혔다 (2026-09-29).
+            //   진한 금빛 + 금테로 띄운다.
+            legendary: { label: '전설',   color: 'text-amber-700',  bg: 'bg-gradient-to-br from-amber-200 to-yellow-100', border: 'border-amber-400', star: '👑' },
         };
 
         // 총 학습 활동 수 (누적) — 알 성장의 기준
@@ -1284,7 +1286,7 @@ let vocabulary = [];
                     okStyle: 'primary',
                     cancelLabel: '도감 보기',
                     noEnter: true,
-                    onCancel: () => { changeTab('records'); setTimeout(renderEgg, 100); }
+                    onCancel: openEggCollection
                 }
             );
         }
@@ -1361,6 +1363,17 @@ let vocabulary = [];
             `;
         }
 
+        //   [냐냐 요청] 부화 팝업의 '도감 보기' — 탭만 옮기면 도감이 맨 아래에 접혀 있어서
+        //   못 본 거나 같았다. 펼치고 그 자리로 내려간다 (2026-09-29).
+        function openEggCollection() {
+            changeTab('records');
+            eggCollectionOpen = true;
+            renderEgg();
+            //   부드럽게 굴리면 창이 뒤에 있을 때 프레임이 안 돌아 멈춘다 — 바로 세운다 (changeTab 과 같은 이유)
+            const sec = document.getElementById('egg-collection-section');
+            if (sec) window.scrollTo(0, Math.max(0, sec.getBoundingClientRect().top + window.scrollY - 80));
+        }
+
         function toggleEggCollection() {
             eggCollectionOpen = !eggCollectionOpen;
             renderEggCollectionSection();
@@ -1414,7 +1427,7 @@ let vocabulary = [];
                 const has = owned.has(c.id);
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
-                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border border-slate-100">
+                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'}">
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
                         <span class="text-3xl">${c.emoji}</span>
