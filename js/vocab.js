@@ -5314,7 +5314,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 4) AI 채점
             const q = { word: w };
             let ai = null;
-            const aiInfo = () => ai ? { aiIsRealWord: ai.answerIsRealWord, aiMeaning: ai.answerMeaning, comment: ai.comment } : {};
+            const aiInfo = () => ai ? { aiIsRealWord: ai.answerIsRealWord, aiMeaning: ai.answerMeaning, comment: ai.comment, verdict: ai.verdict } : {};
             if (typeof aiGradeSubjective === 'function') {
                 s.grading = true;
                 renderWritePractice();

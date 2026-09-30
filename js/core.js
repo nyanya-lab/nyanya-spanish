@@ -3653,6 +3653,17 @@ let vocabulary = [];
             const asked = (askedWord && (askedWord._idiomOf || askedWord._conjOf || askedWord)) || null;
             if (!asked) return false;
             const hit = synonymHitByForm(userAnswer, asked);
+            const overlap = (x, y) => !!(x && y && typeof meaningsOverlap === 'function' && meaningsOverlap(x, y));
+            //   [냐냐 지적] 관용구 문제는 관용구의 뜻과 잰다 (2026-09-30). 예전엔 본 단어 뜻
+            //   (aburrido '지루한')과 재고, 단어장에 없는 표현이면 통째로 떨어뜨려서
+            //   'aburrirse de' 처럼 제대로 쓴 다른 표현이 늘 오답이었다 (estar aburrido de ~).
+            //   단어장에 없어도 AI 가 말한 뜻이 관용구 뜻과 겹치면 유의어다. 덤은 awardSynonymScore 가
+            //   단어장 낱말에만 주므로 여기서 통과해도 점수는 안 붙는다.
+            if (askedWord && askedWord._isIdiomTask) {
+                const im = String(askedWord.meaning || '');
+                if (overlap(String(aiMeaning || ''), im)) return true;
+                if (hit && hit.id !== asked.id && overlap(String(hit.meaning || ''), im)) return true;
+            }
             if (!hit || hit.id === asked.id) return false;
             //   ① 내가 등록해 둔 유의어 (반의어는 빼고)
             const syns = Array.isArray(asked.synonyms) ? asked.synonyms : [];
@@ -3661,7 +3672,6 @@ let vocabulary = [];
                     && normalizeSpanishAnswer(sy.word || '') === normalizeSpanishAnswer(hit.word || ''))))) return true;
             //   ② 적어둔 뜻이 겹치는가 (단어 빈칸·퀴즈의 유의어 판정과 같은 잣대)
             const hm = String(hit.meaning || ''), am = String(asked.meaning || '');
-            const overlap = (x, y) => !!(x && y && typeof meaningsOverlap === 'function' && meaningsOverlap(x, y));
             if (overlap(hm, am)) return true;
             //   ③ [냐냐 요청] 유의어인데 등록해 두지 않았고 뜻도 다른 말로 적어뒀을 수 있다 (2026-09-18).
             //   그때는 AI 가 말한 '네가 쓴 낱말의 뜻' 을 마지막으로 한 번 더 본다
@@ -7385,11 +7395,19 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 : (opts.aiIsRealWord === false
                     ? `❌ <b>${escapeHtml(user)}</b>는 없는 단어예요.`
                     : `❌ <b>${escapeHtml(user)}</b>는 답이 아니에요.`);
+            //   [냐냐 지적] AI 설명 한 줄은 뜻을 보여줄 때도 같이 낸다 (2026-09-30).
+            //   'cada vez en cuando 는 가끔씩이라는 뜻' 만 나오고 '올바른 표현은 de cuando en cuando'
+            //   가 숨어서 왜 틀렸는지 알 수 없었다. 단, AI 가 '틀림·오타' 라고 한 설명만 —
+            //   '좋은 동의어예요' 같은 칭찬이 ❌ 아래 붙으면 거꾸로 헷갈린다 (앱이 판정을 뒤집은 경우).
+            //   판정을 안 넘겨주는 곳은 예전처럼 뜻이 없을 때만 낸다.
+            const showComment = !!opts.comment && (opts.verdict
+                ? /^(wrong|typo)$/i.test(String(opts.verdict))
+                : !(isReal && meaning));
             return `
                 <div class="space-y-1 text-left">
                     <p class="font-bold text-rose-500">${head}</p>
                     <p class="font-bold text-slate-600">정답은 <b class="text-slate-900">${escapeHtml(correct)}</b> 예요.</p>
-                    ${(opts.comment && !(isReal && meaning)) ? `<p class="text-slate-400 font-semibold">${escapeHtml(opts.comment)}</p>` : ''}
+                    ${showComment ? `<p class="text-slate-400 font-semibold">${escapeHtml(opts.comment)}</p>` : ''}
                 </div>`;
         }
 

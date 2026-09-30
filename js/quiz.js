@@ -1450,7 +1450,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             const wrongHtml = () => buildWrongAnswerHtml(userAnswer, correct, {
                 aiIsRealWord: ai.answerIsRealWord,
                 aiMeaning: ai.answerMeaning,
-                comment: ai.comment
+                comment: ai.comment,
+                verdict: ai.verdict   // AI 가 처음 준 판정 — 설명 한 줄을 낼지 가른다
             });
 
             // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (한 번은 다시 쓸 기회)
