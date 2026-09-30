@@ -5150,7 +5150,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
             const why = (typeof buildWrongAnswerHtml === 'function')
-                ? buildWrongAnswerHtml(mine || '', w.word, aiInfo || {}) : '';
+                ? buildWrongAnswerHtml(mine || '', w.word, Object.assign({ correctMeaning: w.meaning || '' }, aiInfo || {})) : '';
             s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why, base: writeBaseForm(w) };
             writePracticeSave();
             renderWritePractice();

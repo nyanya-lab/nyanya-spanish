@@ -7390,7 +7390,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 const hasBatchim = c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0;
                 return hasBatchim ? '이라는' : '라는';
             };
-            const head = isReal && meaning
+            //   [냐냐 지적] '~는 ○○이라는 뜻이에요' 는 **다른 뜻**이라 틀렸다는 설명이다 (2026-10-01).
+            //   뜻이 정답과 겹치면 '뜻은 맞는데 왜 ❌?' 가 된다 — 그땐 갈라 적는다.
+            //     단어장에서 찾은 뜻 = 진짜 유의어(되묻기는 이미 씀) → 같은 뜻이지만 다른 낱말/표현
+            //     AI 가 준 뜻 = AI 가 '틀림' 이라 해놓고 뜻은 같다고 한 모순 → 뜻은 빼고 설명 한 줄로
+            const sameMeaning = !!(isReal && meaning && opts.correctMeaning
+                && typeof meaningsOverlap === 'function' && meaningsOverlap(meaning, opts.correctMeaning));
+            const kind = /\s/.test(target) ? '표현' : '낱말';
+            const head = (sameMeaning && known)
+                ? `💡 <b>${escapeHtml(user)}</b>도 같은 뜻이지만, 지금 외우는 건 다른 ${kind}이에요.`
+                : (isReal && meaning && !sameMeaning)
                 ? `❌ <b>${escapeHtml(user)}</b>는 <b class="text-slate-800">'${escapeHtml(meaning)}'</b>${josa(meaning)} 뜻이에요.`
                 : (opts.aiIsRealWord === false
                     ? `❌ <b>${escapeHtml(user)}</b>는 없는 단어예요.`
@@ -7402,7 +7411,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   판정을 안 넘겨주는 곳은 예전처럼 뜻이 없을 때만 낸다.
             const showComment = !!opts.comment && (opts.verdict
                 ? /^(wrong|typo)$/i.test(String(opts.verdict))
-                : !(isReal && meaning));
+                : !(isReal && meaning) || (sameMeaning && !known));
             return `
                 <div class="space-y-1 text-left">
                     <p class="font-bold text-rose-500">${head}</p>
