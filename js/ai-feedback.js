@@ -3786,6 +3786,23 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
             const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
             const byTitle = new Map();
             notes.forEach(t => byTitle.set(norm(t.title), t));
+            //   [냐냐 지적] AI 가 노트 이름 대신 노트 안의 소제목을 이름처럼 보낼 때가 있다 (2026-10-01).
+            //   '비교급' 노트의 '최상급' 단락을 보고 '최상급 >> la más elegante' 라고 보내서, 없는 이름으로
+            //   버려졌다. 모르는 이름이면 그 말이 글(또는 표 제목)에 들어 있는 노트가 **딱 하나**일 때만
+            //   그 노트로 받는다. '전치사' 처럼 여러 노트에 나오는 말은 지금처럼 버린다. 짧은 말(3자 미만)은 안 본다.
+            const contentKey = new Map();
+            const byContent = (title) => {
+                const k = norm(title);
+                if (k.length < 3) return null;
+                const hits = notes.filter(t => {
+                    if (!contentKey.has(t.id)) {
+                        const caps = (t.blocks || []).map(b => (b && b.caption) || '').join(' ');
+                        contentKey.set(t.id, norm(aiStripTags(noteRichText(t)) + ' ' + caps));
+                    }
+                    return contentKey.get(t.id).includes(k);
+                });
+                return hits.length === 1 ? hits[0] : null;
+            };
 
             // '제목 >> 근거 조각' 을 갈라서, 근거가 문장에 실제로 있는 것만 남긴다
             const hay = grammarEvidenceHaystack(feedback);
@@ -3810,7 +3827,7 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
                 const cut = String(item.name || '').split('>>');
                 const title = cut[0].trim();
                 const ev = cut.slice(1).join('>>').trim();
-                const note = byTitle.get(norm(title));
+                const note = byTitle.get(norm(title)) || byContent(title);
                 if (!note) return;                       // 지어낸 제목은 버린다
                 //   잘 썼다는 내 문장에서, 틀렸다는 어느 쪽에서든 근거를 대야 한다
                 const where = (item.ok === true) ? mineHayOnly : hay;
