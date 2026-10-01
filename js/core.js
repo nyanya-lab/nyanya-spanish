@@ -7394,7 +7394,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   뜻이 정답과 겹치면 '뜻은 맞는데 왜 ❌?' 가 된다 — 그땐 갈라 적는다.
             //     단어장에서 찾은 뜻 = 진짜 유의어(되묻기는 이미 씀) → 같은 뜻이지만 다른 낱말/표현
             //     AI 가 준 뜻 = AI 가 '틀림' 이라 해놓고 뜻은 같다고 한 모순 → 뜻은 빼고 설명 한 줄로
-            const sameMeaning = !!(isReal && meaning && opts.correctMeaning
+            //   ⚠️ 뜻 겹침 잣대는 느슨하다 — '왜냐하면' 과 '무엇 때문에, 왜' 가 '왜' 하나로 겹친다.
+            //      AI 가 '틀림'(뜻이 다르다)이라고 한 단어장 낱말까지 '같은 뜻' 으로 적으면 AI 설명과
+            //      정면으로 부딪힌다 (porque ↔ para qué, 2026-10-01). 그땐 예전처럼 뜻을 적는다.
+            const aiSaidWrong = /^(wrong|typo)$/i.test(String(opts.verdict || ''));
+            const sameMeaning = !!(isReal && meaning && opts.correctMeaning && !(known && aiSaidWrong)
                 && typeof meaningsOverlap === 'function' && meaningsOverlap(meaning, opts.correctMeaning));
             const kind = /\s/.test(target) ? '표현' : '낱말';
             const head = (sameMeaning && known)
