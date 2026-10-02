@@ -1869,9 +1869,49 @@
         //   ⚠️ 곡선은 그대로 각자 민다. 쓰기 엔진이 과제마다 _isIdiomTask 를 보고 갈라놨고,
         //      여기서 idiomReview:true 를 같이 넘겨야 관용구 칸도 앞으로 간다.
         // ============================================================
-        function getTodayReviewTasks() {
-            const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
-            const idioms = (typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
+        // ============================================================
+        // [냐냐 요청] 단어·관용구 버튼을 다시 나눴다 (2026-10-02). 쓰기로 풀 땐 '같이 풀기' 로 합친다.
+        //   어느 버튼으로 들어왔나(todayReviewEntry) + 같이 풀기(todayReviewTogether, 처음엔 켜짐·동기화)
+        //   → 둘 다 켜지면 9/2 의 한 묶음과 똑같다. 회차를 이어갈 때(continue)도 같은 묶음을 쓴다.
+        //   관용구 버튼은 누를 때마다 쓰기 / 문장(관용구 미션) 을 고른다 (openIdiomReviewChoice).
+        // ============================================================
+        let todayReviewEntry = 'word';       // 'word' | 'idiom'
+        let todayReviewTogether = true;
+        function todayReviewMix() {
+            return { words: todayReviewEntry === 'word' || todayReviewTogether,
+                     idioms: todayReviewEntry === 'idiom' || todayReviewTogether };
+        }
+        function setTodayReviewTogether(on) {
+            todayReviewTogether = !!on;
+            const due = getTodayReviewTasks();
+            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(Math.max(1, due.length) / todayReviewBatch)));
+            renderReviewSplitModal();
+            if (typeof saveToStorage === 'function') saveToStorage();
+        }
+        function openIdiomReviewChoice() {
+            const n = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
+            if (!n) { showToast("오늘 복습할 관용구가 없어요! 🎉", "info"); return; }
+            const c = document.getElementById('idiom-review-choice-count');
+            if (c) c.innerText = `오늘 복습할 관용구 ${n}개`;
+            document.getElementById('idiom-review-choice-modal')?.classList.remove('hidden');
+        }
+        function closeIdiomReviewChoice() {
+            document.getElementById('idiom-review-choice-modal')?.classList.add('hidden');
+        }
+        function chooseIdiomReview(how) {
+            closeIdiomReviewChoice();
+            if (how === 'write') { startTodayReviewShortcut('idiom'); return; }
+            //   문장으로 — 관용구 미션 탭에서 '오늘 복습할 관용구 먼저' 를 켠 채로 바로 한 문제
+            if (typeof changeTab === 'function') changeTab('ai-feedback');
+            if (typeof switchAiMode === 'function') switchAiMode('idiom');
+            if (typeof setIdiomDueFirst === 'function') setIdiomDueFirst(true);
+            if (typeof generateIdiomMission === 'function') generateIdiomMission();
+        }
+
+        function getTodayReviewTasks(mix) {
+            const m = mix || todayReviewMix();
+            const words = (m.words && typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
+            const idioms = (m.idioms && typeof getIdiomDueList === 'function') ? getIdiomDueList() : [];
             // [냐냐 지적] 동사는 원형이 아니라 활용형으로 묻는다. 활용형 변환이 쓰기연습 탭
             //   경로(buildWriteTasks)에만 걸려 있어서, 배너로 시작한 복습만 원형으로 나왔다.
             const wordTasks = (typeof toWriteVerbTask === 'function') ? words.map(toWriteVerbTask) : words;
@@ -1881,7 +1921,8 @@
             return wordTasks.concat(idiomTasks);
         }
 
-        function startTodayReviewShortcut() {
+        function startTodayReviewShortcut(entry) {
+            todayReviewEntry = (entry === 'idiom') ? 'idiom' : 'word';
             const due = getTodayReviewTasks();
             if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             todayReviewPlan = null;
@@ -1905,9 +1946,22 @@
             const listEl = document.getElementById('review-split-list');
             const totalEl = document.getElementById('review-split-total');
             const nIdiom = due.filter(t => t && t._isIdiomTask).length;
-            if (totalEl) totalEl.innerText = nIdiom
-                ? `오늘 복습할 단어 ${due.length - nIdiom}개 · 관용구 ${nIdiom}개`
-                : `오늘 복습할 단어 ${due.length}개`;
+            const nWord = due.length - nIdiom;
+            if (totalEl) totalEl.innerText = (nIdiom && nWord) ? `오늘 복습할 단어 ${nWord}개 · 관용구 ${nIdiom}개`
+                : nIdiom ? `오늘 복습할 관용구 ${nIdiom}개` : `오늘 복습할 단어 ${nWord}개`;
+            //   [냐냐 요청] 같이 풀기 — 들어온 버튼의 반대쪽을 섞을지 (반대쪽이 0개면 줄을 숨긴다)
+            const tRow = document.getElementById('review-split-together-row');
+            const tChk = document.getElementById('review-split-together');
+            const tLbl = document.getElementById('review-split-together-label');
+            if (tRow && tChk && tLbl) {
+                const otherN = todayReviewEntry === 'idiom'
+                    ? ((typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0)
+                    : ((typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0);
+                tRow.classList.toggle('hidden', !otherN);
+                tChk.checked = todayReviewTogether;
+                tLbl.innerText = todayReviewEntry === 'idiom'
+                    ? `📖 단어도 같이 풀기 (${otherN}개)` : `📘 관용구도 같이 풀기 (${otherN}개)`;
+            }
             if (numEl) numEl.innerText = `${todayReviewParts}번`;
             // counts 는 앞쪽이 크므로 그대로 쓰면 '18~17개'처럼 거꾸로 적힌다. 작은 쪽을 앞에 둔다.
             if (perEl) perEl.innerText = counts.every(c => c === counts[0])

@@ -8,10 +8,10 @@
     <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
          앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
          manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610021306">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610021306">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610021306">
-    <link rel="manifest" href="manifest.webmanifest?v=202610021306">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610021410">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610021410">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610021410">
+    <link rel="manifest" href="manifest.webmanifest?v=202610021410">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202610021306">
+    <link rel="stylesheet" href="css/style.css?v=202610021410">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -85,7 +85,7 @@
                          진한 네모는 걷었다. 누르면 새로고침.
                          크기는 44px — 줄 높이(52px)는 그대로 두라셔서 위아래를 4px 씩 여백 쪽으로 내민다(-my-1) -->
                     <div id="header-logo" class="w-11 h-11 -my-1 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <img src="img/icon-192.png?v=202610021306" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
+                        <img src="img/icon-192.png?v=202610021410" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
@@ -123,9 +123,15 @@
                             <span class="text-[10px] font-black text-amber-600 tracking-widest">복습</span>
                             <!-- [냐냐 요청] 단어와 관용구는 한 묶음 — 같은 쓰기 복습이라 버튼을 나눌 이유가 없다.
                                  관용구는 틀렸을 때만 곡선에 들어와서 대개 한두 개뿐이라 더 그렇다 -->
-                            <button id="today-review-btn" onclick="startTodayReviewShortcut()" title="오늘 복습할 단어·관용구 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
-                                <span class="text-[10px] font-bold text-amber-600">단어·관용구</span>
+                            <!-- [냐냐 요청] 단어와 관용구를 다시 나눴다 (2026-10-02). 쓰기로 풀 땐 나눔 창의 '같이 풀기' 로 합친다.
+                                 관용구는 누를 때마다 쓰기 / 문장(관용구 미션) 중에 고른다 -->
+                            <button id="today-review-btn" onclick="startTodayReviewShortcut('word')" title="오늘 복습할 단어 — 쓰기 복습으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
+                                <span class="text-[10px] font-bold text-amber-600">단어</span>
                                 <span id="today-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
+                            </button>
+                            <button id="idiom-review-btn" onclick="openIdiomReviewChoice()" title="오늘 복습할 관용구 — 쓰기로 또는 문장으로" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
+                                <span class="text-[10px] font-bold text-amber-600">관용구</span>
+                                <span id="idiom-review-count-badge" class="text-xs font-extrabold text-amber-700">0개</span>
                             </button>
                             <button id="grammar-review-btn" onclick="startGrammarReview()" title="오늘 복습할 문법 — AI가 만든 문장을 번역해서" class="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-white/70 hover:bg-white border border-amber-200 transition-all active:scale-95 cursor-pointer">
                                 <span class="text-[10px] font-bold text-amber-600">문법</span>
@@ -2530,12 +2536,41 @@
     </div>
 
     <!-- [냐냐 요청] 복습 배너 → 몇 번에 나눠 할지 먼저 고르기 -->
+    <!-- [냐냐 요청] 관용구 복습 — 누를 때마다 쓰기 / 문장 중에 고른다 (2026-10-02, games.js openIdiomReviewChoice) -->
+    <div id="idiom-review-choice-modal" onclick="if(event.target===this) closeIdiomReviewChoice()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-4 text-center">
+            <div>
+                <div class="text-4xl">📘</div>
+                <h3 class="text-base font-bold text-slate-900 mt-2">관용구 복습, 어떻게 할까요?</h3>
+                <p id="idiom-review-choice-count" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="chooseIdiomReview('write')" class="py-4 rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-all active:scale-95">
+                    <div class="text-2xl">✍️</div>
+                    <div class="text-sm font-black text-amber-800 mt-1">쓰기로</div>
+                    <div class="text-[10px] text-amber-600 mt-0.5">뜻 보고 빨리</div>
+                </button>
+                <button onclick="chooseIdiomReview('sentence')" class="py-4 rounded-2xl border border-pink-200 bg-pink-50 hover:bg-pink-100 transition-all active:scale-95">
+                    <div class="text-2xl">📘</div>
+                    <div class="text-sm font-black text-pink-700 mt-1">문장으로</div>
+                    <div class="text-[10px] text-pink-500 mt-0.5">관용구 미션 · 첨삭</div>
+                </button>
+            </div>
+            <button onclick="closeIdiomReviewChoice()" class="text-xs font-bold text-slate-400 hover:text-slate-600">닫기</button>
+        </div>
+    </div>
+
     <div id="review-split-modal" onclick="if(event.target===this) closeReviewSplitModal()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 space-y-5 text-center max-h-[90vh] overflow-y-auto">
             <div class="relative">
                 <div class="text-4xl">📖</div>
                 <h3 class="text-base font-bold text-slate-900 mt-2">몇 번에 나눠서 할까요?</h3>
                 <p id="review-split-total" class="text-xs text-slate-400 mt-0.5"></p>
+                <!-- [냐냐 요청] 단어·관용구를 같이 풀기 (2026-10-02, games.js setTodayReviewTogether) — 처음엔 켜짐, 고른 걸 기억 -->
+                <label id="review-split-together-row" class="hidden mt-2 inline-flex items-center gap-2 cursor-pointer select-none bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
+                    <input type="checkbox" id="review-split-together" onchange="setTodayReviewTogether(this.checked)" class="w-4 h-4 accent-amber-500">
+                    <span id="review-split-together-label" class="text-xs font-bold text-amber-800"></span>
+                </label>
                 <!-- [냐냐 요청] '한 번에 몇 개씩' 을 여기서 직접 고친다 (2026-09-21) -->
                 <button type="button" onclick="toggleReviewBatchSetting()" title="한 번에 몇 개씩 잡을지 바꾸기"
                         class="absolute top-0 right-0 w-9 h-9 rounded-full text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition-colors">
@@ -2661,14 +2696,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202610021306"></script>
-    <script src="js/creatures.js?v=202610021306"></script>
-    <script src="js/core.js?v=202610021306"></script>
-    <script src="js/vocab.js?v=202610021306"></script>
-    <script src="js/flashcards.js?v=202610021306"></script>
-    <script src="js/quiz.js?v=202610021306"></script>
-    <script src="js/games.js?v=202610021306"></script>
-    <script src="js/ai-feedback.js?v=202610021306"></script>
-    <script src="js/es-keys.js?v=202610021306"></script>
+    <script src="js/dictionary-data.js?v=202610021410"></script>
+    <script src="js/creatures.js?v=202610021410"></script>
+    <script src="js/core.js?v=202610021410"></script>
+    <script src="js/vocab.js?v=202610021410"></script>
+    <script src="js/flashcards.js?v=202610021410"></script>
+    <script src="js/quiz.js?v=202610021410"></script>
+    <script src="js/games.js?v=202610021410"></script>
+    <script src="js/ai-feedback.js?v=202610021410"></script>
+    <script src="js/es-keys.js?v=202610021410"></script>
 </body>
 </html>

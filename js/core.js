@@ -287,6 +287,8 @@ let vocabulary = [];
                 writeTenses: (typeof writeTenses !== 'undefined' && Array.isArray(writeTenses)) ? writeTenses : undefined,
                 //   [냐냐 요청] 오늘의 복습을 한 번에 몇 개씩 잡을지 (2026-09-21) — 동사 시제와 같은 대접
                 todayReviewBatch: (typeof todayReviewBatch === 'number' && todayReviewBatch > 0) ? todayReviewBatch : undefined,
+                //   [냐냐 요청] 쓰기 복습에서 단어·관용구 같이 풀기 (2026-10-02, 처음엔 켜짐)
+                todayReviewTogether: (typeof todayReviewTogether === 'boolean') ? todayReviewTogether : undefined,
                 //   [냐냐 요청] 쓰기 시험 명단·진행·기록 (2026-09-23) — 날을 넘기고 기기를 바꿔도 이어서
                 writeExams: (typeof writeExams !== 'undefined' && writeExams) ? writeExams : undefined,
                 //   [냐냐 요청] 관용구 미션의 뽑는 범위 (2026-10-02) — 안 고른 상태(null)면 안 보낸다
@@ -469,6 +471,9 @@ let vocabulary = [];
                 grammarCellMarks = payload.grammarCellMarks || {};
                 grammarCellWords = payload.grammarCellWords || {};       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 //   [냐냐 요청] 오늘의 복습 한 번에 몇 개씩 (없으면 지금 값 그대로 — 기본 100)
+                if (typeof todayReviewTogether !== 'undefined' && typeof payload.todayReviewTogether === 'boolean') {
+                    todayReviewTogether = payload.todayReviewTogether;
+                }
                 if (typeof setTodayReviewBatch === 'function' && Number.isFinite(Number(payload.todayReviewBatch))) {
                     setTodayReviewBatch(payload.todayReviewBatch, { silent: true });
                 }
@@ -3575,10 +3580,9 @@ let vocabulary = [];
             renderIdiomReviewBtn();   // [냐냐 요청] 관용구 쪽도
             // [냐냐 요청] 헤더 '오늘의 복습' 배너 갱신: 복습할 단어 개수 표시.
             //   0개면 회색 비활성 + '복습 완료 ✓', 있으면 활성 + 'N개'
-            // [냐냐 요청] 단어와 관용구를 한 묶음으로 하므로 개수도 합쳐서 센다
-            const words = (typeof getTodayReviewTasks === 'function')
-                ? getTodayReviewTasks()
-                : ((typeof getReviewDueWords === 'function') ? getReviewDueWords() : []);
+            // [냐냐 요청] 단어·관용구 버튼을 다시 나눴다 (2026-10-02) — 이 버튼은 단어만 센다.
+            //   관용구는 옆 버튼(renderIdiomReviewBtn)이 센다. 같이 풀기는 나눔 창의 체크로 고른다.
+            const words = (typeof getReviewDueWords === 'function') ? getReviewDueWords() : [];
             const btn = document.getElementById('today-review-btn');
             const badge = document.getElementById('today-review-count-badge');
             if (!btn || !badge) return;
@@ -4569,7 +4573,8 @@ let vocabulary = [];
                 <h4 class="text-sm font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-rotate text-amber-500"></i> 망각곡선 · 사전</h4>
                 <ul class="text-xs text-slate-600 font-semibold leading-relaxed space-y-1 list-disc pl-4">
                     <li>관용구는 <b>제 망각곡선</b>을 따로 돕니다 (1·3·7·14·30일). 단어 곡선과 별개예요</li>
-                    <li>오늘의 복습에서 <b>단어와 한 묶음</b>으로 나와요 — 같은 쓰기 복습이니까요</li>
+                    <li>헤더 복습 칸에 <b>단어 · 관용구 버튼이 따로</b> 있어요. 쓰기로 풀 땐 나눔 창의 <b>'같이 풀기'</b> 를 켜면 한 묶음으로 나와요(처음엔 켜짐).
+                        관용구 버튼은 누를 때마다 <b>✍️ 쓰기로 / 📘 문장으로(관용구 미션)</b> 를 골라요</li>
                     <li>문법처럼 <b>첨삭에서 오늘 차례인 관용구를 제대로 쓰면</b> 그걸로 오늘 복습을 한 것으로 쳐요 —
                         한 칸 앞으로, <b>🔁 오늘 복습</b> 뱃지, 일지 복습 +1. 오늘 차례가 아니면 점수만 붙어요</li>
                     <li><b>📘 관용구 미션</b>에서 '오늘 복습할 관용구 먼저' 를 켜두면 오늘 몫부터 문장으로 나와요.
