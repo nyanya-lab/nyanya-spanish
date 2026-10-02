@@ -2690,6 +2690,29 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         let idiomDupState = null;   // { items: [{ row, text, meaning, owners: [{ w, it }], pick }] }
         let _idiomMovePending = []; // performSaveWord 가 새 단어 id 를 정한 뒤 처리한다
 
+        // [냐냐 요청] 단어로 둘지 관용구로 둘지 추천 한 줄 (2026-10-02) — 관용구 정리 때 정한 기준 그대로:
+        //   · 단어 자기 자신을 또 적은 것: 감탄 쓰임(¡Genial!)이면 관용구로 남겨도 되고, 아니면 뺀다
+        //   · 빈칸 [ ] 이 있는 틀, '동사 + 낱말' 짝(poner la lavadora): 그 단어에 딸린 쓰임이라 관용구
+        //   · 그 밖의 굳은 표현(a veces · por eso · sobre todo · 속담): 한 덩어리라 단어
+        function wordOrIdiomAdvice(text, wordHits, selfId, formWord) {
+            const isSelf = wordHits.some(w => w.id === '__form' || (selfId && String(w.id) === String(selfId)));
+            const t = String(text || '').trim();
+            if (isSelf) {
+                return /^[¡!]/.test(t)
+                    ? { pick: 'keep', say: '💡 감탄 쓰임이라 관용구로 남겨도 좋아요 (¡Genial! 처럼)' }
+                    : { pick: 'drop', say: '💡 단어와 똑같아서 관용구에서 빼는 걸 추천해요' };
+            }
+            //   첫 낱말이 동사원형 모양일 때만 '동사 짝' 으로 본다 — 활용표로 되돌리면 sobre→sobrar, como→comer 로 헛짚는다
+            //   ⚠️ 대괄호만으로는 안 가른다 — antes de [..] · fuera de [..] 같은 전치사구는 단어로 두기로 하셨다
+            const toks = idiomDupKey(t.replace(/\[[^\]]*\]/g, ' ')).split(' ').filter(Boolean);
+            if (toks.length <= 1) return { pick: 'drop', say: '💡 단어와 똑같아서 관용구에서 빼는 걸 추천해요' };
+            const verbFirst = toks[0].length >= 2 && /(ar|er|ir|ír)(se)?$/.test(toks[0]);
+            if (verbFirst) {
+                return { pick: 'keep', say: '💡 동사로 시작하는 짝(poner la lavadora 처럼)이라 관용구가 어울려요 — 단어 쪽은 월간 정리 때 정리해요' };
+            }
+            return { pick: 'drop', say: '💡 한 덩어리로 굳은 표현이라 단어로만 두는 걸 추천해요' };
+        }
+
         function findIdiomDupsInForm(selfId) {
             const rows = Array.prototype.slice.call(document.querySelectorAll('#idiom-entries-box > div'));
             const items = [];
@@ -2713,7 +2736,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 if (wordHits.length) {
                     const mInp = row.querySelector('[data-idiom-field="meaning"]');
-                    items.push({ kind: 'word', row, text, meaning: mInp ? mInp.value.trim() : '', words: wordHits, pick: 'drop' });
+                    const rec = wordOrIdiomAdvice(text, wordHits, selfId, formWord);
+                    items.push({ kind: 'word', row, text, meaning: mInp ? mInp.value.trim() : '', words: wordHits, pick: rec.pick, advice: rec.say });
                     return;
                 }
                 const owners = [];
@@ -2757,6 +2781,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         ${x.meaning ? `<span class="text-slate-400 text-xs">— ${escapeHtml(x.meaning)}</span>` : ''}</div>
                     <p class="text-[11px] font-bold text-amber-600">이 표현은 단어로 이미 있어요:
                         ${x.words.map(w => `${escapeHtml(w.word)}${w.pos ? ` <span class="text-slate-400">(${escapeHtml(POS_LABELS[w.pos] || w.pos)})</span>` : ''}${w.id === '__form' || (idiomDupState.selfId && String(w.id) === String(idiomDupState.selfId)) ? ' <span class="text-slate-400">— 지금 이 단어</span>' : ''}`).join(', ')}</p>
+                    ${x.advice ? `<p class="text-[12px] font-semibold text-slate-600 bg-amber-50 rounded-lg px-2.5 py-1.5">${escapeHtml(x.advice)}</p>` : ''}
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         ${pickBtn(i, 'drop', '관용구에서 빼기', '단어로만 둬요 (점수가 둘로 안 갈려요)', x.pick === 'drop')}
                         ${pickBtn(i, 'keep', '그래도 관용구로 두기', '단어와 관용구에 따로 있어요', x.pick === 'keep')}
