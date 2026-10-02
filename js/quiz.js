@@ -810,7 +810,8 @@ let quizSession = null;
                     CONTRACTION_SPLIT[alts[0]].forEach(p => out.push({ alts: [p], verb: false }));
                     return;
                 }
-                out.push({ alts, verb: alts.some(a => a.length >= 3 && /(ar|er|ir|ír)(se)?$/.test(a)) });
+                //   [냐냐 요청] 두 글자 동사 ir 도 동사로 본다 (2026-10-02) — 'ir a [장소]' 에 'voy a la playa' 가 오답이었다
+                out.push({ alts, verb: alts.some(a => a === 'ir' || (a.length >= 3 && /(ar|er|ir|ír)(se)?$/.test(a))) });
             });
             return out;
         }
