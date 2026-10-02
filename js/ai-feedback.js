@@ -2128,12 +2128,14 @@ ${buildLearnerProfileSummary()}`;
                     html = `✅ 이번 관용구를 제대로 썼어요! — ${name}`; cls = 'bg-emerald-50 border-emerald-200 text-emerald-800';
                 } else if (hit && hit.v === 'bad') {
                     html = `✏️ 이번 관용구를 쓰려고 했는데 형태가 조금 달라요 — ${name}${mean}`; cls = 'bg-rose-50 border-rose-200 text-rose-800';
+                } else if (hit && hit.v === 'zero') {
+                    html = `✏️ 이번 관용구를 썼는데 고친 문장에서 바뀌었어요 — ${name}${mean}`; cls = 'bg-rose-50 border-rose-200 text-rose-800';
                 } else if (j.state === 'failed') {
                     html = `💡 이번 관용구 — ${name}${mean}`; cls = 'bg-slate-50 border-slate-200 text-slate-700';
                 } else {
                     html = `💡 이 문장은 이번 관용구로도 쓸 수 있어요 — ${name}${mean}`; cls = 'bg-amber-50 border-amber-200 text-amber-900';
                 }
-                if (mission.review && !hit && j.state !== 'failed') html += ` <span class="opacity-70">· 오늘 몫에 남겨뒀어요 — 뒤에 다시 나와요</span>`;
+                if (mission.review && (!hit || hit.v === 'zero') && j.state !== 'failed') html += ` <span class="opacity-70">· 오늘 몫에 남겨뒀어요 — 뒤에 다시 나와요</span>`;
                 box.className = `border p-3 rounded-2xl text-xs leading-relaxed font-semibold ${cls}`;
                 box.innerHTML = html;
                 syncIdiomScopeBadge();   // 오늘 몫 남은 수
@@ -2734,6 +2736,61 @@ ${buildLearnerProfileSummary()}`;
             e.reviewLogged = now;
         }
 
+        // ============================================================
+        // [냐냐 지적] 관용구도 단어와 같은 잣대로 코드가 한 번 더 본다 (2026-10-02).
+        //   'Esto fue rompido, ¿por eso tienes uno adhesivo instántaneo?' 에서
+        //   adhesivo instantáneo 는 철자를 틀렸는데(instántaneo) +2·오늘 복습이 붙었고,
+        //   por eso 는 por casualidad 로 고쳐졌는데도 +2 였다. 관용구 판정은 '표현을 썼나' 만 묻기 때문이다.
+        //   단어 규칙과 똑같이: 고친 문장에서 없어졌으면 0 (고쳐짐) · 남았는데 내 꼴이 틀렸으면 −2 (철자).
+        //   - '고친 문장에 살아남았나' — 표현의 내용어(사전형)가 고친 문장에 다 있나 (활용형은 사전형으로 돌려 견준다)
+        //   - '내 꼴이 틀렸나' — 내 문장에서 지운 줄(line-through)에 표현의 낱말이 들었거나,
+        //     같은 낱말인데 악센트까지 견주면 고친 문장과 글자가 다를 때
+        //   'bad' 는 그대로 둔다 (AI 가 이미 틀렸다고 본 것).
+        // ============================================================
+        function aiIdiomGuardVerdicts(j, feedback) {
+            if (!j || !Array.isArray(j.verdicts) || !feedback) return;
+            const fixedHtml = String(feedback.correctedText || '');
+            const mineHtml = String(feedback.originalMarked || feedback.userText || '');
+            if (!fixedHtml.trim()) return;
+            const toks = (html) => String(html || '').replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+            const fixedRaw = toks(fixedHtml).map(t => t.toLowerCase().normalize('NFC'));
+            const mineRaw = toks(mineHtml).map(t => t.toLowerCase().normalize('NFC'));
+            //   고친 문장의 낱말 — 그대로 · 사전형 둘 다 (llegué → llegar)
+            const fixedKeys = new Set();
+            fixedRaw.forEach(t => { const n = aiIdiomUnSe(aiIdiomNorm(t)); fixedKeys.add(n); fixedKeys.add(aiIdiomLemma(t)); });
+            //   내 문장에서 지운 줄의 낱말 — 키(그대로·사전형) → 내가 쓴 글자들
+            const struck = new Map();
+            const addStruck = (k, raw) => { if (!k) return; if (!struck.has(k)) struck.set(k, []); struck.get(k).push(raw); };
+            (mineHtml.match(/<span[^>]*line-through[^>]*>[\s\S]*?<\/span>/gi) || []).forEach(sp => {
+                toks(sp).forEach(t => { addStruck(aiIdiomUnSe(aiIdiomNorm(t)), t); addStruck(aiIdiomLemma(t), t); });
+            });
+            //   악센트까지 견줘서 틀린 낱말 — 악센트를 떼면 같은데 글자 그대로는 고친 문장에 없는 것
+            const accentMiss = new Set();
+            mineRaw.forEach(t => {
+                const n = aiIdiomNorm(t);
+                if (fixedRaw.includes(t)) return;
+                if (fixedRaw.some(f => aiIdiomNorm(f) === n)) accentMiss.add(aiIdiomUnSe(n));
+            });
+            j.verdicts.forEach(x => {
+                if (!x || x.v !== 'ok' || !x.c) return;
+                const content = Array.isArray(x.c.content) && x.c.content.length
+                    ? x.c.content
+                    : aiIdiomNorm(String(x.c.it.idiom).replace(RE_PLACEHOLDER, ' ')).split(' ').filter(t => t && !AI_IDIOM_SKIP.has(t)).map(aiIdiomUnSe);
+                if (!content.length) return;
+                const survived = content.every(t => fixedKeys.has(t));
+                if (!survived) { x.v = 'zero'; return; }                       // 고쳐져서 없어짐 → 0
+                //   남았지만 내 꼴이 틀림 — 단어 규칙처럼 갈라 매긴다
+                //     악센트·철자를 틀림 → −2 (instántaneo)
+                //     진짜 있는 다른 꼴(활용·성수)로 썼다가 고쳐짐 → 0 (llegué → llego 같은 것)
+                if (content.some(t => accentMiss.has(t))) { x.v = 'bad'; return; }
+                const hits = content.filter(t => struck.has(t));
+                if (!hits.length) return;
+                const realForm = hits.every(t => struck.get(t).some(raw =>
+                    typeof findVocabWordByForm === 'function' && !!findVocabWordByForm(raw)));
+                x.v = realForm ? 'zero' : 'bad';
+            });
+        }
+
         //   따로 물은 판정(aiIdiomJudge)으로 점수를 붙인다. 판정이 아직 안 왔으면 칸을 '확인 중' 으로 두고
         //   오는 대로 붙인 뒤 다시 그린다. 그사이 새 첨삭을 시작했으면(판정이 바뀜) 늦게 온 것은 버린다.
         let aiIdiomPending = false;
@@ -2744,13 +2801,16 @@ ${buildLearnerProfileSummary()}`;
             const j = aiIdiomJudge;
             if (!j) return;
             const finish = () => {
+                aiIdiomGuardVerdicts(j, feedback);   // AI 가 'ok' 라 해도 고쳐졌거나 철자가 틀렸으면 바로잡는다
                 //   양쪽에 오면 틀림을 따른다 (단어와 같은 이유)
                 const bad = new Set(j.verdicts.filter(x => x.v === 'bad').map(x => x.c));
                 const ok = new Set(j.verdicts.filter(x => x.v === 'ok' && !bad.has(x.c)).map(x => x.c));
-                const push = (c, isOk) => {
+                //   고쳐져서 없어진 표현은 0점으로 보여준다 (단어의 '고쳐짐 0' 과 같다)
+                const zero = new Set(j.verdicts.filter(x => x.v === 'zero' && !bad.has(x.c) && !ok.has(x.c)).map(x => x.c));
+                const push = (c, isOk, isZero) => {
                     const key = idiomKey(c.w.id, c.it.idiom);
                     if (aiLastEsKoIdioms.some(e => e.key === key)) return;
-                    const delta = isOk ? gainOk : WORD_SPELL_BAD;
+                    const delta = isZero ? 0 : (isOk ? gainOk : WORD_SPELL_BAD);
                     //   반영 '전' 에 오늘 차례였나 — 점수를 바꿔 다시 붙일 때도 이 값을 그대로 쓴다
                     const rec = (idiomReview || {})[key];
                     const due = !!(rec && rec.lastWrongDate && typeof curveIsDue === 'function'
@@ -2763,6 +2823,7 @@ ${buildLearnerProfileSummary()}`;
                 };
                 ok.forEach(c => push(c, true));
                 bad.forEach(c => push(c, false));
+                zero.forEach(c => push(c, false, true));
             };
             if (j.state !== 'pending') { finish(); return; }
             aiIdiomPending = true;
@@ -3156,9 +3217,29 @@ ${buildLearnerProfileSummary()}`;
                 push(w, fixedFlat.includes(' ' + words.join(' ') + ' '));
             });
             // ② 내가 쓴 낱말을 하나씩 (위에서 이미 먹은 토막은 건너뛴다)
+            //   [냐냐 지적] 악센트만 틀린 낱말은 '철자 틀림' 이다 (2026-10-02) — instántaneo 가 0 이었다.
+            //   AI 가 wordsBad 대신 wordsForm 에 넣으면 −2 가 빠졌다. 악센트를 떼면 고친 문장의 낱말과 같은데
+            //   글자 그대로는 다르면 코드가 −2 로 잡는다 (Accents count — año 와 ano 는 다른 낱말).
+            const deAccent = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const fixedLower = fixedToks.map(t => t.toLowerCase().normalize('NFC'));
+            //   ⚠️ 악센트가 낱말을 바꾸는 경우(esta 이것 ↔ está 있다)는 다른 낱말이라 철자 틀림으로 치지 않는다 —
+            //      고친 쪽 낱말이 단어장에서 같은 항목으로 닿을 때만 −2.
+            const accentOnlyMiss = (tok, w) => {
+                const t = String(tok || '').toLowerCase().normalize('NFC');
+                if (!w || fixedLower.includes(t)) return false;
+                const d = deAccent(t);
+                if (d.length < 2) return false;
+                return fixedToks.some(f => {
+                    if (deAccent(f) !== d) return false;
+                    const fw = resolve(f, '');
+                    return !!fw && fw.id === w.id;
+                });
+            };
             mineToks.forEach((tok, i) => {
                 if (usedTok[i]) return;
-                push(resolveHere(tok, i), fixedSet.has(norm(tok)));
+                const survived = fixedSet.has(norm(tok));
+                const w = resolveHere(tok, i);
+                push(w, survived, !survived && accentOnlyMiss(tok, w));
             });
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
             //   'lemones' 라고 쓰면 'el limón' 에 못 닿는다 — 토막으로도, 성·수 변형으로도, 활용형 역추적으로도.
