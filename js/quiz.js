@@ -785,6 +785,11 @@ let quizSession = null;
         //   동사 활용은 단어장에 적힌 활용표로 알아본다 (es → ser).
         //   lenientVerbs: 동사 자리는 아무 낱말이나 — '낱말이 빠졌나' 만 보고 동사 판정은 AI 에게 맡길 때
         // ============================================================
+        // [냐냐 요청] 줄임꼴 del · al 을 풀어서 견준다 (2026-10-02).
+        //   "a la derecha de [장소/사물]" 에 "a la derecha del banco" 를 쓰면 틀렸다고 했다 —
+        //   de + el 이 del 로 붙으면 고정 낱말 de 가 사라진 것처럼 보였다. ir a [장소] → "ir al cine" 도 같았다.
+        //   → 답과 틀 양쪽에서 del → de el, al → a el 로 풀고 견준다.
+        const CONTRACTION_SPLIT = { del: ['de', 'el'], al: ['a', 'el'] };
         function templateTokens(raw, keepAccents) {
             let s = String(raw || '').toLowerCase().trim().normalize('NFC').replace(RE_QA_MARKER, '');
             if (!keepAccents) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -800,6 +805,11 @@ let quizSession = null;
                 const clean = tok.replace(/[^\p{L}\p{N}\/]/gu, '');
                 if (!clean.replace(/\//g, '')) return;          // 빈칸 사이의 '/' 같은 기호만 남은 조각
                 const alts = spanishTokenAlts(clean).map(a => a.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+                //   틀에 적힌 del · al 도 풀어 둔다 — 답 쪽을 풀었으니 양쪽 모양을 맞춘다 (al menos)
+                if (alts.length === 1 && CONTRACTION_SPLIT[alts[0]]) {
+                    CONTRACTION_SPLIT[alts[0]].forEach(p => out.push({ alts: [p], verb: false }));
+                    return;
+                }
                 out.push({ alts, verb: alts.some(a => a.length >= 3 && /(ar|er|ir|ír)(se)?$/.test(a)) });
             });
             return out;
@@ -808,7 +818,9 @@ let quizSession = null;
             if (String(correctRaw || '').search(RE_PLACEHOLDER) < 0) return false;
             const T = templateTokens(correctRaw, keepAccents);
             if (!T.some(t => t.slot) || !T.some(t => !t.slot)) return false;
-            const U = normalizeSpanishAnswer(userRaw, keepAccents).split(' ').filter(Boolean);
+            const U = [];
+            normalizeSpanishAnswer(userRaw, keepAccents).split(' ').filter(Boolean)
+                .forEach(u => (CONTRACTION_SPLIT[u] || [u]).forEach(p => U.push(p)));
             if (!U.length) return false;
             const verbOk = (t, u) => {
                 if (lenientVerbs) return true;
