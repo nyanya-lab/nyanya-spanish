@@ -1418,6 +1418,58 @@
         }
 
         // 내용이 있는 문법 노트 중에서 하나를 무작위로 (범위를 정해뒀으면 그 안에서만)
+        // ============================================================
+        // [냐냐 요청] 미션 문장은 내가 등록한 동사 시제로 옮길 수 있는 것만 (2026-10-02).
+        //   '네가 같이 가준다면 고마울 거야'(접속법·조건법), '어제 산 접착제'(부정과거) 처럼 아직 안 배운
+        //   시제가 꼭 필요한 문장이 최근 12개 중 2~3개꼴로 나왔다.
+        //   시제 목록은 단어장에서 읽는다 — 동사 3개 이상에 채워둔 시제만 '배운 것' 으로 친다 (DELE 가늠과 같은 잣대).
+        //   부정과거를 배워 동사에 채우면 코드 수정 없이 그날부터 미션에 섞인다.
+        //   연습하는 문법 노트가 바로 그 시제를 가르치면 노트가 이긴다 (AI 에게 그렇게 일러둔다).
+        // ============================================================
+        const MISSION_TENSE_LABEL = {
+            presente: '직설법 현재', gerundio: '현재진행 (estar + 현재분사)', participio: '현재완료 (haber + 과거분사)',
+            indefinido: '부정과거', imperfecto: '불완료과거', futuro: '단순미래', condicional: '조건법',
+            subjPresente: '접속법 현재', subjImperfecto: '접속법 과거', imperativo: '명령법'
+        };
+        function registeredMissionTenses() {
+            const min = (typeof DELE_TENSE_MIN_VERBS === 'number') ? DELE_TENSE_MIN_VERBS : 3;
+            const count = {};
+            (vocabulary || []).forEach(v => {
+                if (!v || v.pos !== 'verb') return;
+                const t = (typeof verbTensesOf === 'function') ? verbTensesOf(v) : (v.conjugationsByTense || {});
+                Object.keys(t).forEach(k => { const f = t[k]; if (f && Object.values(f).some(Boolean)) count[k] = (count[k] || 0) + 1; });
+            });
+            return Object.keys(MISSION_TENSE_LABEL).filter(k => (count[k] || 0) >= min);
+        }
+        function missionTenseRuleText(hasNote) {
+            const have = registeredMissionTenses();
+            if (!have.length) return '';
+            const notYet = Object.keys(MISSION_TENSE_LABEL).filter(k => !have.includes(k));
+            if (!notYet.length) return '';   // 다 배웠으면 막을 게 없다
+            //   예시는 '아직 안 배운 것' 에 해당하는 것만 — 부정과거를 배우고 나면 '어제 ~했어' 를 막으면 안 된다
+            const EX = {
+                indefinido: "'어제 ~했어 · 지난주에 ~했어' → 부정과거",
+                imperfecto: "'어렸을 때 ~하곤 했어 · 그땐 ~였어' → 불완료과거",
+                futuro: "'~할 거야' 는 단순미래 대신 ir a + 동사원형으로 옮겨지게",
+                condicional: "'~할 텐데 · ~하면 좋을 텐데' → 조건법",
+                subjPresente: "'~라면 좋겠어 · ~하기를 바라 · ~하기 전에(+다른 주어)' → 접속법",
+                imperativo: "'~해줘 · ~해 · ~하지 마' 처럼 시키는 말 → 명령법. 부탁은 '~해줄 수 있어?' (poder + 동사원형) 로"
+            };
+            const examples = notYet.map(k => EX[k]).filter(Boolean);
+            if (notYet.includes('subjImperfecto') && !notYet.includes('subjPresente')) examples.push("'~했더라면 · ~해준다면' → 접속법 과거");
+            return `
+[시제 제한 — 학생이 배운 동사 시제는 이것뿐입니다]
+쓸 수 있는 것: ${have.map(k => MISSION_TENSE_LABEL[k]).join(' · ')}
+그리고 동사원형을 붙여 쓰는 꼴 (ir a + 동사원형 으로 미래, tener que · hay que · querer · poder · necesitar + 동사원형).
+아직 안 배운 것: ${notYet.map(k => MISSION_TENSE_LABEL[k]).join(' · ')}
+→ 스페인어로 옮길 때 아직 안 배운 시제가 하나라도 필요해지는 문장은 만들지 마세요.
+${examples.map(x => '· ' + x).join('\n')}${notYet.includes('indefinido') ? `
+지난 일을 말하려면 '오늘 · 이번 주 · 방금 · 벌써 · 한 번도' 처럼 현재완료로 자연스럽게 옮겨지는 때로 잡으세요.` : ''}
+내보내기 전에 이 문장을 직접 스페인어로 옮겨보고, 아직 안 배운 시제가 한 군데라도 나오면 문장을 다시 쓰세요.${hasNote ? `
+단, 위 문법 노트가 바로 그 시제를 가르치는 노트라면 그 시제는 써도 됩니다 — 연습하라고 낸 문법이 먼저입니다.` : ''}
+`;
+        }
+
         function pickMissionGrammarNote() {
             const pool = aiScopedGrammarNotes();
             if (!pool.length) return null;
@@ -1548,6 +1600,7 @@ ${grammarDetail}
    짜임만 남기고 소재는 완전히 새로 잡으세요.` : ''}
 다만 이 대목으로 도저히 자연스러운 문장이 안 나오면 '같은 노트 안의 다른 대목'으로 바꾸세요 — 자연스러움이 먼저입니다.
 노트 밖으로 나가지는 마세요. 이 노트를 하나도 쓰지 않는 문장은 실패입니다 (대목을 바꾸는 건 괜찮고, 노트를 통째로 버리는 게 안 됩니다).` : ''}` : ''}
+${missionTenseRuleText(!!grammarContext)}
 
 ⚠️ 가장 중요 — 문장이 '말이 되는지' 반드시 검토하세요. 문법을 끼워 넣는 것보다 우선입니다.
 내보내기 전에 스스로 물어보세요: "실제 사람이 이 말을 하는 상황이 존재하는가?"
@@ -2008,6 +2061,7 @@ ${pick.it.idiom} = ${pick.it.idiomMeaning || ''}
 
 [최근에 낸 문장 — 소재가 겹치지 않게]
 ${recentAsks.map(a => '· ' + a).join('\n')}` : ''}
+${missionTenseRuleText(false)}
 
 ⚠️ 문장이 '말이 되는지' 반드시 검토하세요. 실제 사람이 이 말을 하는 상황이 있어야 합니다.
 ${buildLearnerProfileSummary()}`;
