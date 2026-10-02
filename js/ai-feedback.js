@@ -2042,6 +2042,9 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 pick = from[Math.floor(Math.random() * from.length)];
             }
 
+            //   빈칸 있는 틀 표현인가 — [ ]/( ) 안이 한글 이름표일 때만 빈칸이다.
+            //   '(Podría repetirme) otra vez' 처럼 괄호에 스페인어가 들었으면 '빼도 되는 말' 이지 빈칸이 아니다.
+            const hasSlot = /[\[(][^\])]*[가-힣][^\])]*[\])]/.test(String(pick.it.idiom || ''));
             const recentAsks = (aiNotes || []).filter(n => n && n.mode === 'idiom' && n.ask)
                 .map(n => String(n.ask).trim()).filter(Boolean).slice(0, 6);
             const orig = btn ? btn.innerHTML : '';
@@ -2056,7 +2059,13 @@ ${pick.it.idiom} = ${pick.it.idiomMeaning || ''}
 (이 관용구가 달린 단어: ${pick.w.word} = ${pick.w.meaning || ''})
 
 이 관용구를 쓰면 딱 맞게 번역되는 상황으로 문장을 잡으세요. 관용구의 뜻이 문장의 중심이어야 합니다.
-[ ] 나 ( ) 는 채워 넣는 자리입니다 — 그 자리에 어울리는 구체적인 말(사람·사물·장소·동사 등)을 넣은 문장으로 만드세요.
+⚠️ 위에 적힌 **그 뜻 그대로의 쓰임**이어야 합니다. 같은 낱말의 다른 쓰임은 안 됩니다 —
+예: 'Más o menos [수량/상태] = 대략 ~ 정도' 를 연습하는데 '그냥 그저 그래' (más o menos 단독, '그럭저럭') 로 내면 실패입니다.${hasSlot ? `
+⚠️ 이 관용구에는 [ ] / ( ) 로 표시한 **빈칸**이 있습니다. 빈칸은 학생이 직접 채워 넣는 자리라, 한국어 문장에
+**그 빈칸에 들어갈 구체적인 말이 반드시 들어 있어야** 합니다 (사람·사물·장소·수량·동사 등, 빈칸 이름에 맞게).
+예: 'Más o menos [수량/상태]' → '어제 모임에 대략 **서른 명** 정도 왔어' (빈칸 = 서른 명)
+    'llegar a [장소]' → '나는 **학교에** 아홉 시에 도착했어' (빈칸 = 학교)
+빈칸을 건너뛴 채 관용구 낱말만 쓰게 되는 문장은 실패입니다. 내보내기 전에 slotFill 에 '빈칸 → 들어갈 말' 을 적어서 스스로 확인하세요.` : ''}
 뭉뚱그린 문장은 안 됩니다 — '그것 · 저것 · 어떤 물건' 처럼 소재를 흐리지 마세요.${recentAsks.length ? `
 
 [최근에 낸 문장 — 소재가 겹치지 않게]
@@ -2066,9 +2075,17 @@ ${missionTenseRuleText(false)}
 ⚠️ 문장이 '말이 되는지' 반드시 검토하세요. 실제 사람이 이 말을 하는 상황이 있어야 합니다.
 ${buildLearnerProfileSummary()}`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include Spanish words or Latin alphabet characters. No explanations.";
-            const schema = { type: "OBJECT", properties: { sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개" } }, required: ["sentence"] };
+            //   [냐냐 지적] 빈칸 있는 관용구에 빈칸 없는 쓰임('그냥 그저 그래' ← Más o menos [수량/상태])이 나왔다 (2026-10-02).
+            //   빈칸에 무엇이 들어가는지 적게 해서(slotFill) 스스로 확인하게 하고, 비어 오면 한 번 다시 만든다.
+            const schema = { type: "OBJECT", properties: {
+                sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개" },
+                ...(hasSlot ? { slotFill: { type: "STRING", description: "빈칸마다 '빈칸 → 문장 속 들어갈 한국어 말' (예: '[수량/상태] → 서른 명'). 한글로만" } } : {})
+            }, required: hasSlot ? ["sentence", "slotFill"] : ["sentence"] };
             try {
-                const res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                let res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                if (hasSlot && !String((res && res.slotFill) || '').replace(/[\[\]()→\s-]/g, '').trim()) {
+                    res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                }
                 const sentence = String((res && res.sentence) || '').trim();
                 if (!sentence) throw new Error('EMPTY');
                 if (/[a-zA-Z]/.test(sentence)) throw new Error('SENTENCE_CONTAINS_SPANISH');
