@@ -2661,6 +2661,179 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (_synonymFillQueue.length > 0) setTimeout(() => processSynonymQueue(), 250);
         }
 
+        // ============================================================
+        // [냐냐 요청] 관용구 중복 — 다른 단어에 이미 붙은 관용구를 또 적으면 어느 단어에 붙일지 고른다 (2026-10-02).
+        //   관용구는 단어 밑에 붙는 구조라 dar un paseo 가 dar 와 el paseo 에 따로따로 들어갔다 (30묶음 넘게).
+        //   · 같은 표현 = 대소문자·문장부호(¿?¡!.…)·대괄호 글자만 무시. 악센트는 가른다 (carné ≠ carne 와 같은 원칙).
+        //     'batir [el] récord' = 'batir el récord', '¿Qué tiempo hace ...?' = '¿Qué tiempo hace?'
+        //   · 이번에 **새로 적은 줄**(번호 iid 가 없는 줄)만 본다 — 있던 줄을 고칠 때마다 뜨면 귀찮다.
+        //   · 고른 단어 하나에만 남고 나머지에선 빠진다. 점수·곡선은 기록이 있는 쪽 것을 고른 단어로 옮긴다.
+        // ============================================================
+        const idiomDupKey = (s) => String(s || '').toLowerCase().normalize('NFC')
+            .replace(/[¿?¡!.,;:…\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+
+        let idiomDupState = null;   // { items: [{ row, text, meaning, owners: [{ w, it }], pick }] }
+        let _idiomMovePending = []; // performSaveWord 가 새 단어 id 를 정한 뒤 처리한다
+
+        function findIdiomDupsInForm(selfId) {
+            const rows = Array.prototype.slice.call(document.querySelectorAll('#idiom-entries-box > div'));
+            const items = [];
+            const seen = new Map();   // 이 창 안에서 같은 표현이 두 줄
+            let inFormDup = null;
+            rows.forEach(row => {
+                const inp = row.querySelector('[data-idiom-field="idiom"]');
+                const text = inp ? inp.value.trim() : '';
+                if (!text) return;
+                const key = idiomDupKey(text);
+                if (seen.has(key)) { inFormDup = text; return; }
+                seen.set(key, row);
+                if (row.dataset && row.dataset.iid) return;   // 원래 있던 줄
+                const owners = [];
+                vocabulary.forEach(w => {
+                    if (selfId && String(w.id) === String(selfId)) return;
+                    wordIdiomList(w).forEach(it => { if (idiomDupKey(it.idiom) === key) owners.push({ w, it }); });
+                });
+                if (owners.length) {
+                    const mInp = row.querySelector('[data-idiom-field="meaning"]');
+                    items.push({ row, text, meaning: mInp ? mInp.value.trim() : '', owners, pick: String(owners[0].w.id) });
+                }
+            });
+            return { items, inFormDup };
+        }
+
+        function idiomRecLabel(wordId, it) {
+            const key = `${wordId}::${it.iid || String(it.idiom || '').trim()}`;
+            const s = (typeof idiomScores !== 'undefined' && idiomScores) ? idiomScores[key] : null;
+            const r = (typeof idiomReview !== 'undefined' && idiomReview) ? idiomReview[key] : null;
+            const bits = [];
+            if (s && typeof s.score === 'number') bits.push(`점수 ${s.score}`);
+            if (r && typeof r.stage === 'number') bits.push(`곡선 ${r.stage}칸`);
+            return bits.length ? bits.join(' · ') : '기록 없음';
+        }
+
+        function renderIdiomDupModal() {
+            if (!idiomDupState) return;
+            const selfWord = (document.getElementById('input-word') || {}).value || '';
+            const pickBtn = (i, val, label, sub, on) => `
+                <button type="button" onclick="pickIdiomDup(${i}, this.dataset.v)" data-v="${escapeAttr(val)}"
+                    class="w-full text-left px-3 py-2 rounded-xl border-2 transition-all ${on ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-${on ? 'solid fa-circle-dot text-violet-600' : 'regular fa-circle text-slate-300'} text-xs"></i>
+                        <b class="text-sm text-slate-800">${escapeHtml(label)}</b>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-0.5 pl-5">${sub}</div>
+                </button>`;
+            document.getElementById('idiom-dup-body').innerHTML = idiomDupState.items.map((x, i) => `
+                <div class="border border-slate-200 rounded-2xl p-4 space-y-2 bg-white">
+                    <div class="text-sm"><b class="text-violet-700">${escapeHtml(x.text)}</b>
+                        ${x.meaning ? `<span class="text-slate-400 text-xs">— ${escapeHtml(x.meaning)}</span>` : ''}</div>
+                    <p class="text-[11px] font-bold text-slate-400">어느 단어에 붙일까요?</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        ${x.owners.map(o => pickBtn(i, String(o.w.id), o.w.word,
+                            `이미 있어요 · ${escapeHtml(o.it.idiomMeaning || '')} · ${idiomRecLabel(o.w.id, o.it)}`,
+                            x.pick === String(o.w.id))).join('')}
+                        ${pickBtn(i, '__self', selfWord.trim() || '지금 단어', '지금 적는 단어로 옮기기 (기록도 따라와요)', x.pick === '__self')}
+                    </div>
+                </div>`).join('');
+        }
+
+        function openIdiomDupModal(items) {
+            idiomDupState = { items };
+            renderIdiomDupModal();
+            document.getElementById('idiom-dup-modal').classList.remove('hidden');
+        }
+
+        function closeIdiomDupModal() {
+            document.getElementById('idiom-dup-modal').classList.add('hidden');
+            idiomDupState = null;
+        }
+
+        function pickIdiomDup(i, val) {
+            if (!idiomDupState || !idiomDupState.items[i]) return;
+            idiomDupState.items[i].pick = val;
+            renderIdiomDupModal();
+        }
+
+        // 관용구 기록(점수·곡선)을 다른 단어 밑으로 옮긴다 — 키가 '단어id::관용구번호' 라서
+        function moveIdiomRecords(fromWordId, it, toWordId) {
+            const part = it.iid || String(it.idiom || '').trim();
+            const from = `${fromWordId}::${part}`, to = `${toWordId}::${part}`;
+            if (from === to) return;
+            [typeof idiomScores !== 'undefined' ? idiomScores : null,
+             typeof idiomReview !== 'undefined' ? idiomReview : null].forEach(store => {
+                if (!store || !store[from]) return;
+                if (!store[to]) store[to] = store[from];
+                delete store[from];
+            });
+        }
+
+        function hasIdiomRecord(wordId, it) {
+            const key = `${wordId}::${it.iid || String(it.idiom || '').trim()}`;
+            return !!((typeof idiomScores !== 'undefined' && idiomScores && idiomScores[key]) ||
+                      (typeof idiomReview !== 'undefined' && idiomReview && idiomReview[key]));
+        }
+
+        function removeIdiomFromWord(w, it) {
+            if (Array.isArray(w.idioms) && w.idioms.length) w.idioms = w.idioms.filter(x => x !== it && !(it.iid && x.iid === it.iid));
+            else if (w.idiom) { w.idiom = ''; w.idiomMeaning = ''; }
+        }
+
+        function confirmIdiomDup() {
+            if (!idiomDupState) return;
+            let kept = 0, moved = 0;
+            idiomDupState.items.forEach(x => {
+                if (x.pick === '__self') {
+                    // 지금 단어로 — 기록이 있는 쪽을 데려온다 (없으면 첫 번째)
+                    const src = x.owners.find(o => hasIdiomRecord(o.w.id, o.it)) || x.owners[0];
+                    if (!src.it.iid && typeof ensureIdiomIds === 'function') ensureIdiomIds(src.w);
+                    if (src.it.iid) x.row.dataset.iid = src.it.iid;
+                    const mInp = x.row.querySelector('[data-idiom-field="meaning"]');
+                    if (mInp && !mInp.value.trim()) mInp.value = src.it.idiomMeaning || '';
+                    _idiomMovePending.push({ src, others: x.owners.filter(o => o !== src) });
+                    moved++;
+                } else {
+                    // 원래 단어에 그대로 — 이 창의 줄은 뺀다. 다른 단어에도 있었으면 고른 단어 하나로 모은다
+                    const keep = x.owners.find(o => String(o.w.id) === x.pick);
+                    x.owners.filter(o => o !== keep).forEach(o => {
+                        if (!hasIdiomRecord(keep.w.id, keep.it) && hasIdiomRecord(o.w.id, o.it)) {
+                            if (!keep.it.iid && typeof ensureIdiomIds === 'function') ensureIdiomIds(keep.w);
+                            // 번호가 달라서 키를 새로 짓는다
+                            const part = keep.it.iid || String(keep.it.idiom || '').trim();
+                            const oPart = o.it.iid || String(o.it.idiom || '').trim();
+                            [idiomScores, idiomReview].forEach(store => {
+                                const from = `${o.w.id}::${oPart}`, to = `${keep.w.id}::${part}`;
+                                if (store && store[from] && !store[to]) { store[to] = store[from]; delete store[from]; }
+                            });
+                        }
+                        removeIdiomFromWord(o.w, o.it);
+                    });
+                    x.row.remove();
+                    kept++;
+                }
+            });
+            closeIdiomDupModal();
+            if (kept) showToast(`관용구 ${kept}개는 원래 단어에 두었어요`, "info");
+            performSaveWord();
+        }
+
+        // performSaveWord 가 부른다 — 이 단어 id 가 정해진 뒤에 옛 단어에서 빼고 기록을 옮긴다
+        function applyIdiomMoves(wordObj) {
+            if (!_idiomMovePending.length) return;
+            const pend = _idiomMovePending;
+            _idiomMovePending = [];
+            pend.forEach(({ src, others }) => {
+                const row = (wordObj.idioms || []).find(r => src.it.iid && r.iid === src.it.iid);
+                if (row) {
+                    if (src.it.addedAt) row.addedAt = src.it.addedAt;   // 처음 등록한 날·DELE 는 따라온다
+                    if (src.it.dele && !row.dele) row.dele = src.it.dele;
+                }
+                moveIdiomRecords(src.w.id, src.it, wordObj.id);
+                removeIdiomFromWord(src.w, src.it);
+                others.forEach(o => removeIdiomFromWord(o.w, o.it));
+            });
+            showToast(`관용구 ${pend.length}개를 "${wordObj.word}" 로 옮겼어요 (기록 유지)`, "info");
+        }
+
         function saveWord() {
             const wordVal = document.getElementById('input-word').value.trim();
             const meaningVal = document.getElementById('input-meaning').value.trim();
@@ -2690,6 +2863,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     openDupModal(dup, snapshotWordForm(), modalId || null);
                     return;
                 }
+            }
+
+            // [냐냐 요청] 다른 단어에 이미 있는 관용구면 → 어느 단어에 붙일지 고르는 창
+            {
+                const chk = findIdiomDupsInForm(modalId || null);
+                if (chk.inFormDup) {
+                    showToast(`"${chk.inFormDup}" 가 관용구 칸에 두 줄 있어요. 하나를 지워주세요!`, "error");
+                    return;
+                }
+                _idiomMovePending = [];
+                if (chk.items.length) { openIdiomDupModal(chk.items); return; }
             }
 
             performSaveWord();
@@ -2789,6 +2973,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 // 등록도 끝낼 때 한 번만 알린다 (아래 토스트 또는 '계속 등록?' 확인창이 이미 말해준다)
                 logAction('new-word', null, wordObj.id); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
+
+            applyIdiomMoves(wordObj);   // 관용구 중복 창에서 '지금 단어로 옮기기' 를 고른 것
 
             // [냐냐 PATCH-5배치] 유의어/반의어 — 미등록 단어 자동 등록 + 상대 단어에 양방향 연결
             const synResult = applySynonymLinks(wordObj, getSynonymRowsData());
