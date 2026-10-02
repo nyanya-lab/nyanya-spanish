@@ -7448,6 +7448,21 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (/^¡/.test(t)) return false;
             return /^¿/.test(t) || RE_INTERROG_WORD.test(t.normalize('NFC'));
         }
+        // [냐냐 지적] 재귀대명사만 빠뜨렸나 — 'nos llevamos' 를 'llevamos', 'llevándose' 를 'llevando' (2026-10-02).
+        //   빠진 대명사(me·te·se·nos·os)를 돌려준다. 아니면 ''.
+        //   앞에 따로 선 대명사, 또는 뒤에 붙은 대명사(현재분사·원형) 둘 다 본다. 붙은 꼴은 악센트도 같이 빠지니 떼고 견준다.
+        function reflexivePronounMissing(userRaw, correctRaw) {
+            const plain = (s) => String(s || '').toLowerCase().trim().normalize('NFC').replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+            const deacc = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const u = plain(userRaw), c = plain(typeableForm(correctRaw) || correctRaw);
+            if (!u || !c || u === c) return '';
+            const m = c.match(/^(me|te|se|nos|os) (.+)$/);
+            if (m && (m[2] === u || deacc(m[2]) === deacc(u))) return m[1];
+            const e = c.match(/^(\S+?)(me|te|se|nos|os)$/);
+            //   뒤에 붙은 꼴은 동사원형(-ar/-er/-ir)·현재분사(-ndo)일 때만 — clase 를 'cla + se' 로 읽으면 안 된다
+            if (e && !/\s/.test(c) && /(ar|er|ir|ndo)$/.test(deacc(e[1])) && deacc(e[1]) === deacc(u)) return e[2];
+            return '';
+        }
         function isOtherWholeAnswer(userRaw, correctRaw) {
             const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s || '').toLowerCase().trim();
             const u = norm(userRaw), c = norm(typeableForm(correctRaw) || correctRaw);
@@ -7502,6 +7517,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const correct = String(correctRaw || '');
             const target = typeableForm(correct) || correct;   // 철자 비교는 칠 수 있는 형태로
             if (!user) return `✏️ 정답은 <b>${escapeHtml(correct)}</b> 예요.`;
+            //   재귀대명사만 빠뜨린 것 — 다른 낱말·유의어로 적지 않는다
+            const reflexMiss = reflexivePronounMissing(user, correct);
+            if (reflexMiss) {
+                return `
+                    <div class="space-y-1 text-left">
+                        <p class="font-bold text-rose-500">✏️ 재귀대명사 <b>${escapeHtml(reflexMiss)}</b> 가 빠졌어요.</p>
+                        <p class="font-bold text-slate-600">정답은 <b class="text-slate-900">${escapeHtml(correct)}</b> 예요.</p>
+                    </div>`;
+            }
 
             if (looksLikeSpellMiss(user, correct)) {
                 const ops = charDiffOps(typeableForm(user) || user, target);

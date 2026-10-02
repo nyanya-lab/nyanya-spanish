@@ -5616,6 +5616,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
             }
 
+            // 2-2) [냐냐 지적] 재귀대명사만 빠뜨림 — llevarse 1인칭 복수 'nos llevamos' 를 'llevamos' 로 (2026-10-02).
+            //   llevamos 는 llevar 의 꼴이라 '등록된 유의어(llevar)' 길로 빠져서 "llevar 도 맞는 말이에요 · n…" 이 뜨고
+            //   llevar 에 덤 +1 까지 붙었다. 유의어가 아니라 nos 를 빠뜨린 것이다. 관사 빠뜨린 것과 같은 대접으로 한 번 더.
+            //   ⚠️ 어느 대명사인지는 말하지 않는다 — 'nos' 라고 하면 정답을 통째로 주는 꼴이다.
+            if (typeof reflexivePronounMissing === 'function' && reflexivePronounMissing(userAnswer, w.word)) {
+                if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
+                writeAskRetry('typo', `✏️ 동사는 맞아요! <b>재귀대명사</b>가 빠졌어요. 다시 한 번 써볼까요?`, userAnswer);
+                return;
+            }
+
             // 3) 악센트만 틀림 → AI 부를 것도 없이 바로 '한 번 더' (철자로 이미 봐줬으면 오답)
             if (writeAccentOnlyMiss(userAnswer, w.word)) {
                 if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
