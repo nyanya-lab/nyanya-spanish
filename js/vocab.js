@@ -5189,9 +5189,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   그래서 그 단어의 앞글자만 흘린다 (writePrefixHint 가 마지막 글자는 남겨둔다).
         function writeSynonymHint(userAnswer, w, fallback) {
             if (w && w._isIdiomTask) {
-                const base = (w._idiomOf || {}).word;
-                const p = base ? writePrefixHint(userAnswer, base) : '';
-                if (p) return `💡 그것도 통하는 말이에요! 이번엔 <b>${escapeHtml(p)}</b> 로 시작하는 단어를 써서 말해볼까요?`;
+                //   [냐냐 지적] 힌트가 표현이 아니라 그 표현이 딸린 **단어** 의 앞글자였다 (2026-10-02).
+                //   'de cuando en cuando'(cuando 밑)에 'de vez en cuando' 를 쓰면 "c 로 시작하는 단어를 써서" 가 떴다.
+                //   다른 문제처럼 **표현 자체** 의 앞글자를 알려준다 (de vez… 를 썼으면 'de c').
+                const p = writePrefixHint(userAnswer, w.word);
+                if (p) return `💡 그것도 통하는 말이에요! 이번엔 외우려던 표현으로 — ${hintStartHtml(p)}`;
                 return `💡 그것도 통하는 말이에요! 이번엔 외우려던 그 표현으로 써볼까요?`;
             }
             return fallback || `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요?`;
