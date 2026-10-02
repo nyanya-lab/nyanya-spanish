@@ -305,6 +305,17 @@
         //   2026-09-02 에 Flash(gemini-3-flash-preview)로 재봤다: 미션 문장 생성이 10~31초였다
         //   (Lite 는 5.5~6.4초). 문장 품질도 눈에 띄게 낫지 않아서 올리지 않기로 했다.
         const GEMINI_MODEL_FLASH_LITE = 'gemini-3.1-flash-lite';
+        // ============================================================
+        // [냐냐 요청] 채점은 '생각' 을 끈다 (2026-10-02) — 첨삭 네 탭 채점 + 쓰기 복습·퀴즈 주관식 채점.
+        //   'low' 는 6/24 처음 만들 때 들어간 기본값일 뿐 따로 정한 적이 없었다.
+        //   같은 답으로 low / minimal 을 견줘보니 판정이 네 번 다 똑같았다 (맞는 답 · 틀린 답 ·
+        //   자유 작문 비교급 · 세 문장짜리 — 노트 10개 · 단어 17개까지 같음). 시간은
+        //   7.6→4.1 · 7.1→4.0 · 6.9→3.5초. 쓰기 복습 채점은 1.5→1.2초.
+        //   ⚠️ 문장을 '만드는' 쪽(미션 출제·질문 생성)은 그대로 low 다 — minimal 로 해보니
+        //      '저것은 뭐야' 처럼 프롬프트가 금지한 흐릿한 문장이 바로 나왔다. 시제 제한도 생각이 필요하다.
+        //   판정이 이상해지면 이 한 줄을 'low' 로 돌리면 된다.
+        // ============================================================
+        const AI_GRADE_THINKING = 'minimal';
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {

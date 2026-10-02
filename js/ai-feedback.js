@@ -1000,7 +1000,7 @@
             };
 
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low');
+                const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 const feedback = extractAndParseJson(responseText);
 
                 // [냐냐 요청] 이 답변이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
@@ -1780,7 +1780,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
             };
 
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low');
+                const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
 
@@ -5666,7 +5666,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
             };
 
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low');
+                const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
 

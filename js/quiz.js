@@ -1244,7 +1244,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     },
                     required: ["verdict"]
                 };
-                const resp = await callGemini(prompt, system, schema, 'low');
+                const resp = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
             } catch (e) {
