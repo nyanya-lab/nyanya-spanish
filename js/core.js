@@ -1291,17 +1291,62 @@ let vocabulary = [];
             );
         }
 
-        // 알 성장 단계 (progress 비율에 따라)
+        // ============================================================
+        // [냐냐 요청] 알 그림을 직접 그려 8단계로 (2026-10-02).
+        //   예전엔 이모지 🥚 🐣 💥 셋을 돌려 써서 7단계라도 보이는 그림은 셋뿐이었다.
+        //   냐냐님과 고른 것: 연보라 물결 띠(점박이는 '상한 알 같다' 해서 뺐다) · 마지막에 병아리를
+        //   보여주지 않는다(500마리 중 뭐가 나올지 모르니까) — 금빛이 새고 틈 사이로 눈만.
+        //   '꿈틀꿈틀'(4단계)부터 실제로 흔들린다 (.egg-wobble / .egg-hop, style.css).
+        // ============================================================
+        const EGG_STAGES = [
+            '갓 태어난 알이에요',
+            '따끈따끈해졌어요',
+            '콩닥콩닥, 뭔가 살아 있어요',
+            '꿈틀꿈틀 움직여요!',
+            '톡, 작은 금이 생겼어요',
+            '쩍! 금이 한 바퀴 돌았어요',
+            '누가 밖을 보고 있어요…',
+            '곧 부화해요!! 두근두근'
+        ];
         function eggStageVisual(ratio) {
-            // [냐냐 PATCH] 부화 과정 세분화 (7단계)
-            if (ratio < 0.14) return { emoji: '🥚', label: '갓 태어난 알이에요', anim: '' };
-            if (ratio < 0.28) return { emoji: '🥚', label: '알이 따뜻해지고 있어요', anim: 'scale-105' };
-            if (ratio < 0.43) return { emoji: '🥚', label: '알이 조금 커졌어요', anim: 'scale-105' };
-            if (ratio < 0.57) return { emoji: '🥚', label: '알 속에서 뭔가 움직여요', anim: 'scale-110' };
-            if (ratio < 0.71) return { emoji: '🥚', label: '알이 꿈틀거려요!', anim: 'scale-110 animate-pulse' };
-            if (ratio < 0.85) return { emoji: '🐣', label: '작은 금이 생겼어요!', anim: 'scale-110 animate-pulse' };
-            if (ratio < 0.95) return { emoji: '🐣', label: '쩍! 금이 크게 갔어요', anim: 'scale-125 animate-bounce' };
-            return { emoji: '💥', label: '곧 부화해요!! 두근두근', anim: 'scale-125 animate-bounce' };
+            const idx = Math.max(0, Math.min(EGG_STAGES.length - 1, Math.floor(ratio * EGG_STAGES.length)));
+            const anim = idx >= 7 ? 'egg-hop' : (idx >= 3 ? 'egg-wobble' : '');
+            return { idx, label: EGG_STAGES[idx], anim };
+        }
+        //   단계 그림 (SVG 글자). px 는 너비 — 높이는 비율대로.
+        function eggSvg(idx, px) {
+            const E = 'M42 12 C58 12 70 40 70 58 C70 77 57 88 42 88 C27 88 14 77 14 58 C14 40 26 12 42 12 Z';
+            const shell = (fill, stroke) => `<path d="${E}" fill="${fill || '#FFF8EC'}" stroke="${stroke || '#E9C9A0'}" stroke-width="2"/>`;
+            const band = '<path d="M14 66 l7 -4 l7 4 l7 -4 l7 4 l7 -4 l7 4 l7 -4 l7 4" fill="none" stroke="#AFA9EC" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+            const shine = '<ellipse cx="31" cy="34" rx="4" ry="9" fill="#fff" opacity=".85" transform="rotate(22 31 34)"/><circle cx="36" cy="22" r="1.8" fill="#fff" opacity=".85"/>';
+            const shadow = '<ellipse cx="42" cy="93" rx="22" ry="3.5" fill="#CECBF6" opacity=".55"/>';
+            const eyes = (y) => `<circle cx="35" cy="${y}" r="3" fill="#fff"/><circle cx="49" cy="${y}" r="3" fill="#fff"/><circle cx="35.9" cy="${y - .8}" r="1" fill="#3D2B1F"/><circle cx="49.9" cy="${y - .8}" r="1" fill="#3D2B1F"/>`;
+            const star = (x, y, s, c) => `<path d="M0 -6 Q1 -1 6 0 Q1 1 0 6 Q-1 1 -6 0 Q-1 -1 0 -6 Z" fill="${c}" transform="translate(${x},${y}) scale(${s})"/>`;
+            const heart = (x, y, s) => `<path d="M0 2 C0 -2 -6 -2 -6 2 C-6 5 0 8 0 9 C0 8 6 5 6 2 C6 -2 0 -2 0 2 Z" fill="#ED93B1" transform="translate(${x},${y}) scale(${s})"/>`;
+            const crackLine = '<path d="M15 46 l7 -5 l6 7 l7 -7 l7 6 l7 -6 l7 6 l7 -4" fill="none" stroke="#9A6A4A" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>';
+            let body = '';
+            switch (idx) {
+                case 0: body = shell() + band + shine; break;
+                case 1: body = shell('#FFEFE4', '#F0B9A0') + band + shine
+                    + '<path d="M6 44 q-5 6 0 12 q5 6 0 12 M78 44 q5 6 0 12 q-5 6 0 12" fill="none" stroke="#ED93B1" stroke-width="1.8" stroke-linecap="round"/>'; break;
+                case 2: body = shell() + band + shine + heart(72, 22, 1) + heart(80, 36, .6); break;
+                case 3: body = shell() + band + shine
+                    + '<path d="M74 26 q5 3 6 8 M77 16 q7 3 8 11 M10 30 q-5 3 -6 8" fill="none" stroke="#AFA9EC" stroke-width="1.8" stroke-linecap="round"/>'; break;
+                case 4: body = shell() + band + shine
+                    + '<path d="M50 20 l-3 6 l4 4 l-3 6 l3 3" fill="none" stroke="#9A6A4A" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'; break;
+                case 5: body = shell() + band + shine + crackLine; break;
+                case 6: body = shell() + band + shine
+                    + '<path d="M15 44 l7 -5 l6 7 l7 -7 l7 6 l7 -6 l7 6 l7 -4 L70 55 l-7 3 l-7 -5 l-7 6 l-7 -6 l-7 6 l-6 -6 l-7 5 l-8 -2 Z" fill="#3D2B1F"/>'
+                    + eyes(49); break;
+                default: body =
+                    '<path d="M42 44 L12 2 M42 44 L42 -8 M42 44 L72 2 M42 44 L-2 26 M42 44 L86 26" stroke="#FAC775" stroke-width="5" stroke-linecap="round" opacity=".7"/>'
+                    + '<path d="M14 58 C14 77 27 88 42 88 C57 88 70 77 70 58 l-7 -4 l-7 6 l-7 -6 l-7 6 l-7 -6 l-7 6 l-7 -6 Z" fill="#FFF8EC" stroke="#E9C9A0" stroke-width="2"/>'
+                    + band
+                    + '<ellipse cx="42" cy="56" rx="22" ry="6" fill="#3D2B1F"/>' + eyes(53)
+                    + '<path d="M14 54 C14 40 26 12 42 12 C58 12 70 40 70 54 l-7 4 l-7 -6 l-7 6 l-7 -6 l-7 6 l-7 -6 l-7 6 Z" fill="#FFF8EC" stroke="#E9C9A0" stroke-width="2" transform="rotate(-16 42 40) translate(0,-14)"/>'
+                    + star(76, 16, 1, '#EF9F27') + star(8, 22, .7, '#ED93B1') + star(80, 70, .6, '#AFA9EC');
+            }
+            return `<svg viewBox="-8 -12 100 110" width="${px}" height="${Math.round(px * 1.1)}" aria-hidden="true">${shadow}${body}</svg>`;
         }
 
         let eggCollectionOpen = false; // [냐냐 PATCH] 도감 접힘 상태 (기본 접힘)
@@ -1324,7 +1369,7 @@ let vocabulary = [];
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <div class="text-6xl shrink-0 transition-transform duration-500 ${stage.anim}">${stage.emoji}</div>
+                        <div class="shrink-0 ${stage.anim}">${eggSvg(stage.idx, 76)}</div>
                         <div class="flex-1 min-w-0 space-y-2">
                             <p class="text-sm font-black text-slate-800">${stage.label}</p>
                             <div>
@@ -1338,8 +1383,23 @@ let vocabulary = [];
                     </div>
                 `;
             }
+            // [냐냐 요청] 사이드바 일지 밑의 작은 알 — 그림과 남은 학습만 (2026-10-02)
+            const mini = document.getElementById('egg-mini');
+            if (mini) {
+                mini.title = `${stage.label} · 누르면 알 키우기로`;
+                mini.innerHTML = `<span class="${stage.anim}">${eggSvg(stage.idx, 56)}</span>
+                    <span class="text-[11px] font-bold text-slate-500">부화까지 <b class="text-violet-600">${remain}</b> 학습</span>`;
+            }
             // 도감(별도 하단 섹션)도 같이 갱신
             renderEggCollectionSection();
+        }
+
+        //   사이드바 알을 누르면 학습기록의 알 카드로 간다
+        function openEggWidget() {
+            changeTab('records');
+            renderEgg();
+            const w = document.getElementById('egg-widget');
+            if (w) window.scrollTo(0, Math.max(0, w.getBoundingClientRect().top + window.scrollY - 80));
         }
 
         // [냐냐 PATCH] 생물 도감 — 하단 별도 섹션 (접힘 기본)

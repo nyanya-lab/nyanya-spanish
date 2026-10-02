@@ -46,6 +46,23 @@ html {
             100% { transform: scale(1) translateX(0); }
         }
         .punch-effect-right { animation: punch-right 0.2s ease-out; }
+        /* [냐냐 요청] 알이 '꿈틀꿈틀' 단계부터 흔들린다, 마지막 단계는 통통 뛴다 (2026-10-02, core.js eggSvg) */
+        .egg-wobble, .egg-hop { display: inline-block; transform-origin: 50% 88%; }
+        .egg-wobble { animation: egg-wobble 2.4s ease-in-out infinite; }
+        .egg-hop { animation: egg-hop 1.2s ease-in-out infinite; }
+        @keyframes egg-wobble {
+            0%, 70%, 100% { transform: rotate(0); }
+            76% { transform: rotate(-7deg); }
+            84% { transform: rotate(6deg); }
+            92% { transform: rotate(-3deg); }
+        }
+        @keyframes egg-hop {
+            0%, 40%, 100% { transform: translateY(0) rotate(0); }
+            55% { transform: translateY(-4px) rotate(-5deg); }
+            70% { transform: translateY(0) rotate(4deg); }
+            85% { transform: translateY(-2px) rotate(-2deg); }
+        }
+        @media (prefers-reduced-motion: reduce) { .egg-wobble, .egg-hop { animation: none; } }
         /* [냐냐 요청] 도감의 전설 카드 — 빛줄기가 몇 초마다 비스듬히 스쳐 간다 (2026-09-29) */
         .legend-shine { overflow: hidden; }
         .legend-shine::after {
