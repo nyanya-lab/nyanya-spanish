@@ -1680,7 +1680,9 @@ let vocabulary = [];
             //   예전엔 둘이 각각 세 줄(단어·관용구·문법)을 펼쳐서 사이드바가 너무 길어졌다.
             //   개수만 버튼에 얹고, 세부는 팝업 안의 탭에서 본다.
             const today = getLocalDateString();
-            const plan3 = (typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
+            //   [냐냐 요청] 오늘 칸에서는 복습 예정을 안 보인다 (2026-10-02) — 오늘 할 복습은 복습 배너가 이미 보여준다.
+            //   달력에서 다른 날을 누르면 그날 예정은 그대로 보인다.
+            const plan3 = (ds !== today && typeof getAllScheduledOn === 'function') ? getAllScheduledOn(ds) : null;
             const bad3 = (ds === today && typeof getAllWrongOn === 'function') ? getAllWrongOn(ds) : null;
             //   [냐냐 요청] 복습 예정은 '단어·관용구' 와 '문법' 을 갈라서 낸다 (2026-09-21).
             //   복습이 실제로 둘로 갈려 있다 — 단어·관용구는 쓰기 복습 한 묶음, 문법은 번역 미션이다.
@@ -7520,9 +7522,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   재귀대명사만 빠뜨린 것 — 다른 낱말·유의어로 적지 않는다
             const reflexMiss = reflexivePronounMissing(user, correct);
             if (reflexMiss) {
+                //   빼고 남은 동사가 단어장에 있으면 그 뜻을 같이 — 뜻이 다른 동사가 된다는 게 핵심이다 (llevar ↔ llevarse)
+                const plainV = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(user) : null;
+                const head = (plainV && String(plainV.pos || '').toLowerCase() === 'verb' && plainV.meaning)
+                    ? `❌ 그렇게 쓰면 <b>${escapeHtml(plainV.word)}</b>(${escapeHtml(String(plainV.meaning).trim())})예요. 재귀대명사 <b>${escapeHtml(reflexMiss)}</b> 가 있어야 해요.`
+                    : `✏️ 재귀대명사 <b>${escapeHtml(reflexMiss)}</b> 가 빠졌어요.`;
                 return `
                     <div class="space-y-1 text-left">
-                        <p class="font-bold text-rose-500">✏️ 재귀대명사 <b>${escapeHtml(reflexMiss)}</b> 가 빠졌어요.</p>
+                        <p class="font-bold text-rose-500">${head}</p>
                         <p class="font-bold text-slate-600">정답은 <b class="text-slate-900">${escapeHtml(correct)}</b> 예요.</p>
                     </div>`;
             }

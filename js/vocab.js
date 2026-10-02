@@ -5567,6 +5567,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             renderWritePractice();
         }
         // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자
+        //   [냐냐 요청] 유의어 힌트의 앞글자는 원형으로 (2026-10-02) — 활용형 문제 'nos llevamos' 에서 'n…' 은
+        //   재귀대명사 첫 글자라 아무 도움이 안 됐다. 활용형 문제면 그 동사 원형(llevarse → 'l…')으로 준다.
+        function writeHintBase(w) {
+            return (w && w._isConjTask && w._conjOf && w._conjOf.word) ? w._conjOf.word : (w ? w.word : '');
+        }
         function writePrefixHint(userRaw, correctRaw) {
             //   [냐냐 지적] 부정관사는 떼지 않는다 — 'un montón' 의 힌트가 'm' 이면 un 을 빼도 되는 줄 안다
             const bare = String(correctRaw || '').trim()
@@ -5621,6 +5626,23 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   llevar 에 덤 +1 까지 붙었다. 유의어가 아니라 nos 를 빠뜨린 것이다. 관사 빠뜨린 것과 같은 대접으로 한 번 더.
             //   ⚠️ 어느 대명사인지는 말하지 않는다 — 'nos' 라고 하면 정답을 통째로 주는 꼴이다.
             if (typeof reflexivePronounMissing === 'function' && reflexivePronounMissing(userAnswer, w.word)) {
+                //   [냐냐 요청] 빼고 남은 동사가 단어장에 따로 있으면 뜻이 다른 동사다 (llevar ↔ llevarse) (2026-10-02).
+                //     유의어로 걸어 둔 짝(dormir ↔ dormirse 처럼 뜻이 비슷)  → 되묻기, 그 동사 뜻을 같이
+                //     유의어가 아닌 짝                                       → 오답 (뜻이 다른 동사를 쓴 것)
+                //     단어장에 없음                                          → 아래 '재귀대명사가 빠졌어요' 한 번 더
+                //   ⚠️ 그 동사에 덤은 주지 않는다 — 유의어를 떠올린 게 아니라 대명사를 빠뜨린 것이다.
+                const baseW = w._idiomOf || w._conjOf || w;
+                const plainV = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+                if (plainV && baseW && plainV.id !== baseW.id && String(plainV.pos || '').toLowerCase() === 'verb') {
+                    const isSyn = (Array.isArray(baseW.synonyms) ? baseW.synonyms : []).some(sy => sy && sy.type !== 'antonym' && sy.id === plainV.id);
+                    if (isSyn && !used.synonym) {
+                        const p = writePrefixHint(userAnswer, writeHintBase(w));
+                        writeAskRetry('synonym', `💡 그렇게 쓰면 <b>${escapeHtml(plainV.word)}</b>(${escapeHtml(String(plainV.meaning || '').trim())})예요. 이번엔 외우려던 동사로 써볼까요?${p ? ' ' + hintStartHtml(p) : ''}`, userAnswer);
+                        return;
+                    }
+                    writeFirstRoundFail(w, userAnswer);
+                    return;
+                }
                 if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                 writeAskRetry('typo', `✏️ 동사는 맞아요! <b>재귀대명사</b>가 빠졌어요. 다시 한 번 써볼까요?`, userAnswer);
                 return;
@@ -5662,7 +5684,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     //   [냐냐 지적] 이 길만 '무엇으로 시작하는지' 를 안 알려주고 있었다 (2026-09-07).
                     //   AI 가 유의어로 본 길도, 오타로 본 길도 다 앞글자를 흘려준다. 여기만 빠져서
                     //   '다른 낱말이에요' 만 듣고 뭘 떠올려야 할지 알 수가 없었다.
-                    const p = writePrefixHint(userAnswer, w.word);
+                    const p = writePrefixHint(userAnswer, writeHintBase(w));   // 활용형 문제면 원형 앞글자
                     const got = awardSynonymScore(userAnswer, w);
                     //   [냐냐 요청] 등록해 둔 '차이' 가 있으면 두 줄로 같이 보여준다 (2026-09-28).
                     //     💡 alegre 도 맞는 말이에요! 다시 한 번 써볼까요?
@@ -5738,7 +5760,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (verdict === 'synonym' && !used.synonym) {
                 const got = awardSynonymScore(userAnswer, w, ai.answerMeaning);
                 writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
-                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`) + synonymAwardNote(got), userAnswer);
+                    `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, writeHintBase(w)))}`) + synonymAwardNote(got), userAnswer);
                 return;
             }
             //   낱말이 통째로 붙었거나 따로 등록된 다른 단어면 오타로 봐주지 않는다 (después de ↔ después)
