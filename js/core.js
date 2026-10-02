@@ -1349,7 +1349,6 @@ let vocabulary = [];
             return `<svg viewBox="-8 -12 100 110" width="${px}" height="${Math.round(px * 1.1)}" aria-hidden="true">${shadow}${body}</svg>`;
         }
 
-        let eggCollectionOpen = false; // [냐냐 PATCH] 도감 접힘 상태 (기본 접힘)
         function renderEgg() {
             const container = document.getElementById('egg-widget');
             if (!eggState) eggState = defaultEggState();
@@ -1360,25 +1359,20 @@ let vocabulary = [];
             const remain = Math.max(0, EGG_HATCH_GOAL - eggState.progress);
 
             if (container) {
+                //   [냐냐 요청] 학습기록 맨 아래에서 도감과 한 장으로 (2026-10-02) — 이 줄이 그 카드의 머리다
                 container.innerHTML = `
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-lg">🥚</span>
-                        <div>
-                            <h3 class="text-sm font-black text-slate-800">미스터리 알 키우기</h3>
-                            <p class="text-[11px] text-indigo-500">학습할수록 알이 자라요. 뭐가 나올진 부화해봐야!</p>
-                        </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sm">🥚</span>
+                        <h3 class="text-xs font-bold text-slate-700">알 키우기 · 도감 <span class="font-normal text-slate-400">(${new Set(eggState.collection).size}/${CREATURES.length} 수집)</span></h3>
                     </div>
                     <div class="flex items-center gap-4">
-                        <div class="shrink-0 ${stage.anim}">${eggSvg(stage.idx, 76)}</div>
-                        <div class="flex-1 min-w-0 space-y-2">
+                        <div class="shrink-0 ${stage.anim}">${eggSvg(stage.idx, 64)}</div>
+                        <div class="flex-1 min-w-0 space-y-1.5">
                             <p class="text-sm font-black text-slate-800">${stage.label}</p>
-                            <div>
-                                <div class="h-2.5 bg-white/70 rounded-full overflow-hidden">
-                                    <div class="h-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-500" style="width:${pct}%"></div>
-                                </div>
-                                <p class="text-[11px] text-slate-400 mt-1">부화까지 <b class="text-indigo-500">${remain}</b> 학습 남음 (${pct}%)</p>
+                            <div class="h-2.5 bg-white/80 rounded-full overflow-hidden">
+                                <div class="h-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-500" style="width:${pct}%"></div>
                             </div>
-                            <p class="text-[11px] text-slate-500">🐣 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화 · 📖 도감 <b class="text-emerald-600">${new Set(eggState.collection).size}/${CREATURES.length}</b></p>
+                            <p class="text-[11px] text-slate-500">부화까지 <b class="text-indigo-500">${remain}</b> 학습 (${pct}%) · 🐣 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화</p>
                         </div>
                     </div>
                 `;
@@ -1394,49 +1388,27 @@ let vocabulary = [];
             renderEggCollectionSection();
         }
 
-        //   사이드바 알을 누르면 학습기록의 알 카드로 간다
-        function openEggWidget() {
-            changeTab('records');
-            renderEgg();
-            const w = document.getElementById('egg-widget');
-            if (w) window.scrollTo(0, Math.max(0, w.getBoundingClientRect().top + window.scrollY - 80));
-        }
+        //   사이드바 알을 누르면 학습기록의 알·도감 카드로 간다
+        function openEggWidget() { openEggCollection(); }
 
-        // [냐냐 PATCH] 생물 도감 — 하단 별도 섹션 (접힘 기본)
+        // [냐냐 PATCH] 생물 도감 — 학습기록 맨 아래, 알 키우기 줄 바로 밑
+        //   [냐냐 요청] 접지 않는다 (2026-10-02). 처음엔 '모은 것만' 이라 늘 펼쳐 둬도 길지 않다.
         function renderEggCollectionSection() {
             const sec = document.getElementById('egg-collection-section');
             if (!sec) return;
             if (!eggState) eggState = defaultEggState();
             if (!Array.isArray(eggState.collection)) eggState.collection = [];
-            const uniqueCount = new Set(eggState.collection).size;
-            sec.innerHTML = `
-                <button onclick="toggleEggCollection()" class="w-full flex items-center justify-between gap-2">
-                    <span class="flex items-center gap-2 text-left">
-                        <span class="text-sm">🗂️</span>
-                        <span class="text-xs font-bold text-slate-700">생물 도감 <span class="font-normal text-slate-400">(${uniqueCount}/${CREATURES.length} 수집)</span></span>
-                    </span>
-                    <i class="fa-solid fa-chevron-up text-slate-400 text-xs transition-transform shrink-0 ${eggCollectionOpen ? '' : 'rotate-180'}"></i>
-                </button>
-                <div id="egg-collection-body" class="${eggCollectionOpen ? '' : 'hidden'}">
-                    ${renderCollectionGrid()}
-                </div>
-            `;
+            sec.innerHTML = `<div id="egg-collection-body">${renderCollectionGrid()}</div>`;
         }
 
-        //   [냐냐 요청] 부화 팝업의 '도감 보기' — 탭만 옮기면 도감이 맨 아래에 접혀 있어서
-        //   못 본 거나 같았다. 펼치고 그 자리로 내려간다 (2026-09-29).
+        //   [냐냐 요청] 부화 팝업의 '도감 보기' — 탭만 옮기면 도감이 맨 아래라 못 본 거나 같았다.
+        //   그 자리로 내려간다 (2026-09-29). 이제 알 줄과 도감이 한 장이라 그 카드 머리로 간다.
         function openEggCollection() {
             changeTab('records');
-            eggCollectionOpen = true;
             renderEgg();
             //   부드럽게 굴리면 창이 뒤에 있을 때 프레임이 안 돌아 멈춘다 — 바로 세운다 (changeTab 과 같은 이유)
-            const sec = document.getElementById('egg-collection-section');
+            const sec = document.getElementById('egg-widget');
             if (sec) window.scrollTo(0, Math.max(0, sec.getBoundingClientRect().top + window.scrollY - 80));
-        }
-
-        function toggleEggCollection() {
-            eggCollectionOpen = !eggCollectionOpen;
-            renderEggCollectionSection();
         }
 
         // [냐냐 PATCH] 도감: 희귀도(모으기 힘든 순) 정렬 + '모은 것만 보기' 필터
