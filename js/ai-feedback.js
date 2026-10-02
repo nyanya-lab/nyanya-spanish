@@ -1655,6 +1655,8 @@ ${grammarDetail}
             aiIdiomForcedCand = isIdiom ? { w: idiomMission.w, it: idiomMission.it } : null;
             const idiomJudgeText = aiIdiomJudgeStart(userText);
             aiIdiomForcedCand = null;
+            //   '오늘 복습 먼저' 로 낸 관용구면 그 판정은 복습이다 — 틀려도 오늘 몫은 끝 (applyIdiomDelta)
+            if (aiIdiomJudge) aiIdiomJudge.reviewKey = (isIdiom && idiomMission.review) ? idiomMission.key : null;
             const prompt = `Korean Mission: "${missionSentence}"
             Student's Spanish Answer: "${userText}"
 ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
@@ -1834,6 +1836,21 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
         let aiIdiomForcedCand = null;    // 판정 후보에 꼭 넣을 목표 관용구 { w, it }
         let aiIdiomRecent = [];          // 최근에 낸 관용구 키 — 같은 게 바로 또 나오지 않게
         let aiIdiomHintOn = false;
+        //   [냐냐 요청] '🔁 오늘 복습할 관용구 먼저' (2026-10-02) — 켜져 있으면 오늘 차례부터 낸다.
+        //   범위 설정과 섞지 않으려고 창 밖 체크박스로 뒀다. 폰과 같이 맞춘다 (payload idiomMissionDueFirst).
+        //   처음엔 켜짐. 안 쓰고 다른 말로 옮기면 오늘 몫에 남아 뒤로 돌고, 두 번째부터는 힌트를 열어 낸다.
+        let idiomMissionDueFirst = null; // null = 아직 안 정함(켜짐으로 친다)
+        let aiIdiomDueShown = {};        // 이번에 복습으로 몇 번 냈나 { key: n } — 두 번째부터 힌트를 연다
+        function idiomDueFirstOn() { return idiomMissionDueFirst !== false; }
+        function setIdiomDueFirst(on) {
+            idiomMissionDueFirst = !!on;
+            syncIdiomScopeBadge();
+            if (typeof saveToStorage === 'function') saveToStorage();
+        }
+        function idiomDueEntries() {
+            return (typeof getIdiomDueList === 'function' ? getIdiomDueList() : [])
+                .map(d => ({ w: d.word, it: d.idiom, key: d.key }));
+        }
 
         function idiomScopeNow() {
             const v = Array.isArray(idiomMissionScope) ? idiomMissionScope.filter(k => IDIOM_SCOPE_ITEMS.some(x => x.key === k)) : [];
@@ -1866,9 +1883,18 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
 
         function syncIdiomScopeBadge() {
             const badge = document.getElementById('ai-idiom-scope-badge');
-            if (!badge) return;
-            const on = idiomScopeNow();
-            badge.innerText = on.includes('all') ? '전부' : `${idiomMissionPool(on).length}개`;
+            if (badge) {
+                const on = idiomScopeNow();
+                badge.innerText = on.includes('all') ? '전부' : `${idiomMissionPool(on).length}개`;
+            }
+            const chk = document.getElementById('ai-idiom-due-first');
+            if (chk) chk.checked = idiomDueFirstOn();
+            const cnt = document.getElementById('ai-idiom-due-count');
+            if (cnt) {
+                const n = idiomDueEntries().length;
+                cnt.innerText = n ? `${n}개 남음` : '오늘 몫 끝 ✓';
+                cnt.className = n ? 'text-[11px] font-black text-amber-600' : 'text-[11px] font-bold text-slate-400';
+            }
         }
         function openIdiomScope() {
             idiomScopePending = new Set(idiomScopeNow());
@@ -1920,7 +1946,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
             if (h) h.innerText = "'✨ 문장 뽑기'를 누르면 관용구 하나로 미션이 나와요.";
             const input = document.getElementById('ai-idiom-input');
             if (input) input.value = '';
-            ['ai-idiom-hint-box', 'ai-idiom-target-box'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            ['ai-idiom-hint-box', 'ai-idiom-target-box', 'ai-idiom-review-pill'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
             document.getElementById('ai-feedback-result')?.classList.add('hidden');
             syncIdiomScopeBadge();
         }
@@ -1946,12 +1972,22 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 openApiKeyModal();
                 return;
             }
-            const pool = idiomMissionPool();
-            if (!pool.length) { heading.innerText = "고른 범위에 관용구가 없어요. ⚙️ 뽑는 범위에서 다른 칸도 골라주세요."; return; }
-            //   최근에 낸 것은 피한다 (범위가 좁아서 다 걸리면 그냥 뽑는다)
-            const fresh = pool.filter(e => !aiIdiomRecent.includes(e.key));
-            const from = fresh.length ? fresh : pool;
-            const pick = from[Math.floor(Math.random() * from.length)];
+            //   오늘 복습 먼저 — 오늘 차례 중에서 최근에 안 낸 것부터(밀린 순). 다 한 번씩 냈으면 가장 오래전에 낸 것.
+            //   안 쓰고 넘어간 것은 오늘 차례에 그대로 남아 있으므로 이렇게 저절로 뒤로 돈다.
+            const due = idiomDueFirstOn() ? idiomDueEntries() : [];
+            let pick = null, isReview = false;
+            if (due.length) {
+                pick = due.find(e => !aiIdiomRecent.includes(e.key))
+                    || due.slice().sort((a, b) => aiIdiomRecent.indexOf(b.key) - aiIdiomRecent.indexOf(a.key))[0];
+                isReview = true;
+            } else {
+                const pool = idiomMissionPool();
+                if (!pool.length) { heading.innerText = "고른 범위에 관용구가 없어요. ⚙️ 뽑는 범위에서 다른 칸도 골라주세요."; return; }
+                //   최근에 낸 것은 피한다 (범위가 좁아서 다 걸리면 그냥 뽑는다)
+                const fresh = pool.filter(e => !aiIdiomRecent.includes(e.key));
+                const from = fresh.length ? fresh : pool;
+                pick = from[Math.floor(Math.random() * from.length)];
+            }
 
             const recentAsks = (aiNotes || []).filter(n => n && n.mode === 'idiom' && n.ask)
                 .map(n => String(n.ask).trim()).filter(Boolean).slice(0, 6);
@@ -1982,9 +2018,15 @@ ${buildLearnerProfileSummary()}`;
                 const sentence = String((res && res.sentence) || '').trim();
                 if (!sentence) throw new Error('EMPTY');
                 if (/[a-zA-Z]/.test(sentence)) throw new Error('SENTENCE_CONTAINS_SPANISH');
-                aiIdiomMission = { w: pick.w, it: pick.it, key: pick.key, sentence };
+                aiIdiomMission = { w: pick.w, it: pick.it, key: pick.key, sentence, review: isReview };
                 aiIdiomRecent = [pick.key].concat(aiIdiomRecent.filter(k => k !== pick.key)).slice(0, 20);
                 heading.innerText = sentence;
+                document.getElementById('ai-idiom-review-pill')?.classList.toggle('hidden', !isReview);
+                //   복습으로 두 번째 나온 것이면 힌트를 열고 낸다 — 두 번 연달아 못 떠올렸으면 알려주고 써보게
+                if (isReview) {
+                    aiIdiomDueShown[pick.key] = (aiIdiomDueShown[pick.key] || 0) + 1;
+                    if (aiIdiomDueShown[pick.key] >= 2) toggleIdiomHint();
+                }
                 if (typeof AudioFX !== 'undefined') AudioFX.playPunch();
             } catch (e) {
                 console.warn('관용구 미션 생성 실패', e);
@@ -2020,8 +2062,10 @@ ${buildLearnerProfileSummary()}`;
                 } else {
                     html = `💡 이 문장은 이번 관용구로도 쓸 수 있어요 — ${name}${mean}`; cls = 'bg-amber-50 border-amber-200 text-amber-900';
                 }
+                if (mission.review && !hit && j.state !== 'failed') html += ` <span class="opacity-70">· 오늘 몫에 남겨뒀어요 — 뒤에 다시 나와요</span>`;
                 box.className = `border p-3 rounded-2xl text-xs leading-relaxed font-semibold ${cls}`;
                 box.innerHTML = html;
+                syncIdiomScopeBadge();   // 오늘 몫 남은 수
             };
             box.className = 'border p-3 rounded-2xl text-xs leading-relaxed font-semibold bg-slate-50 border-slate-200 text-slate-400';
             box.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 이번 관용구를 썼는지 보는 중...';
@@ -2581,13 +2625,42 @@ ${buildLearnerProfileSummary()}`;
             if (typeof logIdiomGradeChange === 'function') logIdiomGradeChange(before, getIdiomGrade(e.w.id, e.it.idiom), e.key);
         }
         //   점수 하나를 반영한다 — 단어의 addWordScore 와 같은 규칙.
-        //   맞음: +2 · 마스터 자격 (곡선은 안 민다 — 곡선은 복습에서만 앞으로 간다)
+        //   맞음: +2 · 마스터 자격. 곡선은 **오늘 차례일 때만** 한 칸 앞으로 (e.due)
         //   틀림: −2 · 곡선 한 칸 뒤 (밖이었으면 들어온다)
+        // ============================================================
+        // [냐냐 요청] 첨삭에서 오늘 차례인 관용구를 제대로 쓰면 그걸로 오늘 복습을 한 것으로 친다 (2026-10-02).
+        //   문법은 9/15 부터 이미 이렇다(applyEsKoGrammarScores 의 dueToday). 9/23 '앞으로는 복습에서만' 은
+        //   valor 가 30일을 기다려야 하는데 시험에서 8일 만에 졸업한 일 때문이었다 — '오늘 차례' 만 치면
+        //   칸 간격은 날짜가 정하므로 그 일이 안 생긴다. 하루에 몇 번 써도 한 칸.
+        //   관용구 미션에서 '오늘 복습 먼저' 로 낸 문제(e.missionReview)는 복습 그 자체라
+        //   틀려도 오늘 몫은 끝난다 (복습에서 틀린 것과 같다). 그 밖에서 틀린 건 지금처럼 오늘 줄에 남는다.
+        //   덤으로 채운 오늘 몫은 일지 복습 +1 (쓰기 복습이 하나 풀 때마다 +1 인 것과 같은 잣대).
+        // ============================================================
+        function aiIdiomAlsoReviewed(e) {
+            return !!e && e.delta !== 0 && ((e.delta > 0 && e.due) || e.missionReview);
+        }
         function applyIdiomDelta(e, delta) {
-            if (!delta) return;
-            const ok = delta > 0;
-            addIdiomScore(e.w.id, e.it.idiom, delta, { correct: ok, subjective: ok });
-            if (!ok && typeof idiomReviewDemote === 'function') idiomReviewDemote(e.w.id, e.it.idiom, false);
+            if (delta) {
+                const ok = delta > 0;
+                addIdiomScore(e.w.id, e.it.idiom, delta, { correct: ok, subjective: ok });
+                if (ok) {
+                    if (e.due && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(e.w.id, e.it.idiom);
+                } else if (typeof idiomReviewDemote === 'function') {
+                    idiomReviewDemote(e.w.id, e.it.idiom, !!e.missionReview);
+                }
+            }
+            syncAiBonusReview(e, aiIdiomAlsoReviewed(e));
+        }
+        //   덤으로 채운 오늘 몫을 일지 복습 칸에 맞춘다 — 점수를 0 으로 돌리면 도로 뺀다
+        function syncAiBonusReview(e, want) {
+            const now = want ? 1 : 0;
+            const had = e.reviewLogged || 0;
+            if (now > had && typeof logAction === 'function') logAction('review');
+            if (now < had && typeof nyanyaDiary !== 'undefined') {
+                const d = nyanyaDiary[getLocalDateString()];
+                if (d) d.reviewCount = Math.max(0, (d.reviewCount || 0) - 1);
+            }
+            e.reviewLogged = now;
         }
 
         //   따로 물은 판정(aiIdiomJudge)으로 점수를 붙인다. 판정이 아직 안 왔으면 칸을 '확인 중' 으로 두고
@@ -2607,8 +2680,13 @@ ${buildLearnerProfileSummary()}`;
                     const key = idiomKey(c.w.id, c.it.idiom);
                     if (aiLastEsKoIdioms.some(e => e.key === key)) return;
                     const delta = isOk ? gainOk : WORD_SPELL_BAD;
+                    //   반영 '전' 에 오늘 차례였나 — 점수를 바꿔 다시 붙일 때도 이 값을 그대로 쓴다
+                    const rec = (idiomReview || {})[key];
+                    const due = !!(rec && rec.lastWrongDate && typeof curveIsDue === 'function'
+                        && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate));
                     const e = { w: c.w, it: c.it, key, ok: isOk, delta, baseDelta: isOk ? delta : gainOk, groupDelta: delta,
-                                prev: snapshotIdiomScoreState(key), gradeBefore: getIdiomGrade(c.w.id, c.it.idiom), undone: false };
+                                prev: snapshotIdiomScoreState(key), gradeBefore: getIdiomGrade(c.w.id, c.it.idiom), undone: false,
+                                due, missionReview: !!(j.reviewKey && j.reviewKey === key), reviewLogged: 0 };
                     applyIdiomDelta(e, delta);
                     aiLastEsKoIdioms.push(e);
                 };
@@ -2704,8 +2782,13 @@ ${buildLearnerProfileSummary()}`;
             const key = idiomKey(w.id, it.idiom);
             if ((aiLastEsKoIdioms || []).some(e => e.key === key)) { showToast("이미 목록에 있어요", "info"); return; }
             //   단어 더하기와 같다 — 0 점으로 넣고 점수는 ↺ 로 고른다. AI 를 더 부르지 않는다.
+            //   손으로 넣어도 오늘 차례였으면 +2 로 고를 때 오늘 복습으로 친다 (AI 가 놓친 걸 내가 채운 것이니)
+            const rec = (idiomReview || {})[key];
+            const due = !!(rec && rec.lastWrongDate && typeof curveIsDue === 'function'
+                && curveIsDue(rec.lastReviewDate, rec.lastWrongDate, rec.stage || 0, rec.keepDueDate));
             aiLastEsKoIdioms.push({ w, it, key, ok: false, delta: 0, baseDelta: WORD_SPELL_OK, groupDelta: 0,
-                prev: snapshotIdiomScoreState(key), gradeBefore: getIdiomGrade(w.id, it.idiom), undone: false, manual: true });
+                prev: snapshotIdiomScoreState(key), gradeBefore: getIdiomGrade(w.id, it.idiom), undone: false, manual: true,
+                due, missionReview: !!(aiIdiomJudge && aiIdiomJudge.reviewKey === key), reviewLogged: 0 });
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddIdiomPicker();
             renderEsKoGrammarRefs();
@@ -4096,8 +4179,12 @@ ${buildLearnerProfileSummary()}`;
                     if (grammarReviewTotal) grammarReviewDone++;
                 }
                 //   '🔁 오늘 복습' 표는 배너 줄에서 뺀 것과 오늘 차례를 채운 것 둘 다에 붙인다
-                aiLastEsKoGrammar.push({ note, usage, delta, baseDelta: delta, prev, canMove,
-                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), ev: item.ev, state: 'normal', undone: false });
+                const ge = { note, usage, delta, baseDelta: delta, prev, canMove,
+                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), ev: item.ev, state: 'normal', undone: false, reviewLogged: 0 };
+                aiLastEsKoGrammar.push(ge);
+                //   [냐냐 요청] 덤으로 채운 오늘 몫은 일지 복습 +1 (2026-10-02). 복습 미션이 지목한 노트는
+                //   미션 자체가 복습으로 세어지므로(countAsReview) 여기 안 걸린다 — alsoReviewed 가 그 노트를 뺀다.
+                syncAiBonusReview(ge, ge.alsoReviewed && delta !== 0);
             });
             // 단어와 같이 점수순(낮은 것부터). 한 번만 정하고 점수를 바꿔도 자리는 안 옮긴다.
             aiLastEsKoGrammar.sort((a, b) => (a.delta - b.delta) || String(a.note.title || '').localeCompare(String(b.note.title || ''), 'ko'));
@@ -4982,6 +5069,7 @@ ${buildLearnerProfileSummary()}`;
             }
             if (delta === 0) removeAiNoteGram(_lastAiNoteKey, id);
             else setAiNoteGramOk(_lastAiNoteKey, id, ok, e.note.title);
+            syncAiBonusReview(e, e.alsoReviewed && delta !== 0);   // 0 으로 돌리면 일지 복습도 도로 뺀다
 
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
@@ -5368,6 +5456,7 @@ ${buildLearnerProfileSummary()}`;
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(e.it.idiom)}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${e.delta > 0 ? 'text-emerald-600' : (e.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(e.delta)}</span>` : ''}
+                                ${aiIdiomAlsoReviewed(e) ? `<span title="이 관용구는 오늘 복습으로 쳤어요" class="shrink-0 text-[9px] font-black text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">🔁 오늘 복습</span>` : ''}
                                 <button type="button" onclick="cycleIdiomEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
                             </span>`;
                         }).join('')}

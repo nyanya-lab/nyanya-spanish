@@ -291,6 +291,7 @@ let vocabulary = [];
                 writeExams: (typeof writeExams !== 'undefined' && writeExams) ? writeExams : undefined,
                 //   [냐냐 요청] 관용구 미션의 뽑는 범위 (2026-10-02) — 안 고른 상태(null)면 안 보낸다
                 idiomMissionScope: (typeof idiomMissionScope !== 'undefined' && Array.isArray(idiomMissionScope)) ? idiomMissionScope : undefined,
+                idiomMissionDueFirst: (typeof idiomMissionDueFirst !== 'undefined' && typeof idiomMissionDueFirst === 'boolean') ? idiomMissionDueFirst : undefined,
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {},
                 //   [냐냐 요청] 문법 보기 설정 (필터·정렬·펼침·색인 숨김) — 폰과 PC 가 같은 모습으로 열리게
                 grammarPrefs: (typeof grammarPrefsSnapshot === 'function') ? grammarPrefsSnapshot() : undefined
@@ -483,6 +484,9 @@ let vocabulary = [];
                 if (typeof idiomMissionScope !== 'undefined') {
                     idiomMissionScope = Array.isArray(payload.idiomMissionScope)
                         ? payload.idiomMissionScope.filter(x => typeof x === 'string') : null;
+                    if (typeof idiomMissionDueFirst !== 'undefined') {
+                        idiomMissionDueFirst = (typeof payload.idiomMissionDueFirst === 'boolean') ? payload.idiomMissionDueFirst : null;
+                    }
                     if (typeof syncIdiomScopeBadge === 'function') syncIdiomScopeBadge();
                 }
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
@@ -4365,7 +4369,7 @@ let vocabulary = [];
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 90% / 80%</td><td class="py-2 px-3 font-bold text-emerald-600">+1.3 / +0.7</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 <b>70%</b></td><td class="py-2 px-3 font-bold text-slate-400">0 (본전)</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">빈칸 60% / 40% 이하</td><td class="py-2 px-3 font-bold text-rose-500">−0.7 / −2</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">첨삭에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 질문에 답하기 · 내 예문 연습 · 스→한 자유 작문</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">첨삭에서 <b>그 문법을 제대로 씀</b><br><span class="text-[10px] font-semibold text-slate-400">한→스 랜덤 미션 · 관용구 미션 · 질문에 답하기 · 스→한 자유 작문</span></td><td class="py-2 px-3 font-black text-emerald-600">+1</td></tr>
                         <tr class="border-b border-slate-100 bg-amber-50/60"><td class="py-2 px-3 font-black text-slate-700">한 문법이 <b>하루에 받는 플러스</b>는 여기까지<br><span class="text-[10px] font-semibold text-slate-400">빈칸이든 첨삭이든 한 주머니로 세요 · 마이너스는 상한 없음</span></td><td class="py-2 px-3 font-black text-amber-600">+2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">번역에서 그 문법을 <b>틀리게 씀</b></td><td class="py-2 px-3 font-black text-rose-500">−2</td></tr>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-bold text-slate-600">그 문법을 안 쓰고 번역 — 문장은 맞음</td><td class="py-2 px-3 font-bold text-slate-400">0</td></tr>
@@ -4405,18 +4409,17 @@ let vocabulary = [];
                     </thead>
                     <tbody>
                         <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">곡선에 <b>들어오기</b></td><td class="py-2 px-3 font-bold text-slate-600">어디서 틀리든</td><td class="py-2 px-3 font-bold text-slate-600">어디서 틀리든</td></tr>
-                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>앞으로</b></td><td class="py-2 px-3 font-bold text-emerald-600">복습에서만</td><td class="py-2 px-3 font-bold text-emerald-600">복습에서만</td></tr>
-                        <tr><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>뒤로</b></td><td class="py-2 px-3 font-bold text-rose-500">어디서 틀리든</td><td class="py-2 px-3 font-bold text-[#5896cb]">복습에서만</td></tr>
+                        <tr class="border-b border-slate-100"><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>앞으로</b></td><td class="py-2 px-3 font-bold text-emerald-600">복습에서만</td><td class="py-2 px-3 font-bold text-emerald-600">복습 + 첨삭에서 <b>오늘 차례</b>를 제대로 썼을 때</td></tr>
+                        <tr><td class="py-2 px-3 font-black text-slate-700">한 칸 <b>뒤로</b></td><td class="py-2 px-3 font-bold text-rose-500">어디서 틀리든</td><td class="py-2 px-3 font-bold text-rose-500">어디서 틀리든</td></tr>
                     </tbody>
                 </table>
                 <p class="text-[11px] text-[#2c5578] font-semibold leading-relaxed">
-                    <b>뒤로 가는 것만 단어와 달라요.</b> 문법 노트는 서른 개 남짓이라 문장 하나 쓸 때마다 한두 개씩 걸려요 —
-                    그때마다 칸이 움직이면 곡선이 너무 요동쳐서, <b>칸은 복습에서만</b> 움직이게 뒀어요.
-                    단어는 천 개가 넘어서 한 단어를 만나는 일 자체가 드물거든요.
+                    <b>앞으로 가는 것만 단어와 달라요.</b> 어느 첨삭 탭에서든 <b>오늘 복습할 차례인 문법</b>을 제대로 쓰면
+                    그걸로 오늘 복습을 한 것으로 쳐요 — 결과 카드에 <b>🔁 오늘 복습</b> 이 붙고, 일지의 <b>복습</b>도 하나 올라가요.
+                    칸 사이 간격은 날짜가 정하니까 하루에 여러 번 써도 칸은 한 번만 나가요.
                 </p>
                 <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                    첨삭에서 그 문법을 제대로 썼으면 <b>점수(+1)만</b> 올라가고 칸은 그대로예요.
-                    문법 노트의 <b>'이 문법으로 번역 연습'</b> 버튼도 마찬가지 — 내가 골라서 하는 연습이라 칸을 안 움직여요.
+                    오늘 차례가 <b>아닌</b> 문법을 첨삭에서 제대로 쓰면 <b>점수(+1)만</b> 올라가고 칸은 그대로예요.
                     문법표 빈칸은 <b>70% 미만</b>일 때 곡선에 들여놓기만 해요.
                 </p>
             </div>
@@ -4567,6 +4570,10 @@ let vocabulary = [];
                 <ul class="text-xs text-slate-600 font-semibold leading-relaxed space-y-1 list-disc pl-4">
                     <li>관용구는 <b>제 망각곡선</b>을 따로 돕니다 (1·3·7·14·30일). 단어 곡선과 별개예요</li>
                     <li>오늘의 복습에서 <b>단어와 한 묶음</b>으로 나와요 — 같은 쓰기 복습이니까요</li>
+                    <li>문법처럼 <b>첨삭에서 오늘 차례인 관용구를 제대로 쓰면</b> 그걸로 오늘 복습을 한 것으로 쳐요 —
+                        한 칸 앞으로, <b>🔁 오늘 복습</b> 뱃지, 일지 복습 +1. 오늘 차례가 아니면 점수만 붙어요</li>
+                    <li><b>📘 관용구 미션</b>에서 '오늘 복습할 관용구 먼저' 를 켜두면 오늘 몫부터 문장으로 나와요.
+                        안 쓰고 다른 말로 옮기면 오늘 몫에 남아서 뒤에 다시 나와요</li>
                     <li>단어장에서 <b>📘 관용구</b> 를 누르면 표현만 모아 볼 수 있어요 (페이지 넘기기 옆)</li>
                     <li>등록은 따로 없습니다 — <b>단어에 적어둔 관용구</b>를 그대로 가져와요</li>
                 </ul>
