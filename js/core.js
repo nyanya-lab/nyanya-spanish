@@ -7431,6 +7431,47 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   설명 문구를 고르는 데도, 단어 빈칸에서 틀린 글자를 칠할지 정하는 데도 같은 잣대를 쓴다.
         //   ⚠️ 거리는 악센트를 세는 쪽으로 재야 한다. normalizeSpanishAnswer 는 악센트를 떼기 때문에
         //      despues vs después 가 거리 0이 되어 '아예 다른 단어' 쪽으로 새어나갔다.
+        // [냐냐 지적] 철자를 흘린 게 아니라 '다른 답' 인 경우 (2026-10-02).
+        //   'después' 문제에 'después de' 를 쓰면 글자 3개 차이라 '철자가 틀렸어요' 로 칠해졌다.
+        //   실은 따로 등록된 다른 단어(~한 후에)다. 둘 중 하나면 철자 실수로 보지 않는다:
+        //     ① 낱말이 통째로 붙거나 빠졌다 (짧은 쪽 낱말들이 긴 쪽에 차례대로 다 들어 있다)
+        //     ② 단어장에 **글자 그대로** 따로 등록된 다른 단어다 (활용형·복수형으로 짐작하지는 않는다 —
+        //        casas 를 casa 의 다른 단어로 치면 안 된다)
+        function isOtherWholeAnswer(userRaw, correctRaw) {
+            const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s || '').toLowerCase().trim();
+            const u = norm(userRaw), c = norm(typeableForm(correctRaw) || correctRaw);
+            if (!u || !c || u === c) return false;
+            const ut = u.split(' '), ct = c.split(' ');
+            if (ut.length !== ct.length) {
+                const [longT, shortT] = ut.length > ct.length ? [ut, ct] : [ct, ut];
+                let k = 0;
+                longT.forEach(t => { if (k < shortT.length && t === shortT[k]) k++; });
+                if (k === shortT.length) return true;
+            }
+            return (typeof vocabulary !== 'undefined') && vocabulary.some(w => norm(w.word) === u);
+        }
+        // [냐냐 지적] 단어장 뜻 칸의 한 항목이 문제 뜻의 한 항목과 **통째로** 같은가 (2026-10-02).
+        //   desde '~로부터' 문제에 de('~의, ~로부터, ~에 대한')를 쓰면, 내 단어장 기준으로는 같은 뜻인데
+        //   AI 가 '틀림' 이라 해서 오답이 됐고 "de 는 ~로부터라는 뜻 · 뜻이 다르니 주의" 라는 모순된 안내가 떴다.
+        //   meaningsOverlap 은 '왜' 한 글자도 겹친다고 봐서(porque ↔ para qué) AI 를 이기면 안 됐다.
+        //   항목이 통째로 같을 때만 단어장을 믿는다. 괄호 설명·(역)·물결표·띄어쓰기는 무시한다.
+        function meaningItemsExactMatch(m1, m2) {
+            const items = (m) => String(m || '').toLowerCase().replace(/\([^)]*\)/g, '')
+                .split(/[,;/·]/).map(s => s.replace(/[~\s.]/g, '')).filter(s => s.length >= 2);
+            const b = new Set(items(m2));
+            return items(m1).some(x => b.has(x));
+        }
+        //   내가 쓴 답이 문제 단어 말고 단어장에 글자 그대로 있는 다른 단어이고, 뜻 한 항목이 통째로 같은가
+        function registeredSameMeaningWord(userRaw, askedWord) {
+            if (!askedWord || typeof vocabulary === 'undefined') return null;
+            const base = askedWord._idiomOf || askedWord._conjOf || askedWord;
+            if (askedWord._isIdiomTask || askedWord._isConjTask) return null;
+            const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s, true) : String(s || '').toLowerCase().trim();
+            const u = norm(userRaw);
+            if (!u) return null;
+            const hit = vocabulary.find(w => w.id !== base.id && norm(w.word) === u);
+            return (hit && meaningItemsExactMatch(hit.meaning, askedWord.meaning || base.meaning)) ? hit : null;
+        }
         function looksLikeSpellMiss(userRaw, correctRaw) {
             const user = String(userRaw || '').trim();
             const target = typeableForm(correctRaw) || String(correctRaw || '');
@@ -7439,6 +7480,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const soft = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
             if (soft(user) === soft(target)) return false;          // 아예 같으면 틀린 게 아니다
             if (!!norm(user) && norm(user) === norm(target)) return true;   // 악센트만 다름
+            if (isOtherWholeAnswer(user, target)) return false;
             const dist = (typeof levenshtein === 'function') ? levenshtein(soft(user), soft(target)) : 99;
             // 정답 길이의 절반 안쪽으로 다르면 '철자를 틀린 것'으로 본다
             return dist > 0 && dist <= Math.max(1, Math.min(3, Math.floor(soft(target).length / 2)));
@@ -7484,7 +7526,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //      AI 가 '틀림'(뜻이 다르다)이라고 한 단어장 낱말까지 '같은 뜻' 으로 적으면 AI 설명과
             //      정면으로 부딪힌다 (porque ↔ para qué, 2026-10-01). 그땐 예전처럼 뜻을 적는다.
             const aiSaidWrong = /^(wrong|typo)$/i.test(String(opts.verdict || ''));
-            const sameMeaning = !!(isReal && meaning && opts.correctMeaning && !(known && aiSaidWrong)
+            //   단, 단어장 뜻 한 항목이 통째로 같으면(de ↔ desde '~로부터') AI 가 틀렸다고 해도 '같은 뜻' 으로 적는다
+            const exactSame = !!(known && opts.correctMeaning && meaningItemsExactMatch(known, opts.correctMeaning));
+            const sameMeaning = !!(isReal && meaning && opts.correctMeaning && !(known && aiSaidWrong && !exactSame)
                 && typeof meaningsOverlap === 'function' && meaningsOverlap(meaning, opts.correctMeaning));
             const kind = /\s/.test(target) ? '표현' : '낱말';
             const head = (sameMeaning && known)
@@ -7499,7 +7543,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   가 숨어서 왜 틀렸는지 알 수 없었다. 단, AI 가 '틀림·오타' 라고 한 설명만 —
             //   '좋은 동의어예요' 같은 칭찬이 ❌ 아래 붙으면 거꾸로 헷갈린다 (앱이 판정을 뒤집은 경우).
             //   판정을 안 넘겨주는 곳은 예전처럼 뜻이 없을 때만 낸다.
-            const showComment = !!opts.comment && (opts.verdict
+            //   단어장 뜻이 통째로 같아 '같은 뜻' 으로 적었으면, 그와 부딪히는 AI 설명('뜻이 다르니 주의')은 뺀다
+            const showComment = !!opts.comment && !exactSame && (opts.verdict
                 ? /^(wrong|typo)$/i.test(String(opts.verdict))
                 : !(isReal && meaning) || (sameMeaning && !known));
             return `

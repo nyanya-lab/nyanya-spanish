@@ -5705,6 +5705,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   오타로도 보지 않는다 — 글자가 비슷할 뿐 진짜 다른 낱말이다.
             if (verdict === 'synonym' && typeof synonymClaimIsReal === 'function'
                 && !synonymClaimIsReal(userAnswer, w, ai.answerMeaning)) verdict = 'wrong';
+            //   [냐냐 지적] 단어장 뜻 한 항목이 문제 뜻과 통째로 같으면 AI 가 틀렸다고 해도 되묻는다 (2026-10-02, de ↔ desde)
+            if ((verdict === 'wrong' || verdict === 'typo') && typeof registeredSameMeaningWord === 'function'
+                && registeredSameMeaningWord(userAnswer, w)) verdict = 'synonym';
             // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (퀴즈 주관식과 같은 규칙)
             if (verdict === 'correct' && typeof phraseAnswerIncomplete === 'function'
                 && phraseAnswerIncomplete(userAnswer, w.word)) {
@@ -5723,6 +5726,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`) + synonymAwardNote(got), userAnswer);
                 return;
             }
+            //   낱말이 통째로 붙었거나 따로 등록된 다른 단어면 오타로 봐주지 않는다 (después de ↔ después)
+            if (verdict === 'typo' && typeof isOtherWholeAnswer === 'function' && isOtherWholeAnswer(userAnswer, w.word)) verdict = 'wrong';
             if (verdict === 'typo' && !used.typo) {
                 // 오타가 3글자를 넘으면 봐주지 않는다 (퀴즈와 같은 기준 — 악센트를 뗀 문자열로 잰다)
                 const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
