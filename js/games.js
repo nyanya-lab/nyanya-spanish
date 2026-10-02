@@ -1870,38 +1870,27 @@
         //      여기서 idiomReview:true 를 같이 넘겨야 관용구 칸도 앞으로 간다.
         // ============================================================
         // ============================================================
-        // [냐냐 요청] 단어·관용구 버튼을 다시 나눴다 (2026-10-02). 쓰기로 풀 땐 '같이 풀기' 로 합친다.
-        //   어느 버튼으로 들어왔나(todayReviewEntry) + 같이 풀기(todayReviewTogether, 처음엔 켜짐·동기화)
-        //   → 둘 다 켜지면 9/2 의 한 묶음과 똑같다. 회차를 이어갈 때(continue)도 같은 묶음을 쓴다.
-        //   관용구 버튼은 누를 때마다 쓰기 / 문장(관용구 미션) 을 고른다 (openIdiomReviewChoice).
+        // [냐냐 요청] 단어·관용구는 한 버튼, 창에서 골라 푼다 (2026-10-02).
+        //   같은 날 버튼 둘 + '같이 풀기' 로 나눴다가, 냐냐님이 "쓰기는 처음 나오는 창 하나로,
+        //   단어 체크 · 관용구 체크로 화면 통일" 하자고 해서 다시 묶었다.
+        //   todayReviewPick = { words, idioms } (처음엔 둘 다 켜짐 · 기억 · 동기화).
+        //   둘 다 켜면 9/2 의 한 묶음과 같다. 회차를 이어갈 때(continue)도 같은 고름을 쓴다.
+        //   관용구 문장 연습은 창 맨 아래 버튼 (startIdiomSentenceReview).
         // ============================================================
-        let todayReviewEntry = 'word';       // 'word' | 'idiom'
-        let todayReviewTogether = true;
+        let todayReviewPick = { words: true, idioms: true };
         function todayReviewMix() {
-            return { words: todayReviewEntry === 'word' || todayReviewTogether,
-                     idioms: todayReviewEntry === 'idiom' || todayReviewTogether };
+            return { words: todayReviewPick.words !== false, idioms: todayReviewPick.idioms !== false };
         }
-        function setTodayReviewTogether(on) {
-            todayReviewTogether = !!on;
+        function setTodayReviewPick(kind, on) {
+            todayReviewPick = Object.assign({ words: true, idioms: true }, todayReviewPick, { [kind]: !!on });
             const due = getTodayReviewTasks();
             todayReviewParts = Math.min(5, Math.max(1, Math.ceil(Math.max(1, due.length) / todayReviewBatch)));
             renderReviewSplitModal();
             if (typeof saveToStorage === 'function') saveToStorage();
         }
-        function openIdiomReviewChoice() {
-            const n = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
-            if (!n) { showToast("오늘 복습할 관용구가 없어요! 🎉", "info"); return; }
-            const c = document.getElementById('idiom-review-choice-count');
-            if (c) c.innerText = `오늘 복습할 관용구 ${n}개`;
-            document.getElementById('idiom-review-choice-modal')?.classList.remove('hidden');
-        }
-        function closeIdiomReviewChoice() {
-            document.getElementById('idiom-review-choice-modal')?.classList.add('hidden');
-        }
-        function chooseIdiomReview(how) {
-            closeIdiomReviewChoice();
-            if (how === 'write') { startTodayReviewShortcut('idiom'); return; }
-            //   문장으로 — 관용구 미션 탭에서 '오늘 복습할 관용구 먼저' 를 켠 채로 바로 한 문제
+        //   관용구는 문장으로 — 관용구 미션 탭에서 '오늘 복습할 관용구 먼저' 를 켠 채로 바로 한 문제
+        function startIdiomSentenceReview() {
+            closeReviewSplitModal();
             if (typeof changeTab === 'function') changeTab('ai-feedback');
             if (typeof switchAiMode === 'function') switchAiMode('idiom');
             if (typeof setIdiomDueFirst === 'function') setIdiomDueFirst(true);
@@ -1921,10 +1910,11 @@
             return wordTasks.concat(idiomTasks);
         }
 
-        function startTodayReviewShortcut(entry) {
-            todayReviewEntry = (entry === 'idiom') ? 'idiom' : 'word';
+        function startTodayReviewShortcut() {
+            //   고른 쪽이 비었어도 창은 연다 — 다른 쪽을 체크하면 되니까. 둘 다 0개일 때만 막는다.
+            const all = getTodayReviewTasks({ words: true, idioms: true });
+            if (all.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             const due = getTodayReviewTasks();
-            if (due.length < 1) { showToast("오늘 복습할 게 없어요! 🎉", "info"); return; }
             todayReviewPlan = null;
             // [냐냐 요청] 적어도 창은 띄운다 (2026-09-08). 예전엔 스무 개 이하면 건너뛰었는데,
             //   이 창에 시제 고르는 자리가 생겨서 건너뛰면 그걸 만질 데가 없어진다.
@@ -1945,23 +1935,24 @@
             const perEl = document.getElementById('review-split-per');
             const listEl = document.getElementById('review-split-list');
             const totalEl = document.getElementById('review-split-total');
-            const nIdiom = due.filter(t => t && t._isIdiomTask).length;
-            const nWord = due.length - nIdiom;
-            if (totalEl) totalEl.innerText = (nIdiom && nWord) ? `오늘 복습할 단어 ${nWord}개 · 관용구 ${nIdiom}개`
-                : nIdiom ? `오늘 복습할 관용구 ${nIdiom}개` : `오늘 복습할 단어 ${nWord}개`;
-            //   [냐냐 요청] 같이 풀기 — 들어온 버튼의 반대쪽을 섞을지 (반대쪽이 0개면 줄을 숨긴다)
-            const tRow = document.getElementById('review-split-together-row');
-            const tChk = document.getElementById('review-split-together');
-            const tLbl = document.getElementById('review-split-together-label');
-            if (tRow && tChk && tLbl) {
-                const otherN = todayReviewEntry === 'idiom'
-                    ? ((typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0)
-                    : ((typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0);
-                tRow.classList.toggle('hidden', !otherN);
-                tChk.checked = todayReviewTogether;
-                tLbl.innerText = todayReviewEntry === 'idiom'
-                    ? `📖 단어도 같이 풀기 (${otherN}개)` : `📘 관용구도 같이 풀기 (${otherN}개)`;
-            }
+            //   [냐냐 요청] 총 개수 + 단어 / 관용구 체크 (2026-10-02)
+            const allW = (typeof getReviewDueWords === 'function') ? getReviewDueWords().length : 0;
+            const allI = (typeof getIdiomDueList === 'function') ? getIdiomDueList().length : 0;
+            const pick = todayReviewMix();
+            if (totalEl) totalEl.innerText = `오늘 복습 총 ${allW + allI}개 (단어 ${allW} · 관용구 ${allI})`
+                + ((pick.words && pick.idioms) ? '' : ` — 고른 것 ${due.length}개`);
+            [['words', allW, '📖 단어'], ['idioms', allI, '📘 관용구']].forEach(([k, n, name]) => {
+                const chk = document.getElementById(`review-pick-${k}`);
+                const lbl = document.getElementById(`review-pick-${k}-label`);
+                const row = document.getElementById(`review-pick-${k}-row`);
+                if (chk) { chk.checked = !!pick[k]; chk.disabled = !n; }
+                if (lbl) lbl.innerText = `${name} ${n}개`;
+                if (row) row.classList.toggle('opacity-40', !n);
+            });
+            const startBtn = document.getElementById('review-split-start');
+            if (startBtn) startBtn.disabled = due.length < 1;
+            const sentBtn = document.getElementById('review-split-idiom-sentence');
+            if (sentBtn) sentBtn.classList.toggle('hidden', !allI);
             if (numEl) numEl.innerText = `${todayReviewParts}번`;
             // counts 는 앞쪽이 크므로 그대로 쓰면 '18~17개'처럼 거꾸로 적힌다. 작은 쪽을 앞에 둔다.
             if (perEl) perEl.innerText = counts.every(c => c === counts[0])
