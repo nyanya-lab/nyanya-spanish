@@ -5576,10 +5576,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const c = keepIndef ? flat(bare) : normalizeWriteAnswer(bare);
             const shared = (typeof sharedPrefixLen === 'function') ? sharedPrefixLen(u, c) : 0;
             // ⚠️ 마지막 글자는 남긴다. 'cassa'처럼 앞이 거의 다 맞으면 정답을 통째로 흘리게 된다
-            let n = Math.max(1, Math.min(shared + 1, bare.length - 1));
-            //   [냐냐 지적] 앞의 전치사·관사·¿ 에서 멈추지 않게 첫 내용 낱말 첫 글자까지 (a la d… · un m… · ¿Q…)
-            if (typeof hintLenPastFunctionWords === 'function') n = Math.min(hintLenPastFunctionWords(bare, n), Math.max(1, bare.length - 1));
-            return bare.slice(0, n);
+            return bare.slice(0, Math.max(1, Math.min(shared + 1, bare.length - 1)));
         }
 
         async function gradeWriteFirstRound(userRaw) {

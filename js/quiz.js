@@ -607,8 +607,7 @@ let quizSession = null;
                 let hintWord = correct.toLowerCase().trim()
                     .replace(/^(el\/la|los\/las|un\/una|el|la|los|las|un|una|unos|unas)\s+/i, '');
                 const sharedLen = sharedPrefixLen(userNorm, normalizeSpanishAnswer(hintWord));
-                const hintPrefix = hintWord.slice(0, (typeof hintLenPastFunctionWords === 'function')
-                    ? Math.min(hintLenPastFunctionWords(hintWord, sharedLen + 1), Math.max(1, hintWord.length - 1)) : sharedLen + 1);
+                const hintPrefix = hintWord.slice(0, sharedLen + 1);
                 return {
                     isCorrect: false,
                     hint: `💡 그것도 같은 뜻이에요! 다른 동의어를 생각해 볼까요? <b>${hintPrefix}</b>로 시작하는 단어예요.`,

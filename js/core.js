@@ -7356,26 +7356,6 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   안내 상자가 통째로 진한 글씨라 <b> 로 굵게 해봐야 둘레와 구별이 안 됐다.
         //   글자 자체를 칩으로 띄우고 자간을 벌려서, 한눈에 '이게 힌트' 로 보이게 한다.
         //   퀴즈·쓰기 복습이 같이 쓴다.
-        // [냐냐 지적] 앞글자 힌트가 앞의 전치사·관사에서 멈췄다 (2026-10-02).
-        //   'a la derecha de' 는 'a', 'un montón' 은 'u', '¿Qué hora es?' 는 '¿' 만 보여줘서 아무 도움이 안 됐다.
-        //   앞에 붙은 기능어(전치사·관사·대명사)와 ¿¡ 는 건너뛰고, 첫 **내용 낱말의 첫 글자** 까지는 보여준다.
-        //   빈칸 [ ] 이 먼저 나오면 거기서 멈춘다. 정답 전체를 흘리지 않게 마지막 글자는 부르는 쪽이 남긴다.
-        const HINT_LEAD_FUNC = new Set(['a', 'al', 'de', 'del', 'en', 'con', 'por', 'para', 'sin', 'sobre', 'hasta', 'desde',
-            'el', 'la', 'los', 'las', 'lo', 'un', 'una', 'unos', 'unas', 'se', 'me', 'te', 'le', 'les', 'nos', 'os', 'y', 'o', 'que', 'q']);
-        function hintLenPastFunctionWords(full, n) {
-            const s = String(full || '');
-            const re = /[^\s]+/g;
-            let m;
-            while ((m = re.exec(s))) {
-                const tok = m[0];
-                if (tok.startsWith('[') || tok.startsWith('(')) return n;           // 빈칸이 먼저 나옴
-                const core = tok.replace(/^[¿¡."'“”]+/, '').replace(/[?!.,;:]+$/, '').toLowerCase();
-                if (core && HINT_LEAD_FUNC.has(core)) continue;                       // 앞에 붙은 기능어
-                const lead = tok.length - tok.replace(/^[¿¡."'“”]+/, '').length;      // ¿ 같은 앞 기호
-                return Math.max(n, m.index + lead + 1);                               // 첫 내용 낱말의 첫 글자까지
-            }
-            return n;
-        }
         function hintStartHtml(prefix) {
             const p = String(prefix || '').trim();
             if (!p) return '';
