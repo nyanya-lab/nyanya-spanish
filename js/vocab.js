@@ -2632,12 +2632,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             // [냐냐 PATCH] 수정하다가 중복이 된 경우 → 두 단어를 하나로 합치고, 고치던 쪽은 삭제
-            //   점수는 더 높은 쪽, 정답/오답 횟수는 합산해서 보존
+            //   [냐냐 요청] 점수는 **더한다** (2026-10-02) — 예전엔 높은 쪽만 남겼다.
+            //   점수는 맞히면 +, 틀리면 − 로 쌓이는 값이라, 두 자리에서 따로 한 연습을 다 세려면 더해야 한다.
+            //   정답/오답 횟수도 합산, 곡선은 더 멀리 간 쪽을 통째로 (관용구 정리 때 정한 규칙과 같다)
             let mergedNote = '';
             if (dupState.mergeFromId && dupState.mergeFromId !== target.id) {
                 const dying = vocabulary.find(v => v.id === dupState.mergeFromId);
                 if (dying) {
-                    target.score = clampScore(Math.max(getScore(target), getScore(dying)));
+                    target.score = clampScore(getScore(target) + getScore(dying));
+                    if (dying.lastWrongDate && (!target.lastWrongDate || (dying.reviewStage || 0) > (target.reviewStage || 0))) {
+                        ['reviewStage', 'curveEnteredDate', 'lastDemoteDate', 'lastReviewDate', 'lastWrongDate', 'keepDueDate'].forEach(f => {
+                            if (dying[f] !== undefined && dying[f] !== null) target[f] = dying[f]; else delete target[f];
+                        });
+                    }
                     target.correctTotal = (target.correctTotal || 0) + (dying.correctTotal || 0);
                     target.wrongTotal = (target.wrongTotal || 0) + (dying.wrongTotal || 0);
                     if (dying.subjectivePassed) target.subjectivePassed = true;
@@ -2696,6 +2703,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (seen.has(key)) { inFormDup = text; return; }
                 seen.set(key, row);
                 if (row.dataset && row.dataset.iid) return;   // 원래 있던 줄
+                //   [냐냐 요청] 단어로 이미 있는 표현이면 그것부터 알린다 (2026-10-02).
+                //   a veces · por eso 처럼 단어로 둔 굳은 표현을 관용구로 또 적으면 점수가 둘로 갈린다.
+                //   지금 적는 단어 이름과 같아도 (단어 자기 자신을 관용구로) 같이 알린다.
+                const wordHits = vocabulary.filter(w => idiomDupKey(w.word) === key);
+                const formWord = ((document.getElementById('input-word') || {}).value || '').trim();
+                if (formWord && idiomDupKey(formWord) === key && !wordHits.some(w => selfId && String(w.id) === String(selfId))) {
+                    wordHits.push({ id: '__form', word: formWord, pos: (document.getElementById('input-pos') || {}).value || '' });
+                }
+                if (wordHits.length) {
+                    const mInp = row.querySelector('[data-idiom-field="meaning"]');
+                    items.push({ kind: 'word', row, text, meaning: mInp ? mInp.value.trim() : '', words: wordHits, pick: 'drop' });
+                    return;
+                }
                 const owners = [];
                 vocabulary.forEach(w => {
                     if (selfId && String(w.id) === String(selfId)) return;
@@ -2731,7 +2751,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     </div>
                     <div class="text-[11px] text-slate-500 mt-0.5 pl-5">${sub}</div>
                 </button>`;
-            document.getElementById('idiom-dup-body').innerHTML = idiomDupState.items.map((x, i) => `
+            document.getElementById('idiom-dup-body').innerHTML = idiomDupState.items.map((x, i) => x.kind === 'word' ? `
+                <div class="border border-amber-200 rounded-2xl p-4 space-y-2 bg-white">
+                    <div class="text-sm"><b class="text-violet-700">${escapeHtml(x.text)}</b>
+                        ${x.meaning ? `<span class="text-slate-400 text-xs">— ${escapeHtml(x.meaning)}</span>` : ''}</div>
+                    <p class="text-[11px] font-bold text-amber-600">이 표현은 단어로 이미 있어요:
+                        ${x.words.map(w => `${escapeHtml(w.word)}${w.pos ? ` <span class="text-slate-400">(${escapeHtml(POS_LABELS[w.pos] || w.pos)})</span>` : ''}${w.id === '__form' || (idiomDupState.selfId && String(w.id) === String(idiomDupState.selfId)) ? ' <span class="text-slate-400">— 지금 이 단어</span>' : ''}`).join(', ')}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        ${pickBtn(i, 'drop', '관용구에서 빼기', '단어로만 둬요 (점수가 둘로 안 갈려요)', x.pick === 'drop')}
+                        ${pickBtn(i, 'keep', '그래도 관용구로 두기', '단어와 관용구에 따로 있어요', x.pick === 'keep')}
+                    </div>
+                </div>` : `
                 <div class="border border-slate-200 rounded-2xl p-4 space-y-2 bg-white">
                     <div class="text-sm"><b class="text-violet-700">${escapeHtml(x.text)}</b>
                         ${x.meaning ? `<span class="text-slate-400 text-xs">— ${escapeHtml(x.meaning)}</span>` : ''}</div>
@@ -2746,8 +2776,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 </div>`).join('');
         }
 
-        function openIdiomDupModal(items) {
-            idiomDupState = { items };
+        function openIdiomDupModal(items, selfId) {
+            idiomDupState = { items, selfId: selfId || null };
             renderIdiomDupModal();
             document.getElementById('idiom-dup-modal').classList.remove('hidden');
         }
@@ -2789,8 +2819,12 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
         function confirmIdiomDup() {
             if (!idiomDupState) return;
-            let kept = 0, moved = 0;
+            let kept = 0, moved = 0, dropped = 0;
             idiomDupState.items.forEach(x => {
+                if (x.kind === 'word') {   // 단어로 이미 있는 표현
+                    if (x.pick === 'drop') { x.row.remove(); dropped++; }
+                    return;
+                }
                 if (x.pick === '__both') {
                     // 원래 단어에 그대로 두고 지금 단어에도 보이게 — 이 줄을 '같이 쓰는 줄' 로 바꿔 두면 저장이 걸어 준다
                     const src = x.owners.find(o => hasIdiomRecord(o.w.id, o.it)) || x.owners[0];
@@ -2835,6 +2869,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
             closeIdiomDupModal();
             if (kept) showToast(`관용구 ${kept}개는 원래 단어에 두었어요`, "info");
+            if (dropped) showToast(`단어로 이미 있는 표현 ${dropped}개는 관용구에서 뺐어요`, "info");
             performSaveWord();
         }
 
@@ -2927,7 +2962,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     return;
                 }
                 _idiomMovePending = [];
-                if (chk.items.length) { openIdiomDupModal(chk.items); return; }
+                if (chk.items.length) { openIdiomDupModal(chk.items, modalId || null); return; }
             }
 
             performSaveWord();
