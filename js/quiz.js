@@ -922,6 +922,7 @@ let quizSession = null;
                 || ((word._isIdiomTask && word._idiomOf) ? { wordId: word._idiomOf.id, text: word.word } : null);
             if (idiomRef && typeof getIdiomGrade === 'function') {
                 chips.push(B('bg-violet-100 text-violet-600', '📘 관용구'));
+                if (typeof idiomIsQuestion === 'function' && idiomIsQuestion(idiomRef.text)) chips.push(B('bg-indigo-100 text-indigo-700', '❓ 질문'));
                 if (typeof deleLevelBadgeHtml === 'function' && typeof wordIdiomList === 'function') {
                     const owner = (vocabulary || []).find(v => v.id === idiomRef.wordId);
                     const norm = (t) => String(t || '').trim().toLowerCase();

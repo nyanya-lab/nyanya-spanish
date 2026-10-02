@@ -7437,6 +7437,17 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //     ① 낱말이 통째로 붙거나 빠졌다 (짧은 쪽 낱말들이 긴 쪽에 차례대로 다 들어 있다)
         //     ② 단어장에 **글자 그대로** 따로 등록된 다른 단어다 (활용형·복수형으로 짐작하지는 않는다 —
         //        casas 를 casa 의 다른 단어로 치면 안 된다)
+        // [냐냐 지적] 관용구 문제에 질문인지 알려준다 (2026-10-02).
+        //   'para qué'(무엇 때문에, 왜)를 물었는데 '📘 관용구' 딱지만 있어서 porque 를 썼다 — 질문인지 알 길이 없었다.
+        //   ¿? 로는 못 가른다 (por qué · para qué · desde cuándo 처럼 ¿? 없이 적힌 게 8개).
+        //   스페인어 의문사는 늘 악센트를 찍으니(qué·quién·cuál·cuándo·cuánto·dónde·cómo) 그걸로 본다.
+        //   ⚠️ ¡Qué bonito! · ¡Cómo corre el tiempo! 같은 감탄문에도 들어 있어서 ¡ 로 시작하면 뺀다.
+        const RE_INTERROG_WORD = /(^|[^\p{L}])(qué|quién|quiénes|cuál|cuáles|cuándo|cuánto|cuánta|cuántos|cuántas|dónde|adónde|cómo)(?![\p{L}])/iu;
+        function idiomIsQuestion(text) {
+            const t = String(text || '').trim().replace(RE_QA_MARKER, '').trim();
+            if (/^¡/.test(t)) return false;
+            return /^¿/.test(t) || RE_INTERROG_WORD.test(t.normalize('NFC'));
+        }
         function isOtherWholeAnswer(userRaw, correctRaw) {
             const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s) : String(s || '').toLowerCase().trim();
             const u = norm(userRaw), c = norm(typeableForm(correctRaw) || correctRaw);

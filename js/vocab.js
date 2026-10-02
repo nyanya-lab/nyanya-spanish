@@ -4971,6 +4971,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const showIdiomBase = !!s.retry;
             const posHtml = w._isIdiomTask
                 ? `<span class="inline-block text-[10px] font-black text-violet-600 bg-violet-100 border border-violet-200 rounded-lg px-2 py-0.5">📘 관용구${showIdiomBase ? ` · ${escapeHtml((w._idiomOf || {}).word || '')}` : ''}</span>`
+                  //   [냐냐 지적] 질문인 표현이면 같이 알려준다 — 뜻만 봐서는 porque 인지 por qué 인지 모른다
+                  + ((typeof idiomIsQuestion === 'function' && idiomIsQuestion(w.word))
+                      ? ` <span class="inline-block text-[10px] font-black text-indigo-700 bg-indigo-100 border border-indigo-200 rounded-lg px-2 py-0.5">❓ 질문</span>` : '')
                 : (posLabel
                     //   [냐냐 요청] 품사마다 단어장 카드와 같은 색으로 (2026-09-17).
                     //   ⚠️ 명사만은 성별 색(남 파랑·여 분홍)을 쓰지 않는다 — 답을 가린 채 묻는 자리라,
