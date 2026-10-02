@@ -314,8 +314,12 @@
         //   ⚠️ 문장을 '만드는' 쪽(미션 출제·질문 생성)은 그대로 low 다 — minimal 로 해보니
         //      '저것은 뭐야' 처럼 프롬프트가 금지한 흐릿한 문장이 바로 나왔다. 시제 제한도 생각이 필요하다.
         //   판정이 이상해지면 이 한 줄을 'low' 로 돌리면 된다.
+        //   ⚠️ [냐냐 결정] 같은 날 'low' 로 되돌렸다 (2026-10-02). 관용구 미션 '요즘 너의 스페인어 실력은 어때?' 에
+        //      '¿Estos días hablas español?'(스페인어 하니?) 를 minimal 이 두 번 중 한 번 정답으로 넘겼다 —
+        //      low 는 두 번 다 뜻이 다르다고 잡았다. "속도보다 판정이 틀리는 게 더 해롭다." 채점은 다시 7~9초.
+        //      상수는 남겨둔다 — 다시 재볼 때 이 한 줄만 바꾸면 된다.
         // ============================================================
-        const AI_GRADE_THINKING = 'minimal';
+        const AI_GRADE_THINKING = 'low';
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
