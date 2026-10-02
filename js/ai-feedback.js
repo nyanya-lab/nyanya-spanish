@@ -2178,6 +2178,21 @@ ${buildLearnerProfileSummary()}`;
             'article', 'determiner', 'numeral', 'number', 'interjection', 'expression', 'idiom', 'other',
             // [냐냐 지적] 'Nancy|proper noun' 이 '|' 를 못 뗀 채로 추천 칩에 그대로 떴다
             'proper noun', 'proper-noun', 'propernoun', 'proper', 'name']);
+        // [냐냐 지적] 'querer|verbo' · 'exhibir|verbo' 처럼 품사를 스페인어로 보내면 '|' 를 못 떼서,
+        //   단어장에 있는 querer·exhibir 가 '아직 단어장에 없어요' 에 떴다 (2026-10-02).
+        //   스페인어·한국어 품사 이름을 영어 이름으로 바꿔 읽는다.
+        const AI_POS_ALIAS = {
+            verbo: 'verb', sustantivo: 'noun', nombre: 'noun', adjetivo: 'adjective', adverbio: 'adverb',
+            'preposición': 'preposition', preposicion: 'preposition', pronombre: 'pronoun',
+            'conjunción': 'conjunction', conjuncion: 'conjunction', 'artículo': 'article', articulo: 'article',
+            determinante: 'determiner', 'número': 'numeral', numero: 'numeral',
+            'interjección': 'interjection', interjeccion: 'interjection', interrogativo: 'interrogative',
+            frase: 'phrase', 'locución': 'phrase', locucion: 'phrase', 'expresión': 'phrase', expresion: 'phrase',
+            'nombre propio': 'proper noun',
+            '동사': 'verb', '명사': 'noun', '형용사': 'adjective', '부사': 'adverb', '전치사': 'preposition',
+            '대명사': 'pronoun', '접속사': 'conjunction', '관사': 'article', '구': 'phrase', '표현': 'phrase', '숙어': 'phrase',
+            '고유명사': 'proper noun'
+        };
         // ============================================================
         // [냐냐 지적] trabajador 를 명사(근로자)로 썼는데 형용사(부지런한) 항목이 +2 를 받았다 (2026-09-22).
         //   낱말 훑기는 철자만 보고 단어장을 찾는다. AI 는 'trabajador|noun' 으로 품사까지 알려주는데
@@ -2209,7 +2224,8 @@ ${buildLearnerProfileSummary()}`;
                 let pos = '';
                 const bar = s.lastIndexOf('|');
                 if (bar > 0) {
-                    const tail = s.slice(bar + 1).trim().toLowerCase();
+                    const raw = s.slice(bar + 1).trim().toLowerCase();
+                    const tail = AI_POS_ALIAS[raw] || raw;
                     if (AI_POS_WORDS.has(tail)) { pos = tail; s = s.slice(0, bar).trim(); }
                 }
                 if (s) out.push({ name: s, ok, pos });
