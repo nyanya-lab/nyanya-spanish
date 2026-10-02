@@ -988,7 +988,9 @@ let quizSession = null;
             // [냐냐 요청] 성·수 변화 설명문은 제거 — 품사 뱃지 옆 '성 변화 X' 칩으로 대체됨
             //   (adjAgreementText()는 다른 데서 쓸 수 있으니 함수 자체는 남겨둠)
             // 관용구
-            const idiomList = (word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []);
+            const idiomList = ((word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []))
+                //   [냐냐 요청] 다른 단어와 같이 쓰는 관용구도 같이 보인다 (2026-10-02)
+                .concat((typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(word).map(x => x.it) : []);
             if (idiomList.length > 0) {
                 // [냐냐 요청] 표현마다 발음 듣기 — 통으로 소리내 봐야 입에 붙는다
                 const items = idiomList.map(x => `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed">

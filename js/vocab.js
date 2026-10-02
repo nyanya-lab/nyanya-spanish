@@ -967,8 +967,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
                 const idiomBox = document.getElementById('idiom-fields-box');
                 const idiomIcon = document.getElementById('idiom-toggle-icon');
-                if (idiomList.length > 0) {
+                //   [냐냐 요청] 다른 단어와 같이 쓰는 관용구도 보통 줄처럼 싣는다 — 줄에 주인 id 를 달아 둔다
+                const linkedList = (typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(w) : [];
+                if (idiomList.length > 0 || linkedList.length > 0) {
                     idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, item.iid || ''));
+                    linkedList.forEach(({ owner, it }) => addIdiomRow(it.idiom, it.idiomMeaning, it.iid || '', owner.id));
                     if (idiomBox) idiomBox.classList.remove('hidden');
                     if (idiomIcon) idiomIcon.className = "fa-solid fa-minus text-xs";
                 } else {
@@ -1091,7 +1094,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   **글자로 찾아** 다시 붙였다 — 글자가 바뀜으면 못 찾고 새 번호를 받았다.
         //   → 편집창 줄에 번호를 실어두고, 저장할 때 그 번호로 이어 붙인다.
         //   ⚠️ 새로 시작하고 싶으면 그 줄을 지우고 다시 적으면 된다 (번호가 새로 나온다).
-        function addIdiomRow(idiomText = '', meaningText = '', iid = '') {
+        function addIdiomRow(idiomText = '', meaningText = '', iid = '', ownerId = '') {
             const entriesBox = document.getElementById('idiom-entries-box');
             if (!entriesBox) { console.warn('idiom-entries-box 엘리먼트를 찾을 수 없음 — index.html이 최신 버전이 아닐 수 있어요'); return; }
             const rowId = 'idiom-row-' + (idiomRowCounter++);
@@ -1099,6 +1102,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             row.id = rowId;
             row.className = 'flex gap-2 items-start';
             if (iid) row.dataset.iid = iid;
+            if (ownerId) row.dataset.owner = ownerId;   // 다른 단어와 같이 쓰는 관용구
             row.innerHTML = `
                 <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
@@ -1216,6 +1220,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (idiomVal) {
                     const row0 = { idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' };
                     if (row.dataset && row.dataset.iid) row0.iid = row.dataset.iid;   // 글자를 고쳐도 점수가 따라오게
+                    if (row.dataset && row.dataset.owner) row0.owner = row.dataset.owner;   // 같이 쓰는 관용구 — 저장 때 따로 다룬다
                     result.push(row0);
                 }
             });
@@ -1243,6 +1248,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (old.addedAt) r.addedAt = old.addedAt;   // 있던 줄은 그대로
                     if (old.dele && !r.dele) r.dele = old.dele;  // DELE 뱃지도 지키고
                     if (old.iid && !r.iid) r.iid = old.iid;
+                    if (Array.isArray(old.alsoUnder) && old.alsoUnder.length && !r.alsoUnder) r.alsoUnder = old.alsoUnder.slice();   // 같이 걸린 단어도
                 } else {
                     r.addedAt = now;                             // 이번에 새로 적은 줄
                 }
@@ -2610,7 +2616,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             target.notes = chosen.notes || '';
             target.example = chosen.example || '';
             target.exampleMeaning = chosen.exampleMeaning || '';
-            target.idioms = chosen.idioms || [];
+            target.idioms = (chosen.idioms || []).filter(r => !(r.owner && r.owner !== target.id));   // 같이 쓰는 줄은 주인 것이라 뺀다
+            target.idioms.forEach(r => { delete r.owner; });
             target.conjugationsByTense = chosen.conjugationsByTense || {};
             target.irregularByTense = chosen.irregularByTense || {};
             target.verbClassByTense = chosen.verbClassByTense || {};
@@ -2636,6 +2643,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     if (dying.subjectivePassed) target.subjectivePassed = true;
                     syncWordFlags(target);
 
+                    releaseWordIdioms(dying);   // 같이 걸린 관용구는 남은 단어로 넘긴다
                     // 사라지는 단어를 유의어로 걸어둔 곳에서 링크 제거
                     vocabulary.forEach(other => {
                         if (Array.isArray(other.synonyms)) {
@@ -2733,6 +2741,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             `이미 있어요 · ${escapeHtml(o.it.idiomMeaning || '')} · ${idiomRecLabel(o.w.id, o.it)}`,
                             x.pick === String(o.w.id))).join('')}
                         ${pickBtn(i, '__self', selfWord.trim() || '지금 단어', '지금 적는 단어로 옮기기 (기록도 따라와요)', x.pick === '__self')}
+                        ${pickBtn(i, '__both', '둘 다', '원래 단어에도, 지금 단어에도 보여요 (점수는 하나)', x.pick === '__both')}
                     </div>
                 </div>`).join('');
         }
@@ -2782,6 +2791,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!idiomDupState) return;
             let kept = 0, moved = 0;
             idiomDupState.items.forEach(x => {
+                if (x.pick === '__both') {
+                    // 원래 단어에 그대로 두고 지금 단어에도 보이게 — 이 줄을 '같이 쓰는 줄' 로 바꿔 두면 저장이 걸어 준다
+                    const src = x.owners.find(o => hasIdiomRecord(o.w.id, o.it)) || x.owners[0];
+                    if (!src.it.iid && typeof ensureIdiomIds === 'function') ensureIdiomIds(src.w);
+                    if (!src.it.iid) return;
+                    x.row.dataset.iid = src.it.iid;
+                    x.row.dataset.owner = src.w.id;
+                    const tInp = x.row.querySelector('[data-idiom-field="idiom"]');
+                    const mInp = x.row.querySelector('[data-idiom-field="meaning"]');
+                    if (tInp) tInp.value = src.it.idiom;
+                    if (mInp) mInp.value = src.it.idiomMeaning || '';
+                    return;
+                }
                 if (x.pick === '__self') {
                     // 지금 단어로 — 기록이 있는 쪽을 데려온다 (없으면 첫 번째)
                     const src = x.owners.find(o => hasIdiomRecord(o.w.id, o.it)) || x.owners[0];
@@ -2826,12 +2848,44 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (row) {
                     if (src.it.addedAt) row.addedAt = src.it.addedAt;   // 처음 등록한 날·DELE 는 따라온다
                     if (src.it.dele && !row.dele) row.dele = src.it.dele;
+                    //   원래 자리에 같이 걸려 있던 단어들도 데려온다 (지금 단어는 빼고)
+                    const also = (Array.isArray(src.it.alsoUnder) ? src.it.alsoUnder : []).filter(id => id !== wordObj.id);
+                    if (also.length) row.alsoUnder = also;
                 }
                 moveIdiomRecords(src.w.id, src.it, wordObj.id);
                 removeIdiomFromWord(src.w, src.it);
                 others.forEach(o => removeIdiomFromWord(o.w, o.it));
             });
             showToast(`관용구 ${pend.length}개를 "${wordObj.word}" 로 옮겼어요 (기록 유지)`, "info");
+        }
+
+        // performSaveWord 가 부른다 — 다른 단어와 같이 쓰는 관용구 정리
+        //   ① 창에 남은 줄: 주인 쪽 글자·뜻을 고친 대로 바꾸고, 이 단어 id 를 걸어 둔다 (둘 다 고르면 여기서 처음 걸린다)
+        //   ② 창에서 지운 줄: 이 단어에서만 뗀다 — 주인에겐 그대로 남는다
+        //   ③ 이 단어가 주인인 관용구를 지웠는데 같이 걸린 단어가 있으면 그쪽으로 넘긴다
+        function applyIdiomLinks(wordObj, linkedRows, prevWord) {
+            const keep = new Set();
+            (linkedRows || []).forEach(r => {
+                const owner = vocabulary.find(v => v.id === r.owner);
+                const it = owner ? wordIdiomList(owner).find(x => x.iid === r.iid) : null;
+                if (!it) return;
+                it.idiom = r.idiom;
+                if (r.idiomMeaning) it.idiomMeaning = r.idiomMeaning;
+                if (!Array.isArray(it.alsoUnder)) it.alsoUnder = [];
+                if (it.alsoUnder.indexOf(wordObj.id) < 0) it.alsoUnder.push(wordObj.id);
+                keep.add(owner.id + '::' + it.iid);
+            });
+            linkedIdiomsOf(wordObj).forEach(({ owner, it }) => {
+                if (keep.has(owner.id + '::' + it.iid)) return;
+                it.alsoUnder = it.alsoUnder.filter(id => id !== wordObj.id);
+                if (!it.alsoUnder.length) delete it.alsoUnder;
+            });
+            if (prevWord && Array.isArray(prevWord.idioms)) {
+                const nowIds = new Set((wordObj.idioms || []).map(x => x.iid).filter(Boolean));
+                prevWord.idioms.forEach(it => {
+                    if (it && it.iid && !nowIds.has(it.iid) && Array.isArray(it.alsoUnder) && it.alsoUnder.length) handOverIdiom(wordObj, it);
+                });
+            }
         }
 
         function saveWord() {
@@ -2903,6 +2957,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // 한쪽을 지우면 다른 쪽도 지워지던 문제 방지). 수정 모드일 때만 기존 id 유지.
             const newId = 'word-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 
+            //   [냐냐 요청] 다른 단어가 주인인 관용구 줄은 내 관용구에 넣지 않는다 — 저장 끝에 따로 다룬다
+            const allIdiomRows = getIdiomRowsData();
+            const linkedIdiomRows = allIdiomRows.filter(r => r.owner && r.owner !== modalId);
+            const ownIdiomRows = allIdiomRows.filter(r => !(r.owner && r.owner !== modalId));
+            ownIdiomRows.forEach(r => { delete r.owner; });
+            let prevWordForIdioms = null;
+
             let wordObj = {
                 id: modalId || newId,
                 word: wordVal,
@@ -2910,7 +2971,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 pos: pos,
                 example: document.getElementById('input-example').value.trim(),
                 exampleMeaning: document.getElementById('input-example-meaning').value.trim(),
-                idioms: getIdiomRowsData(),
+                idioms: ownIdiomRows,
                 notes: document.getElementById('input-notes').value.replace(/\s+$/, ''), // [냐냐 PATCH] 맨 앞 들여쓰기 공백은 보존, 끝쪽 공백만 정리
                 mastered: false
             };
@@ -2937,6 +2998,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (index !== -1) {
                     // [냐냐 PATCH-0배치] 수정해도 점수·학습기록은 그대로 보존 (안 그러면 수정할 때마다 점수가 0으로 리셋됨)
                     const prev = vocabulary[index];
+                    prevWordForIdioms = prev;
                     // [냐냐 지적] 창에 없는 기록은 원래 단어에서 통째로 가져온다 (2026-09-29).
                     //   예전엔 아래에 적은 몇 개만 옮겨서 곡선 칸·복습한 날·DELE 레벨이 날아갔다.
                     //   곡선이 1일차로 돌아가 옛날 틀린 날부터 세니, 고치는 순간 '밀린 복습'으로 떴다
@@ -2975,6 +3037,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             }
 
             applyIdiomMoves(wordObj);   // 관용구 중복 창에서 '지금 단어로 옮기기' 를 고른 것
+            applyIdiomLinks(wordObj, linkedIdiomRows, prevWordForIdioms);   // 다른 단어와 같이 쓰는 관용구
 
             // [냐냐 PATCH-5배치] 유의어/반의어 — 미등록 단어 자동 등록 + 상대 단어에 양방향 연결
             const synResult = applySynonymLinks(wordObj, getSynonymRowsData());
@@ -3099,6 +3162,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 "삭제한 데이터는 다시 꺼낼 수 없습니다.",
                 () => {
                     const wasMastered = w.mastered; // [냐냐 PATCH] 삭제 전 마스터 여부
+                    releaseWordIdioms(w);   // [냐냐 요청] 같이 걸린 관용구는 남은 단어로 넘긴다
                     // [냐냐 PATCH-5배치] 이 단어를 유의어/반의어로 걸어둔 모든 단어에서 링크 자동 제거
                     vocabulary.forEach(other => {
                         if (Array.isArray(other.synonyms) && other.synonyms.some(l => l.id === wordId)) {
@@ -3880,6 +3944,59 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!w) return [];
             const arr = Array.isArray(w.idioms) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
             return arr.filter(x => x && String(x.idiom || '').trim() && String(x.idiomMeaning || '').trim());
+        }
+
+        // ============================================================
+        // [냐냐 요청] 관용구 하나를 두 단어에 같이 둔다 (2026-10-02).
+        //   batir el récord 를 el récord 에도, batir 에도 보이게. 표시는 따로 없이 그냥 둘 다에 나온다.
+        //   · 관용구는 한 단어(주인) 밑에만 있고, 같이 보일 단어 id 를 it.alsoUnder 에 적는다.
+        //     기록 키('주인id::번호')가 하나라 점수·곡선은 저절로 같이 쓴다.
+        //   · 복습·퀴즈·첨삭·개수는 wordIdiomList(주인 것만)를 그대로 써서 **한 번만** 센다.
+        //     두 단어에 다 보이게 하는 건 화면(카드·보기 창·편집 창·관용구 사전)뿐이다.
+        //   · 주인에서 지우거나 주인 단어를 지우면 같이 걸린 단어로 넘어간다 (기록도 따라간다).
+        // ============================================================
+        function linkedIdiomsOf(w) {
+            if (!w) return [];
+            const out = [];
+            (vocabulary || []).forEach(o => {
+                if (o === w) return;
+                wordIdiomList(o).forEach(it => {
+                    if (Array.isArray(it.alsoUnder) && it.alsoUnder.indexOf(w.id) >= 0) out.push({ owner: o, it });
+                });
+            });
+            return out;
+        }
+        //   화면용 — 내 관용구 + 같이 걸린 관용구 ({ owner, it }, 점수는 owner.id 로 본다)
+        function wordIdiomDisplayList(w) {
+            return wordIdiomList(w).map(it => ({ owner: w, it })).concat(linkedIdiomsOf(w));
+        }
+        //   이 관용구가 보이는 단어들 (주인 먼저)
+        function idiomShownWords(owner, it) {
+            const ids = Array.isArray(it.alsoUnder) ? it.alsoUnder : [];
+            return [owner].concat(ids.map(id => (vocabulary || []).find(v => v.id === id)).filter(v => v && v !== owner));
+        }
+        //   주인에서 빠지는 관용구 — 같이 걸린 단어가 남아 있으면 그쪽으로 넘긴다. 넘겼으면 true
+        function handOverIdiom(fromW, it, skipIds) {
+            const skip = skipIds || [];
+            const ids = (Array.isArray(it.alsoUnder) ? it.alsoUnder : []).filter(id => id !== fromW.id && skip.indexOf(id) < 0);
+            const to = ids.map(id => (vocabulary || []).find(v => v.id === id)).find(Boolean);
+            if (!to) return false;
+            const moved = Object.assign({}, it);
+            const rest = ids.filter(id => id !== to.id);
+            if (rest.length) moved.alsoUnder = rest; else delete moved.alsoUnder;
+            if (!Array.isArray(to.idioms)) to.idioms = [];
+            to.idioms.push(moved);
+            if (typeof moveIdiomRecords === 'function') moveIdiomRecords(fromW.id, it, to.id);
+            return true;
+        }
+        //   단어를 지우기 전에 — 내 관용구 중 같이 걸린 것은 넘기고, 남의 관용구에 걸린 내 id 는 뗀다
+        function releaseWordIdioms(w) {
+            if (!w) return;
+            wordIdiomList(w).forEach(it => handOverIdiom(w, it));
+            linkedIdiomsOf(w).forEach(({ it }) => {
+                it.alsoUnder = it.alsoUnder.filter(id => id !== w.id);
+                if (!it.alsoUnder.length) delete it.alsoUnder;
+            });
         }
 
         // [냐냐 요청] 관용구 문제는 '단어의 복제본'으로 만든다.
@@ -5642,7 +5759,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (isSearching) {
                 rows = rows.filter(r => stripAccents(r.text.toLowerCase()).includes(q)
                     || stripAccents(r.meaning.toLowerCase()).includes(q)
-                    || stripAccents(String(r.owner.word || '').toLowerCase()).includes(q));
+                    || idiomShownWords(r.owner, r.it).some(o => stripAccents(String(o.word || '').toLowerCase()).includes(q)));
             }
             // [냐냐 지적] 필터가 하나도 안 걸리고 있었다 (2026-09-15). 검색·정렬만 썼다.
             //   관용구에도 점수·등급·DELE 가 있으니 단어장과 같은 필터를 그대로 건다.
@@ -5656,7 +5773,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     const g = getIdiomGrade(r.owner.id, ref);
                     const isMaster = (g === 'mastered' || g === 'perfect');
                     const isWeak = (g === 'weak' || g === 'critical');
-                    if (posF.length && !posF.includes(r.owner.pos)) return false;
+                    if (posF.length && !idiomShownWords(r.owner, r.it).some(o => posF.includes(o.pos))) return false;
                     const ilv = (typeof normDeleLevel === 'function' ? normDeleLevel(r.it.dele) : r.it.dele) || '';
                     if (deleF.length && ilv && !deleF.includes(ilv)) return false;   // 레벨 없는 건 안 거른다
                     if (mF === 'mastered' && !isMaster) return false;
@@ -5720,9 +5837,19 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     && curveIsDue(cr.lastReviewDate, cr.lastWrongDate, cr.stage || 0, cr.keepDueDate);
                 //   [냐냐 요청] 주인 단어 줄은 품사·단어·뜻·그 단어 점수를 한 줄로 (2026-09-15).
                 //   사전 아이콘 대신 품사를 쓰고, 품사마다 색이 다르다.
-                const ow = r.owner;
-                const owGi = GRADE_INFO[getWordGrade(ow)] || GRADE_INFO.normal;
-                const owMean = String(ow.meaning || '').split(/[,;/·]/)[0].trim();
+                //   [냐냐 요청] 같이 쓰는 단어가 있으면 원단어 줄이 그만큼 늘어난다 (2026-10-02)
+                const ownerLines = idiomShownWords(r.owner, r.it).map(ow => {
+                    const owGi = GRADE_INFO[getWordGrade(ow)] || GRADE_INFO.normal;
+                    const owMean = String(ow.meaning || '').split(/[,;/·]/)[0].trim();
+                    return `
+                            <button onclick="openWordView('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
+                                class="w-full flex items-center gap-1.5 text-left rounded-lg hover:opacity-70 transition-opacity">
+                                <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
+                                <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
+                                <span class="text-[11px] text-slate-400 truncate min-w-0 flex-1">${escapeHtml(owMean)}</span>
+                                <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${owGi.badge}" title="${owGi.label} · 그 단어의 점수">${formatScore(ow)}</span>
+                            </button>`;
+                }).join('<div class="h-1.5"></div>');
                 return `
                 <div class="rounded-3xl p-5 bg-white border border-slate-200 flex flex-col justify-between hover:shadow-md transition-all duration-300 relative gap-3">
                     <div class="space-y-2.5">
@@ -5745,13 +5872,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         ${/* [냐냐 요청] 원단어 줄을 박스로 가둔다 — 단어장에서 관용구를 가두는 것과 같은 모양 */''}
                         <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5">
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Palabra (원단어)</span>
-                            <button onclick="openWordView('${escapeAttr(String(ow.id))}')" title="이 표현이 딸린 단어를 열어요"
-                                class="w-full flex items-center gap-1.5 text-left rounded-lg hover:opacity-70 transition-opacity">
-                                <span class="shrink-0 px-2 py-0.5 text-[10px] font-black rounded-full ${posChipColor(ow)}">${posChipLabel(ow)}</span>
-                                <span class="text-[12px] font-extrabold text-slate-800 shrink-0">${escapeHtml(String(ow.word || ''))}</span>
-                                <span class="text-[11px] text-slate-400 truncate min-w-0 flex-1">${escapeHtml(owMean)}</span>
-                                <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${owGi.badge}" title="${owGi.label} · 그 단어의 점수">${formatScore(ow)}</span>
-                            </button>
+                            ${ownerLines}
                         </div>
                     </div>
                 </div>`;
@@ -6138,12 +6259,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <!-- 관용구 먼저, 예문 나중 (순서 변경) -->
                         ${(() => {
                             if (!isDisplayOn('idioms')) return '';
-                            const idiomList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                            const ownList = (w.idioms && w.idioms.length > 0) ? w.idioms : (w.idiom ? [{ idiom: w.idiom, idiomMeaning: w.idiomMeaning || '' }] : []);
+                            //   [냐냐 요청] 다른 단어와 같이 쓰는 관용구도 똑같이 보인다 — 점수는 주인 단어 쪽 것
+                            const idiomList = ownList.map(it => ({ it, oid: w.id }))
+                                .concat(linkedIdiomsOf(w).map(x => ({ it: x.it, oid: x.owner.id })));
                             if (idiomList.length === 0) return '';
                             //   [냐냐 요청] 표현마다 제 점수를 오른쪽에 낸다 (2026-09-15)
-                            const rows = idiomList.map((item, idx) => {
+                            const rows = idiomList.map(({ it: item, oid }, idx) => {
                                 const ref = item.iid || item.idiom;
-                                const gi = GRADE_INFO[getIdiomGrade(w.id, ref)] || GRADE_INFO.normal;
+                                const gi = GRADE_INFO[getIdiomGrade(oid, ref)] || GRADE_INFO.normal;
                                 return `
                                 <div class="${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200/70' : ''} flex items-center gap-2">
                                     <span class="min-w-0 flex-1">
@@ -6151,7 +6275,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                         <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
                                     </span>
                                     ${deleLevelBadgeHtml(item.dele)}
-                                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(w.id, ref)}</span>
+                                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(oid, ref)}</span>
                                 </div>`;
                             }).join('');
                             return `
