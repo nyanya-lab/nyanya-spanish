@@ -8,10 +8,10 @@
     <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
          앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
          manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610020947">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610020947">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610020947">
-    <link rel="manifest" href="manifest.webmanifest?v=202610020947">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610021004">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610021004">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610021004">
+    <link rel="manifest" href="manifest.webmanifest?v=202610021004">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202610020947">
+    <link rel="stylesheet" href="css/style.css?v=202610021004">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -85,7 +85,7 @@
                          진한 네모는 걷었다. 누르면 새로고침.
                          크기는 44px — 줄 높이(52px)는 그대로 두라셔서 위아래를 4px 씩 여백 쪽으로 내민다(-my-1) -->
                     <div id="header-logo" class="w-11 h-11 -my-1 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <img src="img/icon-192.png?v=202610020947" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
+                        <img src="img/icon-192.png?v=202610021004" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
@@ -939,14 +939,15 @@
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
                             </button>
+                            <!-- [냐냐 요청] 관용구 미션 (2026-10-02) — '내 예문으로 연습' 자리를 대신한다 -->
+                            <button id="ai-mode-btn-idiom" onclick="switchAiMode('idiom')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
+                                📘 관용구 미션
+                            </button>
                             <button id="ai-mode-btn-es-ko" onclick="switchAiMode('es-ko')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 🇪🇸 스 ➡️ 🇰🇷 한 (자유 작문 첨삭)
                             </button>
                             <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 💬 질문에 답하기
-                            </button>
-                            <button id="ai-mode-btn-example" onclick="switchAiMode('example')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
-                                📖 내 예문으로 연습
                             </button>
                             <!-- [냐냐 요청] 연습이 아니라 되돌아보기. 첨삭받은 문장이 여기 쌓인다 -->
                             <button id="ai-mode-btn-note" onclick="switchAiMode('note')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
@@ -1114,40 +1115,53 @@
                         </div>
                     </div>
 
-                    <!-- MODE D: MY EXAMPLE PRACTICE -->
-                    <div id="ai-pane-example" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse"></span>
-                                    <span>내 예문으로 작문 연습</span>
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">등록한 단어의 예문을 활용해요. 그대로 번역하거나, 비슷한 새 문장이 나와요!</p>
+                    <!-- MODE D: 관용구 미션 (2026-10-02) — 관용구 하나로 한국어 문장을 받아 번역한다. 채점은 한→스 미션과 같다 -->
+                    <div id="ai-pane-idiom" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse"></span>
+                                <span>관용구로 번역 연습</span>
+                            </h3>
+                            <div class="flex flex-wrap gap-2 justify-end">
+                                <button onclick="openIdiomScope()" title="어떤 관용구에서 뽑을지 골라요" class="bg-slate-50 hover:bg-slate-100 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 transition-all flex items-center gap-1.5">
+                                    <i class="fa-solid fa-gear"></i>
+                                    <span>뽑는 범위</span>
+                                    <span id="ai-idiom-scope-badge" class="bg-pink-100 text-pink-700 rounded-md px-1.5 py-0.5 text-[10px] font-black"></span>
+                                </button>
+                                <button onclick="toggleIdiomHint()" class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-xs font-bold border border-amber-200 transition-all flex items-center gap-1">
+                                    <i class="fa-solid fa-lightbulb"></i>
+                                    <span>💡 힌트 보기</span>
+                                </button>
+                                <button id="ai-generate-idiom-btn" onclick="generateIdiomMission()" class="bg-pink-50 hover:bg-pink-100 text-pink-600 px-4 py-2 rounded-xl text-xs font-bold border border-pink-200 transition-all active:scale-95 flex items-center gap-1">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span>✨ 문장 뽑기</span>
+                                </button>
                             </div>
-                            <button id="ai-generate-example-btn" onclick="generateExampleMission()" class="shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-600 px-4 py-2 rounded-xl text-xs font-bold border border-violet-200 transition-all active:scale-95 flex items-center gap-1">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>✨ 문장 뽑기</span>
-                            </button>
                         </div>
 
-                        <div class="bg-violet-50 border border-violet-100 p-5 rounded-2xl space-y-2">
+                        <div id="ai-idiom-hint-box" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed font-semibold"></div>
+
+                        <div class="bg-pink-50 border border-pink-100 p-5 rounded-2xl space-y-2">
                             <div class="flex items-center justify-between">
-                                <span id="ai-example-mode-badge" class="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">내 예문 연습 📖</span>
-                                <span class="text-xs text-violet-500 font-medium"><i class="fa-solid fa-book-bookmark"></i> 등록 단어 기반</span>
+                                <span class="text-xs bg-pink-500 text-white px-2 py-0.5 rounded-full font-extrabold tracking-wide">관용구 미션 📘</span>
+                                <span class="text-xs text-pink-500 font-medium">다른 맞는 표현도 정답이에요</span>
                             </div>
-                            <h3 id="ai-example-korean" class="text-lg font-bold text-slate-900 pt-1">'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.</h3>
+                            <h3 id="ai-idiom-korean" class="text-lg font-bold text-slate-900 pt-1">'✨ 문장 뽑기'를 누르면 관용구 하나로 미션이 나와요.</h3>
                         </div>
+
+                        <!-- 채점 뒤: 이번 관용구를 썼는지 -->
+                        <div id="ai-idiom-target-box" class="hidden"></div>
 
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-slate-500">나의 스페인어 답변 작성</label>
                             <div class="relative">
-                                <textarea id="ai-example-input" data-es rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitExampleMission();}" placeholder="스페인어로 직접 작문한 후 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"></textarea>
-                                <button type="button" onclick="clearInputField('ai-example-input')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
+                                <textarea id="ai-idiom-input" data-es rows="3" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitIdiomMission();}" placeholder="스페인어로 직접 작문한 후 적어보세요... (엔터로 제출, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-pink-400 font-semibold"></textarea>
+                                <button type="button" onclick="clearInputField('ai-idiom-input')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
                             </div>
                         </div>
 
                         <div class="flex gap-2 justify-end !mt-2.5">
-                            <button id="ai-example-submit-btn" onclick="submitExampleMission()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
+                            <button id="ai-idiom-submit-btn" onclick="submitIdiomMission()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md">
                                 <i class="fa-solid fa-paper-plane"></i>
                                 <span>답변 제출하기</span>
                             </button>
@@ -1972,6 +1986,29 @@
         </div>
     </div>
 
+    <!-- [냐냐 요청] 관용구 미션 — 뽑는 범위 (2026-10-02, ai-feedback.js openIdiomScope) -->
+    <div id="ai-idiom-scope-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-gear text-pink-500"></i>
+                        <span>관용구 뽑는 범위</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 font-semibold mt-1">여러 개 고르면 합쳐서 그 안에서 하나씩 뽑아요.</p>
+                </div>
+                <button onclick="closeIdiomScope()" class="w-8 h-8 shrink-0 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="ai-idiom-scope-list" class="p-5 space-y-2"></div>
+            <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
+                <button onclick="closeIdiomScope()" class="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-all active:scale-95">취소</button>
+                <button onclick="applyIdiomScope()" class="px-5 py-2.5 bg-pink-500 hover:bg-pink-600 rounded-xl text-xs font-bold text-white transition-all active:scale-95">적용</button>
+            </div>
+        </div>
+    </div>
+
     <!-- [냐냐 요청] 쓰기 시험 기록 — 마스터 · 졸업 탭 (약점은 2026-09-28 에 뺐다) (vocab.js openWriteExamHistory) -->
     <div id="write-exam-history-modal" onclick="if (event.target === this) closeWriteExamHistory()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
         <!-- [냐냐 요청] 크기 고정 — 탭을 바꿔도 창이 줄었다 늘었다 하지 않게 -->
@@ -2614,14 +2651,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202610020947"></script>
-    <script src="js/creatures.js?v=202610020947"></script>
-    <script src="js/core.js?v=202610020947"></script>
-    <script src="js/vocab.js?v=202610020947"></script>
-    <script src="js/flashcards.js?v=202610020947"></script>
-    <script src="js/quiz.js?v=202610020947"></script>
-    <script src="js/games.js?v=202610020947"></script>
-    <script src="js/ai-feedback.js?v=202610020947"></script>
-    <script src="js/es-keys.js?v=202610020947"></script>
+    <script src="js/dictionary-data.js?v=202610021004"></script>
+    <script src="js/creatures.js?v=202610021004"></script>
+    <script src="js/core.js?v=202610021004"></script>
+    <script src="js/vocab.js?v=202610021004"></script>
+    <script src="js/flashcards.js?v=202610021004"></script>
+    <script src="js/quiz.js?v=202610021004"></script>
+    <script src="js/games.js?v=202610021004"></script>
+    <script src="js/ai-feedback.js?v=202610021004"></script>
+    <script src="js/es-keys.js?v=202610021004"></script>
 </body>
 </html>

@@ -289,6 +289,8 @@ let vocabulary = [];
                 todayReviewBatch: (typeof todayReviewBatch === 'number' && todayReviewBatch > 0) ? todayReviewBatch : undefined,
                 //   [냐냐 요청] 쓰기 시험 명단·진행·기록 (2026-09-23) — 날을 넘기고 기기를 바꿔도 이어서
                 writeExams: (typeof writeExams !== 'undefined' && writeExams) ? writeExams : undefined,
+                //   [냐냐 요청] 관용구 미션의 뽑는 범위 (2026-10-02) — 안 고른 상태(null)면 안 보낸다
+                idiomMissionScope: (typeof idiomMissionScope !== 'undefined' && Array.isArray(idiomMissionScope)) ? idiomMissionScope : undefined,
                 gameHighScores: (typeof collectGameHighScores === 'function') ? collectGameHighScores() : {},
                 //   [냐냐 요청] 문법 보기 설정 (필터·정렬·펼침·색인 숨김) — 폰과 PC 가 같은 모습으로 열리게
                 grammarPrefs: (typeof grammarPrefsSnapshot === 'function') ? grammarPrefsSnapshot() : undefined
@@ -476,6 +478,12 @@ let vocabulary = [];
                 }
                 if (typeof writeExams !== 'undefined') {
                     writeExams = (payload.writeExams && typeof payload.writeExams === 'object') ? payload.writeExams : {};
+                }
+                //   [냐냐 요청] 관용구 미션 뽑는 범위 (없으면 null — '안 풀어본 것' 이 기본)
+                if (typeof idiomMissionScope !== 'undefined') {
+                    idiomMissionScope = Array.isArray(payload.idiomMissionScope)
+                        ? payload.idiomMissionScope.filter(x => typeof x === 'string') : null;
+                    if (typeof syncIdiomScopeBadge === 'function') syncIdiomScopeBadge();
                 }
                 // [냐냐 PATCH] 저장된 주제(아이콘) 목록 복원 — 없으면 기본값 유지
                 if (Array.isArray(payload.grammarTopics) && payload.grammarTopics.length) {
@@ -10987,7 +10995,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   '처음 보는 주소' 로 만들어서 index.html 부터 새로 받아오게 한다.
         //   ⚠️ 쓰던 글이 있으면 한 번 묻는다 — 헤더는 늘 보이는 자리라 잘못 눌릴 수 있다.
         function hardReloadApp() {
-            const boxes = ['ai-user-input', 'ai-free-input-es', 'ai-example-input', 'ai-question-input',
+            const boxes = ['ai-user-input', 'ai-free-input-es', 'ai-idiom-input', 'ai-question-input',
                            'input-word', 'input-meaning', 'write-answer-input', 'fill-answer-input'];
             const typing = boxes.some(id => {
                 const el = document.getElementById(id);

@@ -195,12 +195,12 @@
             const btnKoEs = document.getElementById('ai-mode-btn-ko-es');
             const btnEsKo = document.getElementById('ai-mode-btn-es-ko');
             const btnQuestion = document.getElementById('ai-mode-btn-question');
-            const btnExample = document.getElementById('ai-mode-btn-example');
+            const btnIdiom = document.getElementById('ai-mode-btn-idiom');
             const btnNote = document.getElementById('ai-mode-btn-note');
             const paneKoEs = document.getElementById('ai-pane-ko-es');
             const paneEsKo = document.getElementById('ai-pane-es-ko');
             const paneQuestion = document.getElementById('ai-pane-question');
-            const paneExample = document.getElementById('ai-pane-example');
+            const paneIdiom = document.getElementById('ai-pane-idiom');
             const paneNote = document.getElementById('ai-pane-note');
             const resultBox = document.getElementById('ai-feedback-result');
 
@@ -211,12 +211,12 @@
             btnKoEs.className = mode === 'ko-es' ? activeClass : inactiveClass;
             btnEsKo.className = mode === 'es-ko' ? activeClass : inactiveClass;
             btnQuestion.className = mode === 'question' ? activeClass : inactiveClass;
-            if (btnExample) btnExample.className = mode === 'example' ? activeClass : inactiveClass;
+            if (btnIdiom) btnIdiom.className = mode === 'idiom' ? activeClass : inactiveClass;
             if (btnNote) btnNote.className = mode === 'note' ? activeClass : inactiveClass;
             paneKoEs.classList.toggle('hidden', mode !== 'ko-es');
             paneEsKo.classList.toggle('hidden', mode !== 'es-ko');
             paneQuestion.classList.toggle('hidden', mode !== 'question');
-            if (paneExample) paneExample.classList.toggle('hidden', mode !== 'example');
+            if (paneIdiom) paneIdiom.classList.toggle('hidden', mode !== 'idiom');
             // 첨삭 노트는 쓰는 화면이 아니라 보는 화면이라 sticky 바깥에 있다.
             //   입력칸 넷이 다 접히므로 위에는 버튼 줄만 남는다.
             if (paneNote) paneNote.classList.toggle('hidden', mode !== 'note');
@@ -227,8 +227,9 @@
                 document.getElementById('ai-free-input-es').value = '';
             } else if (mode === 'question') {
                 // 질문 목록은 '질문 관리' 모달에서 보여주므로 여기선 별도 처리 불필요
-            } else if (mode === 'example') {
-                resetExampleMissionState();
+            } else if (mode === 'idiom') {
+                //   다른 탭 갔다 와도 받아둔 미션은 그대로 둔다 — 없을 때만 빈 상태로
+                if (!aiIdiomMission) resetIdiomMissionState(); else syncIdiomScopeBadge();
             } else if (mode === 'note') {
                 // 들어올 때마다 '틀린 것만' 부터. 펼쳐 둔 총평도 접고 시작한다
                 aiNoteFilter = 'wrong';
@@ -1602,12 +1603,17 @@ ${grammarDetail}
             }
         }
 
-        async function submitAiTranslationKoEs() {
-            if (!aiCurrentKoreanSentence) {
-                showToast("먼저 '✨ 랜덤 문장 생성'을 눌러서 미션을 받아주세요!", "error");
+        //   kind = 'idiom' 이면 관용구 미션의 답이다 (2026-10-02) — 채점은 문법 미션과 똑같고,
+        //   다른 것은 입력칸 · 문장 · 참고 줄 · 문법 복습을 안 건드리는 것 · 노트 갈래뿐이다.
+        async function submitAiTranslationKoEs(kind) {
+            const isIdiom = kind === 'idiom';
+            const idiomMission = isIdiom ? aiIdiomMission : null;
+            const missionSentence = isIdiom ? (idiomMission && idiomMission.sentence) : aiCurrentKoreanSentence;
+            if (!missionSentence) {
+                showToast(isIdiom ? "먼저 '✨ 문장 뽑기'를 눌러서 미션을 받아주세요!" : "먼저 '✨ 랜덤 문장 생성'을 눌러서 미션을 받아주세요!", "error");
                 return;
             }
-            const userText = document.getElementById('ai-user-input').value.trim();
+            const userText = document.getElementById(isIdiom ? 'ai-idiom-input' : 'ai-user-input').value.trim();
             if (!userText) {
                 showToast("스페인어 답변을 입력해 주세요!", "error");
                 return;
@@ -1620,7 +1626,7 @@ ${grammarDetail}
             }
 
             renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'을 먼저 치운다
-            const submitBtn = document.getElementById('ai-ko-es-submit-btn');
+            const submitBtn = document.getElementById(isIdiom ? 'ai-idiom-submit-btn' : 'ai-ko-es-submit-btn');
             const originalHtml = submitBtn.innerHTML;
             
             submitBtn.disabled = true;
@@ -1638,14 +1644,20 @@ ${grammarDetail}
             //   미션 답안에 다른 문법을 잘 써도 그건 점수를 못 받았다. 문장을 '만들' 때는
             //   지금처럼 문법 하나만 보고 만든다 — 목록은 '채점' 에만 붙는다.
             const koEsNoteListText = aiScoringNoteListText(koEsScoreNotes);
-            const refGrammar = aiCurrentGrammarForMission
+            const refGrammar = isIdiom
+                ? `\n            This mission was built around the student's set expression "${idiomMission.it.idiom}" (= ${String(idiomMission.it.idiomMeaning || '').replace(/"/g, "'")}). It is only the material the Korean sentence was made from: the student does NOT have to use it. Any correct translation is correct, and never mark the answer down or ask for that expression in "message", "changes" or "tip".\n`
+                : aiCurrentGrammarForMission
                 ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n${aiCurrentGrammarDetailForMission ? `            The mission was aimed at THIS line of that note: ${aiCurrentGrammarDetailForMission}\n` : ''}`
                 : '';
             const refWords = '';   // [냐냐 요청] 덧붙임 단어를 안 주므로 채점에도 알릴 게 없다
 
-            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
+            //   관용구 미션이면 목표 관용구를 판정 후보에 꼭 넣는다 (부른 뒤 바로 비운다 — 다른 탭에 새지 않게)
+            aiIdiomForcedCand = isIdiom ? { w: idiomMission.w, it: idiomMission.it } : null;
+            const idiomJudgeText = aiIdiomJudgeStart(userText);
+            aiIdiomForcedCand = null;
+            const prompt = `Korean Mission: "${missionSentence}"
             Student's Spanish Answer: "${userText}"
-${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
+${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
             COMPLETENESS: the Spanish must carry EVERY piece of the Korean mission — each clause, each modifier, each object. If something in the Korean is missing from the answer (a dropped noun, a dropped "~하고 있는", a dropped reason), that is a mistranslation: set isCorrect=false, add the missing part in "correctedText", and say in "message" what was left out. Do not call a shortened answer "완벽" just because the Spanish it does contain is grammatical.
             There is NO required vocabulary word. The mission is a Korean sentence to translate, and any wording that is grammatical and carries the same meaning is correct — never ask the student to have used some other word just because you would have picked it. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error.)
             Check the grammar is correct.
@@ -1734,15 +1746,20 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
                 // [냐냐 요청] '이번 미션이 참고한 내용' 카드는 없앴다 (2026-09-02).
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
-                applyAiWritingScores(feedback, koEsScoreNotes, true);   // 점수 카드는 그 아래에 이어 붙는다
-                //   ⚠️ true = 한→스 미션의 답. 이 한 군데만 복습으로 쳐준다 (다른 세 탭은 안 넘긴다)
+                applyAiWritingScores(feedback, koEsScoreNotes, !isIdiom);   // 점수 카드는 그 아래에 이어 붙는다
+                //   ⚠️ true = 한→스 (문법) 미션의 답. 이 한 군데만 복습으로 쳐준다 (다른 탭은 안 넘긴다)
                 //   [냐냐 요청] 문법 복습으로 낸 미션은 일지에 'AI 첨삭' 이 아니라 '복습' 으로 센다 (2026-09-17).
                 //   ⚠️ 둘 다 세면 안 된다 — 알 키우기가 첨삭 횟수와 복습 개수를 더해서 자란다.
-                const countAsReview = !!(aiMissionReviewGrammarId && grammarReviewTotal);
-                if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
-                grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
-                aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
-                renderGrammarReviewBar('graded');
+                //   관용구 미션은 문법 복습 줄과 상관이 없다 — 건드리지 않는다.
+                const countAsReview = !isIdiom && !!(aiMissionReviewGrammarId && grammarReviewTotal);
+                if (!isIdiom) {
+                    if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
+                    grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
+                    aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
+                    renderGrammarReviewBar('graded');
+                } else {
+                    renderIdiomTargetResult(idiomMission);
+                }
                 resultBox.classList.remove('hidden');   // ⚠️ 847d5ce 에서 이 줄이 지워져 결과 카드가 안 보였다
 
 
@@ -1773,12 +1790,12 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
+                    { role: "assistant", content: `<b>미션:</b> ${missionSentence}<br>${isIdiom ? `<b>이번 관용구:</b> ${idiomMission.it.idiom} (${idiomMission.it.idiomMeaning || ''})<br>` : ''}<b>냐냐님 제출 답안:</b> ${userText}<br><b>선생님 총평:</b> ${feedback.message}<br><b>정석 가이드라인:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
                 //   복습으로 센 번역은 노트에 표시해 둔다 — 일지에서 첨삭 목록이 아니라 복습 목록에 나오게
-                recordAiNote('ko-es', aiCurrentKoreanSentence, userText, feedback, undefined, countAsReview);
+                recordAiNote(isIdiom ? 'idiom' : 'ko-es', missionSentence, userText, feedback, undefined, countAsReview);
                 logAction(countAsReview ? 'review' : 'ai');
                 saveToStorage();
                 updateStats();
@@ -1794,233 +1811,221 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
         }
 
         // ============================================================
-        // [냐냐 PATCH] 내 예문으로 연습 모드
+        // [냐냐 요청] 관용구 미션 — 한→스 랜덤 미션의 관용구판 (2026-10-02).
+        //   '내 예문으로 연습' 자리를 대신한다 (한 달 동안 0번 쓰여서 냐냐님이 지우기로 했다).
+        //   문법 미션은 그대로 두고, 여기서는 관용구 하나를 뽑아 그 관용구가 필요한 한국어 문장을 낸다.
+        //   ⚠️ 9/8 에 목표 단어를 없앤 이유(gorra/sombrero — 뜻이 통하는 말을 써도 지적당했다)를 지킨다:
+        //      그 관용구를 안 써도 맞게 옮겼으면 맞다. 썼으면 관용구 판정이 +점수를 붙이고,
+        //      안 썼으면 벌점 없이 '이 관용구로도 쓸 수 있어요' 만 알려준다.
+        //   곡선은 앞으로 밀지 않는다 — 앞으로는 복습에서만 (curve-outside-wrong-rule).
+        //   뽑는 범위는 설정에서 고른다: 안 풀어본 것 · 곡선 안 · 약점 · 마스터 · 전부 (합쳐서 뽑는다).
+        //   설정은 폰과 같이 맞춘다 (core.js 저장 묶음의 idiomMissionScope).
         // ============================================================
-        let exampleMissionMode = 'translate'; // 'translate'(예문 그대로 번역) | 'similar'(비슷한 새 문장)
+        const IDIOM_SCOPE_ITEMS = [
+            { key: 'fresh',  label: '아직 한 번도 안 풀어본 것' },
+            { key: 'curve',  label: '복습 곡선 안에 있는 것' },
+            { key: 'weak',   label: '약점' },
+            { key: 'master', label: '마스터' },
+            { key: 'all',    label: '전부' }
+        ];
+        let idiomMissionScope = null;    // 저장된 값 (없으면 ['fresh'])
+        let idiomScopePending = null;    // 설정 창에서 고르는 중
+        let aiIdiomMission = null;       // { w, it, key, sentence }
+        let aiIdiomForcedCand = null;    // 판정 후보에 꼭 넣을 목표 관용구 { w, it }
+        let aiIdiomRecent = [];          // 최근에 낸 관용구 키 — 같은 게 바로 또 나오지 않게
+        let aiIdiomHintOn = false;
 
-        function resetExampleMissionState() {
-            aiCurrentWordForMission = null;
-            aiCurrentKoreanSentence = "";
-            const box = document.getElementById('ai-example-korean');
-            if (box) box.innerText = "'문장 뽑기'를 누르면 등록한 단어의 예문으로 미션이 나와요.";
-            const input = document.getElementById('ai-example-input');
+        function idiomScopeNow() {
+            const v = Array.isArray(idiomMissionScope) ? idiomMissionScope.filter(k => IDIOM_SCOPE_ITEMS.some(x => x.key === k)) : [];
+            return v.length ? v : ['fresh'];
+        }
+        //   한 관용구가 어느 칸에 드나 — 설정 창의 개수와 뽑기가 같은 잣대를 쓴다
+        function idiomScopeTest(key, wordId, idiomText) {
+            const rec = (typeof idiomScores !== 'undefined' && idiomScores) ? idiomScores[key] : null;
+            return {
+                fresh: !rec || !((rec.correctTotal || 0) + (rec.wrongTotal || 0)),
+                curve: (() => { const r = (typeof idiomReview !== 'undefined' && idiomReview) ? idiomReview[key] : null;
+                                return !!(r && r.lastWrongDate && (r.stage || 0) < REVIEW_INTERVALS.length); })(),
+                weak: ['weak', 'critical'].includes(getIdiomGrade(wordId, idiomText)),
+                master: ['mastered', 'perfect'].includes(getIdiomGrade(wordId, idiomText)),
+                all: true
+            };
+        }
+        function idiomMissionEntries() {
+            const out = [];
+            (vocabulary || []).forEach(w => wordIdiomList(w).forEach(it => {
+                const key = idiomKey(w.id, it.iid || it.idiom);
+                out.push({ w, it, key, t: idiomScopeTest(key, w.id, it.idiom) });
+            }));
+            return out;
+        }
+        function idiomMissionPool(scope) {
+            const on = scope || idiomScopeNow();
+            return idiomMissionEntries().filter(e => on.some(k => e.t[k]));
+        }
+
+        function syncIdiomScopeBadge() {
+            const badge = document.getElementById('ai-idiom-scope-badge');
+            if (!badge) return;
+            const on = idiomScopeNow();
+            badge.innerText = on.includes('all') ? '전부' : `${idiomMissionPool(on).length}개`;
+        }
+        function openIdiomScope() {
+            idiomScopePending = new Set(idiomScopeNow());
+            renderIdiomScope();
+            document.getElementById('ai-idiom-scope-modal')?.classList.remove('hidden');
+        }
+        function closeIdiomScope() {
+            document.getElementById('ai-idiom-scope-modal')?.classList.add('hidden');
+            idiomScopePending = null;
+        }
+        function toggleIdiomScopeItem(key) {
+            if (!idiomScopePending) return;
+            if (idiomScopePending.has(key)) idiomScopePending.delete(key); else idiomScopePending.add(key);
+            renderIdiomScope();
+        }
+        function renderIdiomScope() {
+            const box = document.getElementById('ai-idiom-scope-list');
+            if (!box || !idiomScopePending) return;
+            const entries = idiomMissionEntries();
+            const count = (k) => entries.filter(e => e.t[k]).length;
+            const picked = [...idiomScopePending];
+            const total = picked.length ? entries.filter(e => picked.some(k => e.t[k])).length : 0;
+            box.innerHTML = IDIOM_SCOPE_ITEMS.map(x => {
+                const on = idiomScopePending.has(x.key);
+                return `<button type="button" onclick="toggleIdiomScopeItem('${x.key}')"
+                    class="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all ${on ? 'bg-pink-50 border-pink-300' : 'bg-white border-slate-200 hover:border-slate-300'}">
+                    <span class="w-4 h-4 shrink-0 rounded-md border flex items-center justify-center ${on ? 'bg-pink-500 border-pink-500 text-white' : 'bg-white border-slate-300'}">${on ? '<i class="fa-solid fa-check text-[9px]"></i>' : ''}</span>
+                    <span class="text-xs font-bold text-slate-800 flex-1">${x.label}</span>
+                    <span class="text-[11px] font-bold text-slate-400">${count(x.key).toLocaleString()}개</span>
+                </button>`;
+            }).join('') + `<p class="text-[11px] text-slate-500 pt-1 text-right">고른 범위에서 <b class="text-pink-600">${total.toLocaleString()}개</b> 중에 뽑아요</p>`;
+        }
+        function applyIdiomScope() {
+            if (!idiomScopePending) return;
+            const picked = IDIOM_SCOPE_ITEMS.map(x => x.key).filter(k => idiomScopePending.has(k));
+            if (!picked.length) { showToast("하나는 골라주세요!", "error"); return; }
+            if (!idiomMissionPool(picked).length) { showToast("그 범위엔 관용구가 아직 없어요. 다른 칸도 골라주세요!", "info"); return; }
+            idiomMissionScope = picked;
+            syncIdiomScopeBadge();
+            closeIdiomScope();
+            if (typeof saveToStorage === 'function') saveToStorage();
+            showToast(`관용구 ${idiomMissionPool(picked).length.toLocaleString()}개 범위에서 출제할게요`, "success");
+        }
+
+        function resetIdiomMissionState() {
+            aiIdiomMission = null;
+            aiIdiomHintOn = false;
+            const h = document.getElementById('ai-idiom-korean');
+            if (h) h.innerText = "'✨ 문장 뽑기'를 누르면 관용구 하나로 미션이 나와요.";
+            const input = document.getElementById('ai-idiom-input');
             if (input) input.value = '';
-            document.getElementById('ai-feedback-result').classList.add('hidden');
+            ['ai-idiom-hint-box', 'ai-idiom-target-box'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            document.getElementById('ai-feedback-result')?.classList.add('hidden');
+            syncIdiomScopeBadge();
         }
 
-        async function generateExampleMission() {
-            // 예문이 있는 단어만 대상으로
-            const withExample = vocabulary.filter(w => w.example && w.example.trim() && w.exampleMeaning && w.exampleMeaning.trim());
-            if (withExample.length === 0) {
-                showToast("예문이 등록된 단어가 없어요! 단어에 예문을 추가한 뒤 이용해 주세요.", "error");
-                return;
-            }
-
-            const target = withExample[Math.floor(Math.random() * withExample.length)];
-            aiCurrentWordForMission = target;
-
-            // 절반은 예문 그대로 번역, 절반은 비슷한 새 문장 만들기
-            exampleMissionMode = Math.random() < 0.5 ? 'translate' : 'similar';
-            const badge = document.getElementById('ai-example-mode-badge');
-            const koreanBox = document.getElementById('ai-example-korean');
-            document.getElementById('ai-example-input').value = '';
-            document.getElementById('ai-feedback-result').classList.add('hidden');
-
-            if (exampleMissionMode === 'translate') {
-                // 예문의 한국어 뜻을 미션으로 → 학생이 스페인어로 (원래 예문이 정답)
-                if (badge) badge.innerText = '예문 그대로 번역 ✍️';
-                aiCurrentKoreanSentence = target.exampleMeaning;
-                koreanBox.innerText = target.exampleMeaning;
-            } else {
-                // AI가 예문을 참고해 비슷한 새 한국어 문장을 만들어 미션으로
-                if (badge) badge.innerText = '비슷한 새 문장 🎲';
-                if (!hasGeminiApiKey()) {
-                    // 키 없으면 그냥 번역 모드로 대체
-                    exampleMissionMode = 'translate';
-                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
-                    aiCurrentKoreanSentence = target.exampleMeaning;
-                    koreanBox.innerText = target.exampleMeaning;
-                    return;
-                }
-                koreanBox.innerText = "AI가 비슷한 문장을 만들고 있어요...";
-                const btn = document.getElementById('ai-generate-example-btn');
-                const orig = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`;
-                try {
-                    const prompt = `단어 "${target.word}" (뜻: ${target.meaning})의 예문: "${target.example}" (${target.exampleMeaning}).
-                    이 예문과 같은 단어를 쓰되, 상황/주어/목적어를 조금 바꾼 자연스러운 새 스페인어 문장 1개와 그 한국어 번역을 만들어줘. 너무 어렵지 않게, 원래 예문과 난이도 비슷하게.`;
-                    const system = `You are a Spanish tutor. Create ONE new natural Spanish sentence using the same target word, similar in difficulty to the given example. Return JSON only.`;
-                    const schema = {
-                        type: "OBJECT",
-                        properties: {
-                            spanish: { type: "STRING", description: "새 스페인어 문장" },
-                            korean: { type: "STRING", description: "그 문장의 자연스러운 한국어 번역" }
-                        },
-                        required: ["spanish", "korean"]
-                    };
-                    const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
-                    const res = extractAndParseJson(responseText);
-                    aiCurrentKoreanSentence = res.korean || target.exampleMeaning;
-                    koreanBox.innerText = aiCurrentKoreanSentence;
-                } catch (e) {
-                    console.error(e);
-                    // 실패 시 예문 그대로 번역으로 대체
-                    exampleMissionMode = 'translate';
-                    if (badge) badge.innerText = '예문 그대로 번역 ✍️';
-                    aiCurrentKoreanSentence = target.exampleMeaning;
-                    koreanBox.innerText = target.exampleMeaning;
-                    showToast("새 문장 생성에 실패해서 예문 번역으로 대체했어요", "info");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = orig;
-                }
-            }
+        function toggleIdiomHint() {
+            const box = document.getElementById('ai-idiom-hint-box');
+            if (!box) return;
+            if (aiIdiomHintOn) { box.classList.add('hidden'); aiIdiomHintOn = false; return; }
+            box.innerHTML = aiIdiomMission
+                ? `💡 <b>이번에 써볼 관용구:</b> ${escapeHtml(aiIdiomMission.it.idiom)} <span class="text-amber-700/70">— ${escapeHtml(aiIdiomMission.it.idiomMeaning || '')}</span>`
+                : "아직 미션 문장이 없어요. 먼저 '✨ 문장 뽑기'를 눌러주세요!";
+            box.classList.remove('hidden');
+            aiIdiomHintOn = true;
+            if (typeof AudioFX !== 'undefined') AudioFX.playPunch();
         }
 
-        // 예문 연습 답변 제출 — 기존 한->스 채점 로직을 재사용 (aiCurrentWordForMission/aiCurrentKoreanSentence 세팅됨)
-        async function submitExampleMission() {
-            if (!aiCurrentWordForMission) {
-                showToast("먼저 '✨ 문장 뽑기'를 눌러서 미션을 받아주세요!", "error");
-                return;
-            }
-            const userText = document.getElementById('ai-example-input').value.trim();
-            if (!userText) {
-                showToast("스페인어 답변을 입력해 주세요!", "error");
-                return;
-            }
+        async function generateIdiomMission() {
+            const heading = document.getElementById('ai-idiom-korean');
+            const btn = document.getElementById('ai-generate-idiom-btn');
+            resetIdiomMissionState();
             if (!hasGeminiApiKey()) {
-                showToast("Gemini API 키가 등록되지 않아 AI 채점을 사용할 수 없습니다. 우측 상단 배지에서 키를 등록해 주세요!", "error");
+                showToast("Gemini API 키가 없어서 AI 문장 생성을 사용할 수 없어요. 우측 상단 배지에서 키를 등록해 주세요!", "error");
                 openApiKeyModal();
                 return;
             }
+            const pool = idiomMissionPool();
+            if (!pool.length) { heading.innerText = "고른 범위에 관용구가 없어요. ⚙️ 뽑는 범위에서 다른 칸도 골라주세요."; return; }
+            //   최근에 낸 것은 피한다 (범위가 좁아서 다 걸리면 그냥 뽑는다)
+            const fresh = pool.filter(e => !aiIdiomRecent.includes(e.key));
+            const from = fresh.length ? fresh : pool;
+            const pick = from[Math.floor(Math.random() * from.length)];
 
-            const submitBtn = document.getElementById('ai-example-submit-btn');
-            const originalHtml = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
-            AudioFX.playPunch();
+            const recentAsks = (aiNotes || []).filter(n => n && n.mode === 'idiom' && n.ask)
+                .map(n => String(n.ask).trim()).filter(Boolean).slice(0, 6);
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 생성 중...`; }
+            heading.innerHTML = `<span class="inline-flex items-center gap-2 text-slate-400 text-base"><i class="fa-solid fa-spinner animate-spin"></i> AI가 문장을 만들고 있어요... (보통 3~5초)</span>`;
 
-            // [냐냐 요청] 여기도 스페인어를 직접 쓰는 곳이라 스→한과 똑같이 단어·문법 점수를 매긴다
-            const exScoreNotes = aiScoringNoteList();
-            resetAiWritingScores();
+            const prompt = `짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
+매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 합니다.
 
-            const refExample = aiCurrentWordForMission.example || '';
-            const prompt = `Korean Mission: "${aiCurrentKoreanSentence}"
-            Target Word we practice: "${aiCurrentWordForMission.word}" (Meaning: "${aiCurrentWordForMission.meaning}")
-            Reference example sentence (for context): "${refExample}"
-            Student's Spanish Answer: "${userText}"
+[이번에 연습할 스페인어 관용구 — 학생이 단어장에 적어둔 것]
+${pick.it.idiom} = ${pick.it.idiomMeaning || ''}
+(이 관용구가 달린 단어: ${pick.w.word} = ${pick.w.meaning || ''})
 
-            The student is translating the Korean mission into Spanish using the target word. Check translation accuracy, grammar, and natural usage of the target word. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class='text-red-600 font-extrabold underline'>...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". Write the tag with SINGLE quotes exactly as shown — a double quote inside a JSON string breaks the whole response, and the student then sees a sentence that stops mid-way. The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. When you EXTEND a sentence, tag only the words you actually added: for "Ayer vi una película." → "Ayer vi una película con mi amigo y cenamos juntos.", the tags go on "con mi amigo y cenamos juntos" alone — "vi una película" stayed exactly as the student wrote it and must stay plain. Split "changes" the same way, one row per piece that really differs; never write a row whose "from" repeats words that did not change. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class='line-through text-slate-400'>...</span>' tags; correct words stay plain.
-            ${aiScoringNoteListText(exScoreNotes)}${aiIdiomJudgeStart(userText)}
-            ${buildLearnerProfileSummary()}`;
+이 관용구를 쓰면 딱 맞게 번역되는 상황으로 문장을 잡으세요. 관용구의 뜻이 문장의 중심이어야 합니다.
+[ ] 나 ( ) 는 채워 넣는 자리입니다 — 그 자리에 어울리는 구체적인 말(사람·사물·장소·동사 등)을 넣은 문장으로 만드세요.
+뭉뚱그린 문장은 안 됩니다 — '그것 · 저것 · 어떤 물건' 처럼 소재를 흐리지 마세요.${recentAsks.length ? `
 
-            const system = `You are an encouraging and precise Spanish tutor tutoring a student named "냐냐".
-            Return feedback matching this exact JSON schema:
-            {
-               "isCorrect": true/false,
-               "verdict": "e.g., 완벽한 정답이에요! 🎉 or 다시 한 번 살펴볼까요? 📝",
-               "correctedText": "The perfect standard Spanish sentence. Wrap ONLY changed words in red span tags; correct words plain.",
-               "originalMarked": "The student original sentence verbatim, with ONLY wrong words wrapped in line-through span tags; correct words plain.",
-               "message": "Concise evaluation in Korean, 1-2 sentences. Mention '냐냐님' and the key grammar point.",
-               "breakdown": [ { "word": "ONE Spanish word", "mean": "Korean meaning 1-4 words" } ],
-               "tip": "냐냐님에게 주는 학습 설명. 이 항목이 AI 코멘트를 대신하므로 자세히 쓸 것. 반드시 줄바꿈(\\n)으로 나눈 두 줄로 쓸 것. 한 덩어리로 이어 쓰지 말 것. 1번째 줄: 이번 문장에서 잘한 점 또는 틀린 핵심 한 문장. 2번째 줄: 그 문법이 왜 그렇게 되는지 규칙 설명 1~2문장. 각 줄은 60자 이내로 짧게. 예문은 넣지 말 것 — 고친 문장이 이미 위에 있음. 격려만 늘어놓지 말고 실제로 배울 내용을 담을 것."${AI_ISSUE_JSON_FIELD},${AI_SCORING_JSON_FIELDS}${AI_NATURAL_JSON_FIELDS}
-            }
-            IMPORTANT for "breakdown": split correctedText into individual words (3-7 items), each exactly ONE word, "mean" never empty, no duplicates.${AI_SCORING_RULES_TEXT}${AI_NATURAL_RULES_TEXT}
-            Do not wrap JSON in markdown blockticks.`;
+[최근에 낸 문장 — 소재가 겹치지 않게]
+${recentAsks.map(a => '· ' + a).join('\n')}` : ''}
 
-            const schema = {
-                type: "OBJECT",
-                properties: {
-                    isCorrect: { type: "BOOLEAN" },
-                    verdict: { type: "STRING" },
-                    correctedText: { type: "STRING" },
-                    originalMarked: { type: "STRING" },
-                    message: { type: "STRING" },
-                    breakdown: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                word: { type: "STRING", description: "Exactly one Spanish word or particle" },
-                                mean: { type: "STRING", description: "Korean meaning, 1-4 words, never empty" }
-                            },
-                            required: ["word", "mean"]
-                        }
-                    },
-                    tip: { type: "STRING" },
-                    ...aiIssueSchemaProp(),
-                    ...aiScoringSchemaProps(),
-                    ...aiNaturalSchemaProps()
-                },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
-            };
-
+⚠️ 문장이 '말이 되는지' 반드시 검토하세요. 실제 사람이 이 말을 하는 상황이 있어야 합니다.
+${buildLearnerProfileSummary()}`;
+            const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include Spanish words or Latin alphabet characters. No explanations.";
+            const schema = { type: "OBJECT", properties: { sentence: { type: "STRING", description: "100% 순수 한글로만 작성된 구어체 문장 1개" } }, required: ["sentence"] };
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low');
-                const feedback = extractAndParseJson(responseText);
-
-                const resultBox = document.getElementById('ai-feedback-result');
-                const correctionBox = document.getElementById('ai-coach-correction-box');
-                const originalRender = document.getElementById('ai-original-render');
-                const correctedRender = document.getElementById('ai-corrected-render');
-                const coachVerdict = document.getElementById('ai-coach-verdict');
-                const coachMsg = document.getElementById('ai-coach-message');
-                const coachTip = document.getElementById('ai-coach-tip');
-                const coachIcon = document.getElementById('ai-coach-icon');
-
-                // [냐냐 요청] 이 문장이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
-                applyAiWritingScores(feedback, exScoreNotes);
-
-                resultBox.classList.remove('hidden');
-
-                if (feedback.isCorrect) {
-                    coachIcon.innerText = "🏆🏅";
-                    coachVerdict.className = "text-sm font-bold text-emerald-600";
-                    correctionBox.classList.add('hidden');
-                } else {
-                    coachIcon.innerText = "📝📝";
-                    coachVerdict.className = "text-sm font-bold text-red-600";
-                    correctionBox.classList.remove('hidden');
-                    originalRender.innerHTML = feedback.originalMarked || userText;
-                    correctedRender.innerHTML = feedback.correctedText;
-                    renderAiChanges(feedback);
-                }
-
-                coachVerdict.innerText = feedback.verdict;
-                coachMsg.innerHTML = feedback.message;
-
-                renderAiTip(feedback.tip);
-                renderAiNatural(feedback);
-
-                // 학습 프로필 반영
-                learnerProfile.totalAnswered++;
-                if (feedback.isCorrect) {
-                    learnerProfile.totalCorrect++;
-                } else if (aiCurrentWordForMission) {
-                    const pos = aiCurrentWordForMission.pos || 'etc';
-                    learnerProfile.wrongByPos[pos] = (learnerProfile.wrongByPos[pos] || 0) + 1;
-                }
-
-                aiChatHistory = [
-                    { role: "system", content: "당신은 냐냐님의 상냥한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 추가 질문에 친근하게 한국어로 답해주세요." },
-                    { role: "assistant", content: `<b>미션:</b> ${aiCurrentKoreanSentence}<br><b>제출 답안:</b> ${userText}<br><b>총평:</b> ${feedback.message}<br><b>정석:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
-                ];
-                renderChatThread();
-
-                recordAiNote('example', aiCurrentKoreanSentence, userText, feedback);
-                logAction('ai');
-                saveToStorage();
-                updateStats();
-                scrollAiResultIntoView();
-                showToast("AI 첨삭이 끝났습니다! ✨", "success");
+                const res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                const sentence = String((res && res.sentence) || '').trim();
+                if (!sentence) throw new Error('EMPTY');
+                if (/[a-zA-Z]/.test(sentence)) throw new Error('SENTENCE_CONTAINS_SPANISH');
+                aiIdiomMission = { w: pick.w, it: pick.it, key: pick.key, sentence };
+                aiIdiomRecent = [pick.key].concat(aiIdiomRecent.filter(k => k !== pick.key)).slice(0, 20);
+                heading.innerText = sentence;
+                if (typeof AudioFX !== 'undefined') AudioFX.playPunch();
             } catch (e) {
-                console.error(e);
-                showToast(describeGeminiError(e), "error");
+                console.warn('관용구 미션 생성 실패', e);
+                showToast(String(e.message || '').includes('SENTENCE_CONTAINS_SPANISH')
+                    ? "생성된 문장에 스페인어가 섞여 있어서 다시 시도해 주세요!" : describeGeminiError(e), "error");
+                heading.innerText = "문장 생성에 실패했어요. '✨ 문장 뽑기'를 다시 눌러주세요.";
+                aiIdiomMission = null;
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalHtml;
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
+        }
+
+        function submitIdiomMission() { return submitAiTranslationKoEs('idiom'); }
+
+        //   목표 관용구를 썼나 — 관용구 판정(aiIdiomJudge)이 오는 대로 미션 칸 아래에 한 줄
+        function renderIdiomTargetResult(mission) {
+            const box = document.getElementById('ai-idiom-target-box');
+            const j = aiIdiomJudge;
+            if (!box || !mission || !j) return;
+            const show = () => {
+                if (aiIdiomJudge !== j || aiIdiomMission !== mission) return;   // 그새 새 미션·새 첨삭
+                const hit = (j.verdicts || []).find(x => x.c && idiomKey(x.c.w.id, x.c.it.iid || x.c.it.idiom) === mission.key);
+                //   관용구 끝 글자가 제각각이라 조사(을/를)를 붙이지 않는 문장으로 쓴다
+                const name = `<b>${escapeHtml(mission.it.idiom)}</b>`;
+                const mean = mission.it.idiomMeaning ? ` <span class="opacity-70">(${escapeHtml(mission.it.idiomMeaning)})</span>` : '';
+                let html, cls;
+                if (hit && hit.v === 'ok') {
+                    html = `✅ 이번 관용구를 제대로 썼어요! — ${name}`; cls = 'bg-emerald-50 border-emerald-200 text-emerald-800';
+                } else if (hit && hit.v === 'bad') {
+                    html = `✏️ 이번 관용구를 쓰려고 했는데 형태가 조금 달라요 — ${name}${mean}`; cls = 'bg-rose-50 border-rose-200 text-rose-800';
+                } else if (j.state === 'failed') {
+                    html = `💡 이번 관용구 — ${name}${mean}`; cls = 'bg-slate-50 border-slate-200 text-slate-700';
+                } else {
+                    html = `💡 이 문장은 이번 관용구로도 쓸 수 있어요 — ${name}${mean}`; cls = 'bg-amber-50 border-amber-200 text-amber-900';
+                }
+                box.className = `border p-3 rounded-2xl text-xs leading-relaxed font-semibold ${cls}`;
+                box.innerHTML = html;
+            };
+            box.className = 'border p-3 rounded-2xl text-xs leading-relaxed font-semibold bg-slate-50 border-slate-200 text-slate-400';
+            box.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 이번 관용구를 썼는지 보는 중...';
+            if (j.state === 'pending' && j.promise) j.promise.then(show, show); else show();
         }
 
         // ============================================================
@@ -2545,6 +2550,17 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
                     .filter(x => { const k = aiIdiomRawKey(x.it.idiom); if (seenText.has(k)) return false; seenText.add(k); return true; })
                     .sort((a, b) => b.content.length - a.content.length)   // 겹치는 낱말이 많은(좁은) 표현부터
                     .slice(0, AI_IDIOM_CAND_MAX);
+                //   [냐냐 요청] 관용구 미션의 목표 관용구는 낱말이 안 맞아도 늘 후보에 넣는다 (2026-10-02).
+                //   활용·성수가 바뀌어 낱말 훑기에 안 걸려도 '썼나' 를 AI 가 판단하게 — 안 썼으면 'no' 가 온다.
+                const f = aiIdiomForcedCand;
+                if (f) {
+                    const fk = idiomKey(f.w.id, f.it.iid || f.it.idiom);
+                    const same = (x) => idiomKey(x.w.id, x.it.iid || x.it.idiom) === fk;
+                    if (!aiIdiomCands.some(same)) {
+                        const x = aiIdiomIndex().find(same) || { w: f.w, it: f.it, content: [] };
+                        aiIdiomCands = [x].concat(aiIdiomCands).slice(0, AI_IDIOM_CAND_MAX);
+                    }
+                }
             } catch (e) { aiIdiomCands = []; }
             if (!aiIdiomCands.length) return `\n            MY SET EXPRESSIONS: (none for this sentence) — output [] for "idiomsOk" and "idiomsBad".\n`;
             const lines = aiIdiomCands.map((x, i) =>
@@ -4548,7 +4564,7 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
             _lastAiNoteKey = stamp;
             aiNotes.unshift({
                 t: stamp,
-                mode: mode,                                   // 'question' | 'ko-es' | 'example' | 'es-ko'
+                mode: mode,                                   // 'question' | 'ko-es' | 'idiom' | 'es-ko' (옛 기록엔 'example')
                 ask: plain(ask),                              // 질문·미션 (자유 작문은 빈 값)
                 mine: mineText,                               // 내가 쓴 문장
                 fixed: plain(feedback.correctedText),         // 교정본
@@ -4580,7 +4596,8 @@ ${koEsNoteListText}${aiIdiomJudgeStart(userText)}${refGrammar}${refWords}
             'ko-es':    { label: '한→스 미션', cls: 'bg-violet-100 text-violet-600' },
             'es-ko':    { label: '자유 작문',   cls: 'bg-sky-100 text-sky-600' },
             'question': { label: '질문 답하기', cls: 'bg-emerald-100 text-emerald-600' },
-            'example':  { label: '예문 연습',   cls: 'bg-amber-100 text-amber-600' }
+            'idiom':    { label: '관용구 미션', cls: 'bg-pink-100 text-pink-600' },
+            'example':  { label: '예문 연습',   cls: 'bg-amber-100 text-amber-600' }   // 옛 기록용 (탭은 2026-10-02 에 지웠다)
         };
 
         // [냐냐 요청] 실수 유형은 AI가 준 글자라 따옴표가 섞일 수 있다. onclick 에 글자를 그대로
