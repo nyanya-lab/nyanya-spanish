@@ -1455,6 +1455,36 @@ let vocabulary = [];
             renderEggCollectionSection();
         }
 
+        // ============================================================
+        // [냐냐 요청] 도감의 모은 카드를 누르면 그 낱말로 (2026-10-02).
+        //   단어장에 있으면 조회창, 없으면 낱말을 채운 등록 창 (퀴즈의 '등록' 과 같은 길).
+        //   못 만난 칸(???)은 누르지 않는다 — 이름이 드러난다.
+        //   도감 이름은 'pez (물고기)' 꼴이라 괄호 앞만 쓴다. 관사는 normalizeSpanishAnswer 가 떼고 맞춘다.
+        //   ⚠️ 활용형 찾기(findVocabWordByForm)는 쓰지 않는다 — 'vino' 가 venir 로 갈 수 있다.
+        // ============================================================
+        function creatureSpanish(c) { return String((c && c.name) || '').split(' (')[0].trim(); }
+        function creatureVocabWord(c) {
+            const es = creatureSpanish(c);
+            if (!es || typeof vocabulary === 'undefined' || typeof normalizeSpanishAnswer !== 'function') return null;
+            const key = normalizeSpanishAnswer(es);
+            return vocabulary.find(v => normalizeSpanishAnswer(v.word) === key) || null;
+        }
+        function openCreatureWord(id) {
+            const c = CREATURES.find(x => x.id === id);
+            if (!c || !(eggState && eggState.collection || []).includes(id)) return;
+            const w = creatureVocabWord(c);
+            if (w) { if (typeof openWordView === 'function') openWordView(w.id); return; }
+            const es = creatureSpanish(c);
+            if (typeof openWordModal !== 'function') return;
+            openWordModal();
+            const input = document.getElementById('input-word');
+            if (input) {
+                input.value = es;
+                if (typeof handleWordInput === 'function') handleWordInput(es);
+            }
+            showToast(`"${es}" 등록 창을 열었어요`, "info");
+        }
+
         function renderCollectionGrid() {
             if (!eggState) eggState = defaultEggState();
             if (!Array.isArray(eggState.collection)) eggState.collection = [];
@@ -1487,7 +1517,9 @@ let vocabulary = [];
                 const has = owned.has(c.id);
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
-                    return `<div class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''}">
+                    const inVocab = !!creatureVocabWord(c);
+                    return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
+                        <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
                         <span class="text-3xl">${c.emoji}</span>

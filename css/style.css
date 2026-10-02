@@ -48,19 +48,21 @@ html {
         .punch-effect-right { animation: punch-right 0.2s ease-out; }
         /* [냐냐 요청] 알이 '꿈틀꿈틀' 단계부터 흔들린다, 마지막 단계는 통통 뛴다 (2026-10-02, core.js eggSvg) */
         .egg-wobble, .egg-hop { display: inline-block; transform-origin: 50% 88%; }
-        .egg-wobble { animation: egg-wobble 2.4s ease-in-out infinite; }
-        .egg-hop { animation: egg-hop 1.2s ease-in-out infinite; }
+        /* [냐냐 지적] 너무 자주 움직였다 (2026-10-02) — 흔들기 2.4초마다 → 9초에 한 번, 뛰기 1.2초 → 6초에 한 번.
+           움직이는 시간(1초 남짓)은 그대로 두고 쉬는 시간만 늘렸다 */
+        .egg-wobble { animation: egg-wobble 9s ease-in-out infinite; }
+        .egg-hop { animation: egg-hop 6s ease-in-out infinite; }
         @keyframes egg-wobble {
-            0%, 70%, 100% { transform: rotate(0); }
-            76% { transform: rotate(-7deg); }
-            84% { transform: rotate(6deg); }
-            92% { transform: rotate(-3deg); }
+            0%, 88%, 100% { transform: rotate(0); }
+            90% { transform: rotate(-7deg); }
+            93% { transform: rotate(6deg); }
+            96% { transform: rotate(-3deg); }
         }
         @keyframes egg-hop {
-            0%, 40%, 100% { transform: translateY(0) rotate(0); }
-            55% { transform: translateY(-4px) rotate(-5deg); }
-            70% { transform: translateY(0) rotate(4deg); }
-            85% { transform: translateY(-2px) rotate(-2deg); }
+            0%, 80%, 100% { transform: translateY(0) rotate(0); }
+            84% { transform: translateY(-4px) rotate(-5deg); }
+            90% { transform: translateY(0) rotate(4deg); }
+            95% { transform: translateY(-2px) rotate(-2deg); }
         }
         @media (prefers-reduced-motion: reduce) { .egg-wobble, .egg-hop { animation: none; } }
         /* [냐냐 요청] 도감의 전설 카드 — 빛줄기가 몇 초마다 비스듬히 스쳐 간다 (2026-09-29) */
