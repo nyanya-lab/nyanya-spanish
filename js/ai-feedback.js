@@ -3208,11 +3208,28 @@ ${buildLearnerProfileSummary()}`;
             //      'el fin de semana' 를 잡아놓고 그 안의 'de' 와 'la semana' 까지 따로 점수를 줬다.
             //      한 번 쓴 자리는 한 번만 센다. 긴 것부터 자리를 잡는다.
             const usedTok = new Array(mineToks.length).fill(false);
+            //   [냐냐 요청] 구 단어 안의 동사는 활용형도 그 자리로 본다 (2026-10-02).
+            //   'poner la lavadora' 를 단어로 둬도 문장엔 'pongo la lavadora' 로 쓰는데, 글자 그대로만 견줘서 못 잡았다.
+            //   동사 모양(-ar/-er/-ir, -se)인 자리만 활용표로 되돌려 본다 — 다른 자리는 예전처럼 글자 그대로.
+            //   재귀형은 '-se' 를 떼고 견준다 (me quedé dormido → quedarse dormido).
+            const phraseVerbMemo = new Map();
+            const unSe = (s) => String(s || '').replace(/(ar|er|ir|ír)se$/, '$1');
+            const phraseTokOk = (tok, want) => {
+                const t = norm(tok);
+                if (t === want) return true;
+                if (!/(ar|er|ir|ír)(se)?$/.test(want)) return false;
+                const key = t + '|' + want;
+                if (phraseVerbMemo.has(key)) return phraseVerbMemo.get(key);
+                const v = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(t) : null;
+                const ok = !!v && String(v.pos || '').toLowerCase() === 'verb' && unSe(norm(v.word)) === unSe(want);
+                phraseVerbMemo.set(key, ok);
+                return ok;
+            };
             const findSpan = (words) => {
                 for (let i = 0; i + words.length <= mineToks.length; i++) {
                     let ok = true;
                     for (let j = 0; j < words.length; j++) {
-                        if (usedTok[i + j] || norm(mineToks[i + j]) !== words[j]) { ok = false; break; }
+                        if (usedTok[i + j] || !phraseTokOk(mineToks[i + j], words[j])) { ok = false; break; }
                     }
                     if (ok) return i;
                 }
@@ -3230,7 +3247,9 @@ ${buildLearnerProfileSummary()}`;
                 const at = findSpan(words);
                 if (at < 0) return;
                 for (let j = 0; j < words.length; j++) usedTok[at + j] = true;
-                push(w, fixedFlat.includes(' ' + words.join(' ') + ' '));
+                //   살아남았나 — 내가 쓴 꼴 그대로(활용형 포함) 고친 문장에 있으면 산 것
+                const mineSpan = mineToks.slice(at, at + words.length).map(t => norm(t)).join(' ');
+                push(w, fixedFlat.includes(' ' + mineSpan + ' ') || fixedFlat.includes(' ' + words.join(' ') + ' '));
             });
             // ② 내가 쓴 낱말을 하나씩 (위에서 이미 먹은 토막은 건너뛴다)
             //   [냐냐 지적] 악센트만 틀린 낱말은 '철자 틀림' 이다 (2026-10-02) — instántaneo 가 0 이었다.
@@ -3339,7 +3358,7 @@ ${buildLearnerProfileSummary()}`;
                 for (let i = 0; i + words.length <= fixedToks.length; i++) {
                     let ok = true;
                     for (let j = 0; j < words.length; j++) {
-                        if (fixedUsed[i + j] || norm(fixedToks[i + j]) !== words[j]) { ok = false; break; }
+                        if (fixedUsed[i + j] || !phraseTokOk(fixedToks[i + j], words[j])) { ok = false; break; }
                     }
                     if (ok) return i;
                 }
