@@ -1002,6 +1002,7 @@
             try {
                 const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 const feedback = extractAndParseJson(responseText);
+                undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
 
                 // [냐냐 요청] 이 답변이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
                 applyAiWritingScores(feedback, qScoreNotes);
@@ -1783,6 +1784,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
+                undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
@@ -2969,6 +2971,54 @@ ${buildLearnerProfileSummary()}`;
             return Array.from(out);
         }
 
+        // [냐냐 지적] 낱말 순서만 바꾼 '수정' 은 되돌린다 (2026-10-03).
+        //   "jardín bello" 를 "bello jardín" 으로 옮겨 놓고 '어순' 수정이라 적었다 — 형용사가 명사 뒤에 오는 건
+        //   스페인어의 기본 순서라 틀린 게 아니다(앞에 두는 건 강조일 뿐). 지시문에 적어도 네 번에 한 번은 옮겨서
+        //   여기서 한 번 더 거른다: 고친 쪽이 내 낱말들을 순서만 바꾼 것이면(철자 고침은 함께 있어도 됨)
+        //   고친 문장을 내 순서로 되돌리고, 철자 고침이 있으면 그것만 남긴다.
+        //   ⚠️ 뜻이 바뀌는 형용사(gran/grande·viejo·pobre…)를 옮긴 건 진짜 수정일 수 있어 건드리지 않는다.
+        const AI_POSITION_MEANING_ADJ = /^(gran|grande|grandes|viejo|vieja|viejos|viejas|pobre|pobres|nuevo|nueva|nuevos|nuevas|mismo|misma|mismos|mismas|único|única|únicos|únicas|antiguo|antigua|antiguos|antiguas|cierto|cierta|ciertos|ciertas|propio|propia|propios|propias)$/i;
+        function undoReorderOnlyChanges(feedback) {
+            if (!feedback || !Array.isArray(feedback.changes) || typeof feedback.correctedText !== 'string') return;
+            const bare = (t) => String(t || '').toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]/gu, '');
+            const close = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && typeof levenshtein === 'function' && levenshtein(a, b) <= 2);
+            feedback.changes = feedback.changes.filter(c => {
+                const fromT = String((c && c.from) || '').trim().split(/\s+/).filter(Boolean);
+                const toT = String((c && c.to) || '').trim().split(/\s+/).filter(Boolean);
+                if (fromT.length < 2 || fromT.length !== toT.length) return true;
+                if (toT.some(t => AI_POSITION_MEANING_ADJ.test(bare(t)))) return true;
+                //   내 낱말 하나하나를 고친 쪽 낱말에 짝지어 본다 (같거나 철자만 살짝 다름)
+                const used = new Array(toT.length).fill(false);
+                const pairs = fromT.map(f => {
+                    const i = toT.findIndex((t, k) => !used[k] && close(bare(f), bare(t)));
+                    if (i >= 0) used[i] = true;
+                    return i;
+                });
+                if (pairs.some(i => i < 0)) return true;                       // 다른 낱말이 끼었다 — 진짜 수정
+                if (pairs.every((i, k) => i === k)) return true;               // 순서는 그대로 — 철자 고침 같은 것
+                const restored = pairs.map(i => toT[i]).join(' ');            // 내 순서, 고친 쪽 철자
+                const at = feedback.correctedText.indexOf(c.to.trim());
+                if (at < 0) return true;
+                feedback.correctedText = feedback.correctedText.slice(0, at) + restored + feedback.correctedText.slice(at + c.to.trim().length);
+                if (bare(restored) === bare(fromT.join(' '))) return false;    // 순서만 바꾼 것 — 줄을 지운다
+                c.to = restored;                                               // 철자 고침만 남긴다
+                //   남은 철자 고침이 다른 줄(architecto → arquitecto)과 같으면 이 줄은 겹치니 뺀다
+                const fixedPairs = fromT.map((f, k) => [bare(f), bare(toT[pairs[k]])]).filter(([a, b]) => a !== b);
+                const covered = fixedPairs.every(([a, b]) => feedback.changes.some(o => o !== c && bare(o.from) === a && bare(o.to) === b));
+                return !covered;
+            });
+        }
+        //   단어장 뜻 두 개가 겹치나 — '~라고 생각한다' 와 '생각하다' 처럼 끝말만 다른 것도 같은 걸로 본다.
+        //   (역)·(재) 표시·괄호 설명·물결표·띄어쓰기·'라고' 는 떼고, '~한다' 는 '~하다' 로 맞춘다.
+        function koMeaningsOverlap(m1, m2) {
+            const items = (m) => String(m || '').replace(/\([^)]*\)/g, ' ').split(/[,;/·]/)
+                .map(s => s.replace(/[~\s.]/g, '').replace(/^라고|라고/g, '').replace(/한다$/, '하다').replace(/는다$/, '다'))
+                .filter(s => s.length >= 2);
+            const a = items(m1), b = items(m2);
+            //   포함 관계는 짧은 쪽이 세 글자 이상일 때만 — '하다'(hacer) 가 '생각하다' 에 들어 있다고 겹치면 안 된다
+            const inc = (x, y) => Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x));
+            return a.some(x => b.some(y => x === y || inc(x, y)));
+        }
         function applyEsKoWordScores(feedback, okDelta) {
             const gainOk = (typeof okDelta === 'number') ? okDelta : WORD_SPELL_OK;
             aiLastEsKoWords = [];
@@ -3398,6 +3448,21 @@ ${buildLearnerProfileSummary()}`;
                 const w = resolve(name, pos);
                 if (!w || done.has(w.id)) return;
                 if (FUNC_POS.has(String(w.pos || '').toLowerCase())) return;
+                //   [냐냐 지적] 비슷한 뜻의 다른 낱말로 바꿔 쓴 것은 '못 떠올린 것' 이 아니다 (2026-10-03).
+                //   "¿Te parece también?" 을 AI 가 "¿tú también lo piensas?" 로 고치자 pensar 가 −2 였다 —
+                //   냐냐님은 parecer(~라고 생각한다)로 같은 뜻을 말했다. rizo(곱슬)→arroz(쌀) 처럼 뜻이 다른
+                //   낱말을 잘못 고른 것과 다르다. 내가 쓴 낱말 중 '고쳐짐(0)' 이 된 같은 품사의 낱말과
+                //   뜻이 겹치면 −2 대신 0 으로 둔다.
+                const swappedFrom = aiLastEsKoWords.find(e => e && e.noScore && !e.missed && !e.added && e.word
+                    && e.word.id !== w.id
+                    && String(e.word.pos || '').toLowerCase() === String(w.pos || '').toLowerCase()
+                    && koMeaningsOverlap(e.word.meaning, w.meaning));
+                if (swappedFrom) {
+                    push(w, false, false);                         // 0 — 바꿔 쓴 것
+                    const e0 = aiLastEsKoWords[aiLastEsKoWords.length - 1];
+                    if (e0 && e0.word.id === w.id) e0.swappedFrom = swappedFrom.word.word;
+                    return;
+                }
                 push(w, false, true);                              // −2
                 const e = aiLastEsKoWords[aiLastEsKoWords.length - 1];
                 if (e && e.word.id === w.id) e.missed = true;
@@ -4754,6 +4819,8 @@ ${buildLearnerProfileSummary()}`;
             NEVER blame the student for a structure YOU introduced. "grammarBad" means the student REACHED FOR that note's rule and got it wrong. If the structure appears only in your correction and nowhere in the student's own sentence, that note goes in NEITHER list. Example: the student wrote "Me diverte viajar al norte" (a perfectly good sentence needing only diverte→divierte); if you rewrite it as "Será muy divertido viajar al norte", the SER+ADJ+INF note is YOUR structure, not theirs — do not mark it wrong.
             And prefer the smallest correction that makes the sentence right: fix the spelling or the conjugation and stop there. Do not swap a working structure for one you like better — the student is graded on what they wrote.
             KEEP THE STUDENT'S CORRECT WORDS. Every word or phrase the student used correctly must appear in your correctedText exactly as they wrote it, even when you rebuild the sentence around it. Never swap a correct word for a synonym you happen to prefer: the student wrote "estos días" → keep "estos días", never "últimamente"; "mucho" stays "mucho", not "bastante". If you truly must replace a correct word (it no longer fits the structure you had to fix, or it changes the meaning), give that word its OWN row in "changes" with the reason. A word that silently disappears from the correction, or is folded into another row's explanation, is a mistake — the student cannot learn from a change nobody explained.
+            KEEP THE STUDENT'S WORD ORDER when it is grammatical. An adjective AFTER its noun ("el jardín bello", "el arquitecto famoso") is the normal Spanish order and is NEVER an error: do not move it in correctedText and do not list it in "changes". This also forbids swapping such an adjective for a synonym and moving it: "jardín bello" must stay "jardín bello" — never "hermoso jardín", never "jardín hermoso" ("bello" is a correct word). Putting it BEFORE the noun ("el bello jardín") is only an optional stylistic emphasis — if you think it sounds nicer, say so ONLY in "moreNatural"/"naturalWhy", never as a correction. The one exception is an adjective whose MEANING changes with its position (grande/gran, viejo, pobre, nuevo, mismo, único, antiguo): move it only when the student's position gives the wrong meaning, and explain the meaning difference in "changes".
+            FINAL CHECK BEFORE OUTPUT: read every row of "changes". If a row's "to" is only the student's own words in a different order (e.g. "jardín bello → bello jardín", "arquitecto famoso → famoso arquitecto"), it is NOT a correction: delete that row and put the student's original order back into correctedText. If the sentence still needed nothing else, correctedText must equal the student's sentence apart from real fixes.
             A note must never appear in both lists. If you are unsure whether the note's own rule was broken, leave the note out of both lists rather than guessing "grammarBad".
             EVIDENCE IS MANDATORY. Every entry of "grammarOk"/"grammarBad" is written as "TITLE >> FRAGMENT", where FRAGMENT is 1-5 Spanish words COPIED VERBATIM from the student's sentence or from your corrected sentence - the very words this note's rule is about. Copy them letter for letter; do not paraphrase, do not translate, do not name the rule again. Use "..." for a gap when the rule spans words (e.g. "mas ... que"). A fragment that does not appear in either sentence is thrown away by the app together with its note, so the student loses the point - and a fragment you cannot find is proof the note was not really used, which is exactly when you must leave the note out.${AI_SPELLING_CONSISTENCY_RULE}`;
         // 스키마 조각. ⚠️ 쓰는 쪽에서 required 에도 usedGrammar·usedWords 를 꼭 넣어야 한다 —
@@ -5803,6 +5870,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                 const responseText = await callGemini(prompt, system, schema, AI_GRADE_THINKING);
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
+                undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
