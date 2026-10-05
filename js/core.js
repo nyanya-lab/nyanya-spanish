@@ -9837,7 +9837,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             { ch: '/', title: '빗금' },
             { ch: '[', title: '대괄호 열기' },
             { ch: ']', title: '대괄호 닫기' },
-            { ch: '→', title: '화살표' }   // [냐냐 요청] 2026-09-28
+            { ch: '→', title: '화살표' },  // [냐냐 요청] 2026-09-28
+            { ch: ':', title: '쌍점' }     // [냐냐 요청] 2026-10-05 — '· + 사람: ~' 처럼 메모에 자주 쓴다
         ];
 
         function rtInsertSymbol(id, ch) {
@@ -10321,6 +10322,17 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             vocabulary.forEach(v => { if (normalizeSpanishAnswer(v.word) === target) push(v); });
             // 2순위: 변형형 역추적 (동사 활용·복수형·형용사 성수)
             if (typeof findVocabWordByForm === 'function') push(findVocabWordByForm(text));
+            // 3순위: [냐냐 지적] 어미를 빗금으로 적은 칸 (2026-10-05) — 서수 표의 'segundo/a/os/as' ·
+            //   'primer/o/a/os/as' 는 칸 글자가 단어(segundo·primero)와 달라서 후보가 하나도 안 떴다.
+            //   첫 조각(segundo · primer)과 거기에 -o 를 붙인 꼴(primero)로 단어장을 찾는다.
+            //   ⚠️ 빗금 펼치기(spanishAnswerVariants)는 primo·prima 같은 엉뚱한 꼴까지 만들어서 쓰지 않는다.
+            if (!out.length && text.indexOf('/') > 0) {
+                const head = normalizeSpanishAnswer(text.split('/')[0]);
+                const heads = new Set([head, /[^aeiou]$/.test(head) ? head + 'o' : '']);
+                vocabulary.forEach(v => { const n = normalizeSpanishAnswer(v.word); if (n && heads.has(n)) push(v); });
+                //   형용사로 등록된 쪽을 먼저 (cuarto/a 칸 → 형용사 cuarto 가 명사 el cuarto 보다 앞)
+                out.sort((a, b) => (b.pos === 'adjective') - (a.pos === 'adjective'));
+            }
             return out;
         }
 

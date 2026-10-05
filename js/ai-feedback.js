@@ -4432,7 +4432,8 @@ ${buildLearnerProfileSummary()}`;
                 }
                 //   '🔁 오늘 복습' 표는 배너 줄에서 뺀 것과 오늘 차례를 채운 것 둘 다에 붙인다
                 const ge = { note, usage, delta, baseDelta: delta, prev, canMove,
-                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), ev: item.ev, state: 'normal', undone: false, reviewLogged: 0 };
+                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), isReviewTarget: !!reviewId && note.id === reviewId,
+                    ev: item.ev, state: 'normal', undone: false, reviewLogged: 0 };
                 aiLastEsKoGrammar.push(ge);
                 //   [냐냐 요청] 덤으로 채운 오늘 몫은 일지 복습 +1 (2026-10-02). 복습 미션이 지목한 노트는
                 //   미션 자체가 복습으로 세어지므로(countAsReview) 여기 안 걸린다 — alsoReviewed 가 그 노트를 뺀다.
@@ -5653,8 +5654,10 @@ ${buildLearnerProfileSummary()}`;
                         <div class="text-xs font-extrabold text-slate-800 truncate">${escapeHtml(g.note.icon || '📋')} ${escapeHtml(g.note.title || '')}</div>
                     </button>
                     ${/* [냐냐 요청] 복습 줄을 푸는 김에 제대로 써서 오늘 몫으로 쳐준 문법 (2026-09-14) */''}
-                    ${g.alsoReviewed && g.delta !== 0
-                        ? `<span title="이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
+                    ${/* [냐냐 요청] 지금 복습하는 그 문법에도 같은 딱지를 단다 (2026-10-05) — 예전엔 '덤으로 쳐준 다른 문법' 에만 붙어서
+                         정작 복습 대상이 안 보였다. 일지 복습 +1 은 미션 자체가 세므로 여기선 화면 딱지만 단다(alsoReviewed 는 그대로). */''}
+                    ${(g.alsoReviewed || g.isReviewTarget) && g.delta !== 0
+                        ? `<span title="${g.isReviewTarget ? '지금 복습하는 문법이에요' : '이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다'}" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
                         : ''}
                     ${cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
@@ -6155,6 +6158,11 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                         }
                         if (/z$/.test(base)) forms.add(base.slice(0, -1) + 'ces');   // feliz → felices
                     }
+                    //   [냐냐 지적] 남성 단수 명사 앞에서 줄어드는 꼴 (2026-10-05) — 'el tercer piso' · 'mi primer día' 의
+                    //   tercer·primer 가 안 걸려서 서수 단어가 첨삭 점수에 아예 안 떴다. buen·mal·gran·algún·ningún 도 같다.
+                    const APOCOPE = { primero: 'primer', tercero: 'tercer', bueno: 'buen', malo: 'mal', alguno: 'algun',
+                        ninguno: 'ningun', grande: 'gran', cualquiera: 'cualquier', santo: 'san' };
+                    if (APOCOPE[base]) forms.add(APOCOPE[base]);
                     if (forms.has(target)) offer(v, FVBF_RANK.ADJ_STEM);
                 }
                 // 4) 명사: 단수형 등록됐으면 복수형도 같은 단어로 취급 (그 반대도)
