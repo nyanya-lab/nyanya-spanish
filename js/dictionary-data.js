@@ -318,8 +318,15 @@
         //      '¿Estos días hablas español?'(스페인어 하니?) 를 minimal 이 두 번 중 한 번 정답으로 넘겼다 —
         //      low 는 두 번 다 뜻이 다르다고 잡았다. "속도보다 판정이 틀리는 게 더 해롭다." 채점은 다시 7~9초.
         //      상수는 남겨둔다 — 다시 재볼 때 이 한 줄만 바꾸면 된다.
+        //   [냐냐 요청] 채점만 3.5 Flash-Lite · medium 으로 (2026-10-06). 나머지 호출은 3.1 그대로.
+        //      같은 미션 답으로 재보니 3.5 는 low·minimal 이면 생각을 아예 안 한다 (생각 토큰 0, 2초) —
+        //      그래서 'estás' 활용 틀림도, 'hablas español' 뜻 틀림도 정답으로 넘겼다.
+        //      medium 은 생각 ~2,500 토큰, 10초 안팎으로 둘 다 잡았다 (3.1 low 는 같은 날 9~14초).
+        //      되돌리기: 아래 두 줄을 GEMINI_MODEL_FLASH_LITE · 'low' 로.
+        //      ⚠️ 3.5 에 'low' 를 주면 생각이 꺼진다 — 채점 모델을 3.5 로 두는 동안 'low' 로 내리지 말 것.
         // ============================================================
-        const AI_GRADE_THINKING = 'low';
+        const GEMINI_MODEL_GRADE = 'gemini-3.5-flash-lite';
+        const AI_GRADE_THINKING = 'medium';
         async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
