@@ -3206,6 +3206,18 @@ ${buildLearnerProfileSummary()}`;
                 if (hit) return guard(hit);
                 const verb = aiVerbForm.get(k);
                 if (verb) return guard(verb);
+                //   [냐냐 지적] 원형·현재분사 뒤에 대명사가 붙은 꼴 (2026-10-05) — 'a encontrarme con mi amigo' 의
+                //   encontrarme 를 encontrar(찾다)로 잡았다. 붙은 me 가 재귀(만나다)인지 목적어(나를 찾다)인지는
+                //   낱말만으론 모르니, 대명사를 뗀 원형으로 AI 가 이 문장에서 짚은 동사를 고른다
+                //   (encontrar · encontrarse 중 AI 가 encontrarse 라고 했으면 그쪽).
+                if (typeof fvbfEncliticBases === 'function') {
+                    const bases = fvbfEncliticBases(k);
+                    if (bases.length) {
+                        const byAi = vocabulary.find(v => aiIds.has(v.id) && v.pos === 'verb'
+                            && bases.some(b => norm(v.word) === b || norm(v.word) === b + 'se'));
+                        if (byAi) return guard(byAi);
+                    }
+                }
                 //   위에서 걸러낸 후보가 있으면 그 안에서 고른다 (resolve 는 거르기 전 목록을 본다)
                 if (cands.length) { const p = pickByPos(cands, ''); if (p) return guard(p); }
                 return guard(resolve(raw, ''));
