@@ -990,22 +990,22 @@ let quizSession = null;
             //   (adjAgreementText()는 다른 데서 쓸 수 있으니 함수 자체는 남겨둠)
             // 관용구
             const idiomList = ((word.idioms && word.idioms.length > 0) ? word.idioms : (word.idiom ? [{ idiom: word.idiom, idiomMeaning: word.idiomMeaning || '' }] : []))
+                .map(it => ({ it, ownerId: word.id }))
                 //   [냐냐 요청] 다른 단어와 같이 쓰는 관용구도 같이 보인다 (2026-10-02)
-                .concat((typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(word).map(x => x.it) : []);
+                .concat((typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(word).map(x => ({ it: x.it, ownerId: x.owner.id })) : []);
             if (idiomList.length > 0) {
                 // [냐냐 요청] 표현마다 발음 듣기 — 통으로 소리내 봐야 입에 붙는다
-                //   [냐냐 요청] 단어 조회 창(opts.idiomExamples)에서만 관용구를 누르면 그 예문이 펼쳐진다 (2026-10-06).
-                //   이 함수는 퀴즈·복습 화면도 그리지만 거기선 예문을 안 싣는다.
-                const items = idiomList.map(x => {
-                    const ex = opts.idiomExamples && x.example;
-                    const line = `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed">
-                    <span${ex ? ` role="button" onclick="const n=this.parentElement.nextElementSibling; if(n) n.classList.toggle('hidden')" class="cursor-pointer hover:text-violet-600" title="눌러서 예문 보기"` : ''}>· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}${ex ? ' <i class="fa-solid fa-quote-right text-[9px] text-sky-400 align-middle"></i>' : ''}</span>
+                //   [냐냐 요청] 단어 조회 창(opts.idiomExamples)에서는 관용구를 유의어처럼 눌러서 작은 창(뜻·예문·점수)을 띄운다 (2026-10-06).
+                //   이 함수는 퀴즈·복습 화면도 그리지만 거기선 누를 수 없고 예문도 안 나온다.
+                const items = idiomList.map(({ it: x, ownerId }) => {
+                    const click = opts.idiomExamples && x.iid && typeof openIdiomView === 'function';
+                    const head = click
+                        ? `<button type="button" onclick="event.stopPropagation(); openIdiomView('${escapeAttr(String(ownerId))}', '${escapeAttr(String(x.iid))}')" class="px-2 py-0.5 rounded-lg text-[13px] font-black bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-all text-left">${escapeHtml(x.idiom)}</button>`
+                        : `<b class="text-slate-800">${escapeHtml(x.idiom)}</b>`;
+                    return `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed${click ? ' py-0.5' : ''}">
+                    <span>${click ? '' : '· '}${head}${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>
                     ${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(x.idiom) : ''}
                 </span>`;
-                    return ex ? line + `<span class="hidden block pl-3 pb-1 leading-snug">
-                    <span class="block text-[13px] text-slate-600 italic">${escapeHtml(x.example)}</span>
-                    ${x.exampleMeaning ? `<span class="block text-[12px] text-slate-400">${escapeHtml(x.exampleMeaning)}</span>` : ''}
-                </span>` : line;
                 }).join('');
                 sections.push(`
                     <div>

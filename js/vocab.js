@@ -915,6 +915,43 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
             modal.classList.remove('hidden');
         }
+        //   [냐냐 요청] 단어 조회에서 관용구를 누르면 뜨는 작은 창 (2026-10-06) — 유의어 칩처럼.
+        //   뜻 · 예문 · 점수/DELE · 딸린 단어. 퀴즈·복습에선 부르지 않는다 (예문이 답을 보여줘서).
+        function openIdiomView(ownerId, iid) {
+            const owner = (vocabulary || []).find(v => v.id === ownerId);
+            const it = owner && (owner.idioms || []).find(x => x.iid === iid);
+            const modal = document.getElementById('idiom-view-modal');
+            if (!it || !modal) { showToast("그 관용구를 찾을 수 없어요", "error"); return; }
+            const grade = getIdiomGrade(owner.id, iid);
+            const gi = GRADE_INFO[grade] || GRADE_INFO.normal;
+            const words = idiomShownWords(owner, it).map(w => `<button type="button" onclick="closeIdiomView(); openWordView('${escapeAttr(String(w.id))}')" class="px-2 py-0.5 rounded-lg text-[12px] font-bold bg-violet-50 text-violet-700 hover:bg-violet-100">${escapeHtml(w.word)}</button>`).join(' ');
+            document.getElementById('idiom-view-body').innerHTML = `
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-lg font-black text-slate-900 break-words">${escapeHtml(it.idiom)}</span>
+                            <button type="button" onclick="speakText(event, '${escapeAttr(it.idiom)}')" class="text-slate-400 hover:text-violet-500 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
+                        </div>
+                        <p class="text-sm font-bold text-slate-500 mt-0.5 break-words">${escapeHtml(it.idiomMeaning || '')}</p>
+                    </div>
+                    <span class="flex items-center gap-1.5 shrink-0">
+                        <span class="inline-flex items-center">${deleLevelBadgeHtml(it.dele)}</span>
+                        <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label}">${formatIdiomScore(owner.id, iid)}</span>
+                    </span>
+                </div>
+                ${it.example ? `
+                <div class="bg-sky-50/60 rounded-2xl p-3">
+                    <span class="block text-xs font-black text-sky-600 mb-1">✍️ 예문</span>
+                    <span class="flex items-baseline gap-1"><span class="text-sm text-slate-700 italic leading-relaxed">${escapeHtml(it.example)}</span>${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(it.example) : ''}</span>
+                    ${it.exampleMeaning ? `<span class="block text-sm text-slate-500 leading-relaxed">${escapeHtml(it.exampleMeaning)}</span>` : ''}
+                </div>` : '<p class="text-xs text-slate-400 font-semibold">아직 예문이 없어요.</p>'}
+                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[10px] font-black text-violet-500">원단어</span>${words}</div>`;
+            modal.classList.remove('hidden');
+        }
+        function closeIdiomView() {
+            const m = document.getElementById('idiom-view-modal');
+            if (m) m.classList.add('hidden');
+        }
         function closeWordView() {
             const m = document.getElementById('word-view-modal');
             if (m) m.classList.add('hidden');
