@@ -2035,7 +2035,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function normalizeMeaningMarks(meaning) {
             return String(meaning || '').split(',').map(part => {
                 const marks = [];
-                const rest = part.replace(/\s*\((역|재)\)\s*/g, (m, k) => { if (!marks.includes(k)) marks.push(k); return ' '; })
+                const rest = part.replace(/\s*\((역|재|남|스)\)\s*/g, (m, k) => { if (!marks.includes(k)) marks.push(k); return ' '; })
                     .replace(/\s+/g, ' ').replace(/\s+([.,;:!?)])/g, '$1').trim();   // '있다(역).' → '있다.' (빈칸 없이)
                 return marks.map(k => `(${k})`).join('') + rest;
             }).join(', ');
@@ -2102,6 +2102,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
               · 그 뜻이 **재귀형(-se)으로만** 쓰이면 그 뜻 바로 **앞**에 "(재)"
               · 예: tocar → "만지다, 연주하다, (역)~가 당첨되다, (역)~가 할 차례다" / quedar → "남다, 만나기로 하다, (재)머무르다"
               · 입력 단어가 이미 -se 로 끝나는 재귀동사면 (재)는 붙이지 말 것 (전부 재귀라 뜻이 없다). 그 밖의 뜻엔 아무것도 붙이지 말 것.
+            - **지역 표시 (모든 품사):** 그 뜻이 **중남미에서만** 쓰이면 뜻 바로 앞에 "(남)", **스페인에서만** 쓰이면 "(스)".
+              스페인·중남미 **양쪽에서 다 쓰는 뜻엔 절대 붙이지 말 것** — 확실할 때만. 대부분의 뜻은 표시가 없어야 한다.
+              · 예: recién → "갓·막 ~한(+과거분사), (남)방금 ~했다, (남)~에야 비로소" / el zumo → "(스)주스" / el jugo → "(남)주스, 즙" / la casa → "집" (표시 없음)
             - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
             - adjMasculineBase: 형용사인데 입력이 여성형/복수형이면 사전 표제형인 남성 단수형을 여기에(관사 없이). 이미 남성 단수형이거나 성별로 안 변하는 형용사(feliz, azul 등)면 빈 문자열. 오타 교정(correctedSpelling)과는 별개로, 형태만 여성→남성으로 바꾸는 용도임.
             - idioms에는 (1) 진짜 흔한 관용구/숙어뿐 아니라 (2) 이 단어의 "핵심 문형/구문 패턴"도 넣을 것.
@@ -2138,7 +2141,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    meaning: { type: "STRING", description: "핵심 한글 뜻 (명사는 복수로 입력해도 기본 뜻으로 — libros 도 '책'이지 '책들' 이 아님). 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다" },
+                    meaning: { type: "STRING", description: "핵심 한글 뜻 (명사는 복수로 입력해도 기본 뜻으로 — libros 도 '책'이지 '책들' 이 아님). 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다. 중남미에서만 쓰는 뜻 앞에 (남), 스페인에서만 쓰는 뜻 앞에 (스) — 양쪽 다 쓰면 표시 없음" },
                     correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },

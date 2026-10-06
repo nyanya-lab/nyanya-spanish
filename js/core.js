@@ -8617,7 +8617,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   - 저장된 뜻은 '(역)' 그대로다. 괄호는 글자 크기 0 으로 숨겨서 복사해도 '(역)' 이 간다.
         //   - 직접 쓰는 칸(contenteditable)·입력칸은 안 건드린다 — 거기서는 글자로 고쳐야 한다.
         // ============================================================
-        const MEAN_MARK_RE = /\((역|재)\)/;
+        //   [냐냐 요청] (남)=중남미에서만 · (스)=스페인에서만 쓰는 뜻도 같은 동그라미로 (2026-10-06). 양쪽 다 쓰는 뜻엔 아무것도 안 붙인다.
+        const MEAN_MARK_RE = /\((역|재|남|스)\)/;
+        const MEAN_MARK_TITLE = { 역: '역구조동사로 쓰는 뜻', 재: '재귀동사로 쓰는 뜻', 남: '중남미에서만 쓰는 뜻', 스: '스페인에서만 쓰는 뜻' };
         const MEAN_MARK_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'TITLE']);
         function meanMarkSkip(node) {
             for (let n = node.parentNode; n && n.nodeType === 1; n = n.parentNode) {
@@ -8629,14 +8631,14 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const text = tn.nodeValue;
             if (!text || text.indexOf('(') < 0 || !MEAN_MARK_RE.test(text) || meanMarkSkip(tn)) return;
             const frag = document.createDocumentFragment();
-            const re = /\((역|재)\)/g;
+            const re = /\((역|재|남|스)\)/g;
             let last = 0, m;
             while ((m = re.exec(text))) {
                 if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
                 const sp = document.createElement('span');
                 sp.className = 'mean-mark';
                 sp.dataset.m = m[1];
-                sp.title = m[1] === '역' ? '역구조동사로 쓰는 뜻' : '재귀동사로 쓰는 뜻';
+                sp.title = MEAN_MARK_TITLE[m[1]] || '';
                 sp.innerHTML = `<span class="mm-p">(</span>${m[1]}<span class="mm-p">)</span>`;
                 frag.appendChild(sp);
                 last = m.index + m[0].length;
