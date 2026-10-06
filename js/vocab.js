@@ -1881,6 +1881,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
+            - 명사면 nounUsualForm 도 볼 것: 실제로 보통 쓰는 꼴이 입력과 단·복수가 다르면 그 꼴을 (gafa→gafas, vacación→vacaciones, casas→casa). 입력이 이미 보통 꼴이거나 둘 다 흔하면 빈 문자열.
+            - 명사의 복수가 단수와 **다른 뜻**으로도 쓰이면(el deber 의무 / los deberes 숙제, la esposa 아내 / las esposas 수갑) pluralMeaning 에 "los deberes = 숙제" 처럼 적을 것.
+              뜻은 같은데 보통 복수로 쓴다는 이야기(gafas, pantalones)는 nounUsualForm 이 맡으니 meaning·notes 에 쓰지 말 것. 오타가 아니므로 correctedSpelling 에도 넣지 말 것.
             - estudiante, artista, cantante처럼 남녀 형태가 같고 관사만 바뀌는 사람 명사는 isCommonGender=true, gender='none'으로 (앱이 el/la로 표시함).
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
             - **의문사(qué, quién, dónde, cuándo, cómo, cuánto, por qué, cuál 등)와 의문사가 들어간 의문 구문은 품사를 무조건 pos="interrogative"(의문사)로 할 것.** 부사/대명사/구문으로 분류하지 말 것.
@@ -1926,12 +1929,15 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    meaning: { type: "STRING", description: "핵심 한글 뜻. 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다" },
+                    meaning: { type: "STRING", description: "핵심 한글 뜻 (명사는 복수로 입력해도 기본 뜻으로 — libros 도 '책'이지 '책들' 이 아님). 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다" },
                     correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
                     isCommonGender: { type: "BOOLEAN", description: "사람을 가리키는 명사인데 형태가 남녀 공통이라 관사만 바뀌는 경우 true (el/la estudiante, el/la artista, el/la cantante). 이 경우 gender는 'none'으로. 성별이 고정된 명사(libro=남, casa=여)는 false" },
                     isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true, 단수형이면 false. 명사가 아니면 false. 예: casas/libros는 true, casa/libro는 false" },
+                    //   [냐냐 요청] 보통 복수로 쓰는 명사(gafas)·평범한 명사의 복수 입력(casas)을 등록 때 짚어준다 (2026-10-06)
+                    nounUsualForm: { type: "STRING", description: "명사일 때만. 이 명사를 실제로 보통 쓰는 꼴(관사 없이)이 입력과 단수·복수가 다르면 그 꼴. 예: 입력 'gafa'→'gafas', 'vacación'→'vacaciones', 'tijera'→'tijeras', 'pantalón'→'pantalones', 'casas'→'casa', 'libros'→'libro'. 입력이 이미 보통 쓰는 꼴이거나(casa, gafas, vacaciones) 단수·복수가 둘 다 흔하면 빈 문자열. 명사가 아니면 빈 문자열" },
+                    pluralMeaning: { type: "STRING", description: "명사의 복수가 단수와 다른 뜻으로도 쓰일 때만 '복수 꼴(관사 포함) = 그 뜻'. 예: deber → 'los deberes = 숙제', esposa → 'las esposas = 수갑', celo → 'los celos = 질투'. 복수도 같은 뜻이면(casas, libros) 빈 문자열. 명사가 아니면 빈 문자열" },
                     usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
                     adjMasculineBase: { type: "STRING", description: "형용사이고 입력이 여성형(또는 복수형)이면, 사전 표제형인 '남성 단수형'을 여기에 (관사 없이). 예: 입력이 'buena'/'buenas'/'buenos'면 'bueno', 'roja'면 'rojo'. 이미 남성 단수형이거나(bueno) 성별로 안 변하는 형용사(feliz, azul, tolerante)이거나 형용사가 아니면 빈 문자열." },
@@ -2009,7 +2015,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   [냐냐 지적] máma 를 몇 번을 눌러도 mamá 로 안 고쳐줬다 (2026-09-28).
                 //   재보니 AI 가 다섯 번에 두 번은 correctedSpelling 칸을 아예 빼고 답했다 —
                 //   필수가 아니라서 빠지면 '오타 없음' 으로 지나갔다. 필수로 두면 오타가 없을 땐 빈 문자열이 온다.
-                required: ["meaning", "correctedSpelling", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes"]
+                //   nounUsualForm · pluralMeaning 도 같은 까닭으로 필수 (2026-10-06) — 빼두니 esposa 의 '수갑' 을 세 번 다 빠뜨렸다.
+                required: ["meaning", "correctedSpelling", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes", "nounUsualForm", "pluralMeaning"]
             };
 
             try {
@@ -2020,16 +2027,48 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
+                //   [냐냐 요청] 복수가 다른 뜻이면 메모에 한 줄 (2026-10-06). notes 에 쓰라고만 하면 AI 가 자주 빠뜨려서 칸을 따로 받는다.
+                //   AI 가 같은 말을 notes 에 제 말로 또 적어 와서(· 아내 외에 수갑이라는 뜻이 있음 · 항상 복수형으로 사용됨)
+                //   복수 이야기를 맡는 칸이 있을 땐 notes 의 복수 이야기 줄을 걷어낸다.
+                const pluralMeaning = String((result && result.pos === 'noun' && result.pluralMeaning) || '').trim();
+                const usualSaid = !!(result && result.pos === 'noun' && String(result.nounUsualForm || '').trim());
+                if (pluralMeaning || usualSaid) {
+                    const pmWord = (pluralMeaning.split('=')[1] || '').trim();
+                    result.notes = String(result.notes || '').split('\n')
+                        .filter(line => !/복수|단수/.test(line) && !(pmWord && line.includes(pmWord))).join('\n').replace(/\s+$/, '');
+                }
+                if (pluralMeaning) {
+                    result.notes = (result.notes ? result.notes + '\n' : '') + '· 복수 ' + pluralMeaning;
+                }
 
                 // [냐냐 PATCH] 오타 감지: AI가 교정한 철자가 입력과 다르면 확인 팝업
                 const corrected = (result.correctedSpelling || '').trim();
                 const bareInput = rawWord.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').trim().toLowerCase();
-                const isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
+                let isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
 
                 // [냐냐 PATCH] 형용사 여성형/복수형 → 남성 단수 기본형 건의 (오타와 별개)
                 const mascBase = (result.adjMasculineBase || '').trim();
                 const isFeminineAdj = !isRealCorrection && result.pos === 'adjective' && mascBase
                     && mascBase.toLowerCase() !== bareInput && mascBase.toLowerCase() !== rawWord.toLowerCase();
+
+                // [냐냐 요청] 명사는 보통 쓰는 수(단수·복수)로 등록할지 묻는다 (2026-10-06) — 형용사 남성형 건의와 같은 모양.
+                //   AI 가 엉뚱한 낱말을 들고 오면 안 되니 앞 세 글자가 같고 네 글자 안쪽으로만 다를 때만 받는다
+                //   (vacación→vacaciones · lápiz→lápices 가 3).
+                let usualForm = String(result.nounUsualForm || '').replace(/^(el|la|los|las)\s+/i, '').trim();
+                const inputKey = stripAccents(bareInput);
+                //   AI 가 복수형을 '오타 교정' 칸에 넣어 오기도 한다 (gafa → gafas). 수만 바뀐 거면 오타가 아니라 이쪽으로 돌린다 —
+                //   오타 창으로 가면 관사가 단수로 붙어 'la gafas' 가 됐다.
+                const numberPair = (a, b) => a === b + 's' || a === b + 'es' || b === a + 's' || b === a + 'es'
+                    || (b.endsWith('z') && a === b.slice(0, -1) + 'ces') || (a.endsWith('z') && b === a.slice(0, -1) + 'ces');
+                const correctedKey = stripAccents(corrected.toLowerCase());
+                if (isRealCorrection && result.pos === 'noun' && (correctedKey === stripAccents(usualForm.toLowerCase()) || numberPair(correctedKey, inputKey))) {
+                    if (!usualForm) usualForm = corrected;
+                    isRealCorrection = false;
+                }
+                const usualKey = stripAccents(usualForm.toLowerCase());
+                const isUsualNumber = !isRealCorrection && !isFeminineAdj && result.pos === 'noun' && usualForm
+                    && usualKey !== inputKey && usualKey.slice(0, 3) === inputKey.slice(0, 3)
+                    && typeof levenshtein === 'function' && levenshtein(usualKey, inputKey) <= 4;
 
                 if (isRealCorrection) {
                     showConfirm(
@@ -2071,6 +2110,45 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             cancelLabel: '그대로',
                             okStyle: 'primary',
                             onCancel: () => {
+                                applyAutofillResult(result, force);
+                                saveAiWordCache(rawWord, result);
+                                AudioFX.playSuccess();
+                                showToast("입력하신 형태 그대로 적용했어요 ✨", "info");
+                            }
+                        }
+                    );
+                } else if (isUsualNumber) {
+                    //   보통 복수로 쓴다는 말은 이 창이 했으니 notes 에서 뺀다 (AI 가 이 경우 nounUsualForm 대신 오타 칸으로 보내기도 해서 위에서 못 걸렀다)
+                    result.notes = String(result.notes || '').split('\n')
+                        .filter(line => line.startsWith('· 복수 ') || !/복수|단수/.test(line)).join('\n').replace(/\s+$/, '');
+                    //   방향은 꼴 길이로 정한다 — AI 가 'gafa' 를 isPlural=true 로 보내기도 해서 그걸 믿으면 거꾸로 묻는다.
+                    //   복수형이 늘 더 길다 (gafa→gafas · lápiz→lápices · vacación→vacaciones).
+                    const toPlural = usualKey.length > inputKey.length;
+                    const art = result.isCommonGender ? (toPlural ? 'los/las' : 'el/la')
+                        : result.gender === 'masculine' ? (toPlural ? 'los' : 'el')
+                        : result.gender === 'feminine' ? (toPlural ? 'las' : ((result.usesElDespiteFeminine || isStressedInitialA(usualForm)) ? 'el' : 'la')) : '';
+                    const shown = (art ? art + ' ' : '') + usualForm;
+                    const numWord = toPlural ? '복수형' : '단수형';
+                    showConfirm(
+                        `보통 ${numWord} "${shown}"(으)로 써요`,
+                        toPlural
+                            ? `"${rawWord}"는 보통 복수형 "${shown}"(으)로 쓰는 명사예요. 복수형으로 등록할까요? (그대로를 누르면 입력한 형태로 둡니다)`
+                            : `명사는 보통 단수형으로 등록해요. "${rawWord}"는 복수형 같아서, 단수형 "${shown}"(으)로 바꿔서 등록할지 여쭤봐요. (그대로를 누르면 입력한 형태로 둡니다)`,
+                        () => {
+                            document.getElementById('input-word').value = usualForm;   // 관사는 applyAutofillResult 가 붙인다
+                            result.isPlural = toPlural;
+                            if (toPlural) result.usesElDespiteFeminine = false;          // el agua → las aguas
+                            applyAutofillResult(result, force);
+                            saveAiWordCache(usualForm, result);
+                            AudioFX.playSuccess();
+                            showToast(`${numWord} "${shown}"(으)로 바꿔서 적용했어요 ✨`, "success");
+                        },
+                        {
+                            okLabel: `${numWord}으로`,
+                            cancelLabel: '그대로',
+                            okStyle: 'primary',
+                            onCancel: () => {
+                                result.isPlural = !toPlural;   // 입력한 꼴의 수 — 관사가 그 꼴에 맞게 붙는다
                                 applyAutofillResult(result, force);
                                 saveAiWordCache(rawWord, result);
                                 AudioFX.playSuccess();
