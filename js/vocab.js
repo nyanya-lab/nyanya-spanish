@@ -6596,7 +6596,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function pairChipText(o) {
             const abbr = (typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '';
             const mean = String(o.meaning || '').split(/[,;]/)[0].trim();
-            return `${abbr} ${String(o.word || '')}${mean ? `(${mean})` : ''}`;
+            //   [냐냐 요청] 철자가 같으니 단어는 또 안 쓴다 — 품사와 뜻만 (adv. 늦게) (2026-10-06)
+            return `${abbr} ${mean || String(o.word || '')}`;
         }
         function samePosPairChips(w, index) {
             const others = pairsOf(w, index);
