@@ -6521,8 +6521,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     }
                 }
 
+                const pairHtml = samePosPairChips(w, spellingIndex);
+                const pairPad = pairHtml ? Math.max(0, pairChipPadPx(w, spellingIndex) - 130) : 0;   // 아이콘 칸(약 130px) 밑은 원래 비어 있다
                 html += `
                 <div class="rounded-3xl p-5 ${cardStyle} flex flex-col justify-between hover:shadow-md transition-all duration-300 relative group gap-3">
+                    ${pairHtml ? `<div data-pair-closed="${w.id}" class="absolute right-5 bottom-5 flex gap-1 ${expandedAll ? 'hidden' : ''}">${pairHtml}</div>` : ''}
                     ${/* [냐냐 요청] 정답률 · DELE · 점수는 오른쪽 아래. 접혀 있을 땐 감춘다 (2026-09-15).
                          ⚠️ 셋의 높이가 어긋나던 건 DELE 뱃지를 감싼 span 때문이었다 — 그 span 이
                             flex 칸이 되면서 안쪽 뱃지는 줄높이대로만 커져 1~2px 낮았다.
@@ -6540,7 +6543,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                 <span class="min-w-0 leading-tight" style="word-break:break-word;">
                                     <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${w.word}</span>
                                     <span class="inline-flex items-center gap-1.5 align-middle ml-1" style="transform: translateY(1px);">${badgeMarkup}</span>
-                                    <span class="block text-sm text-slate-500 font-semibold mt-0.5 ${expandedAll ? 'hidden' : ''}" data-card-meaning="${w.id}">${w.meaning}</span>
+                                    <span class="block text-sm text-slate-500 font-semibold mt-0.5 ${expandedAll ? 'hidden' : ''}" data-card-meaning="${w.id}"${pairHtml ? ` style="padding-right:${Math.round(pairPad)}px"` : ''}>${w.meaning}</span>
                                 </span>
                             </button>
                             <div class="flex flex-col items-end gap-1.5 shrink-0">
@@ -6554,7 +6557,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                     <i class="fa-solid fa-trash-can text-xs"></i>
                                 </button>
                             </div>
-                            ${samePosPairChips(w, spellingIndex)}
+                            ${pairHtml ? `<div data-pair-open="${w.id}" class="flex flex-wrap justify-end gap-1 ${expandedAll ? '' : 'hidden'}">${pairHtml}</div>` : ''}
                             </div>
                         </div>
 
@@ -6586,15 +6589,27 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             (vocabulary || []).forEach(w => { const k = spellingKeyOf(w); if (!k) return; if (!m.has(k)) m.set(k, []); m.get(k).push(w); });
             return m;
         }
+        //   [냐냐 요청] 아이콘(⇄)은 반의어 같아서 빼고, 그 품사 배지 색으로 칠한다 (2026-10-06).
+        function pairsOf(w, index) {
+            return ((index || buildSpellingIndex()).get(spellingKeyOf(w)) || []).filter(o => o.id !== w.id);
+        }
+        function pairChipText(o) {
+            const abbr = (typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '';
+            const mean = String(o.meaning || '').split(/[,;]/)[0].trim();
+            return `${abbr} ${String(o.word || '')}${mean ? `(${mean})` : ''}`;
+        }
         function samePosPairChips(w, index) {
-            const others = ((index || buildSpellingIndex()).get(spellingKeyOf(w)) || []).filter(o => o.id !== w.id);
+            const others = pairsOf(w, index);
             if (!others.length) return '';
-            return others.map(o => {
-                const abbr = (typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '';
-                const mean = String(o.meaning || '').split(/[,;]/)[0].trim();
-                return `<button type="button" onclick="event.stopPropagation(); openWordView('${escapeAttr(String(o.id))}')" title="같은 철자, 다른 품사 — ${escapeAttr(String(o.meaning || ''))}"
-                    class="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-500 border border-slate-200 transition-all whitespace-nowrap">⇄ ${escapeHtml(abbr)} ${escapeHtml(String(o.word || ''))}${mean ? `(${escapeHtml(mean)})` : ''}</button>`;
-            }).join('');
+            return others.map(o => `<button type="button" onclick="event.stopPropagation(); openWordView('${escapeAttr(String(o.id))}')" title="같은 철자, 다른 품사 — ${escapeAttr(String(o.meaning || ''))}"
+                    class="px-2 rounded-full text-[10px] font-black leading-[18px] whitespace-nowrap hover:opacity-70 transition-opacity ${posChipColor(o)}">${escapeHtml(pairChipText(o))}</button>`).join('');
+        }
+        //   접힌 카드에선 오른쪽 아래, 뜻 줄과 같은 높이에 띄운다 — 오른쪽 칸에 줄을 보태면 카드가 다른 카드보다 길어지고
+        //   왼쪽 뜻 줄과 높이가 어긋났다 (냐냐님 지적). 뜻이 칩 밑으로 들어가지 않게 그만큼 오른쪽을 비워 둔다.
+        function pairChipPadPx(w, index) {
+            const others = pairsOf(w, index);
+            if (!others.length) return 0;
+            return others.reduce((s, o) => s + pairChipText(o).length * 6.6 + 22, 0);
         }
 
         // [냐냐 PATCH-페이지네이션] 페이지 바 렌더
@@ -6772,6 +6787,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!nowHidden && typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(id);
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(90deg)';
             if (meaning) meaning.classList.toggle('hidden', !nowHidden);
+            //   같은 철자·다른 품사 칩 — 접히면 뜻 줄 옆(오른쪽 아래), 펼치면 아이콘 밑
+            const pc = document.querySelector(`[data-pair-closed="${id}"]`), po = document.querySelector(`[data-pair-open="${id}"]`);
+            if (pc) pc.classList.toggle('hidden', !nowHidden);
+            if (po) po.classList.toggle('hidden', nowHidden);
         }
 
         // 다시 그린 뒤 펼쳐져 있던 카드를 복원

@@ -3646,8 +3646,11 @@ ${buildLearnerProfileSummary()}`;
             const names = VERB_FORM_NOTE_NAMES[key] || [];
             if (!names.length) return [];
             return (notes || []).filter(t => {
-                const blocks = (typeof getNoteBlocks === 'function') ? getNoteBlocks(t) : (t.blocks || []);
-                const head = ((t.title || '') + ' ' + blocks.map(b => (b && b.caption) || '').join(' ')).toLowerCase();
+                //   [냐냐 지적] 제목만 본다 (2026-10-06). 예전엔 표 제목까지 봐서, 날씨 노트의 표 '현재형 vs 현재진행 (llover · nevar)'
+                //   때문에 날씨 노트가 '현재진행을 가르치는 노트' 가 됐다 — 'estoy yendo al café' 에 날씨 +1.
+                //   같은 까닭으로 날씨 노트가 '시제 노트' 로 몰려 표 칸 훑기(hace calor)에서도 빠져 있었다.
+                //   재보니 표 제목으로만 걸리던 노트는 날씨 하나뿐이었다.
+                const head = String(t.title || '').toLowerCase();
                 const hit = names.some(n => (n instanceof RegExp) ? n.test(head) : head.includes(String(n).toLowerCase()));
                 if (!hit) return false;
                 if (!auxTenses) return true;
@@ -4053,6 +4056,28 @@ ${buildLearnerProfileSummary()}`;
         }
         //   원형 칸을 열어주는 대명사 — 역구조(간접목적)·재귀 둘 다 여기 든다
         const CLITIC_PRONOUNS = new Set(['me', 'te', 'le', 'les', 'nos', 'os', 'se']);
+        //   단어장의 굳은 구 가운데 전치사·접속사로 시작하는 것 (por eso · sin embargo · a veces …) — 칸 훑기에서 그 안 낱말을 가린다
+        const FIXED_PHRASE_HEADS = new Set(['por', 'para', 'a', 'al', 'de', 'del', 'en', 'con', 'sin', 'sobre', 'y', 'o', 'ni', 'pero', 'aunque']);
+        let _fixedPhrases = null, _fixedPhrasesN = -1;
+        function fixedPhraseTokenMask(toks) {
+            const mask = new Array(toks.length).fill(false);
+            if (typeof vocabulary === 'undefined') return mask;
+            if (!_fixedPhrases || _fixedPhrasesN !== vocabulary.length) {
+                _fixedPhrasesN = vocabulary.length;
+                _fixedPhrases = [];
+                vocabulary.forEach(v => {
+                    const p = String(v.word || '').toLowerCase().normalize('NFC').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
+                        .split(/[^a-záéíóúüñ]+/).filter(Boolean);
+                    if (p.length >= 2 && p.length <= 4 && FIXED_PHRASE_HEADS.has(p[0])) _fixedPhrases.push(p);
+                });
+            }
+            _fixedPhrases.forEach(p => {
+                for (let i = 0; i + p.length <= toks.length; i++) {
+                    if (p.every((w, j) => toks[i + j] === w)) for (let j = 0; j < p.length; j++) mask[i + j] = true;
+                }
+            });
+            return mask;
+        }
         // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
         function detectNoteCellsInText(text, notes) {
             const out = new Map();
@@ -4077,9 +4102,13 @@ ${buildLearnerProfileSummary()}`;
             //   '-se' 로 끝나는 원형(levantarse)은 대명사를 제 안에 달고 있으니 그대로 둔다.
             const LW0 = _noteCellIndex.lemmaWords;
             const hasClitic = raws.some(r => CLITIC_PRONOUNS.has(nz(r)));
-            raws.forEach(raw => {
+            //   [냐냐 지적] 'por eso' 의 eso 로 지시사 노트 +1 이 붙었다 (2026-10-06).
+            //   단어장에 굳은 표현으로 등록된 '전치사·접속사로 시작하는 구'(por eso · sin embargo · a veces …) 안의 낱말은
+            //   한 낱말 칸 훑기에서 뺀다. 'esta mañana' 처럼 지시사로 시작하는 구는 그대로 둔다 — 그건 진짜 지시사다.
+            const fixedTok = fixedPhraseTokenMask(raws.map(nz));
+            raws.forEach((raw, ri) => {
                 const k = nz(raw);
-                if (!k) return;
+                if (!k || fixedTok[ri]) return;
                 const id = _noteCellIndex.words.get(k);
                 if (!id || out.has(id)) return;
                 if (LW0 && LW0.get(k) === id && !hasClitic && !/se$/.test(k)) return;
@@ -5652,8 +5681,9 @@ ${buildLearnerProfileSummary()}`;
             };
             const cycleBtn = (fn, i) => `<button type="button" onclick="${fn}(${i})" title="점수 바꾸기 (+1 → 0 → −2)" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`;
 
+            //   [냐냐 요청] 손으로 바꾼 줄(↺)·직접 더한 줄은 보라색 (2026-10-06) — 단어 칩과 같다. AI 가 매긴 원래 평가와 한눈에 갈린다.
             const grammarHtml = aiLastEsKoGrammar.map((g, i) => `
-                <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <div class="flex items-center gap-2 border rounded-xl px-2.5 py-1.5 ${(g.delta !== g.baseDelta || g.manual) ? 'bg-violet-50 border-violet-300' : 'bg-white border-slate-200'}">
                     ${badge(g.delta)}
                     ${/* [냐냐 지적] 제목을 누르면 문법 탭으로 점프했는데 그 노트가 화면에 바로 안 보였다.
                          들춰보기 팝업으로 보내기로 했던 대로 고친다 — 팝업 안에 '문법·개념 탭에서 보기' 가
