@@ -1246,6 +1246,9 @@ Prefer "typo" over "synonym" when the answer is not a real Spanish word.
 If the target is a multi-word expression, EVERY word must be there. A missing or extra word — a preposition especially (target "en diagonal a", answer "diagonal a") — is NOT "correct": use "typo" if it is clearly an attempt at the same expression, otherwise "wrong".
 If the target is a TEMPLATE with slots in [ ] or ( ) (e.g. "¿Qué ser [지시대명사]?", "antes de [명사/동사원형]"), the student may fill the slots with fitting words and conjugate the template's infinitive to fit — "qué es esto" for "¿Qué ser [지시대명사]?" is "correct". The fixed words must still all be there; words filling a slot are not "extra".
 Also report whether the student's answer is itself a real Spanish word, and what it means — the learner needs to know if they wrote a different real word or just gibberish.
+If the answer has several words, judge it AS WRITTEN: answerIsRealWord is true only if that whole combination is a real, grammatical expression. A wrong combination of real words (e.g. "tomar en" — tomar takes the vehicle directly: "tomar el metro") is false, and answerMeaning is then empty — never the meaning of just one of its words.
+answerMeaning is a plain Korean meaning only: no notes, no brackets like "(단어 자체의 뜻)".
+The comment must say concretely what is wrong and how the student's word is really used, with a tiny Spanish example when it helps — e.g. "tomar 는 en 없이 tomar el metro 처럼 써요". Do not just say the meaning or usage "differs", and do not repeat the target (the app already shows it).
 Return JSON only.`;
                 // [냐냐 지적] 활용형 문제는 원형을 안 보여주고 뜻만 준다. 그래서 학생이 다른 동사를
                 //   같은 시제·인칭으로 바르게 활용해 쓸 수 있다 — 그건 유의어다.
@@ -1258,14 +1261,14 @@ This is a CONJUGATION question: the student saw only the Korean meaning plus "${
 - "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".` : '';
                 const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}
 Student answered: "${userAnswer}".
-Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 30자 이내)", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답이 실제 스페인어 단어라면 그 한글 뜻(짧게), 아니면 빈 문자열" }`;
+Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 40자 이내) — 무엇이 틀렸고 그 말은 어떻게 쓰는지", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답(쓴 그대로 통째로)이 실제 스페인어 단어·표현이라면 그 한글 뜻(짧게, 설명 없이), 아니면 빈 문자열" }`;
                 const schema = {
                     type: "OBJECT",
                     properties: {
                         verdict: { type: "STRING" },
-                        comment: { type: "STRING", description: "한국어 한 문장, 30자 이내. 길게 쓰지 말 것 — 이 글자를 만드는 시간이 곧 학생이 기다리는 시간이다" },
-                        answerIsRealWord: { type: "BOOLEAN", description: "학생이 쓴 답이 실제로 존재하는 스페인어 단어인가" },
-                        answerMeaning: { type: "STRING", description: "그 답의 한글 뜻. 실제 단어가 아니면 빈 문자열" }
+                        comment: { type: "STRING", description: "한국어 한 문장, 40자 이내. 무엇이 틀렸고 그 말은 실제로 어떻게 쓰는지 (예: 'tomar 는 en 없이 tomar el metro 처럼 써요'). '의미와 쓰임이 다릅니다' 같은 뭉뚱그린 말 금지. 길게 쓰지 말 것 — 이 글자를 만드는 시간이 곧 학생이 기다리는 시간이다" },
+                        answerIsRealWord: { type: "BOOLEAN", description: "학생이 쓴 답이 (여러 낱말이면 쓴 조합 그대로) 실제로 존재하는 스페인어 단어·표현인가" },
+                        answerMeaning: { type: "STRING", description: "그 답 통째의 한글 뜻 (짧게, 괄호 설명 붙이지 말 것). 실제 단어·표현이 아니면 빈 문자열" }
                     },
                     required: ["verdict"]
                 };

@@ -7593,7 +7593,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 : (isReal && meaning && !sameMeaning)
                 ? `❌ <b>${escapeHtml(user)}</b>는 <b class="text-slate-800">'${escapeHtml(meaning)}'</b>${josa(meaning)} 뜻이에요.`
                 : (opts.aiIsRealWord === false
-                    ? `❌ <b>${escapeHtml(user)}</b>는 없는 단어예요.`
+                    //   여러 낱말이면 '없는 표현' — tomar en 처럼 낱말은 다 있는데 조합이 틀린 경우 (2026-10-06)
+                    ? `❌ <b>${escapeHtml(user)}</b>는 없는 ${/\s/.test(user) ? '표현이에요' : '단어예요'}.`
                     : `❌ <b>${escapeHtml(user)}</b>는 답이 아니에요.`);
             //   [냐냐 지적] AI 설명 한 줄은 뜻을 보여줄 때도 같이 낸다 (2026-09-30).
             //   'cada vez en cuando 는 가끔씩이라는 뜻' 만 나오고 '올바른 표현은 de cuando en cuando'
