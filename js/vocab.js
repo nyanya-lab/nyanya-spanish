@@ -1394,13 +1394,25 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     },
                     required: ["correctedWord","meaning","pos","gender","difference"]
                 };
+                //   [냐냐 지적] roca 의 유의어로 rock 을 넣으니 AI 가 '교정' 이라며 piedra · roca 로 바꿔버렸다 (2026-10-06).
+                //     교정은 한두 글자 오타만 — 다른 낱말로 갈아끼우지 않게 못박고, 아래에서 코드로도 한 번 더 막는다.
+                const fixRule = `correctedWord 는 한두 글자 철자 오타일 때만 고칠 것. "${bare}" 가 영어·외래어이거나 다른 뜻의 낱말이어도 다른 단어로 바꾸지 말고 "${bare}" 그대로 두고, 그 낱말 자체의 정보를 채울 것.`;
                 const prompt = isSynonym
-                    ? `스페인어 단어 "${mainWord}"(뜻: ${mainMeaning})의 유의어로 "${bare}"를 등록하려 해. "${bare}"의 정보를 JSON으로 채워줘. 철자 틀렸으면 correctedWord에 교정. 뜻은 한국어로 짧게. difference에는 두 단어의 차이를 "단어A : 설명 | 단어B : 설명" 형식으로.`
-                    : `스페인어 단어 "${bare}"의 정보를 JSON으로. 철자 틀렸으면 correctedWord에 교정. 뜻은 한국어로 짧게. difference는 빈 문자열.`;
+                    ? `스페인어 단어 "${mainWord}"(뜻: ${mainMeaning})의 유의어로 "${bare}"를 등록하려 해. "${bare}"의 정보를 JSON으로 채워줘. ${fixRule} "${mainWord}" 로 바꾸는 것도 안 됨. 뜻은 한국어로 짧게. difference에는 두 단어의 차이를 "단어A : 설명 | 단어B : 설명" 형식으로.`
+                    : `스페인어 단어 "${bare}"의 정보를 JSON으로. ${fixRule} 뜻은 한국어로 짧게. difference는 빈 문자열.`;
                 const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                //   그래도 다른 낱말을 들고 오면(원래 단어로 · 세 글자 넘게 다른 낱말로) 아무것도 안 채운다 —
+                //   뜻·품사도 그 낱말의 것이라 섞이면 더 헷갈린다.
+                const bareKey = s => stripAccents(String(s || '').toLowerCase().trim()).replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '');
+                const proposed = String(data.correctedWord || '').trim();
+                if (proposed && bareKey(proposed) !== bareKey(bare)
+                    && (bareKey(proposed) === bareKey(mainWord) || typeof levenshtein !== 'function' || levenshtein(bareKey(proposed), bareKey(bare)) > 2)) {
+                    showToast(`AI 가 "${bare}" 를 "${proposed}" (으)로 바꾸려 해서 그대로 뒀어요. 직접 채워 주세요`, "warning");
+                    return;
+                }
 
                 // 값 채우기
                 const posSel = row.querySelector('[data-syn-field="pos"]');
