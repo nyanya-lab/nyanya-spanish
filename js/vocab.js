@@ -6440,6 +6440,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             lastFilteredWords = filteredSorted;
             updateWritePracticeBtn();
 
+            //   같은 철자·다른 품사 짝 찾기용 (카드 오른쪽 칩)
+            const spellingIndex = buildSpellingIndex();
             // [냐냐 PATCH-페이지네이션] 검색 중엔 페이지 없이 전체 표시, 아니면 50개씩 잘라 그림
             let pageItems = filteredSorted;
             let totalPages = 1;
@@ -6541,7 +6543,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                     <span class="block text-sm text-slate-500 font-semibold mt-0.5 ${expandedAll ? 'hidden' : ''}" data-card-meaning="${w.id}">${w.meaning}</span>
                                 </span>
                             </button>
-                            <div class="flex items-center gap-1 shrink-0">
+                            <div class="flex flex-col items-end gap-1.5 shrink-0">
+                            <div class="flex items-center gap-1">
                                 <button onclick="speakText(event, '${w.word}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1 shrink-0"><i class="fa-solid fa-volume-high text-sm"></i></button>
                                 ${gradeCycleBtnHtml(grade, `cycleWordGrade('${w.id}', event)`)}
                                 <button onclick="openWordModal('${w.id}')" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all">
@@ -6550,6 +6553,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                 <button onclick="deleteWord('${w.id}', event)" class="w-7 h-7 rounded-full bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-slate-400 flex items-center justify-center transition-all">
                                     <i class="fa-solid fa-trash-can text-xs"></i>
                                 </button>
+                            </div>
+                            ${samePosPairChips(w, spellingIndex)}
                             </div>
                         </div>
 
@@ -6565,6 +6570,31 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (expandedAll) {
                 document.querySelectorAll('[data-card-chevron]').forEach(c => { c.style.transform = 'rotate(90deg)'; });
             }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 같은 철자인데 품사가 다른 단어를 카드 오른쪽(아이콘 밑)에 칩으로 (2026-10-06).
+        //   el futuro(명사) 카드에 'adj. futuro(미래의)' — 누르면 그 단어 조회 창이 뜬다.
+        //   품사별로 따로 등록하는 게 원칙이라(칸·점수가 품사마다 다름) 묶지 않고 서로 이어만 준다.
+        // ============================================================
+        function spellingKeyOf(w) {
+            return String((w && w.word) || '').toLowerCase().normalize('NFC')
+                .replace(/^(el\/la|los\/las|el|la|los|las)\s+/, '').trim();
+        }
+        function buildSpellingIndex() {
+            const m = new Map();
+            (vocabulary || []).forEach(w => { const k = spellingKeyOf(w); if (!k) return; if (!m.has(k)) m.set(k, []); m.get(k).push(w); });
+            return m;
+        }
+        function samePosPairChips(w, index) {
+            const others = ((index || buildSpellingIndex()).get(spellingKeyOf(w)) || []).filter(o => o.id !== w.id);
+            if (!others.length) return '';
+            return others.map(o => {
+                const abbr = (typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '';
+                const mean = String(o.meaning || '').split(/[,;]/)[0].trim();
+                return `<button type="button" onclick="event.stopPropagation(); openWordView('${escapeAttr(String(o.id))}')" title="같은 철자, 다른 품사 — ${escapeAttr(String(o.meaning || ''))}"
+                    class="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-500 border border-slate-200 transition-all whitespace-nowrap">⇄ ${escapeHtml(abbr)} ${escapeHtml(String(o.word || ''))}${mean ? `(${escapeHtml(mean)})` : ''}</button>`;
+            }).join('');
         }
 
         // [냐냐 PATCH-페이지네이션] 페이지 바 렌더
