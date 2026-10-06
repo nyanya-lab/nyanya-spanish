@@ -1156,6 +1156,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 <div class="idiom-ex-box hidden flex gap-2 items-start pl-4">
                 <input type="text" data-idiom-field="example" placeholder="관용구 예문 (스페인어)" autocomplete="off" value="${q(exampleText)}" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs italic focus:outline-none focus:ring-2 focus:ring-sky-400">
                 <input type="text" data-idiom-field="exampleMeaning" placeholder="예문 뜻" autocomplete="off" value="${q(exampleMeaningText)}" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-sky-400">
+                <button type="button" onclick="autofillIdiomExample('${rowId}')" title="이 관용구 예문을 AI로 (비어 있으면 만들고, 적어뒀으면 번역·철자를 채워요)" class="w-8 h-8 shrink-0 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i></button>
                 </div>
             `;
             entriesBox.appendChild(row);
@@ -1163,6 +1164,97 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function toggleIdiomExampleRow(rowId) {
             const box = document.querySelector(`#${rowId} .idiom-ex-box`);
             if (box) box.classList.toggle('hidden');
+        }
+        function markIdiomExampleToggle(row) {
+            const exInp = row && row.querySelector('[data-idiom-field="example"]');
+            const tog = row && row.querySelector('.idiom-ex-toggle');
+            if (!tog) return;
+            const has = !!(exInp && exInp.value.trim());
+            tog.classList.toggle('bg-sky-50', has); tog.classList.toggle('text-sky-500', has);
+            tog.classList.toggle('bg-slate-50', !has); tog.classList.toggle('text-slate-300', !has);
+        }
+        //   AI 버튼 돌릴 때 아이콘을 빙글빙글로 — 끝나면 되돌린다
+        async function withSpinner(btn, job) {
+            const icon = btn ? btn.querySelector('i') : null;
+            const prev = icon ? icon.className : '';
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+            if (btn) btn.disabled = true;
+            try { return await job(); }
+            catch (e) { showToast(typeof describeGeminiError === 'function' ? describeGeminiError(e) : "AI 추천 중 문제가 생겼어요", "error"); }
+            finally { if (icon) icon.className = prev; if (btn) btn.disabled = false; }
+        }
+
+        // [냐냐 요청] 관용구 예문 줄의 AI 버튼 (2026-10-06) — 비어 있으면 만들고, 적어뒀으면 번역·철자를 채운다
+        async function autofillIdiomExample(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const idiom = (row.querySelector('[data-idiom-field="idiom"]') || {}).value || '';
+            const mean = (row.querySelector('[data-idiom-field="meaning"]') || {}).value || '';
+            const exInp = row.querySelector('[data-idiom-field="example"]');
+            const exMeInp = row.querySelector('[data-idiom-field="exampleMeaning"]');
+            if (!idiom.trim()) { showToast("먼저 관용구를 적어주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+            const cur = exInp ? exInp.value.trim() : '';
+            await withSpinner(row.querySelector('[onclick^="autofillIdiomExample"]'), async () => {
+                const schema = { type: "OBJECT", properties: { example: { type: "STRING" }, exampleMeaning: { type: "STRING" } }, required: ["example", "exampleMeaning"] };
+                const prompt = cur
+                    ? `스페인어 관용구 "${idiom}"(뜻: ${mean}) 의 예문 "${cur}" 를 한국어로 번역해줘. 철자·강세·활용이 틀렸으면 example 에 고쳐서 넣어줘.`
+                    : `스페인어 관용구 "${idiom}"(뜻: ${mean}) 를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 예문 한 문장과 한국어 번역을 만들어줘. 대괄호 자리는 알맞은 말로 채우고, 동사는 문장에 맞게 활용할 것.`;
+                const res = await callGemini(prompt, "You are a careful Spanish (Spain) teacher. Output strictly the JSON schema. Korean translation. No markdown.", schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                if (exInp && data.example) exInp.value = data.example.trim();
+                if (exMeInp && data.exampleMeaning) exMeInp.value = data.exampleMeaning.trim();
+                markIdiomExampleToggle(row);
+                showToast(cur ? "예문 번역을 채웠어요! ✨" : "예문을 만들었어요! ✨", "success");
+            });
+        }
+
+        // [냐냐 요청] 관용구 칸 통째로 AI 보완 (2026-10-06).
+        //   맨 위 '✨ AI 추천' 은 관용구 줄을 통째로 갈아 끼워서 이미 있는 단어엔 못 썼다 (번호·점수가 끊김).
+        //   이건 있는 줄은 그대로 두고 ① 빈 뜻·예문만 채우고 ② 빠진 관용구를 0~3개 더한다.
+        async function aiAugmentIdioms(btn) {
+            const word = ((document.getElementById('input-word') || {}).value || '').trim();
+            const meaning = ((document.getElementById('input-meaning') || {}).value || '').trim();
+            if (!word) { showToast("먼저 단어를 입력해주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+            const box = document.getElementById('idiom-fields-box');
+            if (box && box.classList.contains('hidden')) toggleIdiomSection();
+            const rows = [...document.querySelectorAll('#idiom-entries-box > div')];
+            const cur = rows.map((r, i) => ({ i, r, idiom: (r.querySelector('[data-idiom-field="idiom"]') || {}).value.trim(),
+                mean: (r.querySelector('[data-idiom-field="meaning"]') || {}).value.trim(),
+                ex: ((r.querySelector('[data-idiom-field="example"]') || {}).value || '').trim() })).filter(x => x.idiom);
+            await withSpinner(btn, async () => {
+                const item = { type: "OBJECT", properties: { idiom: { type: "STRING" }, idiomMeaning: { type: "STRING" }, example: { type: "STRING" }, exampleMeaning: { type: "STRING" } }, required: ["idiom", "idiomMeaning", "example", "exampleMeaning"] };
+                const schema = { type: "OBJECT", properties: {
+                    fill: { type: "ARRAY", items: { type: "OBJECT", properties: { i: { type: "INTEGER" }, idiomMeaning: { type: "STRING" }, example: { type: "STRING" }, exampleMeaning: { type: "STRING" } }, required: ["i", "idiomMeaning", "example", "exampleMeaning"] } },
+                    add: { type: "ARRAY", items: item } }, required: ["fill", "add"] };
+                const prompt = `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 의 관용구 목록을 보완해줘.
+지금 있는 관용구:
+${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 예문: ${x.ex || '(없음)'}`).join('\n') : '(없음)'}
+① fill: 위 목록에서 뜻이나 예문이 비어 있는 줄만, 번호 i 와 함께 채워줘 (있는 뜻은 그대로 돌려줘). 다 차 있으면 빈 배열.
+② add: 이 단어로 실제로 자주 쓰는 관용구·굳은 표현 가운데 위 목록에 없는 것을 0~3개. 억지로 만들지 말 것.
+   '단어 + 빈칸' 뿐인 것이나 당연한 전치사 짝(en [장소], de [재료] 같은 것)은 넣지 말 것. 영어 뜻을 섞지 말 것.
+예문은 그 관용구를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 한 문장, exampleMeaning 은 한국어 번역. idiomMeaning 에 예문을 넣지 말 것.`;
+                const res = await callGemini(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                let filled = 0, added = 0;
+                (data.fill || []).forEach(f => {
+                    const x = cur.find(c => c.i === f.i); if (!x) return;
+                    const set = (field, v) => { const inp = x.r.querySelector(`[data-idiom-field="${field}"]`); if (inp && !inp.value.trim() && v) { inp.value = String(v).trim(); filled++; } };
+                    set('meaning', f.idiomMeaning); set('example', f.example); set('exampleMeaning', f.exampleMeaning);
+                    markIdiomExampleToggle(x.r);
+                });
+                const have = new Set(cur.map(x => normalizeSpanishAnswer(x.idiom)));
+                (data.add || []).forEach(a => {
+                    if (!a.idiom || have.has(normalizeSpanishAnswer(a.idiom))) return;
+                    have.add(normalizeSpanishAnswer(a.idiom));
+                    addIdiomRow(a.idiom.trim(), (a.idiomMeaning || '').trim(), '', '', (a.example || '').trim(), (a.exampleMeaning || '').trim());
+                    added++;
+                });
+                showToast(filled || added ? `빈 칸 ${filled}개 채우고 관용구 ${added}개 더했어요 ✨` : "더 보탤 게 없대요 — 지금 목록 그대로 좋아요", filled || added ? "success" : "info");
+            });
         }
 
         // [냐냐 요청] 관용구 행 하나만 AI로 채우기
@@ -1504,6 +1596,58 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             } finally {
                 if (icon) icon.className = prevCls || 'fa-solid fa-wand-magic-sparkles text-xs';
             }
+        }
+
+        // [냐냐 요청] 유의어·반의어 칸 통째로 AI 보완 (2026-10-06) — 관용구 보완과 같은 방식.
+        //   있는 줄은 그대로 두고 ① 빈 뜻·차이만 채우고 ② 빠진 유의어·반의어를 0~3개 더한다.
+        async function aiAugmentSynonyms(btn) {
+            const word = ((document.getElementById('input-word') || {}).value || '').trim();
+            const meaning = ((document.getElementById('input-meaning') || {}).value || '').trim();
+            if (!word) { showToast("먼저 단어를 입력해주세요!", "error"); return; }
+            if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
+            const box = document.getElementById('syn-fields-box');
+            if (box && box.classList.contains('hidden')) toggleSynonymSection();
+            const rows = [...document.querySelectorAll('#syn-entries-box > div')];
+            const get = (r, f) => ((r.querySelector(`[data-syn-field="${f}"]`) || {}).value || '').trim();
+            const cur = rows.map((r, i) => ({ i, r, word: get(r, 'word'), type: get(r, 'type') || 'synonym', mean: get(r, 'meaning'), diff: get(r, 'difference') })).filter(x => x.word);
+            await withSpinner(btn, async () => {
+                const schema = { type: "OBJECT", properties: {
+                    fill: { type: "ARRAY", items: { type: "OBJECT", properties: { i: { type: "INTEGER" }, meaning: { type: "STRING" }, difference: { type: "STRING" } }, required: ["i", "meaning", "difference"] } },
+                    add: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        word: { type: "STRING", description: "관사 없이 단어만" }, pos: { type: "STRING", enum: ["noun","verb","adjective","adverb","preposition","conjunction","pronoun","interrogative","phrase"] },
+                        gender: { type: "STRING", enum: ["none","masculine","feminine"] }, isPlural: { type: "BOOLEAN" }, meaning: { type: "STRING" },
+                        type: { type: "STRING", enum: ["synonym","antonym"] }, difference: { type: "STRING" } }, required: ["word","pos","gender","meaning","type","difference"] } } }, required: ["fill", "add"] };
+                const prompt = `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 의 유의어·반의어 목록을 보완해줘.
+지금 있는 것:
+${cur.length ? cur.map(x => `${x.i}. [${x.type === 'antonym' ? '반의어' : '유의어'}] ${x.word} = ${x.mean || '(뜻 없음)'}${x.type === 'antonym' ? '' : ` | 차이: ${x.diff || '(없음)'}`}`).join('\n') : '(없음)'}
+① fill: 위 목록에서 뜻이나 (유의어의) 차이가 비어 있는 줄만, 번호 i 와 함께 채워줘 (있는 건 그대로 돌려줘). 반의어의 difference 는 빈 문자열. 다 차 있으면 빈 배열.
+② add: 위에 없는 유의어·반의어를 0~3개. 학습에 쓸모 있는 실제 낱말만, 억지로 만들지 말 것. 반의어가 있을 법한 단어인데 목록에 반의어가 없으면 하나는 넣을 것.
+difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\s+/i, '')} : 짧은 명사형 설명 | 그 단어 : 짧은 명사형 설명" 형식. 영어 뜻을 섞지 말 것.`;
+                const res = await callGemini(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
+                const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
+                if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                let filled = 0, added = 0;
+                (data.fill || []).forEach(f => {
+                    const x = cur.find(c => c.i === f.i); if (!x) return;
+                    const set = (field, v) => { const inp = x.r.querySelector(`[data-syn-field="${field}"]`); if (inp && !inp.value.trim() && v) { inp.value = String(v).trim(); filled++; } };
+                    set('meaning', f.meaning);
+                    if (x.type !== 'antonym') set('difference', f.difference);
+                });
+                const have = new Set(cur.map(x => normalizeSpanishAnswer(x.word)));
+                have.add(normalizeSpanishAnswer(word));
+                (data.add || []).forEach(a => {
+                    if (!a.word) return;
+                    //   AI 가 'centro de fitness' 를 복수라고 해서 'los centro …' 가 됐다 — 첫 낱말이 -s 로 끝날 때만 복수로 믿는다
+                    const plural = !!a.isPlural && /s$/i.test(a.word.trim().split(/\s+/)[0]);
+                    const shown = buildNounDisplayForm(a.word.trim(), a.gender, plural, a.pos);
+                    if (have.has(normalizeSpanishAnswer(shown)) || have.has(normalizeSpanishAnswer(a.word))) return;
+                    have.add(normalizeSpanishAnswer(shown));
+                    const t = a.type === 'antonym' ? 'antonym' : 'synonym';
+                    addSynonymRow({ word: shown, pos: a.pos || 'noun', gender: a.gender || 'none', meaning: a.meaning || '', difference: t === 'antonym' ? '' : (a.difference || ''), type: t });
+                    added++;
+                });
+                showToast(filled || added ? `빈 칸 ${filled}개 채우고 ${added}개 더했어요 ✨` : "더 보탤 게 없대요 — 지금 목록 그대로 좋아요", filled || added ? "success" : "info");
+            });
         }
 
         function clearSynonymRows() {
