@@ -418,6 +418,22 @@
             }
         }
 
+        // [냐냐 요청] 채점 전용 — 3.5 가 막히면 3.1 로 다시 채점한다 (2026-10-06).
+        //   바꾼 바로 그날 3.5 가 몇 분씩 '사용자가 많다'(503)만 돌려줬다. 같은 때 3.1 은 멀쩡했다.
+        //   키 오류·요청 형식 오류는 모델을 바꿔도 똑같으니 그대로 던진다.
+        //   3.1 은 예전 채점 설정(low) 그대로 — 그 설정으로 뜻 틀림까지 잡던 것을 10/2 에 확인했다.
+        async function callGeminiGrade(promptText, systemInstruction, jsonSchema) {
+            try {
+                return await callGemini(promptText, systemInstruction, jsonSchema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE);
+            } catch (e) {
+                const sameEverywhere = String(e && e.message || '').includes('NO_API_KEY')
+                    || e.status === 400 || e.status === 401 || e.status === 403;
+                if (sameEverywhere || GEMINI_MODEL_GRADE === GEMINI_MODEL_FLASH_LITE) throw e;
+                console.warn(`채점: ${GEMINI_MODEL_GRADE} 실패 → ${GEMINI_MODEL_FLASH_LITE} 로 다시`, e);
+                return await callGemini(promptText, systemInstruction, jsonSchema, 'low', GEMINI_MODEL_FLASH_LITE);
+            }
+        }
+
         // [PATCH-에러분류] callGemini가 던진 에러를 사용자에게 보여줄 정확한 한국어 메시지로 변환
         function describeGeminiError(e) {
             const msg = String(e && e.message || '');
