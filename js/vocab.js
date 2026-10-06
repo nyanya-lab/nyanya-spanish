@@ -1874,7 +1874,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                철자가 같아도 품사에 따라 뜻이 다른 단어입니다 (futuro = 명사 '미래' / 형용사 '미래의').
                meaning·example·exampleMeaning·notes·synonyms 를 전부 그 품사로 쓰이는 경우로 채우고,
                pos 는 반드시 "${pickedPos}" 로 두세요. 다른 품사의 뜻은 섞지 마세요.` : '';
+            //   [냐냐 지적] rock 을 등록하니 뜻에 '바위, 암석' (영어 뜻) 이 섞이고 유의어로 piedra 가 붙었다 (2026-10-06).
+            //     예문은 셋 다 음악 이야기였다 — 철자가 영어와 같아서 뜻 칸에만 샌다. 이 한 줄로 세 번 다 '록 음악' 만 나왔다.
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.${pickedPosLine}
+            - **영어와 철자가 같은 낱말(rock, club, fan, test 등 외래어)은 스페인어에서 실제로 쓰이는 뜻만 적을 것. 영어 뜻을 섞지 말 것** (rock = 록 음악. '바위' 는 영어 뜻이라 안 됨 — 스페인어 바위는 roca). 유의어·반의어도 그 스페인어 뜻 기준으로.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
