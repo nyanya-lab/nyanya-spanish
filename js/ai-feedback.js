@@ -3241,7 +3241,7 @@ ${buildLearnerProfileSummary()}`;
                 //   예전엔 자격이 안 붙어서 hablar·comer 가 +10 인데도 마스터가 아니었다 (54개).
                 //   ↺ 로 되돌리면 snapshotWordScoreState 가 자격까지 원래대로 돌린다.
                 if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok, subjective: ok });
-                aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+                pushWordEntry({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             };
 
             if (!mineToks.length) {
@@ -3256,7 +3256,7 @@ ${buildLearnerProfileSummary()}`;
                     const prev = snapshotWordScoreState(w);
                     const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
                     if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: ok, subjective: ok });
-                    aiLastEsKoWords.push({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+                    pushWordEntry({ word: w, ok, noScore, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
                 });
                 return;
             }
@@ -3401,7 +3401,7 @@ ${buildLearnerProfileSummary()}`;
                 const prev = snapshotWordScoreState(w);
                 const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
                 if (delta && typeof addWordScore === 'function') addWordScore(w, delta, { correct: false });
-                aiLastEsKoWords.push({ word: w, ok: false, noScore: !isBad, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
+                pushWordEntry({ word: w, ok: false, noScore: !isBad, delta, baseDelta: delta, prev, gradeBefore, state: 'normal', undone: false });
             });
             // ④ [냐냐 요청] 알면서 못 떠올린 단어도 −2 (2026-09-04).
             //   'rizo(곱슬)' 라고 쓴 자리를 'arroz(쌀)' 로 고쳐줬는데, arroz 는 단어장에 있는 단어다.
@@ -4491,6 +4491,7 @@ ${buildLearnerProfileSummary()}`;
         function snapshotWordScoreState(w) {
             const keys = ['score', 'correctTotal', 'wrongTotal', 'lastWrongDate', 'reviewStage',
                           'lastDemoteDate', // 곡선을 하루 한 번만 물리는 표시 — 되돌릴 때 같이 지워야 재반영이 먹는다
+                          'keepDueDate',    // '오늘 줄에 남김' 표시 — 오늘 차례였나를 반영 전 모습으로 재는 데도 쓴다
                           'lastReviewDate', 'weak', 'mastered', 'perfect', 'subjectivePassed'];
             const snap = {};
             keys.forEach(k => { snap[k] = w[k]; });
@@ -4502,6 +4503,29 @@ ${buildLearnerProfileSummary()}`;
                 if (snap[k] === undefined) delete w[k];
                 else w[k] = snap[k];
             });
+        }
+
+        // ============================================================
+        // [냐냐 요청] 첨삭에서 오늘 차례인 단어를 쓰면 복습으로 친다 (2026-10-06) — 문법·관용구와 같은 잣대.
+        //   그대로 살아남음(+) = 복습 성공 (한 칸 앞) · 철자 틀림(−) = 복습 실패 (한 칸 뒤, 오늘 몫은 끝)
+        //   고쳐짐(0) = 없던 일. 🔁 오늘 복습 딱지 + 일지 복습 +1. ↺ 로 점수를 바꾸면 복습도 같이 따라간다.
+        //   ⚠️ 'AI 가 넣은 단어'(④ 알면서 못 떠올림)는 냐냐님이 쓴 낱말이 아니라 안 친다.
+        //   '오늘 차례였나' 는 점수를 매기기 **전** 모습(prev)으로 잰다 — 매긴 뒤엔 lastWrongDate 가 오늘로 바뀐다.
+        // ============================================================
+        function wordDueBefore(prev) {
+            return !!(prev && prev.lastWrongDate) && typeof curveIsDue === 'function'
+                && curveIsDue(prev.lastReviewDate, prev.lastWrongDate, prev.reviewStage || 0, prev.keepDueDate);
+        }
+        function applyWordReviewCredit(e) {
+            if (!e) return;
+            e.alsoReviewed = !!e.due && e.delta !== 0;
+            if (e.alsoReviewed && typeof markWordReviewedToday === 'function') markWordReviewedToday(e.word, e.delta > 0);
+            syncAiBonusReview(e, e.alsoReviewed);
+        }
+        function pushWordEntry(entry) {
+            entry.due = wordDueBefore(entry.prev);
+            aiLastEsKoWords.push(entry);
+            applyWordReviewCredit(entry);
         }
 
         // ============================================================
@@ -5413,6 +5437,7 @@ ${buildLearnerProfileSummary()}`;
             e.noScore = (delta === 0);
             e.undone = (delta === 0);
             if (delta) addWordScore(e.word, delta, { correct: delta > 0, subjective: delta > 0 });
+            applyWordReviewCredit(e);   // 오늘 차례 단어면 복습 성공·실패·취소를 새 점수에 맞춘다
 
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
@@ -5646,7 +5671,7 @@ ${buildLearnerProfileSummary()}`;
             const delta = 0;
             const prev = snapshotWordScoreState(w);
             const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-            aiLastEsKoWords.push({ word: w, ok: false, noScore: true, delta, baseDelta: WORD_SPELL_OK,
+            pushWordEntry({ word: w, ok: false, noScore: true, delta, baseDelta: WORD_SPELL_OK,
                 prev, gradeBefore, groupDelta: delta, state: 'normal', undone: false, manual: true });
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddWordPicker();
@@ -5729,6 +5754,7 @@ ${buildLearnerProfileSummary()}`;
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
+                                ${w.alsoReviewed ? `<span title="${w.delta > 0 ? '오늘 차례였던 단어 — 오늘 복습으로 쳤어요 (한 칸 앞으로)' : '오늘 차례였던 단어 — 철자가 틀려 복습 실패로 쳤어요 (한 칸 뒤로)'}" class="shrink-0 text-[9px] font-black rounded-full px-1.5 py-0.5 ${w.delta > 0 ? 'text-amber-700 bg-amber-100' : 'text-rose-600 bg-rose-100'}">🔁 ${w.delta > 0 ? '오늘 복습' : '복습 실패'}</span>` : ''}
                                 <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
                             </span>`;
                         }).join('')}

@@ -1651,17 +1651,6 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             });
         }
 
-        //   유의어 후보가 단어 자신이면 차이 설명('A : … | B : …')의 다른 쪽 이름으로 바꾼다. 못 찾으면 null (버림).
-        function fixSelfSynonym(item, selfKey) {
-            if (!item || !item.word) return null;
-            const key = (s) => normalizeSpanishAnswer(String(s || '').replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '').trim());
-            if (key(item.word) !== selfKey) return item;
-            const names = String(item.difference || '').split('|').map(p => p.split(':')[0].trim()).filter(Boolean);
-            const other = names.find(n => key(n) && key(n) !== selfKey);
-            if (!other) return null;
-            return Object.assign({}, item, { word: other.replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '').trim() });
-        }
-
         function clearSynonymRows() {
             const box = document.getElementById('syn-entries-box');
             if (box) box.innerHTML = '';
