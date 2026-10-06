@@ -2597,9 +2597,25 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
 
             // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
+            //   [냐냐 요청] 관용구도 '없는 것만 더하기' (2026-10-06). 예전엔 줄을 통째로 갈아 끼워서
+            //   이미 있는 단어에 누르면 관용구 번호(점수·곡선 연결)가 끊겼다. 같은 관용구가 있으면 빈 뜻·예문만 채운다.
             if (result.idioms && result.idioms.length > 0) {
-                clearIdiomRows();
-                result.idioms.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, '', '', item.example, item.exampleMeaning));
+                document.querySelectorAll('#idiom-entries-box > div').forEach(r => {
+                    const inp = r.querySelector('[data-idiom-field="idiom"]');
+                    if (inp && !inp.value.trim()) r.remove();   // 펼칠 때 생긴 빈 줄은 치운다
+                });
+                const rowsNow = [...document.querySelectorAll('#idiom-entries-box > div')];
+                const keyOf = (t) => normalizeSpanishAnswer(String(t || ''));
+                result.idioms.forEach(item => {
+                    if (!item || !item.idiom) return;
+                    const same = rowsNow.find(r => keyOf((r.querySelector('[data-idiom-field="idiom"]') || {}).value) === keyOf(item.idiom));
+                    if (!same) { addIdiomRow(item.idiom, item.idiomMeaning, '', '', item.example, item.exampleMeaning); return; }
+                    [['meaning', item.idiomMeaning], ['example', item.example], ['exampleMeaning', item.exampleMeaning]].forEach(([f, v]) => {
+                        const inp = same.querySelector(`[data-idiom-field="${f}"]`);
+                        if (inp && !inp.value.trim() && v) inp.value = String(v).trim();
+                    });
+                    markIdiomExampleToggle(same);
+                });
                 const idiomBoxAi = document.getElementById('idiom-fields-box');
                 const idiomIconAi = document.getElementById('idiom-toggle-icon');
                 if (idiomBoxAi) idiomBoxAi.classList.remove('hidden');
