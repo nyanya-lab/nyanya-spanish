@@ -994,10 +994,19 @@ let quizSession = null;
                 .concat((typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(word).map(x => x.it) : []);
             if (idiomList.length > 0) {
                 // [냐냐 요청] 표현마다 발음 듣기 — 통으로 소리내 봐야 입에 붙는다
-                const items = idiomList.map(x => `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed">
-                    <span>· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}</span>
+                //   [냐냐 요청] 단어 조회 창(opts.idiomExamples)에서만 관용구를 누르면 그 예문이 펼쳐진다 (2026-10-06).
+                //   이 함수는 퀴즈·복습 화면도 그리지만 거기선 예문을 안 싣는다.
+                const items = idiomList.map(x => {
+                    const ex = opts.idiomExamples && x.example;
+                    const line = `<span class="flex items-baseline gap-1 text-sm text-slate-700 leading-relaxed">
+                    <span${ex ? ` role="button" onclick="const n=this.parentElement.nextElementSibling; if(n) n.classList.toggle('hidden')" class="cursor-pointer hover:text-violet-600" title="눌러서 예문 보기"` : ''}>· <b class="text-slate-800">${escapeHtml(x.idiom)}</b>${x.idiomMeaning ? ' — ' + escapeHtml(x.idiomMeaning) : ''}${ex ? ' <i class="fa-solid fa-quote-right text-[9px] text-sky-400 align-middle"></i>' : ''}</span>
                     ${(typeof idiomSpeakerHtml === 'function') ? idiomSpeakerHtml(x.idiom) : ''}
-                </span>`).join('');
+                </span>`;
+                    return ex ? line + `<span class="hidden block pl-3 pb-1 leading-snug">
+                    <span class="block text-[13px] text-slate-600 italic">${escapeHtml(x.example)}</span>
+                    ${x.exampleMeaning ? `<span class="block text-[12px] text-slate-400">${escapeHtml(x.exampleMeaning)}</span>` : ''}
+                </span>` : line;
+                }).join('');
                 sections.push(`
                     <div>
                         <span class="block text-xs font-black text-emerald-600 mb-1.5">💬 관용구</span>

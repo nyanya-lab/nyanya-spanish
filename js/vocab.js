@@ -908,7 +908,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             document.getElementById('word-view-badges').innerHTML =
                 badges + (dele ? `<span class="inline-flex items-center">${dele}</span>` : '');
 
-            const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, {}) : '';
+            const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { idiomExamples: true }) : '';
             document.getElementById('word-view-body').innerHTML = (notes && notes.trim())
                 ? notes : '<p class="text-xs text-slate-400 font-semibold">적어둔 정보가 없어요.</p>';
             if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'word-view-conj-box');
@@ -970,8 +970,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 //   [냐냐 요청] 다른 단어와 같이 쓰는 관용구도 보통 줄처럼 싣는다 — 줄에 주인 id 를 달아 둔다
                 const linkedList = (typeof linkedIdiomsOf === 'function') ? linkedIdiomsOf(w) : [];
                 if (idiomList.length > 0 || linkedList.length > 0) {
-                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, item.iid || ''));
-                    linkedList.forEach(({ owner, it }) => addIdiomRow(it.idiom, it.idiomMeaning, it.iid || '', owner.id));
+                    idiomList.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, item.iid || '', '', item.example, item.exampleMeaning));
+                    linkedList.forEach(({ owner, it }) => addIdiomRow(it.idiom, it.idiomMeaning, it.iid || '', owner.id, it.example, it.exampleMeaning));
                     if (idiomBox) idiomBox.classList.remove('hidden');
                     if (idiomIcon) idiomIcon.className = "fa-solid fa-minus text-xs";
                 } else {
@@ -1094,23 +1094,38 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   **글자로 찾아** 다시 붙였다 — 글자가 바뀜으면 못 찾고 새 번호를 받았다.
         //   → 편집창 줄에 번호를 실어두고, 저장할 때 그 번호로 이어 붙인다.
         //   ⚠️ 새로 시작하고 싶으면 그 줄을 지우고 다시 적으면 된다 (번호가 새로 나온다).
-        function addIdiomRow(idiomText = '', meaningText = '', iid = '', ownerId = '') {
+        //   [냐냐 요청] 관용구마다 예문 (2026-10-06). 관용구 사전·단어 조회에서만 보이고 퀴즈·쓰기·미션엔 안 나온다 —
+        //   관용구 뜻 칸에 예문을 적으면 퀴즈에서 답이 보여서 칸을 따로 둔다. 편집 창에선 접어 둔다.
+        function addIdiomRow(idiomText = '', meaningText = '', iid = '', ownerId = '', exampleText = '', exampleMeaningText = '') {
             const entriesBox = document.getElementById('idiom-entries-box');
             if (!entriesBox) { console.warn('idiom-entries-box 엘리먼트를 찾을 수 없음 — index.html이 최신 버전이 아닐 수 있어요'); return; }
             const rowId = 'idiom-row-' + (idiomRowCounter++);
             const row = document.createElement('div');
             row.id = rowId;
-            row.className = 'flex gap-2 items-start';
+            row.className = 'space-y-1.5';
             if (iid) row.dataset.iid = iid;
             if (ownerId) row.dataset.owner = ownerId;   // 다른 단어와 같이 쓰는 관용구
+            const q = (s) => String(s || '').replace(/"/g, '&quot;');
+            const hasEx = !!(exampleText || exampleMeaningText);
             row.innerHTML = `
-                <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${idiomText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${meaningText.replace(/"/g, '&quot;')}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <div class="flex gap-2 items-start">
+                <input type="text" data-idiom-field="idiom" placeholder="예: ¿Qué tiempo hace?" autocomplete="off" value="${q(idiomText)}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <input type="text" data-idiom-field="meaning" placeholder="예: 날씨가 어때요?" autocomplete="off" value="${q(meaningText)}" class="flex-1 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <!-- [냐냐 요청] 관용구마다 AI 추천 — 비어 있으면 하나 추천해주고, 적어뒀으면 뜻을 채운다 -->
-                <button type="button" onclick="autofillIdiomRow('${rowId}')" title="AI 추천 (비어 있으면 관용구를 추천, 적어뒀으면 뜻을 채워요)" class="w-9 h-9 shrink-0 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
+                <button type="button" onclick="autofillIdiomRow('${rowId}')" title="AI 추천 (비어 있으면 관용구를 추천, 적어뒀으면 뜻·예문을 채워요)" class="w-9 h-9 shrink-0 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-600 flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
+                <button type="button" onclick="toggleIdiomExampleRow('${rowId}')" title="이 관용구의 예문" class="idiom-ex-toggle w-9 h-9 shrink-0 rounded-xl ${hasEx ? 'bg-sky-50 text-sky-500' : 'bg-slate-50 text-slate-300'} hover:bg-sky-100 hover:text-sky-600 flex items-center justify-center transition-all"><i class="fa-solid fa-quote-right text-xs"></i></button>
                 <button type="button" onclick="document.getElementById('${rowId}').remove()" class="w-9 h-9 shrink-0 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+                <div class="idiom-ex-box hidden flex gap-2 items-start pl-4">
+                <input type="text" data-idiom-field="example" placeholder="관용구 예문 (스페인어)" autocomplete="off" value="${q(exampleText)}" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs italic focus:outline-none focus:ring-2 focus:ring-sky-400">
+                <input type="text" data-idiom-field="exampleMeaning" placeholder="예문 뜻" autocomplete="off" value="${q(exampleMeaningText)}" class="flex-1 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-sky-400">
+                </div>
             `;
             entriesBox.appendChild(row);
+        }
+        function toggleIdiomExampleRow(rowId) {
+            const box = document.querySelector(`#${rowId} .idiom-ex-box`);
+            if (box) box.classList.toggle('hidden');
         }
 
         // [냐냐 요청] 관용구 행 하나만 AI로 채우기
@@ -1121,6 +1136,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!row) return;
             const idiomInp = row.querySelector('[data-idiom-field="idiom"]');
             const meanInp = row.querySelector('[data-idiom-field="meaning"]');
+            const exInp = row.querySelector('[data-idiom-field="example"]');
+            const exMeInp = row.querySelector('[data-idiom-field="exampleMeaning"]');
             const word = (document.getElementById('input-word') || {}).value || '';
             if (!word.trim()) { showToast("먼저 단어를 입력해주세요!", "error"); return; }
             if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
@@ -1141,9 +1158,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     type: "OBJECT",
                     properties: {
                         idiom: { type: "STRING", description: "스페인어 관용구/자주 쓰는 표현. 강세 부호 정확히" },
-                        meaning: { type: "STRING", description: "한국어 뜻 (짧고 자연스럽게)" }
+                        meaning: { type: "STRING", description: "한국어 뜻 (짧고 자연스럽게, 예문은 넣지 말 것)" },
+                        example: { type: "STRING", description: "이 관용구를 실제로 쓴 자연스러운 스페인어 예문 한 문장. 대괄호 자리는 알맞은 말로 채워서" },
+                        exampleMeaning: { type: "STRING", description: "그 예문의 한국어 번역" }
                     },
-                    required: ["idiom", "meaning"]
+                    required: ["idiom", "meaning", "example", "exampleMeaning"]
                 };
                 const prompt = cur
                     ? `스페인어 표현 "${cur}" 의 한국어 뜻을 채워줘. 철자나 강세가 틀렸으면 idiom 에 고쳐서 넣어줘. (관련 단어: "${word}"${meaning ? `, 뜻: ${meaning}` : ''})`
@@ -1155,6 +1174,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
 
                 if (idiomInp && data.idiom) idiomInp.value = data.idiom.trim();
                 if (meanInp && data.meaning) meanInp.value = data.meaning.trim();
+                //   예문은 비어 있을 때만 채운다 — 손으로 적어 둔 예문은 안 덮는다
+                if (exInp && !exInp.value.trim() && data.example) exInp.value = data.example.trim();
+                if (exMeInp && !exMeInp.value.trim() && data.exampleMeaning) exMeInp.value = data.exampleMeaning.trim();
+                const exTog = row.querySelector('.idiom-ex-toggle');
+                if (exTog && exInp && exInp.value.trim()) { exTog.classList.remove('bg-slate-50', 'text-slate-300'); exTog.classList.add('bg-sky-50', 'text-sky-500'); }
                 showToast(cur ? "관용구 뜻을 채웠어요! ✨" : `"${(data.idiom || '').trim()}" 를 추천했어요! ✨`, "success");
             } catch (e) {
                 showToast("AI 추천 중 문제가 생겼어요. 잠시 후 다시 시도해주세요", "error");
@@ -1219,6 +1243,10 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const idiomVal = idiomInput ? idiomInput.value.trim() : '';
                 if (idiomVal) {
                     const row0 = { idiom: idiomVal, idiomMeaning: meaningInput ? meaningInput.value.trim() : '' };
+                    const exIn = row.querySelector('[data-idiom-field="example"]');
+                    const exMeIn = row.querySelector('[data-idiom-field="exampleMeaning"]');
+                    if (exIn && exIn.value.trim()) row0.example = exIn.value.trim();
+                    if (exMeIn && exMeIn.value.trim()) row0.exampleMeaning = exMeIn.value.trim();
                     if (row.dataset && row.dataset.iid) row0.iid = row.dataset.iid;   // 글자를 고쳐도 점수가 따라오게
                     if (row.dataset && row.dataset.owner) row0.owner = row.dataset.owner;   // 같이 쓰는 관용구 — 저장 때 따로 다룬다
                     result.push(row0);
@@ -1983,9 +2011,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                             type: "OBJECT",
                             properties: {
                                 idiom: { type: "STRING", description: "관용구/숙어 또는 구문 패턴 (스페인어). 자리는 [주어]/[사람]/[사물] 같이 대괄호로. 예: ¿Qué tiempo hace?, enfadado con [사람]" },
-                                idiomMeaning: { type: "STRING", description: "관용구/패턴의 한국어 뜻" }
+                                idiomMeaning: { type: "STRING", description: "관용구/패턴의 한국어 뜻 (예문은 넣지 말 것 — 아래 example 칸에)" },
+                                example: { type: "STRING", description: "이 관용구를 실제로 쓴 자연스러운 스페인어 예문 한 문장. 대괄호 자리는 알맞은 말로 채워서" },
+                                exampleMeaning: { type: "STRING", description: "그 예문의 한국어 번역" }
                             },
-                            required: ["idiom", "idiomMeaning"]
+                            required: ["idiom", "idiomMeaning", "example", "exampleMeaning"]
                         }
                     },
                     exampleMeaning: { type: "STRING", description: "예문의 정확한 한국어 번역" },
@@ -2388,7 +2418,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             // [냐냐 PATCH] AI가 관용구를 찾아줬으면(여러 개 가능) 자동으로 채우고 섹션을 펼침
             if (result.idioms && result.idioms.length > 0) {
                 clearIdiomRows();
-                result.idioms.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning));
+                result.idioms.forEach(item => addIdiomRow(item.idiom, item.idiomMeaning, '', '', item.example, item.exampleMeaning));
                 const idiomBoxAi = document.getElementById('idiom-fields-box');
                 const idiomIconAi = document.getElementById('idiom-toggle-icon');
                 if (idiomBoxAi) idiomBoxAi.classList.remove('hidden');
@@ -3024,6 +3054,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (!it) return;
                 it.idiom = r.idiom;
                 if (r.idiomMeaning) it.idiomMeaning = r.idiomMeaning;
+                if (r.example) it.example = r.example; else delete it.example;
+                if (r.exampleMeaning) it.exampleMeaning = r.exampleMeaning; else delete it.exampleMeaning;
                 if (!Array.isArray(it.alsoUnder)) it.alsoUnder = [];
                 if (it.alsoUnder.indexOf(wordObj.id) < 0) it.alsoUnder.push(wordObj.id);
                 keep.add(owner.id + '::' + it.iid);
@@ -6053,6 +6085,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                                 <span class="text-lg font-extrabold text-slate-900 tracking-tight align-middle">${escapeHtml(r.text)}</span>
                                 ${due ? '<span class="ml-1 align-middle text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">오늘 복습</span>' : ''}
                                 <span class="block text-sm text-slate-500 font-semibold mt-0.5">${escapeHtml(r.meaning)}</span>
+                                ${/* [냐냐 요청] 관용구 예문은 사전에서 보인다 (2026-10-06) */''}
+                                ${r.it.example ? `<span class="block text-[13px] text-slate-600 italic mt-1.5 leading-snug">${escapeHtml(r.it.example)}</span>${r.it.exampleMeaning ? `<span class="block text-[12px] text-slate-400 leading-snug">${escapeHtml(r.it.exampleMeaning)}</span>` : ''}` : ''}
                             </span>
                             ${/* [냐냐 요청] 관용구 점수는 스피커 옆에 */''}
                             ${/* [냐냐 요청] 스피커 · 등급버튼 · DELE · 점수 차례로 (2026-09-15) */''}
