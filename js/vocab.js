@@ -5781,14 +5781,14 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const stageBefore = curveStage();
             // [냐냐 기준] 그 표현을 맞혔으면 곡선을 한 칸 앞으로 — 단, 관용구 복습으로 시작했을 때만.
             //   단어 복습에 섞여 나온 관용구나 퀴즈에서 맞힌 건 점수만 준다 (단어·문법과 같은 기준).
-            if (w._isIdiomTask && w._idiomOf) {
-                if (typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
-                if (s.idiomReview && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
-            }
+            if (w._isIdiomTask && w._idiomOf && typeof markIdiomSeen === 'function') markIdiomSeen(w._idiomOf.id, w.word);   // 만난 표현으로 기록
             const shift = withTaskGradeShift(w, () => {
                 if (typeof addWordScore === 'function') addWordScore(w.id, gain, { correct: true, subjective: true,
                     idiom: w._isIdiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null });
             });
+            //   [냐냐 요청] 칸은 점수를 올린 **뒤에** 민다 (2026-10-06) — 약점이면 졸업 대신 30일 칸에 머무는데,
+            //   이번 정답으로 약점을 벗었으면 그대로 졸업해야 한다.
+            if (w._isIdiomTask && w._idiomOf && s.idiomReview && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(w._idiomOf.id, w.word);
             // 관용구 과제를 맞힌 것으로 단어 곡선을 앞으로 밀지 않는다 — 방금 그 표현의 곡선을 밀었다
             //   [냐냐 요청] 곡선을 한 칸 앞으로 미는 건 **오늘의 복습에서만** (2026-09-23).
             //   자유 연습·시험에서 맞히면 점수만 받는다. 마스터 시험에서 30일 기다리던 valor 가

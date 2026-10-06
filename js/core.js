@@ -3140,6 +3140,7 @@ let vocabulary = [];
             const before = rec.stage || 0;
             rec.stage = before + 1;
             rec.lastReviewDate = getLocalDateString();
+            if (holdWeakAtLastStage(rec, 'stage', getIdiomGrade(wordId, idiomText), idiomText)) return;   // 약점이면 30일 칸에 머문다
             if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length && typeof showToast === 'function') {
                 showToast(`"${idiomText}" 망각곡선 졸업! 🎓`, "success");
             }
@@ -3280,9 +3281,12 @@ let vocabulary = [];
             const before = rec.stage || 0;
             rec.stage = before + 1;
             rec.lastReviewDate = getLocalDateString();
+            const tt = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === id);
+            if (typeof getGrammarGrade === 'function'
+                && holdWeakAtLastStage(rec, 'stage', getGrammarGrade(id), (tt && tt.title) || '이 문법')) return;   // 약점이면 30일 칸에 머문다
             if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length
                 && typeof showToast === 'function') {
-                const t = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === id);
+                const t = tt;
                 showToast(`"${(t && t.title) || '이 문법'}" 망각곡선 졸업! 🎓`, "success");
             }
         }
@@ -3513,6 +3517,16 @@ let vocabulary = [];
 
         // [냐냐 요청] 오늘의 복습(배너)에서 한 단어를 끝냈을 때 호출.
         //   맞았으면 다음 단계로, 핵심을 틀렸으면 한 단계 뒤로.
+        // [냐냐 요청] 약점·치명적이면 졸업 대신 마지막 칸(30일)에 머문다 (2026-10-06).
+        //   졸업은 '오늘의 복습에서 맞힌 횟수' 만 보고 점수는 안 봤다 — 단어 빈칸은 핵심 칸만 맞으면 칸이 나가서
+        //   −8 에서 시작한 단어가 약점인 채로 졸업할 수 있었다. 30일 뒤 다시 나오고, 그때도 약점이면 또 머문다.
+        //   점수는 부르는 쪽이 칸을 밀기 **전에** 이미 반영해 둔다 (쓰기 복습·단어 빈칸 둘 다).
+        function holdWeakAtLastStage(rec, stageKey, grade, label) {
+            if (!rec || (rec[stageKey] || 0) < REVIEW_INTERVALS.length || !isWeakGrade(grade)) return false;
+            rec[stageKey] = REVIEW_INTERVALS.length - 1;
+            if (typeof showToast === 'function') showToast(`"${label}" 은(는) 아직 약점이라 졸업 대신 30일 칸에 머물러요 💪`, "info");
+            return true;
+        }
         function markWordReviewedToday(wordOrId, wasCorrect) {
             const w = (typeof wordOrId === 'string') ? vocabulary.find(v => v.id === wordOrId) : wordOrId;
             if (!w) return;
@@ -3520,6 +3534,7 @@ let vocabulary = [];
             if (wasCorrect) {
                 const before = w.reviewStage || 0;
                 w.reviewStage = before + 1;
+                if (holdWeakAtLastStage(w, 'reviewStage', getWordGrade(w), w.word)) return;
                 // [냐냐 요청] 마지막 칸을 넘어서는 순간을 알려준다. 예전엔 복습 목록에서
                 //   그냥 사라지기만 해서 졸업한 줄도 몰랐다. 넘는 그 한 번만 뜬다.
                 if (before < REVIEW_INTERVALS.length && w.reviewStage >= REVIEW_INTERVALS.length
