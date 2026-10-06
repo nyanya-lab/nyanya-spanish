@@ -9838,7 +9838,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             { ch: '[', title: '대괄호 열기' },
             { ch: ']', title: '대괄호 닫기' },
             { ch: '→', title: '화살표' },  // [냐냐 요청] 2026-09-28
-            { ch: ':', title: '쌍점' }     // [냐냐 요청] 2026-10-05 — '· + 사람: ~' 처럼 메모에 자주 쓴다
+            { ch: ':', title: '쌍점' },    // [냐냐 요청] 2026-10-05 — '· + 사람: ~' 처럼 메모에 자주 쓴다
+            { ch: '~', title: '물결' }     // [냐냐 요청] 2026-10-06 — 스페인 자판은 AltGr+4 인데 한국 자판엔 AltGr 가 없고,
+                                           //   Shift+` 는 es-keys 가 ª 로 바꾼다. 칠 길이 없다.
         ];
 
         function rtInsertSymbol(id, ch) {
