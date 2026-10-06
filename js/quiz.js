@@ -1260,7 +1260,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     },
                     required: ["verdict"]
                 };
-                const resp = await callGeminiGrade(prompt, system, schema);
+                const resp = await callGeminiGrade(prompt, system, schema, 8000);
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
             } catch (e) {

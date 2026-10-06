@@ -327,7 +327,8 @@
         // ============================================================
         const GEMINI_MODEL_GRADE = 'gemini-3.5-flash-lite';
         const AI_GRADE_THINKING = 'medium';
-        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE) {
+        //   timeoutMs: 재시도까지 다 합친 기다림 상한 (0 = 제한 없음). 넘기면 err.timedOut 을 달아 던진다.
+        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
@@ -366,12 +367,24 @@
             // 일시적인 통신/서버 문제는 사용자가 다시 누르지 않아도 알아서 복구되게 함.
             let delay = 500;
             const MAX_ATTEMPTS = 4; // 최초 1회 + 재시도 3회
+            const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
+            const timeoutError = () => { const err = new Error(`Timed out after ${timeoutMs}ms`); err.timedOut = true; return err; };
             for (let i = 0; i < MAX_ATTEMPTS; i++) {
+                let timer = null;
                 try {
+                    let signal;
+                    if (deadline) {
+                        const left = deadline - Date.now();
+                        if (left <= 0) throw timeoutError();
+                        const ctl = new AbortController();
+                        timer = setTimeout(() => ctl.abort(), left);
+                        signal = ctl.signal;
+                    }
                     const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(payload),
+                        signal
                     });
                     if (!response.ok) {
                         const errBody = await response.text().catch(() => '');
@@ -407,13 +420,17 @@
                     }
                     return text;
                 } catch (e) {
+                    if (deadline && e.name === 'AbortError') e = timeoutError();
                     // 키 오류/요청형식 오류/한도초과는 재시도해도 소용없으므로 즉시 중단.
                     //   잘린 응답(MAX_TOKENS)도 다시 물어봐야 똑같이 잘리므로 바로 알린다.
                     const permanent = e.status === 400 || e.status === 401 || e.status === 403
-                        || e.status === 429 || e.finishReason === 'MAX_TOKENS';
+                        || e.status === 429 || e.finishReason === 'MAX_TOKENS' || e.timedOut;
                     if (i === MAX_ATTEMPTS - 1 || permanent) throw e;
+                    if (deadline && Date.now() + delay >= deadline) throw timeoutError();
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2; // 0.5s → 1s → 2s 점진적으로 늘려가며 재시도
+                } finally {
+                    clearTimeout(timer);
                 }
             }
         }
@@ -422,9 +439,12 @@
         //   바꾼 바로 그날 3.5 가 몇 분씩 '사용자가 많다'(503)만 돌려줬다. 같은 때 3.1 은 멀쩡했다.
         //   키 오류·요청 형식 오류는 모델을 바꿔도 똑같으니 그대로 던진다.
         //   3.1 은 예전 채점 설정(low) 그대로 — 그 설정으로 뜻 틀림까지 잡던 것을 10/2 에 확인했다.
-        async function callGeminiGrade(promptText, systemInstruction, jsonSchema) {
+        //   [냐냐 요청] 시간 제한도 둔다 — 3.5 가 오류 없이 마냥 늦을 때가 있었다 (쓰기 복습 채점 9초, 한 번은 45초 넘게).
+        //     첨삭 채점은 평소 10~13초라 20초, 쓰기 복습·퀴즈 채점은 평소 1~2초라 8초. 넘기면 3.1 로 넘긴다.
+        //     3.1 쪽엔 제한을 안 건다 — 거기서 끊으면 채점을 못 받는다.
+        async function callGeminiGrade(promptText, systemInstruction, jsonSchema, timeoutMs = 20000) {
             try {
-                return await callGemini(promptText, systemInstruction, jsonSchema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE);
+                return await callGemini(promptText, systemInstruction, jsonSchema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, timeoutMs);
             } catch (e) {
                 const sameEverywhere = String(e && e.message || '').includes('NO_API_KEY')
                     || e.status === 400 || e.status === 401 || e.status === 403;
