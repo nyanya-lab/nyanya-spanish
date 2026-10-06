@@ -1635,8 +1635,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 });
                 const have = new Set(cur.map(x => normalizeSpanishAnswer(x.word)));
                 have.add(normalizeSpanishAnswer(word));
-                (data.add || []).forEach(a => {
-                    if (!a.word) return;
+                (data.add || []).forEach(a0 => {
+                    const a = fixSelfSynonym(a0, word);
+                    if (!a || !a.word) return;
                     //   AI 가 'centro de fitness' 를 복수라고 해서 'los centro …' 가 됐다 — 첫 낱말이 -s 로 끝날 때만 복수로 믿는다
                     const plural = !!a.isPlural && /s$/i.test(a.word.trim().split(/\s+/)[0]);
                     const shown = buildNounDisplayForm(a.word.trim(), a.gender, plural, a.pos);
@@ -1648,6 +1649,17 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 });
                 showToast(filled || added ? `빈 칸 ${filled}개 채우고 ${added}개 더했어요 ✨` : "더 보탤 게 없대요 — 지금 목록 그대로 좋아요", filled || added ? "success" : "info");
             });
+        }
+
+        //   유의어 후보가 단어 자신이면 차이 설명('A : … | B : …')의 다른 쪽 이름으로 바꾼다. 못 찾으면 null (버림).
+        function fixSelfSynonym(item, selfKey) {
+            if (!item || !item.word) return null;
+            const key = (s) => normalizeSpanishAnswer(String(s || '').replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '').trim());
+            if (key(item.word) !== selfKey) return item;
+            const names = String(item.difference || '').split('|').map(p => p.split(':')[0].trim()).filter(Boolean);
+            const other = names.find(n => key(n) && key(n) !== selfKey);
+            if (!other) return null;
+            return Object.assign({}, item, { word: other.replace(/^(el\/la|los\/las|el|la|los|las)\s+/i, '').trim() });
         }
 
         function clearSynonymRows() {
@@ -1695,6 +1707,21 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 box.classList.remove('hidden');
                 icon.className = "fa-solid fa-minus text-xs";
             }
+        }
+
+        //   [냐냐 지적] logotipo 를 등록하니 유의어 칸에 isotipo 대신 el logotipo 가 들어왔다 (2026-10-06).
+        //     AI 가 단어 이름 자리에 원래 단어를 적어도 차이 설명엔 'logotipo : … | isotipo : …' 로 진짜 이름이 남아 있다.
+        //     원래 단어와 같으면 차이 설명에서 다른 이름을 꺼내 쓰고, 그것도 없으면 그 줄은 버린다.
+        //     악센트는 떼지 않는다 (carne ≠ carné).
+        function fixSelfSynonym(item, mainWord) {
+            if (!item || !item.word) return item;
+            const ART = /^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/;
+            const key = s => String(s || '').normalize('NFC').toLowerCase().trim().replace(ART, '');
+            if (!key(mainWord) || key(item.word) !== key(mainWord)) return item;
+            const names = String(item.difference || '').split('|').map(p => p.split(':')[0].trim()).filter(Boolean);
+            const other = names.find(n => key(n) && key(n) !== key(mainWord));
+            if (!other) return null;
+            return Object.assign({}, item, { word: other.replace(/^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/i, '') });
         }
 
         // [냐냐 PATCH-5배치] 명사면 관사를 붙여서 표시형으로 (복수면 los/las)
@@ -2209,7 +2236,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         items: {
                             type: "OBJECT",
                             properties: {
-                                word: { type: "STRING", description: "유의어/반의어 (스페인어, 관사 없이 단어만. 명사도 관사 빼고)" },
+                                word: { type: "STRING", description: "유의어/반의어 (스페인어, 관사 없이 단어만. 명사도 관사 빼고). 등록하려는 원래 단어 자신은 절대 넣지 말 것 — difference 의 단어B 와 같은 낱말이어야 함" },
                                 pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"], description: "그 단어의 품사" },
                                 gender: { type: "STRING", enum: ["none", "masculine", "feminine"], description: "명사일 때만. 아니면 none" },
                                 isPlural: { type: "BOOLEAN", description: "명사가 복수형이면 true" },
@@ -2575,7 +2602,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     if (inp && inp.value) existing.add(normalizeSpanishAnswer(inp.value));
                 });
                 let added = 0;
-                result.synonyms.forEach(item => {
+                const mainWordNow = ((document.getElementById('input-word') || {}).value || '').trim();
+                result.synonyms.forEach(item0 => {
+                    const item = fixSelfSynonym(item0, mainWordNow);
+                    if (!item) return;
                     const t = item.type === 'antonym' ? 'antonym' : 'synonym';
                     // [냐냐 PATCH] 명사면 관사를 바로 붙여서 보여줌 (la casa)
                     const shown = buildNounDisplayForm(item.word, item.gender, item.isPlural, item.pos);
