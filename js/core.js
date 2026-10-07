@@ -329,12 +329,46 @@ let vocabulary = [];
         const SAVE_DEBOUNCE_MS = 1000;
         let _saveTimer = null;
         let _savePending = null;
+        let _savePendingRev = null;
+
+        // ============================================================
+        // [냐냐 요청] 저장할 때 서버를 한 번 더 확인한다 (2026-10-07).
+        //   왜: 저장은 통째로 덮어쓰기다. 같은 날 정리한 단어·관용구 두 번 몫이, 옛 데이터를 들고 있던
+        //   다른 창의 저장 한 번에 통째로 되돌아갔다.
+        //   어떻게: 올릴 때마다 '저장 번호'(savedRev)를 같이 적는다. 이 창은 불러올 때·올릴 때 그 번호를 기억하고,
+        //   다음에 올리기 직전에 서버의 번호만(몇 글자) 읽어서 다르면 = 다른 곳이 그 사이 저장한 것 → 올리지 않고 묻는다.
+        //   ⚠️ Claude 가 서버 데이터를 직접 고칠 때도 savedRev 를 새로 적는다 — 옛 창이 그 정리를 덮지 못하게 [[app-data-write-procedure]].
+        //   ⚠️ 번호를 못 읽으면(연결 문제) 예전처럼 그냥 올린다 — 확인 때문에 저장이 막히면 더 큰 일이다.
+        // ============================================================
+        let _knownRev = null;          // 이 창이 마지막으로 서버와 맞춘 저장 번호
+        let _saveConflictShown = false;
+        let _forceOverwrite = false;
+        const newSaveRev = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const revPathOf = (p) => String(p).replace(/\.json$/, '/savedRev.json');
+
+        function showSaveConflict() {
+            if (_saveConflictShown || typeof showConfirm !== 'function') return;
+            _saveConflictShown = true;
+            showConfirm("다른 곳에서 더 나중에 저장했어요",
+                "이 창은 옛 데이터라 그대로 저장하면 그쪽 공부를 덮어써요. 새로고침해서 최신 데이터를 받아올게요. 쓰던 첨삭·문법 편집창은 살려 둬요 (이 창에서 방금 바뀐 점수는 사라져요).",
+                () => { _saveConflictShown = false; _savePending = null; hardReloadApp({ quick: true }); },
+                { okLabel: '새로고침', cancelLabel: '이 창 것으로 덮어쓰기', okStyle: 'primary', icon: 'info', noEnter: true,
+                  onCancel: () => {
+                      _saveConflictShown = false;
+                      _forceOverwrite = true;
+                      flushSaveToStorage().finally(() => { _forceOverwrite = false; });
+                  } });
+        }
 
         async function saveToStorage(immediate) {
-            const json = JSON.stringify(buildDataPayload());
+            const payload = buildDataPayload();
+            const rev = newSaveRev();
+            payload.savedRev = rev;
+            const json = JSON.stringify(payload);
             // 이 기기 백업은 미루지 않는다 (창을 갑자기 닫아도 남아야 한다)
             try { localStorage.setItem('nyanya_data_v2', json); } catch (e) {}
             _savePending = json;
+            _savePendingRev = rev;
             if (immediate) return flushSaveToStorage();
             if (_saveTimer) clearTimeout(_saveTimer);
             _saveTimer = setTimeout(() => { _saveTimer = null; flushSaveToStorage(); }, SAVE_DEBOUNCE_MS);
@@ -343,12 +377,26 @@ let vocabulary = [];
         async function flushSaveToStorage() {
             if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
             const json = _savePending;
+            const rev = _savePendingRev;
             if (!json) return;
-            _savePending = null;
 
             // 1순위: Firebase (어디서 열어도 동기화됨) — 비밀번호를 설정해야 사용 가능
             const firebasePath = getFirebaseDataPath();
             if (firebasePath) {
+                //   올리기 전에 서버의 저장 번호만 본다 — 내가 아는 번호와 다르면 다른 곳이 그 사이 저장한 것
+                if (!_forceOverwrite) {
+                    let serverRev;
+                    try {
+                        const r = await fetch(revPathOf(firebasePath), { cache: 'no-store' });
+                        if (r.ok) serverRev = await r.json();
+                    } catch (e) { serverRev = undefined; }
+                    if (serverRev && serverRev !== _knownRev) {
+                        console.warn('[저장 보류] 서버 번호', serverRev, '≠ 이 창', _knownRev);
+                        showSaveConflict();
+                        return;   // 미룬 것(_savePending)은 그대로 둔다 — '덮어쓰기' 를 고르면 그걸 올린다
+                    }
+                }
+                _savePending = null;
                 try {
                     const res = await fetch(firebasePath, {
                         method: 'PUT',
@@ -356,6 +404,7 @@ let vocabulary = [];
                         body: json
                     });
                     if (res.ok) {
+                        _knownRev = rev || _knownRev;
                         updateSyncBadge(true);
                         return;
                     }
@@ -363,6 +412,7 @@ let vocabulary = [];
                     console.warn("Firebase 저장 실패, 다른 저장소로 대체", e);
                 }
             }
+            _savePending = null;
 
             // 2순위: Claude 아티팩트 저장소 (Claude 안에서만 동기화)
             if (hasServerStorage()) {
@@ -396,7 +446,7 @@ let vocabulary = [];
                     if (res.ok) {
                         firebaseReachable = true;
                         const data = await res.json();
-                        if (data) payload = data;
+                        if (data) { payload = data; _knownRev = data.savedRev || null; }   // 저장할 때 견줄 번호
                     }
                 } catch (e) {
                     console.warn("Firebase 연결 실패, 다른 저장소 확인", e);
@@ -11382,6 +11432,19 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 }
                 const free = boxValue('ai-free-input-es');
                 if (free.trim() && keepGraded('es-ko')) s.esKo = { text: free };
+                //   [냐냐 요청] 문법 편집창도 살린다 (2026-10-07) — 저장이 막혀 새로고침할 때 쓴 노트가 날아가면 안 된다.
+                //   표 칸은 칠 때마다 상태에 들어가 있고, 글 덩어리·제목·표 제목만 화면에서 읽어 온다 (저장 때와 같은 자리).
+                if (typeof grammarEditorState !== 'undefined' && grammarEditorState && isShown('grammar-editor-modal')) {
+                    const st = JSON.parse(JSON.stringify(grammarEditorState));
+                    const icon = document.getElementById('ge-icon'), title = document.getElementById('ge-title');
+                    if (icon) st.icon = icon.value;
+                    if (title) st.title = title.value;
+                    (st.blocks || []).forEach((b, bi) => {
+                        if (b.type === 'text') { const el = document.getElementById('ge-rt-' + bi); if (el) b.html = el.innerHTML; }
+                        else if (b.type === 'table') { const c = document.getElementById('ge-cap-' + bi); if (c) b.caption = c.value; }
+                    });
+                    s.grammarEditor = { state: st, heading: (document.getElementById('grammar-editor-title') || {}).innerText || '' };
+                }
                 sessionStorage.setItem(RELOAD_STASH_KEY, JSON.stringify(s));
             } catch (e) { console.warn('새로고침 전 맡기기 실패', e); }
         }
@@ -11479,7 +11542,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     if (typeof renderAskAiThread === 'function') renderAskAiThread();
                     if (s.askAi.open && typeof openAskAi === 'function') openAskAi();
                 }
-                if (s.koEs || s.idiom || s.question || s.esKo || s.result || s.askAi) {
+                if (s.grammarEditor && s.grammarEditor.state && typeof renderGrammarEditorFields === 'function') {
+                    grammarEditorState = s.grammarEditor.state;
+                    geOpenBlocks = {};
+                    document.getElementById('grammar-editor-modal').classList.remove('hidden');
+                    if (typeof applyGrammarEditorWidth === 'function') applyGrammarEditorWidth();
+                    const head = document.getElementById('grammar-editor-title');
+                    if (head && s.grammarEditor.heading) head.innerText = s.grammarEditor.heading;
+                    renderGrammarEditorFields();
+                }
+                if (s.koEs || s.idiom || s.question || s.esKo || s.result || s.askAi || s.grammarEditor) {
                     showToast(locked ? `새로고침 전 화면을 살려뒀어요 — 다른 곳에서 바뀐 ${locked}개는 점수를 못 고쳐요` : "새로고침 전 화면을 그대로 살려뒀어요 ✨",
                         locked ? "warning" : "success");
                 }
