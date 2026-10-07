@@ -8184,9 +8184,15 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //      나중에 돈다. 그래서 서버에서 받은 것은 여기 세워뒀다가 마지막에 덮어씌운다 —
         //      안 그러면 이 기기의 옛 설정이 딴 기기에서 온 새 설정을 도로 밀어낸다.
         // ============================================================
+        //   [냐냐 지적] 앱을 껐다 켜면 정렬·주제 묶기가 안 남았다 (2026-10-07).
+        //     ① 보기를 바꾸자마자 창을 닫으면 1초 미룬 서버 저장이 끊긴다 — 이 기기엔 새 값이, 서버엔 옛 값이 남는데
+        //        다음에 열 때 서버 것이 이겨서 옛 모습으로 돌아갔다. → 바꾼 시각(at)을 같이 적고 더 나중 것이 이긴다.
+        //     ② 옛 데이터를 든 다른 창이 무엇이든 저장하면 그 창의 보기 설정까지 같이 올라가 덮었다 → 저장 번호(savedRev)가 막는다.
         let _syncedGrammarPrefs = null;
+        let _grammarPrefsAt = 0;
         function grammarPrefsSnapshot() {
             return {
+                at: _grammarPrefsAt || undefined,
                 topics: grammarFilterTopics, mastery: grammarFilterMastery, sort: grammarSortMode, view: grammarGroupView,
                 // [냐냐 요청] 마지막에 보던 모습까지 기억 — 펼침 단계 · 접어둔 주제 · 열어둔 노트
                 expand: grammarViewMode, groups: grammarGroupCollapsed, open: grammarOpenState,
@@ -8210,17 +8216,22 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (f.indexGroups && typeof f.indexGroups === 'object') grammarIndexCollapsed = f.indexGroups;
         }
         function saveGrammarFilterPrefs() {
+            _grammarPrefsAt = Date.now();
             try { localStorage.setItem('nyanya_grammar_filters', JSON.stringify(grammarPrefsSnapshot())); } catch (e) {}
             //   딴 기기에도 넘어가게 짐에 실어 올린다 (1초 미룸이라 연달아 눌러도 한 번만 올라간다)
             if (typeof saveToStorage === 'function') saveToStorage();
         }
         function loadGrammarFilterPrefs() {
+            let local = null;
             try {
                 const raw = localStorage.getItem('nyanya_grammar_filters');
-                if (raw) applyGrammarPrefs(JSON.parse(raw));
+                if (raw) local = JSON.parse(raw);
             } catch (e) {}
-            //   서버에서 온 것이 있으면 그것이 이긴다 (마지막으로 저장한 기기의 모습)
-            if (_syncedGrammarPrefs) applyGrammarPrefs(_syncedGrammarPrefs);
+            //   더 나중에 바꾼 쪽이 이긴다 — 옛 것을 먼저 깔고 새 것을 덮는다 (시각이 없는 옛 기록은 0)
+            const atOf = (f) => (f && typeof f.at === 'number') ? f.at : 0;
+            const both = [local, _syncedGrammarPrefs].filter(Boolean).sort((a, b) => atOf(a) - atOf(b));
+            both.forEach(applyGrammarPrefs);
+            _grammarPrefsAt = both.length ? atOf(both[both.length - 1]) : 0;
         }
 
         // ---- 문법 표 편집기 ----
