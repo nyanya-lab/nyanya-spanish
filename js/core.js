@@ -2370,7 +2370,7 @@ let vocabulary = [];
                     .filter(([, p]) => p.t)
                     .map(([label, p]) => `<div class="flex items-baseline gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
                         <span class="text-xs font-bold text-slate-600">${label}</span>
-                        <span class="ml-auto text-[11px] font-bold text-slate-400">${p.c}/${p.t}</span>
+                        <span class="ml-auto text-[11px] font-bold text-slate-400">${Number.isInteger(p.c) ? p.c : p.c.toFixed(1)}/${p.t}</span>
                         <span class="w-10 text-right text-sm font-black ${accTone(p.pct)}">${p.pct}%</span>
                     </div>`).join('') : '';
                 const accBox = accRows
@@ -5302,12 +5302,26 @@ let vocabulary = [];
                 parts.write.t += (d.writeTotal || 0);
                 parts.write.c += (d.writeCorrect || 0);
             });
+            //   [냐냐 요청] 첨삭은 문장 하나 = 1문제, 맞힌 몫은 그 문장에서 + 받은 항목의 비율 (2026-10-07).
+            //   예전엔 '완벽' 이어야 1, 아니면 0 이라 낱말 하나만 고쳐져도 통째로 틀림이었다.
+            //   항목 = 단어·관용구·문법, 0점(고쳐짐·해제)은 뺀다. 10개 중 8개가 + 면 0.8문제 맞힘.
+            //   예전 기록엔 단어·관용구 수가 없다 → 남아 있는 문법 맞음/틀림만으로, 그것도 없으면 예전처럼 맞음/틀림.
+            const aiShare = (x) => {
+                if (x.sc) {
+                    const p = ['g', 'w', 'i'].reduce((a, k) => a + ((x.sc[k] || [])[0] || 0), 0);
+                    const m = ['g', 'w', 'i'].reduce((a, k) => a + ((x.sc[k] || [])[1] || 0), 0);
+                    if (p + m) return p / (p + m);
+                } else if (Array.isArray(x.gram) && x.gram.length) {
+                    return x.gram.filter(g => g && g.ok).length / x.gram.length;
+                }
+                return x.ok ? 1 : 0;
+            };
             (typeof aiNotes !== 'undefined' ? aiNotes : []).forEach(x => {
                 //   t 는 UTC 라 앞 10글자를 자르면 한국 새벽 0~9시가 전날로 간다
                 const ds = (x && x.t) ? getLocalDateString(new Date(x.t)) : '';
                 if (!ds || ds < from || ds > to) return;
                 parts.ai.t++;
-                if (x.ok) parts.ai.c++;
+                parts.ai.c += aiShare(x);
             });
             Object.keys(parts).forEach(k => {
                 parts[k].pct = parts[k].t ? Math.round((parts[k].c / parts[k].t) * 100) : null;
@@ -11521,6 +11535,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         aiLastSuggest = out.sug || { idioms: [], newWords: [] };
                         aiLastFeedbackForAdd = out.fb || null;
                         _lastAiNoteKey = out.note || null;
+                        if (typeof aiScoreNoteKey !== 'undefined') aiScoreNoteKey = _lastAiNoteKey;   // ↺ 하면 그 노트의 정답률 수도 따라가게
                         aiIdiomCands = out.cands || [];
                         aiLastCorrectedText = out.corrected || '';
                         aiResultDate = s.result.date;

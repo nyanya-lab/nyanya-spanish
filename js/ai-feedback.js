@@ -4984,9 +4984,33 @@ ${buildLearnerProfileSummary()}`;
                 //   [냐냐 요청] AI 품사가 단어장과 어느 만큼 맞는지 재려고 남긴다 (점수엔 안 쓴다)
                 posx: (aiLastPosStats && aiLastPosStats.n) ? aiLastPosStats : undefined,
                 rv: asReview ? 1 : undefined,                 // 문법 복습으로 푼 번역 (일지에선 복습)
+                sc: aiCountScoreItems(),                      // [냐냐 요청] 정답률용 + / − 항목 수 (아래 aiCountScoreItems)
                 ok: !!feedback.isCorrect
             });
+            aiScoreNoteKey = stamp;
             if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 첨삭 정답률은 항목으로 센다 (2026-10-07).
+        //   예전엔 문장 하나가 '완벽' 이어야만 맞음이라, 낱말 여섯을 맞게 쓰고 하나만 고쳐져도 통째로 틀림이었다.
+        //   이제 그 문장에서 + 받은 단어·관용구·문법 ÷ (+ 와 − 를 받은 것) — 0점(고쳐짐·해제)은 셈에서 뺀다.
+        //   점수 크기와 상관없이 항목 하나 = 1. 전체 정답률에선 문장 하나 = 1문제이고 맞힌 몫이 이 비율이다 (accuracyBetween).
+        //   ↺·전부 0점·손으로 더하기로 바뀌면 renderEsKoGrammarRefs 가 그 노트의 수를 다시 적는다.
+        // ============================================================
+        let aiScoreNoteKey = null;   // 지금 결과 카드가 적어 넣을 첨삭 노트 (recordAiNote 가 정한다 — 그 전엔 비어 있다)
+        function aiCountScoreItems() {
+            const pm = (list) => {
+                let p = 0, m = 0;
+                (list || []).forEach(e => { if (!e) return; if (e.delta > 0) p++; else if (e.delta < 0) m++; });
+                return [p, m];
+            };
+            return { g: pm(aiLastEsKoGrammar), w: pm(aiLastEsKoWords), i: pm(aiLastEsKoIdioms) };
+        }
+        function syncAiNoteScore() {
+            if (!aiScoreNoteKey || typeof aiNotes === 'undefined') return;
+            const n = aiNotes.find(x => x && x.t === aiScoreNoteKey);
+            if (n) n.sc = aiCountScoreItems();
         }
 
         // ============================================================
@@ -5330,6 +5354,7 @@ ${buildLearnerProfileSummary()}`;
             aiIdiomPending = false;
             aiZeroAllSnapshot = null;   // [냐냐 요청] '전부 0점' 은 그 첨삭 한 번에만 걸린다
             aiResultDate = '';
+            aiScoreNoteKey = null;      // 새 첨삭의 노트가 생기기 전까지는 어느 노트에도 적지 않는다
             aiLastSuggest = { idioms: [], newWords: [] };
             const box = document.getElementById('ai-mission-refs');
             if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
@@ -5693,6 +5718,7 @@ ${buildLearnerProfileSummary()}`;
 
         // 결과 아래에 '이 문장이 쓴 문법'과 점수 변화를 보여준다 (한→스의 참고 카드와 같은 자리)
         function renderEsKoGrammarRefs() {
+            syncAiNoteScore();   // 점수가 바뀔 때마다 여기로 온다 — 정답률용 + / − 수도 같이 맞춘다
             const box = document.getElementById('ai-mission-refs');
             if (!box) return;
             // [냐냐 요청] 한→스는 같은 칸에 '이번 미션이 참고한 내용' 을 먼저 그린다.
