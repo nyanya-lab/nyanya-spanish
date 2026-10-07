@@ -196,6 +196,21 @@ let vocabulary = [];
             return `${url}/vocab/${encodeURIComponent(pw)}.json`;
         }
 
+        // [냐냐 지적] 새로고침이 느리다 (2026-10-07). 데이터(1.5MB)를 window.onload 가 끝난 뒤에야 받기 시작해서,
+        //   페이지 여는 시간(약 1초)과 받는 시간(0.4~1.4초)이 줄줄이 이어졌다.
+        //   이 파일이 읽히는 순간 미리 받기 시작하고, loadFromStorage 가 그걸 이어받는다 (겹쳐서 기다림이 준다).
+        //   주소가 그새 바뀌었으면(설정에서 비밀번호를 바꾼 직후 등) 안 쓰고 새로 받는다.
+        let _earlyDataFetch = null;
+        try {
+            const p = getFirebaseDataPath();
+            if (p) _earlyDataFetch = { path: p, promise: fetch(p).catch(() => null) };
+        } catch (e) {}
+        function takeEarlyDataFetch(path) {
+            const e = _earlyDataFetch;
+            _earlyDataFetch = null;   // 한 번만 쓴다 — 다음부터는 늘 새로 받는다
+            return (e && e.path === path) ? e.promise.then(r => r || fetch(path)) : fetch(path);
+        }
+
         function openSyncPasswordModal() {
             document.getElementById('sync-password-input').value = getSyncPassword();
             const urlInput = document.getElementById('sync-dburl-input');
@@ -377,7 +392,7 @@ let vocabulary = [];
             const firebasePath = getFirebaseDataPath();
             if (firebasePath) {
                 try {
-                    const res = await fetch(firebasePath);
+                    const res = await takeEarlyDataFetch(firebasePath);   // 미리 받기 시작한 것이 있으면 그걸 쓴다
                     if (res.ok) {
                         firebaseReachable = true;
                         const data = await res.json();
@@ -11129,7 +11144,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   그 안의 ?v= 도 옛것이라 js·css 까지 통째로 옛 판이 돈다. 주소에 시각을 붙여
         //   '처음 보는 주소' 로 만들어서 index.html 부터 새로 받아오게 한다.
         //   ⚠️ 쓰던 글이 있으면 한 번 묻는다 — 헤더는 늘 보이는 자리라 잘못 눌릴 수 있다.
-        function hardReloadApp() {
+        //   quick = 30분 창·새 버전 창에서 부른 것 (2026-10-07). 파일을 전부 다시 받는 단계(약 1초)를 건너뛴다.
+        //     새 버전 창은 ?v= 가 바뀌었을 때만 뜨니 새 주소로 어차피 새로 받고, 30분 쉬었으면
+        //     GitHub Pages 의 캐시 기한(max-age=600, 10분)이 이미 지났다. 로고는 훅이 안 도는 커밋(클라우드 방)
+        //     대비로 지금처럼 다 받는다.
+        function hardReloadApp(opts) {
+            const quick = !!(opts && opts.quick === true);
             //   첨삭 네 칸은 새로고침 뒤에 다시 채워주니(reload stash) 묻지 않는다 — 못 살리는 칸만 묻는다
             const typing = unrestorableTyping();
             //   [냐냐 요청] Ctrl+Shift+R 을 대신하는 자리라 js·css 까지 확실히 새로 받아야 한다.
@@ -11139,6 +11159,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const go = async () => {
                 //   미뤄둔 저장(1초)이 있으면 먼저 올린다 — 페이지가 넘어가면서 올리던 것이 끊기면 그 공부가 서버에 없다
                 try { if (typeof flushSaveToStorage === 'function') await flushSaveToStorage(); } catch (e) {}
+                if (quick) {
+                    stashForReload();
+                    const u = new URL(location.href);
+                    u.searchParams.set('r', String(Date.now()));
+                    location.replace(u.toString());
+                    return;
+                }
                 try { if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
                 try {
                     //   태그에 걸린 것 + 이 페이지가 실제로 받아온 것 전부 (글꼴·그림까지).
@@ -11452,7 +11479,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const done = () => { _reloadAskOpen = false; _lastActAt = Date.now(); };
             showConfirm(idle ? "30분 넘게 쉬었어요" : "새 버전이 나왔어요",
                 (idle ? "다른 컴퓨터에서 공부한 것과 새 버전을 받아올게요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
-                () => { done(); hardReloadApp(); },
+                () => { done(); hardReloadApp({ quick: true }); },
                 //   쉬어서 뜬 창은 고를 게 없다 — 보던 것이 다 살아나니 [그냥 쓰기] 를 두지 않는다
                 { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true, hideCancel: idle,
                   onCancel: () => { done(); if (fresh) _newVersionDeclined = _newVersionSeen; } });
