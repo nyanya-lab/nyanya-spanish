@@ -150,6 +150,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             cls.value = 'irregular';
             irr.disabled = false;
             irr.value = type;
+            paintTenseBlock(block);
         }
 
         function isSingleTense(t) { return SINGLE_TENSES.includes(t); }
@@ -310,14 +311,41 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const single = { gerundio: { label: '현재분사 (gerundio)', ph: 'teniendo' },
                                  participio: { label: '과거분사 (participio)', ph: 'tenido' } }[tense]
                             || { label: '한 칸', ph: '' };
-                box.innerHTML = `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${single.label}</span><input type="text" data-person="form" placeholder="${single.ph}" autocomplete="off" class="conj-cell w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-bold text-blue-600"></div>`;
+                box.innerHTML = `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${single.label}</span><input type="text" data-person="form" placeholder="${single.ph}" autocomplete="off" class="conj-cell w-full bg-white px-3 py-2 rounded-lg border border-slate-200 text-sm text-center focus:outline-none font-semibold"></div>`;
                 const el = box.querySelector('[data-person="form"]'); if (el && prev.form) el.value = prev.form;
             } else {
                 box.innerHTML = `<div class="grid grid-cols-3 gap-2">` + CONJ_PERSON_KEYS.map((p, i) =>
-                    `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${CONJ_PERSON_LABELS[i]}</span><input type="text" data-person="${p}" autocomplete="off" class="conj-cell w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none ${i === 0 ? 'font-bold text-blue-600' : 'font-semibold'}"></div>`
+                    `<div class="space-y-1"><span class="text-[10px] font-bold text-slate-400">${CONJ_PERSON_LABELS[i]}</span><input type="text" data-person="${p}" autocomplete="off" class="conj-cell w-full bg-white px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center focus:outline-none font-semibold"></div>`
                 ).join('') + `</div>`;
                 CONJ_PERSON_KEYS.forEach(p => { const el = box.querySelector(`[data-person="${p}"]`); if (el && prev[p]) el.value = prev[p]; });
             }
+            paintTenseBlock(block);
+        }
+        // [냐냐 지적] 편집 화면에서 시제·유형과 상관없이 yo 칸만 늘 파랬다 (2026-10-07) — 현재시제 '1인칭' 만 생각하고 박아 둔 것.
+        //   조회 화면(getConjugationCellMarkup)·퀴즈와 같은 잣대로 그 블록의 유형을 보고 칠한다. 유형을 바꾸면 바로 다시 칠한다.
+        function irregularPersonsOf(irrType) {
+            const t = String(irrType || '');
+            const all = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
+            if (!t || t === 'none') return [];
+            if (t.includes('완전 불규칙') || t.includes('-ducir')) return all;
+            if (t.startsWith('3인칭')) return ['el', 'ellos'];   // 부정과거 — 아래 현재시제 e ➡️ i 보다 먼저
+            const s = new Set();
+            if (t.includes('1인칭')) s.add('yo');
+            if (t.includes('e ➡️ ie') || t.includes('o ➡️ ue') || t.includes('e ➡️ i')) ['yo', 'tu', 'el', 'ellos'].forEach(p => s.add(p));
+            return [...s];
+        }
+        function paintTenseBlock(block) {
+            if (!block) return;
+            const cls = (block.querySelector('.conj-block-class') || {}).value;
+            const irr = (block.querySelector('.conj-block-irr') || {}).value;
+            const isIrr = cls === 'irregular' && !!irr && irr !== 'none';
+            const on = isIrr ? irregularPersonsOf(irr) : [];
+            block.querySelectorAll('.conj-block-inputs .conj-cell').forEach(el => {
+                const blue = el.dataset.person === 'form' ? isIrr : on.includes(el.dataset.person);
+                el.classList.toggle('text-blue-600', blue);
+                el.classList.toggle('font-bold', blue);
+                el.classList.toggle('font-semibold', !blue);
+            });
         }
         function readBlockConj(block) {
             const d = {};
@@ -351,7 +379,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         <option value="regular" ${isRegular ? 'selected' : ''}>규칙</option>
                         <option value="irregular" ${!isRegular ? 'selected' : ''}>불규칙</option>
                     </select>
-                    <select class="conj-block-irr bg-white px-1.5 py-1 rounded-lg border border-slate-200 text-[11px] font-medium focus:outline-none" ${isRegular ? 'disabled' : ''}>${irrOpts}</select>
+                    <select class="conj-block-irr bg-white px-1.5 py-1 rounded-lg border border-slate-200 text-[11px] font-medium focus:outline-none" onchange="paintTenseBlock(this.closest('.conj-tense-block'))" ${isRegular ? 'disabled' : ''}>${irrOpts}</select>
                     <button type="button" onclick="aiFillBlock(this)" title="이 시제만 AI 추천 (빈칸만 채움)" class="w-7 h-7 shrink-0 rounded-lg bg-violet-500 hover:bg-violet-600 text-white flex items-center justify-center transition-all"><i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i></button>
                     <button type="button" onclick="removeTenseBlock(this)" title="이 시제 삭제" class="w-7 h-7 shrink-0 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-500 text-slate-400 flex items-center justify-center transition-all"><i class="fa-solid fa-minus text-[10px]"></i></button>
                 </div>
@@ -388,6 +416,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 if (irr.value === 'none') irr.value = irregularTypesFor(tense).find(o => o !== 'none') || 'none';
             }
             else { irr.disabled = true; irr.value = 'none'; }
+            paintTenseBlock(block);
         }
         function removeTenseBlock(btn) { const b = btn.closest('.conj-tense-block'); if (b) b.remove(); }
 
@@ -2549,6 +2578,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         clsSel.value = result.verbClass || 'regular';
                         onBlockClassChange(clsSel);
                         if (result.verbClass === 'irregular' && (forceOverwrite || irrSel.value === 'none')) irrSel.value = result.irregularType || '1인칭';
+                        paintTenseBlock(presenteBlock);
                     }
                     if (result.conjugations) {
                         CONJ_PERSON_KEYS.forEach(key => {
