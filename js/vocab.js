@@ -74,10 +74,25 @@
         //   -to(abierto·escrito·puesto) 와 -cho(dicho·hecho) 로 나눠봤지만 외울 때 도움이 안 돼서
         //   갈래를 둘로 줄였다 — 그냥 '불규칙' 과, 규칙형·불규칙형을 둘 다 쓰는 것.
         //   (imprimir→imprimido/impreso, freír→freído/frito 처럼 두 꼴이 다 살아 있는 동사)
+        // [냐냐 요청] 부정과거도 제 갈래를 쓴다 (2026-10-07) — 현재시제 목록(e➡️ie·o➡️ue)과 아예 다르다.
+        //   냐냐님이 배운 그대로: 1인칭 단수만(-car·-zar·-gar 철자) · 3인칭 단·복수만(e➡️i·o➡️u·i➡️y) · 모든 인칭(-ducir ➡️ -uj-) · 완전 불규칙.
+        //   car·zar·gar 는 따로 나눴다 (냐냐님 — 어느 철자로 바뀌는지가 외울 거리라서).
         const IRREGULAR_TYPES_BY_TENSE = {
             gerundio: ['none', 'e ➡️ i', 'o ➡️ u', '-yendo', '기타 변형'],
             participio: ['none', '불규칙', '두 꼴 다 씀'],
+            indefinido: ['none', '1인칭 -car ➡️ -qué', '1인칭 -zar ➡️ -cé', '1인칭 -gar ➡️ -gué',
+                         '3인칭 e ➡️ i', '3인칭 o ➡️ u', '3인칭 i ➡️ y', '-ducir ➡️ -uj-', '완전 불규칙'],
         };
+        const INDEFINIDO_TYPE_GUIDE = `Irregularity types for the pretérito indefinido (pick the FIRST that fits):
+- "1인칭 -car ➡️ -qué" = only yo changes spelling: buscar→busqué, tocar→toqué, sacar→saqué
+- "1인칭 -zar ➡️ -cé" = only yo: empezar→empecé, almorzar→almorcé, cruzar→crucé
+- "1인칭 -gar ➡️ -gué" = only yo: llegar→llegué, pagar→pagué, jugar→jugué
+- "3인칭 e ➡️ i" = stem e→i only in él/ellos: pedir→pidió/pidieron, sentir→sintió, servir→sirvió
+- "3인칭 o ➡️ u" = stem o→u only in él/ellos: dormir→durmió/durmieron, morir→murió
+- "3인칭 i ➡️ y" = unstressed i→y only in él/ellos (stem ends in a vowel): leer→leyó/leyeron, creer→creyó, oír→oyó, construir→construyó
+- "-ducir ➡️ -uj-" = every person takes -uj- with no written accent and 3rd plural -eron: conducir→conduje/condujo/condujeron, traducir→traduje
+- "완전 불규칙" = irregular stem in every person (strong preterite or fully irregular): tener→tuve, estar→estuve, poder→pude, poner→puse, hacer→hice, venir→vine, decir→dije, querer→quise, saber→supe, ser/ir→fui, dar→di, ver→vi
+- "none" = fully regular (hablar→hablé, comer→comí, vivir→viví)`;
         function irregularTypesFor(tense) { return IRREGULAR_TYPES_BY_TENSE[tense] || IRREGULAR_TYPE_OPTIONS; }
         function irrOptionsHtml(tense, cur) {
             const list = irregularTypesFor(tense);
@@ -122,7 +137,7 @@ Never add "estar".`;
 Conjugate each verb in this tense: ${label} (internal key: ${tense}), all 6 persons, with correct accents.
 "vos" means the Spanish 2nd person plural vosotros (-áis/-éis/-ís) — NEVER Argentinian voseo (-ás/-és).
 ${REFLEXIVE_RULE}
-Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map(t => `"${t}"`).join(', ')} ("none" = fully regular).`;
+Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map(t => `"${t}"`).join(', ')} ("none" = fully regular).${tense === 'indefinido' ? '\n' + INDEFINIDO_TYPE_GUIDE : ''}`;
         }
         // AI가 준 불규칙 갈래를 블록 콤보박스에 반영 (사용자가 이미 불규칙으로 지정해 뒀으면 건드리지 않음)
         // [냐냐 지적] 1칸짜리 시제가 둘(현재분사·과거분사)이 되면서 시제별 갈래를 봐야 한다.
@@ -3669,6 +3684,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             let isIrregular = false;
             if (verbClass === 'irregular') {
                 const irr = irregularType || '';
+                //   부정과거 갈래 (2026-10-07) — '3인칭 e ➡️ i' 가 아래 현재시제 규칙(e ➡️ i = yo·tú·él·ellos)에 걸리지 않게 먼저 가른다
+                if (irr.startsWith('3인칭')) return getConjugationCellMarkupFinal(person, val, ['él', 'ellos'].includes(person));
+                if (irr.includes('-ducir')) return getConjugationCellMarkupFinal(person, val, true);
                 if (irr.includes('1인칭') && person === 'yo') {
                     isIrregular = true;
                 }
@@ -3686,6 +3704,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 }
             }
 
+            return getConjugationCellMarkupFinal(person, val, isIrregular);
+        }
+        function getConjugationCellMarkupFinal(person, val, isIrregular) {
             const colorClass = isIrregular ? 'text-blue-600 font-black' : 'text-slate-700 font-semibold';
             return `
                 <div class="bg-white p-1 rounded-md border border-slate-100">

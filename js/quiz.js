@@ -1107,6 +1107,9 @@ let quizSession = null;
                     if (!isIrr) return false;
                     const p = person.split('/')[0];
                     if (irrType.includes('완전 불규칙')) return true;
+                    //   부정과거 갈래 (2026-10-07) — 3인칭만 / -ducir 는 전부. 현재시제 e ➡️ i 규칙보다 먼저
+                    if (irrType.startsWith('3인칭')) return ['él', 'ellos'].includes(p);
+                    if (irrType.includes('-ducir')) return true;
                     if (irrType.includes('1인칭') && p === 'yo') return true;
                     const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i');
                     if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
