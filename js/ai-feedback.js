@@ -2858,7 +2858,7 @@ ${buildLearnerProfileSummary()}`;
         //   점수를 직접 정한다 (+2 / 0 / −2) — 반영 전으로 되돌린 뒤 그 점수로 다시 붙인다 (setWordEntryDelta 와 같다)
         function setIdiomEntryDelta(i, delta, quiet) {
             const e = aiLastEsKoIdioms[i];
-            if (!e || e.delta === delta) return;
+            if (!e || e.delta === delta || aiEntryLocked(e, quiet)) return;
             restoreIdiomScoreState(e);
             e.delta = delta;
             e.ok = delta > 0;
@@ -2872,7 +2872,7 @@ ${buildLearnerProfileSummary()}`;
         }
         function cycleIdiomEntry(i) {
             const e = aiLastEsKoIdioms[i];
-            if (!e) return;
+            if (!e || aiEntryLocked(e)) return;
             const to = nextEntryDelta(e, WORD_SPELL_OK);
             setIdiomEntryDelta(i, to);
             showToast(`"${e.it.idiom}" · ${fmtDelta(to)}`, "info");
@@ -5311,8 +5311,10 @@ ${buildLearnerProfileSummary()}`;
         //   결과 카드에서 표시하면 되므로(−2) 미리 깎아둘 이유가 없다.
         let aiLastFeedbackForAdd = null;   // 손으로 문법을 더할 때 근거를 찾으려고 마지막 첨삭을 들고 있는다
         //   isMission = 한→스 미션의 답인가. 복습으로 쳐주는 건 그때뿐이다 (2026-09-15)
+        let aiResultDate = '';   // 이 결과 카드를 채점한 날 — 새로고침 뒤 되살릴지 가른다 (오늘 것만)
         function applyAiWritingScores(feedback, notes, isMission) {
             aiLastFeedbackForAdd = feedback || null;
+            aiResultDate = (typeof getLocalDateString === 'function') ? getLocalDateString() : '';
             applyEsKoGrammarScores(feedback, notes, GRAMMAR_TRANS_OK, isMission);
             applyEsKoWordScores(feedback, WORD_SPELL_OK);
             applyEsKoIdiomScores(feedback, WORD_SPELL_OK);   // [냐냐 요청] 관용구는 단어와 따로, 같은 규칙으로 (2026-09-28)
@@ -5327,6 +5329,7 @@ ${buildLearnerProfileSummary()}`;
             aiLastEsKoIdioms = [];
             aiIdiomPending = false;
             aiZeroAllSnapshot = null;   // [냐냐 요청] '전부 0점' 은 그 첨삭 한 번에만 걸린다
+            aiResultDate = '';
             aiLastSuggest = { idioms: [], newWords: [] };
             const box = document.getElementById('ai-mission-refs');
             if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
@@ -5361,9 +5364,16 @@ ${buildLearnerProfileSummary()}`;
         //   [냐냐 요청] 점수를 직접 정한다 (+2 / 0 / −2). 반영 전 상태로 되돌린 뒤 그 점수로 다시 붙인다.
         //   quiet = 저장과 다시 그리기를 건너뛴다. 한 번에 여러 개를 바꿀 때 쓴다 —
         //   항목마다 renderWordList(단어 1300개)를 다시 그리면 버튼 한 번에 화면이 멎는다.
+        //   [냐냐 요청] 새로고침으로 되살린 카드에서, 그 사이 다른 곳(집 PC 등)에서 점수가 바뀐 줄은 잠근다 (2026-10-07).
+        //   ↺ 는 '채점 전 모습' 으로 되돌린 뒤 새로 붙이는데, 그 모습이 낡았으니 되돌리면 그쪽 공부를 덮는다.
+        function aiEntryLocked(e, quiet) {
+            if (!e || !e.locked) return false;
+            if (!quiet) showToast("다른 곳에서 점수가 바뀐 항목이라 여기서는 못 고쳐요", "warning");
+            return true;
+        }
         function setGrammarEntryDelta(i, delta, quiet) {
             const e = aiLastEsKoGrammar[i];
-            if (!e || e.delta === delta) return;
+            if (!e || e.delta === delta || aiEntryLocked(e, quiet)) return;
             const id = e.note.id;
             restoreGrammarPrev(e);
 
@@ -5421,7 +5431,7 @@ ${buildLearnerProfileSummary()}`;
 
         function cycleGrammarEntry(i) {
             const e = aiLastEsKoGrammar[i];
-            if (!e) return;
+            if (!e || aiEntryLocked(e)) return;
             const to = nextEntryDelta(e, GRAMMAR_TRANS_OK);
             setGrammarEntryDelta(i, to);
             showToast(`"${e.note.title}" · ${fmtDelta(to)}`, "info");
@@ -5429,7 +5439,7 @@ ${buildLearnerProfileSummary()}`;
 
         function setWordEntryDelta(i, delta, quiet) {
             const e = aiLastEsKoWords[i];
-            if (!e || e.delta === delta) return;
+            if (!e || e.delta === delta || aiEntryLocked(e, quiet)) return;
             restoreWordScoreState(e.word, e.prev);
 
             e.delta = delta;
@@ -5498,7 +5508,7 @@ ${buildLearnerProfileSummary()}`;
 
         function cycleWordEntry(i) {
             const e = aiLastEsKoWords[i];
-            if (!e) return;
+            if (!e || aiEntryLocked(e)) return;
             const to = nextEntryDelta(e, WORD_SPELL_OK);
             setWordEntryDelta(i, to);
             showToast(`"${e.word.word}" · ${fmtDelta(to)}`, "info");
@@ -5704,6 +5714,8 @@ ${buildLearnerProfileSummary()}`;
                           : (d < 0 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400');
                 return `<span class="shrink-0 w-9 text-center rounded-lg py-0.5 text-[11px] font-black tabular-nums ${cls}">${fmtDelta(d)}</span>`;
             };
+            //   새로고침 뒤 되살린 카드에서 그 사이 다른 곳에서 바뀐 줄 — ↺ 대신 자물쇠 (aiEntryLocked)
+            const lockMark = `<span title="다른 곳에서 점수가 바뀌어서 여기서는 못 고쳐요" class="shrink-0 w-5 text-center text-[10px] text-slate-300"><i class="fa-solid fa-lock"></i></span>`;
             const cycleBtn = (fn, i) => `<button type="button" onclick="${fn}(${i})" title="점수 바꾸기 (+1 → 0 → −2)" class="shrink-0 w-6 h-6 rounded-full bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600 text-[10px] transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`;
 
             //   [냐냐 요청] 손으로 바꾼 줄(↺)·직접 더한 줄은 보라색 (2026-10-06) — 단어 칩과 같다. AI 가 매긴 원래 평가와 한눈에 갈린다.
@@ -5726,7 +5738,7 @@ ${buildLearnerProfileSummary()}`;
                     ${(g.alsoReviewed || g.isReviewTarget) && g.delta !== 0
                         ? `<span title="${g.isReviewTarget ? '지금 복습하는 문법이에요' : '이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다'}" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
                         : ''}
-                    ${cycleBtn('cycleGrammarEntry', i)}
+                    ${g.locked ? lockMark : cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
 
             // [냐냐 요청] 단어는 점수 묶음으로 — +2 쫙, 0 쫙, −2 쫙 (2026-09-04).
@@ -5755,7 +5767,7 @@ ${buildLearnerProfileSummary()}`;
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
                                 ${w.alsoReviewed ? `<span title="${w.delta > 0 ? '오늘 차례였던 단어 — 오늘 복습으로 쳤어요 (한 칸 앞으로)' : '오늘 차례였던 단어 — 철자가 틀려 복습 실패로 쳤어요 (한 칸 뒤로)'}" class="shrink-0 text-[9px] font-black rounded-full px-1.5 py-0.5 ${w.delta > 0 ? 'text-amber-700 bg-amber-100' : 'text-rose-600 bg-rose-100'}">🔁 ${w.delta > 0 ? '오늘 복습' : '복습 실패'}</span>` : ''}
-                                <button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
+                                ${w.locked ? lockMark : `<button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                             </span>`;
                         }).join('')}
                     </div>
@@ -5783,7 +5795,7 @@ ${buildLearnerProfileSummary()}`;
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${e.delta > 0 ? 'text-emerald-600' : (e.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(e.delta)}</span>` : ''}
                                 ${aiIdiomAlsoReviewed(e) ? `<span title="이 관용구는 오늘 복습으로 쳤어요" class="shrink-0 text-[9px] font-black text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">🔁 오늘 복습</span>` : ''}
-                                <button type="button" onclick="cycleIdiomEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>
+                                ${e.locked ? lockMark : `<button type="button" onclick="cycleIdiomEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                             </span>`;
                         }).join('')}
                     </div>

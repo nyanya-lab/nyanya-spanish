@@ -1870,6 +1870,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             // [냐냐 PATCH] 버튼 라벨/색상 커스터마이즈 (기본: 삭제 확정 - 빨강)
             btnOk.innerText = options.okLabel || '삭제 확정';
             btnCancel.innerText = options.cancelLabel || '취소';
+            btnCancel.classList.toggle('hidden', !!options.hideCancel);   // 고를 것이 없는 알림 (30분 쉬면 새로고침)
             if (options.okStyle === 'primary') {
                 btnOk.className = "flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-md shadow-violet-100";
             } else {

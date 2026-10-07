@@ -11137,6 +11137,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   ?v= 가 그대로면 브라우저가 캐시 것을 계속 쓴다 (훅이 늘 올려주긴 하지만 그때뿐이다).
             //   그래서 지금 걸려 있는 파일들을 cache:'reload' 로 한 번 당겨 캐시를 갈아치운 뒤에 넘어간다.
             const go = async () => {
+                //   미뤄둔 저장(1초)이 있으면 먼저 올린다 — 페이지가 넘어가면서 올리던 것이 끊기면 그 공부가 서버에 없다
+                try { if (typeof flushSaveToStorage === 'function') await flushSaveToStorage(); } catch (e) {}
                 try { if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
                 try {
                     //   태그에 걸린 것 + 이 페이지가 실제로 받아온 것 전부 (글꼴·그림까지).
@@ -11182,10 +11184,19 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   같은 탭에서만 살고 서버로는 안 간다. 보던 탭도 같이 돌아온다.
         //   ⚠️ 못 살리는 것(단어 등록 창·쓰기 복습·빈칸·퀴즈 진행 중·열린 창)이 있으면 창을 미룬다.
         //      끝나거나 닫으면 다음 확인(30초마다)에 뜬다.
-        //   ⚠️ 이미 채점한 미션은 문제를 살리지 않는다 — 결과 카드는 못 살리고, 같은 답을 또 내면 두 번 채점된다.
+        //   [냐냐 요청] 첨삭 결과 카드도 살린다 (2026-10-07) — 점수를 고치려다 못 고치고 새로고침하는 일이 있어서.
+        //     ↺·전부 0점·손으로 더하기가 그대로 되게 점수 줄(채점 전 모습 포함)까지 맡긴다.
+        //     단어·노트·관용구는 붙잡고 있는 객체라 번호로 바꿔 맡기고 되살릴 때 다시 잇는다 (packAiRefs).
+        //   ⚠️ 꼬일 수 있는 데 넷 — 이렇게 막는다:
+        //     ① 문법 복습 줄 · ② 관용구 '오늘 복습' — 그 사이 집에서 끝냈을 수 있다 → 되살릴 때 지금도 오늘 차례인지 다시 잰다
+        //     ③ ↺ 는 '채점 전 모습' 으로 되돌린다 — 그 사이 다른 곳에서 그 항목이 바뀌었으면 덮는다
+        //        → 맡길 때의 점수 모습을 적어두고, 되살린 데이터와 다르면 그 줄을 잠근다 (aiEntryLocked)
+        //     ④ 날짜를 넘기면 하루 상한·오늘 복습 장부가 엇갈린다 → 오늘 채점한 카드만 살린다
+        //   [냐냐 요청] 쉬는 시간은 30분, 쉬어서 뜨는 창엔 [그냥 쓰기] 가 없다 — 다 살아나니 고를 게 없다.
+        //     새 버전 창은 [그냥 쓰기] 를 남긴다 (같이 고치는 날은 하루에도 여러 번 배포한다).
         // ============================================================
         const RELOAD_STASH_KEY = 'nyanya_reload_stash';
-        const IDLE_RELOAD_MS = 60 * 60 * 1000;
+        const IDLE_RELOAD_MS = 30 * 60 * 1000;
         let _lastActAt = Date.now();
         let _reloadAskOpen = false;
         let _newVersionSeen = '';      // 서버에서 본 새 버전 번호
@@ -11210,13 +11221,83 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return Array.from(document.querySelectorAll('div.fixed.inset-0')).some(el => !el.classList.contains('hidden') && el.offsetParent !== null);
         }
 
+        //   점수 줄이 붙잡은 단어·노트·관용구를 번호로 바꿔 맡기고, 되살릴 때 지금 데이터의 그 객체로 다시 잇는다
+        function aiRefIndex() {
+            const words = new Set(typeof vocabulary !== 'undefined' ? vocabulary : []);
+            const notes = new Set(typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []);
+            const idioms = new Map();
+            words.forEach(w => (w.idioms || []).forEach(it => { if (it && typeof it === 'object') idioms.set(it, w.id); }));
+            return { words, notes, idioms };
+        }
+        function packAiRefs(v, ix) {
+            return JSON.stringify(v, (k, x) => {
+                if (!x || typeof x !== 'object') return x;
+                if (ix.words.has(x)) return { $w: x.id };
+                if (ix.notes.has(x)) return { $g: x.id };
+                if (ix.idioms.has(x)) return { $i: ix.idioms.get(x), t: x.idiom, iid: x.iid || null };
+                if (typeof x.then === 'function') return undefined;   // 기다리는 중인 AI 판정은 못 맡긴다
+                return x;
+            });
+        }
+        function unpackAiRefs(str) {
+            const notes = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            let missing = false;
+            const out = JSON.parse(str, (k, x) => {
+                if (!x || typeof x !== 'object') return x;
+                if (x.$w !== undefined) { const w = vocabulary.find(v => v.id === x.$w); if (!w) missing = true; return w || null; }
+                if (x.$g !== undefined) { const n = notes.find(t => t.id === x.$g); if (!n) missing = true; return n || null; }
+                if (x.$i !== undefined) {
+                    const w = vocabulary.find(v => v.id === x.$i);
+                    const it = w && (w.idioms || []).find(o => o && ((x.iid && o.iid === x.iid) || o.idiom === x.t));
+                    if (!it) missing = true;
+                    return it || null;
+                }
+                return x;
+            });
+            return { out, missing };
+        }
+        //   ③ 잠금용 — 항목의 점수 모습. 서버를 한 바퀴 돌면 빈 칸·null 이 빠지므로 그런 차이는 같게 본다
+        function fpCanon(v) {
+            if (Array.isArray(v)) { const a = v.map(fpCanon).filter(x => x !== undefined); return a.length ? a : undefined; }
+            if (v && typeof v === 'object') {
+                const o = {};
+                Object.keys(v).sort().forEach(k => { const c = fpCanon(v[k]); if (c !== undefined) o[k] = c; });
+                return Object.keys(o).length ? o : undefined;
+            }
+            return (v === null || v === undefined || v === '') ? undefined : v;
+        }
+        const fpOf = (v) => JSON.stringify(fpCanon(v) || null);
+        function fpWordEntry(e) { return (e && e.word && typeof snapshotWordScoreState === 'function') ? fpOf(snapshotWordScoreState(e.word)) : ''; }
+        function fpGrammarEntry(e) {
+            const id = e && e.note && e.note.id;
+            if (!id) return '';
+            return fpOf({ d: getGrammarDayGain(id), s: grammarScores[id], t: grammarTransUsed[id], m: masteredGrammar[id], r: grammarReview[id] });
+        }
+        function fpIdiomEntry(e) { return (e && e.key && typeof snapshotIdiomScoreState === 'function') ? fpOf(snapshotIdiomScoreState(e.key)) : ''; }
+
         function stashForReload() {
             try {
                 const s = { at: Date.now(), tab: activeTab };
                 const mode = (typeof currentAiMode !== 'undefined') ? currentAiMode : null;
                 s.aiMode = mode;
                 const graded = isShown('ai-feedback-result');   // 지금 모드에서 채점 결과를 보는 중
-                if (typeof aiCurrentKoreanSentence !== 'undefined' && aiCurrentKoreanSentence && !(graded && mode === 'ko-es')) {
+                //   ④ 오늘 채점한 카드만 — 어제 것은 첨삭 노트 탭에 있다
+                const today = getLocalDateString();
+                const resultToday = graded && typeof aiResultDate !== 'undefined' && aiResultDate === today;
+                if (resultToday) {
+                    const ix = aiRefIndex();
+                    s.result = { date: today, html: document.getElementById('ai-feedback-result').innerHTML,
+                        refs: packAiRefs({ g: aiLastEsKoGrammar, w: aiLastEsKoWords, i: aiLastEsKoIdioms, zero: aiZeroAllSnapshot,
+                            sug: aiLastSuggest, fb: aiLastFeedbackForAdd, note: _lastAiNoteKey, cands: aiIdiomCands,
+                            corrected: aiLastCorrectedText }, ix),
+                        fp: { g: aiLastEsKoGrammar.map(fpGrammarEntry), w: aiLastEsKoWords.map(fpWordEntry), i: aiLastEsKoIdioms.map(fpIdiomEntry) } };
+                }
+                //   채점한 미션은 카드를 살릴 때만 같이 살린다 — 카드 없이 문제만 살리면 같은 답을 또 내게 된다
+                const keepGraded = (m) => !(graded && mode === m && !resultToday);
+                if (typeof askAiMessages !== 'undefined' && askAiMessages.length) {
+                    s.askAi = { msgs: askAiMessages.filter(m => m && m.role !== 'pending'), open: isShown('ask-ai-panel') };
+                }
+                if (typeof aiCurrentKoreanSentence !== 'undefined' && aiCurrentKoreanSentence && keepGraded('ko-es')) {
                     s.koEs = { sentence: aiCurrentKoreanSentence,
                         gid: aiCurrentGrammarForMission ? aiCurrentGrammarForMission.id : null,
                         detail: aiCurrentGrammarDetailForMission || '', reviewGid: aiMissionReviewGrammarId || null,
@@ -11226,16 +11307,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     s.review = { queue: grammarReviewQueue.slice(), total: grammarReviewTotal, done: grammarReviewDone,
                         cur: grammarReviewCurrentId, slotGraded: grammarReviewSlotGraded, lastNote: grammarReviewLastNoteId };
                 }
-                if (typeof aiIdiomMission !== 'undefined' && aiIdiomMission && aiIdiomMission.w && !(graded && mode === 'idiom')) {
+                if (typeof aiIdiomMission !== 'undefined' && aiIdiomMission && aiIdiomMission.w && keepGraded('idiom')) {
                     s.idiom = { wid: aiIdiomMission.w.id, iid: aiIdiomMission.it.iid || null, idiom: aiIdiomMission.it.idiom,
                         key: aiIdiomMission.key, sentence: aiIdiomMission.sentence, review: !!aiIdiomMission.review,
                         hint: !!aiIdiomHintOn, text: boxValue('ai-idiom-input') };
                 }
-                if (typeof currentQuestionForAnswer !== 'undefined' && currentQuestionForAnswer && !(graded && mode === 'question')) {
+                if (typeof currentQuestionForAnswer !== 'undefined' && currentQuestionForAnswer && keepGraded('question')) {
                     s.question = { q: currentQuestionForAnswer, text: boxValue('question-answer-input') };
                 }
                 const free = boxValue('ai-free-input-es');
-                if (free.trim() && !(graded && mode === 'es-ko')) s.esKo = { text: free };
+                if (free.trim() && keepGraded('es-ko')) s.esKo = { text: free };
                 sessionStorage.setItem(RELOAD_STASH_KEY, JSON.stringify(s));
             } catch (e) { console.warn('새로고침 전 맡기기 실패', e); }
         }
@@ -11250,20 +11331,23 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (s.aiMode && typeof switchAiMode === 'function') switchAiMode(s.aiMode);
                 const setBox = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
                 const notes = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+                //   ① 그 사이 다른 곳에서 끝냈으면 오늘 차례가 아니다 — 지금 데이터로 다시 잰다
+                const stillDue = (id) => notes.some(t => t.id === id) && typeof isGrammarDueToday === 'function' && isGrammarDueToday(id);
                 if (s.review && typeof renderGrammarReviewBar === 'function') {
-                    //   이미 끝낸 문법이 지워졌으면 줄에서 뺀다
-                    grammarReviewQueue = (s.review.queue || []).filter(id => notes.some(t => t.id === id));
+                    const before = (s.review.queue || []).length;
+                    grammarReviewQueue = (s.review.queue || []).filter(stillDue);
                     grammarReviewTotal = s.review.total || 0;
-                    grammarReviewDone = s.review.done || 0;
+                    grammarReviewDone = Math.min(grammarReviewTotal, (s.review.done || 0) + (before - grammarReviewQueue.length));
                     grammarReviewCurrentId = s.review.cur || null;
-                    grammarReviewSlotGraded = !!s.review.slotGraded;
+                    //   지금 칸도 이미 끝났으면 '답을 낸 칸' 으로 — 다음 문법으로만 넘어가게
+                    grammarReviewSlotGraded = !!s.review.slotGraded || !(grammarReviewCurrentId && stillDue(grammarReviewCurrentId));
                     grammarReviewLastNoteId = s.review.lastNote || null;
                 }
                 if (s.koEs && s.koEs.sentence) {
                     aiCurrentKoreanSentence = s.koEs.sentence;
                     aiCurrentGrammarForMission = s.koEs.gid ? (notes.find(t => t.id === s.koEs.gid) || null) : null;
                     aiCurrentGrammarDetailForMission = s.koEs.detail || '';
-                    aiMissionReviewGrammarId = (s.koEs.reviewGid && notes.some(t => t.id === s.koEs.reviewGid)) ? s.koEs.reviewGid : null;
+                    aiMissionReviewGrammarId = (s.koEs.reviewGid && stillDue(s.koEs.reviewGid)) ? s.koEs.reviewGid : null;
                     const h = document.getElementById('ai-mission-korean');
                     if (h) h.innerText = aiCurrentKoreanSentence;
                     setBox('ai-user-input', s.koEs.text);
@@ -11273,10 +11357,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     const w = vocabulary.find(v => v.id === s.idiom.wid);
                     const it = w && (w.idioms || []).find(x => x && ((s.idiom.iid && x.iid === s.idiom.iid) || x.idiom === s.idiom.idiom));
                     if (it) {
-                        aiIdiomMission = { w, it, key: s.idiom.key, sentence: s.idiom.sentence, review: s.idiom.review };
+                        //   ② '오늘 복습' 으로 낸 관용구도 아직 오늘 차례인지 다시 잰다
+                        const review = !!s.idiom.review && typeof idiomDueEntries === 'function'
+                            && idiomDueEntries().some(e => e.key === s.idiom.key);
+                        aiIdiomMission = { w, it, key: s.idiom.key, sentence: s.idiom.sentence, review };
                         const h = document.getElementById('ai-idiom-korean');
                         if (h) h.innerText = s.idiom.sentence;
-                        document.getElementById('ai-idiom-review-pill')?.classList.toggle('hidden', !s.idiom.review);
+                        document.getElementById('ai-idiom-review-pill')?.classList.toggle('hidden', !review);
                         aiIdiomHintOn = false;
                         if (s.idiom.hint && typeof toggleIdiomHint === 'function') toggleIdiomHint();
                         setBox('ai-idiom-input', s.idiom.text);
@@ -11292,7 +11379,45 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     setBox('question-answer-input', s.question.text);
                 }
                 if (s.esKo) setBox('ai-free-input-es', s.esKo.text);
-                if (s.koEs || s.idiom || s.question || s.esKo) showToast("쓰던 첨삭을 그대로 살려뒀어요 ✨", "success");
+                let locked = 0;
+                if (s.result && s.result.date === getLocalDateString()) {
+                    const box = document.getElementById('ai-feedback-result');
+                    const { out, missing } = unpackAiRefs(s.result.refs);
+                    //   지워진 단어·노트가 끼어 있으면 점수 줄은 못 잇는다 — 카드 글만 보여준다
+                    const ok = !missing && out;
+                    aiLastEsKoGrammar = ok ? (out.g || []) : [];
+                    aiLastEsKoWords = ok ? (out.w || []) : [];
+                    aiLastEsKoIdioms = ok ? (out.i || []) : [];
+                    aiZeroAllSnapshot = ok ? (out.zero || null) : null;
+                    if (ok) {
+                        aiLastSuggest = out.sug || { idioms: [], newWords: [] };
+                        aiLastFeedbackForAdd = out.fb || null;
+                        _lastAiNoteKey = out.note || null;
+                        aiIdiomCands = out.cands || [];
+                        aiLastCorrectedText = out.corrected || '';
+                        aiResultDate = s.result.date;
+                        //   ③ 맡길 때와 점수 모습이 다르면 그 사이 다른 곳에서 바뀐 것 — 그 줄은 ↺ 를 잠근다
+                        const lock = (list, fps, fn) => list.forEach((e, i) => { if (e && fps && fps[i] !== fn(e)) { e.locked = true; locked++; } });
+                        lock(aiLastEsKoGrammar, s.result.fp.g, fpGrammarEntry);
+                        lock(aiLastEsKoWords, s.result.fp.w, fpWordEntry);
+                        lock(aiLastEsKoIdioms, s.result.fp.i, fpIdiomEntry);
+                    }
+                    if (box) {
+                        box.innerHTML = s.result.html;
+                        box.classList.remove('hidden');
+                        if (typeof renderEsKoGrammarRefs === 'function') renderEsKoGrammarRefs();
+                        if (typeof renderAiZeroAllBtn === 'function') renderAiZeroAllBtn();
+                    }
+                }
+                if (s.askAi && Array.isArray(s.askAi.msgs) && typeof askAiMessages !== 'undefined') {
+                    askAiMessages = s.askAi.msgs;
+                    if (typeof renderAskAiThread === 'function') renderAskAiThread();
+                    if (s.askAi.open && typeof openAskAi === 'function') openAskAi();
+                }
+                if (s.koEs || s.idiom || s.question || s.esKo || s.result || s.askAi) {
+                    showToast(locked ? `새로고침 전 화면을 살려뒀어요 — 다른 곳에서 바뀐 ${locked}개는 점수를 못 고쳐요` : "새로고침 전 화면을 그대로 살려뒀어요 ✨",
+                        locked ? "warning" : "success");
+                }
             } catch (e) { console.warn('새로고침 뒤 되살리기 실패', e); }
         }
 
@@ -11323,12 +11448,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (!idle && !fresh) return;
             _reloadAskOpen = true;
             const typed = ['ai-user-input', 'ai-free-input-es', 'ai-idiom-input', 'question-answer-input'].some(id => boxValue(id).trim());
-            const keep = typed ? ' 쓰던 첨삭은 그대로 살려둘게요.' : '';
+            const keep = (typed || isShown('ai-feedback-result')) ? ' 보던 첨삭은 그대로 살려둘게요.' : '';
             const done = () => { _reloadAskOpen = false; _lastActAt = Date.now(); };
-            showConfirm(idle ? "1시간 넘게 쉬었어요" : "새 버전이 나왔어요",
-                (idle ? "다른 컴퓨터에서 공부한 것과 새 버전을 받아오려면 새로고침해 주세요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
+            showConfirm(idle ? "30분 넘게 쉬었어요" : "새 버전이 나왔어요",
+                (idle ? "다른 컴퓨터에서 공부한 것과 새 버전을 받아올게요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
                 () => { done(); hardReloadApp(); },
-                { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true,
+                //   쉬어서 뜬 창은 고를 게 없다 — 보던 것이 다 살아나니 [그냥 쓰기] 를 두지 않는다
+                { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true, hideCancel: idle,
                   onCancel: () => { done(); if (fresh) _newVersionDeclined = _newVersionSeen; } });
         }
 
