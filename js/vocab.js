@@ -6617,7 +6617,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return ((index || buildSpellingIndex()).get(spellingKeyOf(w)) || []).filter(o => o.id !== w.id);
         }
         function pairChipText(o) {
-            const abbr = (typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '';
+            //   [냐냐 요청] 명사는 성별로 — 여성 f. · 남성 m. · 구분 없음 n. (2026-10-07). la capital ↔ el capital 처럼 명사끼리 짝일 때 갈린다
+            const nounAbbr = { feminine: 'f.', masculine: 'm.' };
+            const abbr = (o.pos === 'noun') ? (nounAbbr[o.gender] || 'n.')
+                : ((typeof SYN_POS_ABBR !== 'undefined' && SYN_POS_ABBR[o.pos]) || o.pos || '');
             const mean = String(o.meaning || '').split(/[,;]/)[0].trim();
             //   [냐냐 요청] 철자가 같으니 단어는 또 안 쓴다 — 품사와 뜻만 (adv. 늦게) (2026-10-06)
             return `${abbr} ${mean || String(o.word || '')}`;
