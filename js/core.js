@@ -4626,27 +4626,63 @@ let vocabulary = [];
                 <table class="w-full text-xs bg-white rounded-xl overflow-hidden"><tbody>${buildGradeRows('자주 틀리는 표현')}</tbody></table>
             </div>`;
 
+            // [냐냐 요청] 🏷️ 표시 — 화면에 나오는 줄임 표시를 한곳에 (2026-10-07)
+            //   동그라미는 '(역)' 글자를 그대로 적으면 markMeaningMarks 가 화면에서 그려준다.
+            const legendRows = (rows) => rows.map(([k, v]) => `
+                <tr class="border-b border-slate-100 last:border-0">
+                    <td class="py-2 px-3 text-sm font-black text-slate-700 whitespace-nowrap">${k}</td>
+                    <td class="py-2 px-3 text-slate-500 font-semibold">${v}</td>
+                </tr>`).join('');
+            const legendBox = (icon, title, sub, rows) => `
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 class="text-sm font-black text-slate-800 flex items-center gap-2">${icon} ${title}</h4>
+                ${sub ? `<p class="text-[11px] text-slate-500 font-semibold leading-relaxed">${sub}</p>` : ''}
+                <table class="w-full text-xs bg-white rounded-xl overflow-hidden"><tbody>${legendRows(rows)}</tbody></table>
+            </div>`;
+            const markHtml =
+                legendBox('<i class="fa-regular fa-circle text-violet-500"></i>', '뜻 앞 동그라미', '그 뜻 하나에만 붙어요. 한 뜻에 둘이 붙기도 해요 — (남)(속)', [
+                    ['(역)', '역구조동사로 쓰는 뜻 — <i>me gusta</i> 처럼 간접목적대명사 + 동사 + 주어'],
+                    ['(재)', '재귀동사(-se)로 쓰는 뜻'],
+                    ['(남)', '중남미에서만 쓰는 뜻'],
+                    ['(스)', '스페인에서만 쓰는 뜻'],
+                    ['(구)', '구어 — 말할 때 쓰는 편한 말'],
+                    ['(속)', '속어 — 거친 말·욕·성적인 말']
+                ]) +
+                legendBox('<i class="fa-solid fa-tag text-sky-500"></i>', '품사 약자', '', [
+                    ['n.', '명사'], ['v.', '동사'], ['adj.', '형용사'], ['adv.', '부사'], ['prep.', '전치사'],
+                    ['conj.', '접속사'], ['pron.', '대명사'], ['int.', '의문사'], ['phr.', '구문'], ['m. / f.', '남성 / 여성 (명사)']
+                ]) +
+                legendBox('<i class="fa-solid fa-robot text-amber-500"></i>', '첨삭 결과 카드', '', [
+                    ['🔁 오늘 복습', '오늘 차례였던 것을 제대로 써서 복습으로 쳤어요 (한 칸 앞으로)'],
+                    ['🔁 복습 실패', '오늘 차례였던 단어를 철자 틀리게 써서 복습 실패로 쳤어요 (한 칸 뒤로)'],
+                    ['<i class="fa-solid fa-rotate-left text-slate-400"></i>', '점수 바꾸기 — 누를 때마다 + → 0 → −2'],
+                    ['보라색 줄', '손으로 바꾸거나 직접 더한 점수 (AI 가 매긴 원래 평가와 갈라 보여요)'],
+                    ['<i class="fa-solid fa-lock text-slate-300"></i>', '새로고침 전 카드를 되살렸는데, 그 사이 다른 곳에서 점수가 바뀐 줄 — 여기서는 못 고쳐요']
+                ]);
+
             const tabBtn = (key, label, icon) => `
                 <button id="help-tab-btn-${key}" onclick="switchHelpTab('${key}')"
                     class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all">${icon} ${label}</button>`;
             return `
             <div class="sticky top-0 z-10 bg-white pb-3 -mt-1 pt-1">
-                <div class="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                <div class="grid grid-cols-4 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
                     ${tabBtn('word', '단어', '📖')}
                     ${tabBtn('idiom', '관용구', '📘')}
                     ${tabBtn('grammar', '문법', '📋')}
+                    ${tabBtn('mark', '표시', '🏷️')}
                 </div>
             </div>
             <div id="help-pane-word" class="space-y-4">${wordHtml}${wordHtml2}</div>
             <div id="help-pane-idiom" class="hidden space-y-4">${idiomHtml}</div>
-            <div id="help-pane-grammar" class="hidden space-y-4">${grammarHtml}</div>`;
+            <div id="help-pane-grammar" class="hidden space-y-4">${grammarHtml}</div>
+            <div id="help-pane-mark" class="hidden space-y-4">${markHtml}</div>`;
         }
 
         // [냐냐 요청] 설명 모달의 단어 / 문법 탭 전환
         function switchHelpTab(which) {
             const on  = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all bg-white text-slate-900 shadow-sm';
             const off = 'flex-1 py-2.5 rounded-xl text-xs font-black transition-all text-slate-500 hover:text-slate-800';
-            ['word', 'idiom', 'grammar'].forEach(key => {
+            ['word', 'idiom', 'grammar', 'mark'].forEach(key => {
                 const pane = document.getElementById('help-pane-' + key);
                 const btn = document.getElementById('help-tab-btn-' + key);
                 if (pane) pane.classList.toggle('hidden', key !== which);
@@ -8651,8 +8687,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   - 직접 쓰는 칸(contenteditable)·입력칸은 안 건드린다 — 거기서는 글자로 고쳐야 한다.
         // ============================================================
         //   [냐냐 요청] (남)=중남미에서만 · (스)=스페인에서만 쓰는 뜻도 같은 동그라미로 (2026-10-06). 양쪽 다 쓰는 뜻엔 아무것도 안 붙인다.
-        const MEAN_MARK_RE = /\((역|재|남|스)\)/;
-        const MEAN_MARK_TITLE = { 역: '역구조동사로 쓰는 뜻', 재: '재귀동사로 쓰는 뜻', 남: '중남미에서만 쓰는 뜻', 스: '스페인에서만 쓰는 뜻' };
+        //   [냐냐 요청] (구)=구어(말할 때 쓰는 편한 말) · (속)=속어(거친 말·욕·성적인 말)도 같은 동그라미로 (2026-10-07)
+        const MEAN_MARK_RE = /\((역|재|남|스|구|속)\)/;
+        const MEAN_MARK_TITLE = { 역: '역구조동사로 쓰는 뜻', 재: '재귀동사로 쓰는 뜻', 남: '중남미에서만 쓰는 뜻', 스: '스페인에서만 쓰는 뜻',
+                                  구: '구어 — 말할 때 쓰는 편한 말', 속: '속어 — 거친 말·욕·성적인 말' };
         const MEAN_MARK_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'OPTION', 'SELECT', 'TITLE']);
         function meanMarkSkip(node) {
             for (let n = node.parentNode; n && n.nodeType === 1; n = n.parentNode) {
@@ -8664,7 +8702,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const text = tn.nodeValue;
             if (!text || text.indexOf('(') < 0 || !MEAN_MARK_RE.test(text) || meanMarkSkip(tn)) return;
             const frag = document.createDocumentFragment();
-            const re = /\((역|재|남|스)\)/g;
+            const re = /\((역|재|남|스|구|속)\)/g;
             let last = 0, m;
             while ((m = re.exec(text))) {
                 if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
