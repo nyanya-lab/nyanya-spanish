@@ -96,6 +96,8 @@ let vocabulary = [];
             if (window.innerWidth < 768) {
                 collapseMobileMenu();
             }
+            restoreReloadStash();   // [냐냐 요청] 새로고침 전에 쓰던 첨삭·보던 탭 (2026-10-07)
+            initIdleReload();       // 1시간 쉬면 · 새 버전이면 새로고침 창
 
             document.addEventListener('keydown', function(e) {
                 // [냐냐 요청] 문법 들춰보기 팝업은 어느 탭에서든 ESC 로 닫힌다
@@ -11128,12 +11130,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   '처음 보는 주소' 로 만들어서 index.html 부터 새로 받아오게 한다.
         //   ⚠️ 쓰던 글이 있으면 한 번 묻는다 — 헤더는 늘 보이는 자리라 잘못 눌릴 수 있다.
         function hardReloadApp() {
-            const boxes = ['ai-user-input', 'ai-free-input-es', 'ai-idiom-input', 'ai-question-input',
-                           'input-word', 'input-meaning', 'write-answer-input', 'fill-answer-input'];
-            const typing = boxes.some(id => {
-                const el = document.getElementById(id);
-                return el && String(el.value || '').trim();
-            });
+            //   첨삭 네 칸은 새로고침 뒤에 다시 채워주니(reload stash) 묻지 않는다 — 못 살리는 칸만 묻는다
+            const typing = unrestorableTyping();
             //   [냐냐 요청] Ctrl+Shift+R 을 대신하는 자리라 js·css 까지 확실히 새로 받아야 한다.
             //   주소에 시각을 붙이면 index.html 은 새로 오지만, js·css 는 그 안의 ?v= 를 따라간다 —
             //   ?v= 가 그대로면 브라우저가 캐시 것을 계속 쓴다 (훅이 늘 올려주긴 하지만 그때뿐이다).
@@ -11160,6 +11158,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         return fetch(u, { cache: 'reload', mode: same ? 'same-origin' : 'no-cors' }).catch(() => {});
                     }));
                 } catch (e) {}
+                stashForReload();
                 try {
                     const u = new URL(location.href);
                     u.searchParams.set('r', String(Date.now()));
@@ -11173,6 +11172,194 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             }
             go();
         }
+
+        // ============================================================
+        // [냐냐 요청] 새로고침해도 쓰던 첨삭은 살린다 · 1시간 쉬면 새로고침 창 · 새 버전 알림 (2026-10-07)
+        //   왜: 저장은 통째로 덮어쓰기다. 회사 PC 를 켜둔 채 퇴근 → 집에서 공부 → 다음 날 그 창을 누르면
+        //   집에서 한 게 날아간다. 오래 쉰 창은 새로 받아오게 하면 막힌다.
+        //   그런데 새로고침이 쓰던 글을 날리면 안 되니, 첨삭 네 칸은 글과 문제(한국어 문장·노트·대목·관용구·
+        //   질문·문법 복습 줄)를 이 탭에 맡겨뒀다가 다시 채운다. 맡기는 곳은 sessionStorage —
+        //   같은 탭에서만 살고 서버로는 안 간다. 보던 탭도 같이 돌아온다.
+        //   ⚠️ 못 살리는 것(단어 등록 창·쓰기 복습·빈칸·퀴즈 진행 중·열린 창)이 있으면 창을 미룬다.
+        //      끝나거나 닫으면 다음 확인(30초마다)에 뜬다.
+        //   ⚠️ 이미 채점한 미션은 문제를 살리지 않는다 — 결과 카드는 못 살리고, 같은 답을 또 내면 두 번 채점된다.
+        // ============================================================
+        const RELOAD_STASH_KEY = 'nyanya_reload_stash';
+        const IDLE_RELOAD_MS = 60 * 60 * 1000;
+        let _lastActAt = Date.now();
+        let _reloadAskOpen = false;
+        let _newVersionSeen = '';      // 서버에서 본 새 버전 번호
+        let _newVersionDeclined = '';  // '그냥 쓰기' 를 누른 버전 — 같은 버전으로 다시 묻지 않는다
+
+        function boxValue(id) { const el = document.getElementById(id); return el ? String(el.value || '') : ''; }
+        function isShown(id) { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); }
+
+        //   새로고침하면 사라지는데 되살릴 수 없는 글
+        function unrestorableTyping() {
+            const modalBoxes = isShown('word-modal') ? ['input-word', 'input-meaning'] : [];
+            return modalBoxes.concat(['write-answer-input', 'fill-answer-input']).some(id => boxValue(id).trim());
+        }
+        //   지금 새로고침하면 끊기는 일이 있나 — 있으면 1시간 창·새 버전 창을 미룬다
+        function reloadWouldInterrupt() {
+            if (unrestorableTyping()) return true;
+            if ((typeof writePracticeState !== 'undefined' && writePracticeState)
+                || (typeof fillState !== 'undefined' && fillState)
+                || (typeof gfillState !== 'undefined' && gfillState)
+                || (typeof quizSession !== 'undefined' && quizSession)) return true;
+            //   열린 창(등록·편집·확인 창 등) — 화면을 덮는 판이 하나라도 보이면
+            return Array.from(document.querySelectorAll('div.fixed.inset-0')).some(el => !el.classList.contains('hidden') && el.offsetParent !== null);
+        }
+
+        function stashForReload() {
+            try {
+                const s = { at: Date.now(), tab: activeTab };
+                const mode = (typeof currentAiMode !== 'undefined') ? currentAiMode : null;
+                s.aiMode = mode;
+                const graded = isShown('ai-feedback-result');   // 지금 모드에서 채점 결과를 보는 중
+                if (typeof aiCurrentKoreanSentence !== 'undefined' && aiCurrentKoreanSentence && !(graded && mode === 'ko-es')) {
+                    s.koEs = { sentence: aiCurrentKoreanSentence,
+                        gid: aiCurrentGrammarForMission ? aiCurrentGrammarForMission.id : null,
+                        detail: aiCurrentGrammarDetailForMission || '', reviewGid: aiMissionReviewGrammarId || null,
+                        text: boxValue('ai-user-input') };
+                }
+                if (typeof grammarReviewTotal !== 'undefined' && grammarReviewTotal) {
+                    s.review = { queue: grammarReviewQueue.slice(), total: grammarReviewTotal, done: grammarReviewDone,
+                        cur: grammarReviewCurrentId, slotGraded: grammarReviewSlotGraded, lastNote: grammarReviewLastNoteId };
+                }
+                if (typeof aiIdiomMission !== 'undefined' && aiIdiomMission && aiIdiomMission.w && !(graded && mode === 'idiom')) {
+                    s.idiom = { wid: aiIdiomMission.w.id, iid: aiIdiomMission.it.iid || null, idiom: aiIdiomMission.it.idiom,
+                        key: aiIdiomMission.key, sentence: aiIdiomMission.sentence, review: !!aiIdiomMission.review,
+                        hint: !!aiIdiomHintOn, text: boxValue('ai-idiom-input') };
+                }
+                if (typeof currentQuestionForAnswer !== 'undefined' && currentQuestionForAnswer && !(graded && mode === 'question')) {
+                    s.question = { q: currentQuestionForAnswer, text: boxValue('question-answer-input') };
+                }
+                const free = boxValue('ai-free-input-es');
+                if (free.trim() && !(graded && mode === 'es-ko')) s.esKo = { text: free };
+                sessionStorage.setItem(RELOAD_STASH_KEY, JSON.stringify(s));
+            } catch (e) { console.warn('새로고침 전 맡기기 실패', e); }
+        }
+
+        //   window.onload 끝에서 부른다 — 데이터·화면이 다 깔린 뒤에 채워야 덮이지 않는다
+        function restoreReloadStash() {
+            let s = null;
+            try { s = JSON.parse(sessionStorage.getItem(RELOAD_STASH_KEY) || 'null'); sessionStorage.removeItem(RELOAD_STASH_KEY); } catch (e) {}
+            if (!s || !s.at || Date.now() - s.at > 10 * 60 * 1000) return;   // 우리가 막 맡긴 것만
+            try {
+                if (s.tab && document.getElementById(`tab-${s.tab}`)) changeTab(s.tab);
+                if (s.aiMode && typeof switchAiMode === 'function') switchAiMode(s.aiMode);
+                const setBox = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+                const notes = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+                if (s.review && typeof renderGrammarReviewBar === 'function') {
+                    //   이미 끝낸 문법이 지워졌으면 줄에서 뺀다
+                    grammarReviewQueue = (s.review.queue || []).filter(id => notes.some(t => t.id === id));
+                    grammarReviewTotal = s.review.total || 0;
+                    grammarReviewDone = s.review.done || 0;
+                    grammarReviewCurrentId = s.review.cur || null;
+                    grammarReviewSlotGraded = !!s.review.slotGraded;
+                    grammarReviewLastNoteId = s.review.lastNote || null;
+                }
+                if (s.koEs && s.koEs.sentence) {
+                    aiCurrentKoreanSentence = s.koEs.sentence;
+                    aiCurrentGrammarForMission = s.koEs.gid ? (notes.find(t => t.id === s.koEs.gid) || null) : null;
+                    aiCurrentGrammarDetailForMission = s.koEs.detail || '';
+                    aiMissionReviewGrammarId = (s.koEs.reviewGid && notes.some(t => t.id === s.koEs.reviewGid)) ? s.koEs.reviewGid : null;
+                    const h = document.getElementById('ai-mission-korean');
+                    if (h) h.innerText = aiCurrentKoreanSentence;
+                    setBox('ai-user-input', s.koEs.text);
+                }
+                if (s.review && typeof renderGrammarReviewBar === 'function') renderGrammarReviewBar();
+                if (s.idiom && typeof vocabulary !== 'undefined') {
+                    const w = vocabulary.find(v => v.id === s.idiom.wid);
+                    const it = w && (w.idioms || []).find(x => x && ((s.idiom.iid && x.iid === s.idiom.iid) || x.idiom === s.idiom.idiom));
+                    if (it) {
+                        aiIdiomMission = { w, it, key: s.idiom.key, sentence: s.idiom.sentence, review: s.idiom.review };
+                        const h = document.getElementById('ai-idiom-korean');
+                        if (h) h.innerText = s.idiom.sentence;
+                        document.getElementById('ai-idiom-review-pill')?.classList.toggle('hidden', !s.idiom.review);
+                        aiIdiomHintOn = false;
+                        if (s.idiom.hint && typeof toggleIdiomHint === 'function') toggleIdiomHint();
+                        setBox('ai-idiom-input', s.idiom.text);
+                    }
+                }
+                if (s.question && s.question.q && s.question.q.question) {
+                    currentQuestionForAnswer = s.question.q;
+                    if (typeof updateSaveAiQuestionBtn === 'function') updateSaveAiQuestionBtn();
+                    const d = document.getElementById('question-display-text');
+                    if (d) d.innerText = currentQuestionForAnswer.question;
+                    const badge = document.getElementById('question-topic-badge');
+                    if (badge) badge.innerText = '주제 보기';
+                    setBox('question-answer-input', s.question.text);
+                }
+                if (s.esKo) setBox('ai-free-input-es', s.esKo.text);
+                if (s.koEs || s.idiom || s.question || s.esKo) showToast("쓰던 첨삭을 그대로 살려뒀어요 ✨", "success");
+            } catch (e) { console.warn('새로고침 뒤 되살리기 실패', e); }
+        }
+
+        //   지금 도는 버전 = index.html 이 붙여준 ?v= (pre-commit 훅이 커밋마다 올린다)
+        function runningAppVersion() {
+            const el = document.querySelector('script[src*="js/core.js"]');
+            const m = el && /[?&]v=(\d+)/.exec(el.getAttribute('src') || '');
+            return m ? m[1] : '';
+        }
+        let _versionCheckedAt = 0;
+        async function checkNewAppVersion() {
+            if (location.protocol === 'file:' || Date.now() - _versionCheckedAt < 5 * 60 * 1000) return;
+            _versionCheckedAt = Date.now();
+            const now = runningAppVersion();
+            if (!now) return;
+            try {
+                const res = await fetch(location.pathname + '?vcheck=' + Date.now(), { cache: 'no-store' });
+                if (!res.ok) return;
+                const m = /js\/core\.js\?v=(\d+)/.exec(await res.text());
+                if (m && m[1] !== now) _newVersionSeen = m[1];
+            } catch (e) {}
+        }
+
+        function askReloadIfDue() {
+            if (_reloadAskOpen || reloadWouldInterrupt()) return;
+            const idle = Date.now() - _lastActAt >= IDLE_RELOAD_MS;
+            const fresh = _newVersionSeen && _newVersionSeen !== _newVersionDeclined;
+            if (!idle && !fresh) return;
+            _reloadAskOpen = true;
+            const typed = ['ai-user-input', 'ai-free-input-es', 'ai-idiom-input', 'question-answer-input'].some(id => boxValue(id).trim());
+            const keep = typed ? ' 쓰던 첨삭은 그대로 살려둘게요.' : '';
+            const done = () => { _reloadAskOpen = false; _lastActAt = Date.now(); };
+            showConfirm(idle ? "1시간 넘게 쉬었어요" : "새 버전이 나왔어요",
+                (idle ? "다른 컴퓨터에서 공부한 것과 새 버전을 받아오려면 새로고침해 주세요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
+                () => { done(); hardReloadApp(); },
+                { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true,
+                  onCancel: () => { done(); if (fresh) _newVersionDeclined = _newVersionSeen; } });
+        }
+
+        function initIdleReload() {
+            //   1시간 지나고 처음 누른 것은 실행하지 않고 창부터 띄운다 — 다른 창에 덮여 있다가 눌러서 돌아온 경우.
+            //   그 누름이 버튼을 실행해 저장까지 하면 옛 데이터로 덮어쓴다. 뒤따르는 click 까지 삼킨다.
+            let swallowUntil = 0;
+            const onAct = (e) => {
+                if (_reloadAskOpen) return;
+                if (Date.now() - _lastActAt >= IDLE_RELOAD_MS && !reloadWouldInterrupt()) {
+                    if (e.type === 'pointerdown' || e.type === 'keydown' || e.type === 'touchstart') {
+                        e.preventDefault(); e.stopPropagation(); swallowUntil = Date.now() + 600;
+                    }
+                    askReloadIfDue();
+                    return;
+                }
+                _lastActAt = Date.now();
+            };
+            ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(t => document.addEventListener(t, onAct, { capture: true, passive: false }));
+            window.addEventListener('scroll', onAct, { passive: true });
+            ['mousedown', 'mouseup', 'click'].forEach(t => document.addEventListener(t, (e) => {
+                if (Date.now() < swallowUntil) { e.preventDefault(); e.stopPropagation(); }
+            }, true));
+            //   돌아왔을 때 — 오래 비웠으면 누르기 전에 창이 먼저 떠 있어야 한다. 잰 다음에 bump 가 시각을 새로 적는다
+            const onBack = async () => { askReloadIfDue(); await checkNewAppVersion(); askReloadIfDue(); };
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onBack(); });
+            window.addEventListener('focus', onBack);
+            setInterval(askReloadIfDue, 30 * 1000);
+            setInterval(checkNewAppVersion, 30 * 60 * 1000);
+        }
+
         // ============================================================
         // [냐냐 요청] 머리 줄 제목이 날마다 바뀐다 (2026-09-23) — '¡○○, 냐냐!'
         //   날짜로 고르니 하루 동안은 같고, 폰과 PC 에서도 같은 문구다. 마우스를 올리면 뜻.
