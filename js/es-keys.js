@@ -73,6 +73,10 @@
             //   ⚠️ 한국어 칸에서도 기호가 바뀐다 (/ → -, ~ → ª, ( → ) …). false 로 두면 data-es 칸만.
             //   비밀번호·API 키(type=password)와 동기화 주소(data-no-es)는 늘 뺀다 — 틀리면 동기화가 끊긴다.
             const ES_KEYS_EVERYWHERE = true;
+            //   [냐냐 지적] 문법 노트 글쓰기(서식 있는 편집칸, contenteditable)엔 안 걸려 있었다 (2026-10-07).
+            //   글 칸과 달리 setRangeText 가 없어서 insertText 로 넣는다 (되돌리기·저장 처리가 그대로 먹는다).
+            const isEsRich = (el) => !!(ES_KEYS_ON && ES_KEYS_EVERYWHERE && el && el.isContentEditable
+                && !(el.closest && el.closest('[data-no-es]')));
             const isEsField = (el) => {
                 if (!ES_KEYS_ON || !el || el.readOnly || el.disabled || el.hasAttribute('data-no-es')) return false;
                 const textLike = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'search'));
@@ -108,5 +112,25 @@
                 el.setRangeText(es, el.selectionStart, el.selectionEnd, 'end');
                 el._esDead = null;
                 el.dispatchEvent(new Event('input', { bubbles: true }));
+            }, true);
+
+            //   서식 있는 편집칸 — 악센트 키는 기억했다가 다음 키가 모음이면 악센트 붙은 글자로 바꿔 넣는다
+            let richDead = null;   // { host, ch }
+            document.addEventListener('keydown', (e) => {
+                const el = e.target;
+                if (!isEsRich(el) || !e.isTrusted || e.isComposing) return;
+                if (e.ctrlKey || e.metaKey || e.altKey) { richDead = null; return; }
+                const host = el.closest('[contenteditable="true"], [contenteditable=""]') || el;
+                const put = (s) => { e.preventDefault(); document.execCommand('insertText', false, s); };
+                if (richDead && richDead.host === host && e.key && e.key.length === 1) {
+                    const t = richDead.ch === DEAD_DIAER ? DIAER : ACUTE;
+                    richDead = null;
+                    if (t[e.key]) { put(t[e.key]); return; }
+                }
+                const es = esCharForKey(e);
+                if (!es) { if (e.key && e.key.length === 1) richDead = null; return; }
+                if (es === DEAD_ACUTE || es === DEAD_DIAER) { e.preventDefault(); richDead = { host, ch: es }; return; }
+                richDead = null;
+                put(es);
             }, true);
         })();
