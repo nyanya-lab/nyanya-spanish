@@ -8,10 +8,10 @@
     <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
          앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
          manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610081527">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610081527">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610081527">
-    <link rel="manifest" href="manifest.webmanifest?v=202610081527">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610081536">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610081536">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610081536">
+    <link rel="manifest" href="manifest.webmanifest?v=202610081536">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202610081527">
+    <link rel="stylesheet" href="css/style.css?v=202610081536">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -85,7 +85,7 @@
                          진한 네모는 걷었다. 누르면 새로고침.
                          크기는 44px — 줄 높이(52px)는 그대로 두라셔서 위아래를 4px 씩 여백 쪽으로 내민다(-my-1) -->
                     <div id="header-logo" class="w-11 h-11 -my-1 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <img src="img/icon-192.png?v=202610081527" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
+                        <img src="img/icon-192.png?v=202610081536" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
@@ -520,9 +520,10 @@
                 <div id="tab-quiz" class="hidden space-y-6">
                     <div style="margin-bottom:-16px" class="sticky top-14 z-30 bg-[#f8fafc] pt-[7px] pb-2 -mt-[7px] space-y-3">
                     <!-- [냐냐 PATCH-4배치] 복습/퀴즈 통합 서브메뉴 (복습 탭과 동일) -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-4 gap-1">
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-5 gap-1">
                         <button onclick="selectReviewMode('write')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">✍️ 쓰기</button>
                         <button onclick="selectReviewMode('vconj')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🔀 동사변형</button>
+                        <button onclick="selectReviewMode('num')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🔢 숫자</button>
                         <button class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all bg-indigo-600 text-white shadow-sm">🎯 퀴즈</button>
                         <button onclick="selectReviewMode(lastFillMode)" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">📝 빈칸</button>
                     </div>
@@ -685,10 +686,12 @@
                     <!-- [냐냐 요청] 쓰기 연습을 맨 앞으로, 깜빡이는 맨 뒤로 -->
                     <!-- [냐냐 요청] 다섯 개가 두 줄로 접히던 걸 네 칸 한 줄로 (2026-09-02).
                          빈칸 둘(단어·문법표)을 '빈칸' 하나로 묶고, 고르면 아래에 갈래가 나온다. -->
-                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-4 gap-1">
+                    <!-- [냐냐 요청] 숫자 칸을 동사변형 옆에 더해 다섯 칸 (2026-10-08) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-1.5 grid grid-cols-5 gap-1">
                         <button id="review-mode-write-btn" onclick="selectReviewMode('write')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all">✍️ 쓰기</button>
                         <!-- [냐냐 요청] 동사 변형만 따로 연습하는 자리 (2026-09-02) -->
                         <button id="review-mode-vconj-btn" onclick="selectReviewMode('vconj')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all">🔀 동사변형</button>
+                        <button id="review-mode-num-btn" onclick="selectReviewMode('num')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all">🔢 숫자</button>
                         <button id="review-mode-quiz-btn" onclick="selectReviewMode('quiz')" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 hover:bg-slate-50">🎯 퀴즈</button>
                         <button id="review-mode-blank-btn" onclick="selectReviewMode(lastFillMode)" class="py-3.5 px-1 rounded-xl text-xs sm:text-sm font-bold transition-all">📝 빈칸</button>
                     </div>
@@ -735,6 +738,26 @@
                             <button onclick="startVconjReview()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-95">시작하기</button>
                         </div>
                         <div id="vconj-play-area" class="hidden"></div>
+                    </div>
+
+                    <!-- ===== 숫자 쓰기 ([냐냐 요청] 2026-10-08) =====
+                         숫자를 보고 스페인어로 쓴다. 0 ~ 1,000,000,000,000 (un billón). 단어 점수와는 따로다. -->
+                    <div id="review-mode-num" class="hidden">
+                        <div id="num-setup" class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-6">
+                            <div class="text-5xl">🔢</div>
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900">숫자를 스페인어로 써 볼까요?</h3>
+                                <p class="text-xs text-slate-400 mt-1">0부터 <b>1,000,000,000,000</b>(un billón)까지 아무 숫자나 나와요. 헷갈리기 쉬운 숫자는 더 자주 나와요.</p>
+                            </div>
+                            <div class="flex justify-center gap-2">
+                                <button onclick="selectNumCount(10)" data-num-count="10" class="num-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">10개</button>
+                                <button onclick="selectNumCount(20)" data-num-count="20" class="num-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">20개</button>
+                                <button onclick="selectNumCount(30)" data-num-count="30" class="num-count-btn px-5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:border-indigo-300 transition-all">30개</button>
+                            </div>
+                            <p class="text-[11px] text-slate-400">악센트까지 맞아야 정답이에요. 악센트만 틀리면 따로 알려 줘요.</p>
+                            <button onclick="startNumPractice()" class="w-full max-w-sm bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-95">시작하기</button>
+                        </div>
+                        <div id="num-play-area" class="hidden"></div>
                     </div>
 
                     <!-- ===== 쓰기 연습 모드 ([냐냐 요청]) ===== -->
@@ -2718,14 +2741,14 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202610081527"></script>
-    <script src="js/creatures.js?v=202610081527"></script>
-    <script src="js/core.js?v=202610081527"></script>
-    <script src="js/vocab.js?v=202610081527"></script>
-    <script src="js/flashcards.js?v=202610081527"></script>
-    <script src="js/quiz.js?v=202610081527"></script>
-    <script src="js/games.js?v=202610081527"></script>
-    <script src="js/ai-feedback.js?v=202610081527"></script>
-    <script src="js/es-keys.js?v=202610081527"></script>
+    <script src="js/dictionary-data.js?v=202610081536"></script>
+    <script src="js/creatures.js?v=202610081536"></script>
+    <script src="js/core.js?v=202610081536"></script>
+    <script src="js/vocab.js?v=202610081536"></script>
+    <script src="js/flashcards.js?v=202610081536"></script>
+    <script src="js/quiz.js?v=202610081536"></script>
+    <script src="js/games.js?v=202610081536"></script>
+    <script src="js/ai-feedback.js?v=202610081536"></script>
+    <script src="js/es-keys.js?v=202610081536"></script>
 </body>
 </html>

@@ -11361,6 +11361,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if ((typeof writePracticeState !== 'undefined' && writePracticeState)
                 || (typeof fillState !== 'undefined' && fillState)
                 || (typeof gfillState !== 'undefined' && gfillState)
+                || (typeof numState !== 'undefined' && numState)
                 || (typeof quizSession !== 'undefined' && quizSession)) return true;
             //   열린 창(등록·편집·확인 창 등) — 화면을 덮는 판이 하나라도 보이면
             return Array.from(document.querySelectorAll('div.fixed.inset-0')).some(el => !el.classList.contains('hidden') && el.offsetParent !== null);

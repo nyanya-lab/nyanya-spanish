@@ -1446,17 +1446,18 @@
             reviewMode = mode;
             const isFill = (mode === 'fill' || mode === 'gfill');
             if (isFill) lastFillMode = mode;
-            const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write', vconj: 'review-mode-vconj' };
+            const containers = { fill: 'review-mode-fill', gfill: 'review-mode-gfill', write: 'review-mode-write', vconj: 'review-mode-vconj', num: 'review-mode-num' };
             Object.entries(containers).forEach(([m, id]) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', m !== mode); });
             // 빈칸 갈래 줄은 빈칸을 고른 동안에만
             const sub = document.getElementById('review-fill-sub');
             if (sub) sub.classList.toggle('hidden', !isFill);
             // [냐냐 PATCH] 퀴즈 버튼도 목록에 포함 (빠져 있어서 혼자 글씨색이 달랐음)
             //   [냐냐 요청] 윗줄의 '빈칸'은 단어·문법표 어느 쪽이든 켜진 것으로 본다
-            const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn', vconj: 'review-mode-vconj-btn' };
+            const btns = { fill: 'review-mode-fill-btn', gfill: 'review-mode-gfill-btn', quiz: 'review-mode-quiz-btn', write: 'review-mode-write-btn', vconj: 'review-mode-vconj-btn', num: 'review-mode-num-btn' };
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
             if (mode === 'vconj' && !vconjState) renderVconjSetup();   // 설정 화면을 그려 둔다
+            if (mode === 'num' && !numState) selectNumCount(numCount);
             Object.entries(btns).forEach(([m, id]) => {
                 const b = document.getElementById(id); if (!b) return;
                 b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
@@ -1763,6 +1764,234 @@
                     <button onclick="resetVconjSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>
                 </div>`;
             vconjState = null;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 숫자 쓰기 (2026-10-08)
+        //   숫자를 보고 스페인어로 쓴다. 0 ~ 1,000,000,000,000 (un billón — 영어 billion 과 다르다, 10억은 mil millones).
+        //   자릿수도 아무렇게나. 대신 헷갈리기 쉬운 숫자(cien/ciento, 500·700·900, 21~29, mil, un millón,
+        //   veintiún mil …)를 셋에 하나꼴로 일부러 낸다.
+        //   채점은 로컬 — 정답이 정해져 있다. 악센트까지 맞아야 정답, 악센트만 틀리면 '거의' 로 따로 보여 준다.
+        //   숫자는 단어가 아니라 단어 점수·곡선·저장은 건드리지 않는다.
+        // ============================================================
+        let numState = null;
+        let numCount = 10;
+
+        const NUM_UNITS = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve',
+            'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve',
+            'veinte', 'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+        const NUM_TENS = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+        const NUM_HUNDREDS = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+
+        //   0~999. 뒤에 mil·millones 가 붙으면 끝의 uno 를 un 으로 (veintiún, treinta y un, ciento un)
+        function numUnder1000(n, beforeNoun) {
+            if (n === 100) return 'cien';
+            const h = Math.floor(n / 100), r = n % 100;
+            const parts = [];
+            if (h) parts.push(NUM_HUNDREDS[h]);
+            if (r) {
+                let w = r < 30 ? NUM_UNITS[r] : NUM_TENS[Math.floor(r / 10)] + (r % 10 ? ' y ' + NUM_UNITS[r % 10] : '');
+                if (beforeNoun) w = w.replace(/veintiuno$/, 'veintiún').replace(/uno$/, 'un');
+                parts.push(w);
+            }
+            return parts.join(' ');
+        }
+        //   0 ~ 999,999
+        function numUnderMillion(n, beforeNoun) {
+            const t = Math.floor(n / 1000), r = n % 1000;
+            const parts = [];
+            if (t) parts.push(t === 1 ? 'mil' : numUnder1000(t, true) + ' mil');
+            if (r) parts.push(numUnder1000(r, beforeNoun));
+            return parts.join(' ');
+        }
+        function numberToSpanish(n) {
+            if (n === 0) return 'cero';
+            if (n === 1e12) return 'un billón';
+            const m = Math.floor(n / 1e6), r = n % 1e6;
+            const parts = [];
+            if (m) parts.push(m === 1 ? 'un millón' : numUnderMillion(m, true) + ' millones');
+            if (r) parts.push(numUnderMillion(r, false));
+            return parts.join(' ');
+        }
+        //   스페인어로 둘 다 맞는 꼴 — mil 앞의 21·31·…·101 은 veintiún mil 도 veintiuno mil 도 된다 (RAE)
+        function numAcceptedAnswers(n) {
+            const main = numberToSpanish(n);
+            //   'un mil' 은 앞에 다른 낱말이 있을 때만 생긴다 (1,000 은 그냥 mil) — treinta y un mil · doscientos un mil
+            const alt = main.replace(/veintiún mil\b/g, 'veintiuno mil').replace(/ un mil\b/g, ' uno mil');
+            return alt !== main ? [main, alt] : [main];
+        }
+
+        function numRandInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+        function numPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+        //   헷갈리는 숫자들
+        const NUM_TRICKY = [
+            () => 100,
+            () => numRandInt(101, 199),
+            () => numPick([500, 700, 900]) + numPick([0, 0, numRandInt(1, 99)]),
+            () => numRandInt(16, 29),
+            () => 1000 + numPick([0, numRandInt(1, 999)]),
+            () => numPick([21, 31, 41, 51, 61, 71, 81, 91, 101, 121, 201, 221]) * 1000 + numPick([0, numRandInt(1, 999)]),
+            () => numPick([100000, 500000, 700000, 900000]),
+            () => numPick([1, 2, 21, 100, 101]) * 1e6 + numPick([0, 0, numRandInt(1, 999999)]),
+            () => numPick([1e9, 2e9, 21e9]) + numPick([0, numRandInt(1, 999) * 1e6]),
+            () => numPick([1001, 1100, 1000001, 1e12]),
+        ];
+        function numMakeQuestion() {
+            if (Math.random() < 0.35) return numPick(NUM_TRICKY)();
+            if (Math.random() < 1 / 13) return 1e12;
+            const d = numRandInt(1, 12);
+            if (d === 1) return numRandInt(0, 9);
+            return Math.pow(10, d - 1) + Math.floor(Math.random() * 9 * Math.pow(10, d - 1));
+        }
+
+        function numNorm(s) { return String(s || '').toLowerCase().replace(/[.,!¡]/g, ' ').replace(/\s+/g, ' ').trim(); }
+        function numStripAccents(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+        //   ok | accent | wrong
+        function numGrade(n, answer) {
+            const a = numNorm(answer);
+            const acc = numAcceptedAnswers(n);
+            if (acc.includes(a)) return 'ok';
+            if (a && acc.some(x => numStripAccents(x) === numStripAccents(a))) return 'accent';
+            return 'wrong';
+        }
+        //   정답 낱말 중 내 답에 없는 것을 칠한다
+        function numMarkExpected(expected, answer) {
+            const mine = numNorm(answer).split(' ');
+            return expected.split(' ').map(w => {
+                const i = mine.indexOf(w);
+                if (i >= 0) { mine.splice(i, 1); return escapeHtml(w); }
+                return `<mark class="bg-rose-100 text-rose-600 rounded px-0.5">${escapeHtml(w)}</mark>`;
+            }).join(' ');
+        }
+
+        function selectNumCount(n) {
+            numCount = Number(n) || 10;
+            document.querySelectorAll('.num-count-btn').forEach(b => {
+                const on = Number(b.dataset.numCount) === numCount;
+                b.classList.toggle('border-indigo-500', on); b.classList.toggle('bg-indigo-50', on); b.classList.toggle('text-indigo-600', on);
+                b.classList.toggle('border-slate-200', !on); b.classList.toggle('text-slate-600', !on);
+            });
+        }
+
+        function startNumPractice() {
+            const qs = [];
+            while (qs.length < numCount) {
+                const n = numMakeQuestion();
+                if (!qs.includes(n)) qs.push(n);
+            }
+            numState = { qs: qs, index: 0, results: [], phase: 'input' };
+            document.getElementById('num-setup').classList.add('hidden');
+            document.getElementById('num-play-area').classList.remove('hidden');
+            renderNumProblem();
+        }
+
+        function resetNumSetup() {
+            numState = null;
+            const setup = document.getElementById('num-setup');
+            const play = document.getElementById('num-play-area');
+            if (setup) setup.classList.remove('hidden');
+            if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
+            selectNumCount(numCount);
+        }
+
+        function renderNumProblem() {
+            if (!numState) return;
+            if (numState.index >= numState.qs.length) { endNumPractice(); return; }
+            const play = document.getElementById('num-play-area');
+            const n = numState.qs[numState.index];
+            numState.phase = 'input';
+            const total = numState.qs.length;
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="resetNumSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
+                        <span class="text-xs font-bold text-slate-500">${numState.index + 1} / ${total}</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-indigo-500 transition-all" style="width:${(numState.index / total * 100)}%"></div>
+                    </div>
+                    <div class="text-center py-3">
+                        <span class="text-[10px] font-bold text-slate-400 tracking-wider">스페인어로 써 보세요</span>
+                        <p class="text-3xl sm:text-4xl font-black text-slate-900 mt-1 tabular-nums break-all">${n.toLocaleString('en-US')}</p>
+                    </div>
+                    <textarea id="num-input" data-es rows="2" onkeydown="numInputKeydown(event)" autocomplete="off" autocapitalize="off" spellcheck="false"
+                        class="w-full bg-white px-3 py-2.5 rounded-xl border-2 border-slate-200 text-base font-bold focus:outline-none focus:border-indigo-400 resize-none"
+                        placeholder="예: novecientos sesenta y cinco"></textarea>
+                    <div id="num-feedback" class="hidden text-sm font-bold space-y-1"></div>
+                    <div class="flex justify-end">
+                        <button id="num-action-btn" onclick="submitNumProblem()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">채점하기</button>
+                    </div>
+                </div>`;
+            setTimeout(() => { const el = document.getElementById('num-input'); if (el) el.focus(); }, 60);
+        }
+
+        function numInputKeydown(e) {
+            if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+            e.preventDefault();
+            if (numState && numState.phase === 'graded') nextNumProblem();
+            else submitNumProblem();
+        }
+
+        function submitNumProblem() {
+            if (!numState || numState.phase !== 'input') return;
+            const n = numState.qs[numState.index];
+            const input = document.getElementById('num-input');
+            const answer = input ? input.value : '';
+            if (!numNorm(answer)) { showToast("답을 써 주세요", "error"); return; }
+            const grade = numGrade(n, answer);
+            const expected = numAcceptedAnswers(n)[0];
+            numState.phase = 'graded';
+            numState.results.push({ n: n, answer: answer.trim(), grade: grade, expected: expected });
+            if (input) {
+                input.readOnly = true;
+                input.classList.remove('border-slate-200');
+                input.classList.add(grade === 'ok' ? 'border-emerald-300' : grade === 'accent' ? 'border-amber-300' : 'border-rose-300',
+                    grade === 'ok' ? 'bg-emerald-50' : grade === 'accent' ? 'bg-amber-50' : 'bg-rose-50');
+            }
+            const fb = document.getElementById('num-feedback');
+            if (fb) {
+                fb.classList.remove('hidden');
+                const alt = numAcceptedAnswers(n)[1];
+                fb.innerHTML = grade === 'ok'
+                    ? `<p class="text-emerald-600">✓ 정답!</p>${alt ? `<p class="text-[11px] text-slate-400">${escapeHtml(alt === numNorm(answer) ? expected : alt)} 도 맞아요</p>` : ''}`
+                    : `<p class="${grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${grade === 'accent' ? '악센트만 틀렸어요' : '✗ 틀렸어요'}</p>
+                       <p class="text-slate-700 font-semibold">${grade === 'accent' ? escapeHtml(expected) : numMarkExpected(expected, answer)}</p>`;
+            }
+            const btn = document.getElementById('num-action-btn');
+            if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextNumProblem()'); }
+        }
+
+        function nextNumProblem() {
+            if (!numState) return;
+            numState.index++;
+            renderNumProblem();
+        }
+
+        function endNumPractice() {
+            const play = document.getElementById('num-play-area');
+            if (!play || !numState) return;
+            const rs = numState.results;
+            const ok = rs.filter(r => r.grade === 'ok').length;
+            const accent = rs.filter(r => r.grade === 'accent').length;
+            const misses = rs.filter(r => r.grade !== 'ok');
+            const rows = misses.map(r => `
+                <div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-black text-slate-800 text-sm tabular-nums">${r.n.toLocaleString('en-US')}</span>
+                        <span class="text-[10px] font-bold ${r.grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${r.grade === 'accent' ? '악센트' : '틀림'}</span>
+                    </div>
+                    <p class="text-xs text-slate-600">${r.grade === 'accent' ? escapeHtml(r.expected) : numMarkExpected(r.expected, r.answer)}</p>
+                    <p class="text-[11px] text-slate-400 line-through">${escapeHtml(r.answer)}</p>
+                </div>`).join('');
+            play.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 text-center">
+                    <div class="text-5xl">${ok === rs.length ? '🏆' : '💪'}</div>
+                    <h3 class="text-lg font-black text-slate-900">숫자 쓰기 끝!</h3>
+                    <p class="text-sm font-bold text-slate-500">${rs.length}개 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''}</p>
+                    ${misses.length ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden max-h-80 overflow-y-auto">${rows}</div>` : ''}
+                    <button onclick="resetNumSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>
+                </div>`;
+            numState = null;
         }
 
         function resetFillSetup() {
