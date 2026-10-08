@@ -1878,6 +1878,80 @@
         }
         function numPct(x) { return Math.round(x * 100) + '%'; }
 
+        //   둘 다 맞는 꼴 중 내 답과 더 가까운 쪽 — 칠하기·이유를 그쪽에 댄다
+        //   (cincuenta y uno mil 이라고 썼는데 un 을 빨갛게 칠하던 것 고침)
+        function numBestExpected(n, answer) {
+            const mine = numNorm(answer).split(' ');
+            const acc = numAcceptedAnswers(n);
+            let best = acc[0], bestHit = -1;
+            acc.forEach(exp => {
+                const left = mine.slice();
+                const hit = exp.split(' ').filter(w => { const i = left.indexOf(w); if (i >= 0) { left.splice(i, 1); return true; } return false; }).length;
+                if (hit > bestHit) { best = exp; bestHit = hit; }
+            });
+            return best;
+        }
+
+        // [냐냐 요청] 틀린 이유를 적는다 (2026-10-08) — 숫자는 규칙이 정해져 있어 AI 없이 바로 잡는다.
+        //   ① 자주 하는 실수(불규칙 500·700·900, cien/ciento, un mil, uno millones, millón/millones,
+        //   16~29 띄어쓰기, 엉뚱한 y, 억·조, 악센트)는 규칙 한 줄로, ② 나머지는 '내가 쓴 낱말 → 맞는 낱말 (= 그 숫자)'.
+        const NUM_WORD_VAL = (() => {
+            const m = {};
+            NUM_UNITS.forEach((w, i) => { m[w] = String(i); });
+            NUM_TENS.forEach((w, i) => { if (w) m[w] = String(i * 10); });
+            NUM_HUNDREDS.forEach((w, i) => { if (w) m[w] = String(i * 100); });
+            return Object.assign(m, { cien: '100', mil: '1,000', 'millón': '1,000,000', millones: '×1,000,000',
+                'billón': '1,000,000,000,000', un: '1', 'veintiún': '21' });
+        })();
+        function numWhy(n, answer) {
+            const exp = numBestExpected(n, answer);
+            const want = exp.split(' ');
+            const mine = numNorm(answer).split(' ').filter(Boolean);
+            const mineS = mine.join(' ');
+            const out = [];
+            const add = (s) => { if (!out.includes(s)) out.push(s); };
+            if (/(cinco|siete|nueve)cientos/.test(mineS)) add('500·700·900은 불규칙이에요 — quinientos · setecientos · novecientos');
+            if (want.includes('cien') && mine.includes('ciento')) add('딱 100은 cien이에요 (cien mil, cien millones도). ciento는 101~199처럼 뒤에 더 붙을 때만');
+            if (want.includes('ciento') && mine.includes('cien')) add('101~199는 ciento + 나머지예요 (ciento uno, ciento treinta). cien은 딱 100일 때만');
+            if (/(^| )(un|uno) mil(?!l)/.test(mineS) && !/(un|uno|veintiún) mil(?!l)/.test(exp)) add('1,000은 그냥 mil이에요 (un mil ✗)');
+            if (/(^| )(uno|veintiuno) (millón|millones)/.test(mineS)) add('millón·millones 앞에서는 uno가 un으로 줄어요 — un millón, veintiún millones');
+            if (want.includes('millón') && mine.includes('millones')) add('1,000,000은 un millón (단수)이에요. 2,000,000부터 millones');
+            if (want.includes('millones') && mine.includes('millón')) add('2,000,000부터는 millones (복수)예요. millón은 딱 un millón일 때만');
+            //   틀 자체를 잘못 짠 경우(띄어쓰기·억/조)는 낱말 짝짓기가 오히려 헷갈린다 (mil → un) — 규칙 줄만 낸다
+            let wholeShape = false;
+            if (/(^| )(diez y|veinte y|dieci|veinti) /.test(mineS)) { add('16~29는 한 낱말로 붙여 써요 — dieciséis, veintiuno, veintitrés'); wholeShape = true; }
+            if (/(cientos?|cien|mil|millón|millones) y /.test(mineS)) add('y는 31~99에서 십의 자리와 일의 자리 사이에만 써요 — ciento cinco, mil dos (y ✗)');
+            const yWant = want.filter(w => w === 'y').length, yMine = mine.filter(w => w === 'y').length;
+            if (yMine < yWant) add('31~99는 십의 자리 + y + 일의 자리예요 — treinta y cinco');
+            if (n === 1e12 && /mil millones/.test(mineS)) { add('1조는 un billón이에요. mil millones는 10억'); wholeShape = true; }
+            if (n >= 1e9 && n < 1e12 && /billón|billones/.test(mineS)) { add('10억은 mil millones예요. billón은 1조 (영어 billion과 달라요)'); wholeShape = true; }
+            if (wholeShape) return out;
+            //   낱말 하나하나 — 맞힌 건 빼고, 악센트만 다른 건 짝지어 보여 주고, 남은 건 차례대로 짝짓는다
+            const left = mine.slice();
+            const missing = [];
+            want.forEach(w => { const i = left.indexOf(w); if (i >= 0) left.splice(i, 1); else missing.push(w); });
+            const val = (w) => NUM_WORD_VAL[w] ? ` (= ${NUM_WORD_VAL[w]})` : '';
+            missing.slice().forEach(w => {
+                const i = left.findIndex(m => numStripAccents(m) === numStripAccents(w));
+                if (i < 0) return;
+                add(`악센트: ${left[i]} → ${w}`);
+                left.splice(i, 1);
+                missing.splice(missing.indexOf(w), 1);
+            });
+            missing.forEach(w => {
+                const m = left.shift();
+                add(m ? `${m} → ${w}${val(w)}` : `빠졌어요: ${w}${val(w)}`);
+            });
+            left.forEach(m => add(`없어도 되는 낱말: ${m}`));
+            return out;
+        }
+        function numWhyHtml(reasons) {
+            if (!reasons || !reasons.length) return '';
+            return `<div class="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 space-y-0.5 text-left">
+                <p class="text-[10px] font-black text-slate-400">왜 틀렸나</p>
+                ${reasons.map(r => `<p>• ${escapeHtml(r)}</p>`).join('')}</div>`;
+        }
+
         //   정답 낱말 중 내 답에 없는 것을 칠한다
         function numMarkExpected(expected, answer) {
             const mine = numNorm(answer).split(' ');
@@ -1971,11 +2045,12 @@
             if (!numNorm(answer)) { showToast("답을 써 주세요", "error"); return; }
             const grade = numGrade(n, answer);
             const share = grade === 'ok' ? 1 : numShare(n, answer);
-            const expected = numAcceptedAnswers(n)[0];
+            const expected = grade === 'ok' ? numAcceptedAnswers(n)[0] : numBestExpected(n, answer);
+            const why = grade === 'ok' ? [] : numWhy(n, answer);
             numState.phase = 'graded';
             const note = applyNumNote(n, share);
             if (note) { numState.noteSum += note.delta; numState.noteTitle = note.title; if (note.curve) numState.curve = true; }
-            numState.results.push({ n: n, answer: answer.trim(), grade: grade, share: share, expected: expected });
+            numState.results.push({ n: n, answer: answer.trim(), grade: grade, share: share, expected: expected, why: why });
             if (input) {
                 input.readOnly = true;
                 input.classList.remove('border-slate-200');
@@ -1992,7 +2067,7 @@
                 fb.innerHTML = (grade === 'ok'
                     ? `<p class="text-emerald-600">✓ 정답!</p>${alt ? `<p class="text-[11px] text-slate-400">${escapeHtml(alt === numNorm(answer) ? expected : alt)} 도 맞아요</p>` : ''}`
                     : `<p class="${grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${grade === 'accent' ? '악센트만 틀렸어요' : '✗ 틀렸어요'} <span class="text-slate-500">· ${numPct(share)}</span></p>
-                       <p class="text-slate-700 font-semibold">${numMarkExpected(expected, answer)}</p>`) + noteLine;
+                       <p class="text-slate-700 font-semibold">${numMarkExpected(expected, answer)}</p>${numWhyHtml(why)}`) + noteLine;
             }
             const btn = document.getElementById('num-action-btn');
             if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextNumProblem()'); }
@@ -2031,6 +2106,7 @@
                     </div>
                     <p class="text-xs text-slate-600">${numMarkExpected(r.expected, r.answer)}</p>
                     <p class="text-[11px] text-slate-400 line-through">${escapeHtml(r.answer)}</p>
+                    ${(r.why || []).map(x => `<p class="text-[11px] text-slate-500">• ${escapeHtml(x)}</p>`).join('')}
                 </div>`).join('');
             play.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 text-center">
