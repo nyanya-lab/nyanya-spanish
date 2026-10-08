@@ -362,6 +362,7 @@ let vocabulary = [];
         }
 
         async function saveToStorage(immediate) {
+            stampTodayReviewDone();   // [냐냐 요청] 연속 복습일 — 오늘 줄이 비었나를 일지에 (2026-10-09)
             const payload = buildDataPayload();
             const rev = newSaveRev();
             payload.savedRev = rev;
@@ -1238,11 +1239,50 @@ let vocabulary = [];
         // ============================================================
         // [냐냐 PATCH] 연속 학습일(streak) 계산 — nyanyaDiary(날짜별 기록) 기반
         // ============================================================
+        // [냐냐 요청] 2026-10-09 부터 연속은 '오늘 복습을 다 한 날'만 센다.
+        //   그 전 날들은 옛 기준(뭐든 하나 하면 인정) 그대로 — 지난 기록을 다시 매기지 않는다.
+        const STREAK_REVIEW_RULE_FROM = '2026-10-09';
+
+        // 단어·관용구·문법 '오늘 복습' 줄에 남은 게 하나도 없나.
+        //   하루 안에서는 줄이 줄기만 한다(오늘 틀린 건 내일 차례) — 늘어나는 건 ↺ 로 복습을 무를 때뿐.
+        function isTodayReviewClear() {
+            if (typeof getReviewDueWords !== 'function') return false;
+            return getReviewDueWords().length === 0
+                && (typeof getIdiomDueList !== 'function' || getIdiomDueList().length === 0)
+                && (typeof getGrammarDueList !== 'function' || getGrammarDueList().length === 0);
+        }
+
+        // 지난날의 복습 줄은 나중에 다시 잴 수 없으므로 저장할 때마다 그날 일지에 적어 둔다 (reviewDone).
+        //   매번 다시 재서 덮어쓴다 — ↺ 로 복습을 물러 줄이 다시 생기면 표시도 같이 꺼진다.
+        //   일지가 없는 날(앱만 켠 날)은 기록을 새로 만들지 않는다.
+        function stampTodayReviewDone() {
+            try {
+                const d = nyanyaDiary && nyanyaDiary[getLocalDateString()];
+                if (!d) return;
+                const clear = isTodayReviewClear();
+                if (!!d.reviewDone === clear) return;
+                d.reviewDone = clear;
+                if (typeof renderStreakBadge === 'function') renderStreakBadge();
+            } catch (e) {}
+        }
+
+        // 연속에 드는 날인가
+        function isStreakDay(ds) {
+            const d = nyanyaDiary[ds];
+            if (!d) return false;
+            if (ds < STREAK_REVIEW_RULE_FROM) return dayActivity(ds) >= 1;
+            //   복습할 게 없던 날은 뭐든 하나는 해야 한다 (앱만 켠 날은 빼려고).
+            //   숫자 쓰기·스스로 돌린 연습도 '한 일' 로 친다 — 달력 진하기(dayActivity)엔 아직 안 들어가 있다.
+            const did = dayActivity(ds) + (d.practiceCount || 0) + (d.numTotal || 0);
+            return d.reviewDone === true && did >= 1;
+        }
+
         function calcStreak() {
             // [냐냐 요청] 학습장에서 뭐든 하나만 해도 그날은 "학습한 날" (예전엔 5개 이상이어야 인정했다).
             //   달력의 ✗ 표시와 같은 기준(dayActivity)을 쓰므로 둘이 어긋나지 않는다.
             //   앱을 켜기만 한 날은 touchDiarySnapshot() 이 만든 빈 기록이라 0 → 자동으로 제외됨
-            const dates = Object.keys(nyanyaDiary || {}).filter(d => dayActivity(d) >= 1).sort(); // 오름차순
+            //   ⚠️ 2026-10-09 부터는 복습을 다 한 날만 (isStreakDay)
+            const dates = Object.keys(nyanyaDiary || {}).filter(isStreakDay).sort(); // 오름차순
             if (dates.length === 0) return 0;
 
             const toDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
