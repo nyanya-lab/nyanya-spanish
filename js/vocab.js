@@ -6173,6 +6173,18 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     return;
                 }
             }
+            //   [냐냐 요청] 활용형 문제에서 동사는 맞고 꼴만 틀렸으면 한 번 더 (2026-10-09) — 3-0 과 같은 대접(+1, 오타로 이미 봐줬으면 오답).
+            //   3-0 은 단어장에 채운 꼴만 알아본다. 안 채운 시제(부정과거 등)나 잘못 만든 꼴(tienemos)은 AI 의 sameVerb 로 본다.
+            //   ⚠️ 단어장의 다른 낱말로 읽히면 봐주지 않는다 — AI 가 헛짚었을 수 있다.
+            if (w._isConjTask && ai.sameVerb === true && !used.typo) {
+                const baseW = w._conjOf || w;
+                const other = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+                if (!other || other.id === baseW.id) {
+                    const p = writePrefixHint(userAnswer, w.word);
+                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?`, userAnswer);
+                    return;
+                }
+            }
             writeFirstRoundFail(w, userAnswer, aiInfo());
         }
 

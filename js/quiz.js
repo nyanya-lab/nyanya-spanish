@@ -1261,10 +1261,13 @@ Return JSON only.`;
 This is a CONJUGATION question: the student saw only the Korean meaning plus "${conjSlot.tenseLabel}${conjSlot.personLabel ? ' · ' + conjSlot.personLabel + (conjSlot.personPronoun ? ' (' + conjSlot.personPronoun + ')' : '') : ''}" and had to produce that exact form — the infinitive was hidden.
 - "synonym" = a DIFFERENT verb with the same meaning, correctly conjugated in that same tense and person (target "esperando", answer "aguardando"). The student knew the grammar but reached for another verb.
 - "wrong" = the RIGHT verb in the WRONG form (target "alternáis", answer "alterno" or "alternado"). That is a conjugation mistake, never "synonym" and never "typo".
-- "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".` : '';
+- "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".
+Also report "sameVerb": true when the answer is an attempt at the TARGET verb itself — its infinitive, another tense or person of it, or a misconjugated form of it (target "tenemos", answer "tener", "tuvimos" or "tienemos"). false for a different verb or anything else.` : '';
+                //   [냐냐 요청] 쓰기 복습에서 활용만 틀렸으면 한 번 더 (2026-10-09) — 단어장에 없는 꼴(안 채운 시제·잘못 만든 꼴)은
+                //   코드가 같은 동사인지 못 알아보니 AI 에게 묻는다. verdict 는 그대로 'wrong' 이라 퀴즈 쪽은 달라지지 않는다.
                 const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}
 Student answered: "${userAnswer}".
-Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 40자 이내) — 무엇이 틀렸고 그 말은 어떻게 쓰는지", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답(쓴 그대로 통째로)이 실제 스페인어 단어·표현이라면 그 한글 뜻(짧게, 설명 없이), 아니면 빈 문자열" }`;
+Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 40자 이내) — 무엇이 틀렸고 그 말은 어떻게 쓰는지", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답(쓴 그대로 통째로)이 실제 스페인어 단어·표현이라면 그 한글 뜻(짧게, 설명 없이), 아니면 빈 문자열"${conjSlot ? ', "sameVerb": true/false' : ''} }`;
                 const schema = {
                     type: "OBJECT",
                     properties: {
@@ -1275,6 +1278,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     },
                     required: ["verdict"]
                 };
+                if (conjSlot) schema.properties.sameVerb = { type: "BOOLEAN", description: "학생 답이 바로 그 동사(원형·다른 시제/인칭·잘못 만든 꼴)인가. 다른 동사면 false" };
                 const resp = await callGeminiGrade(prompt, system, schema, 8000);
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
