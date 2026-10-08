@@ -4101,8 +4101,12 @@ let vocabulary = [];
         //   ⚠️ 빈칸 복습(정답률 곡선 ±2)도 같은 장부를 쓴다 (냐냐님 결정). 상한은
         //      '그 문법이 하루에 받을 수 있는 양' 이라, 어디서 받았든 한 주머니로 센다.
         //   ⚠️ 수동으로 마스터 박기(setGrammarScore)는 상한을 안 탄다 — 그건 더하기가 아니라 못박기다.
+        //   [냐냐 요청] 상한은 '오늘 순수하게 오른 만큼' 으로 센다 (2026-10-08).
+        //     예전엔 받은 플러스만 쌓여서 +2 채운 뒤 −1 이 되면 그날은 다시 못 올렸다 (만회가 안 됨).
+        //     이제 깎인 만큼 장부도 줄어서, 하루에 '아침보다 +2 넘게' 오를 수는 없되 틀린 건 만회된다.
+        //     장부(up)는 음수도 된다 — 많이 깎인 날은 그만큼 다시 오를 수 있다.
         // ============================================================
-        const GRAMMAR_DAY_CAP = 2;      // 노트 하나가 하루에 받을 수 있는 플러스의 총량
+        const GRAMMAR_DAY_CAP = 2;      // 노트 하나가 하루에 '아침보다' 오를 수 있는 양
 
         //   되돌리기(setGrammarEntryDelta)가 장부까지 되돌려야 해서 읽고 쓰는 길을 따로 둔다
         function getGrammarDayGain(id) {
@@ -4119,12 +4123,12 @@ let vocabulary = [];
             if (!id) return 0;
             const before = getGrammarScore(id);
             let d = delta || 0;
-            if (d > 0) {
-                const got = getGrammarDayGain(id);
-                d = Math.min(d, Math.max(0, GRAMMAR_DAY_CAP - got));   // 오늘 남은 몫만큼만
-                if (d > 0) setGrammarDayGain(id, got + d);
-            }
+            const got = getGrammarDayGain(id);
+            if (d > 0) d = Math.min(d, Math.max(0, GRAMMAR_DAY_CAP - got));   // 오늘 남은 몫만큼만
             grammarScores[id] = clampScore(before + d);
+            //   실제로 움직인 만큼(−10·+10 에 걸려 잘린 것 빼고) 장부에 더한다 — 내려간 것도 빼준다
+            const moved = Math.round((grammarScores[id] - before) * 100) / 100;
+            if (moved) setGrammarDayGain(id, Math.round((got + moved) * 100) / 100);
             if (opts.transUsed) grammarTransUsed[id] = true;   // 번역에서 제대로 써봤음 = 마스터 자격
             syncGrammarMastered(id, before);
             return grammarScores[id];
