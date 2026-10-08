@@ -1855,6 +1855,30 @@
             if (a && acc.some(x => numStripAccents(x) === numStripAccents(a))) return 'accent';
             return 'wrong';
         }
+        //   [냐냐 요청] 한 문제의 맞힌 몫 (2026-10-08) — 첨삭처럼 문제 하나 = 1, 맞힌 낱말의 비율.
+        //   정답 낱말 중 내 답에 (악센트까지) 있는 수 ÷ 정답 낱말 수. 내 답이 더 길면(군더더기) 내 답 길이로 나눈다.
+        //   둘 다 맞는 꼴(veintiún/veintiuno mil)은 더 잘 맞는 쪽으로 잰다.
+        function numShare(n, answer) {
+            const mine0 = numNorm(answer).split(' ').filter(Boolean);
+            if (!mine0.length) return 0;
+            return Math.max(...numAcceptedAnswers(n).map(exp => {
+                const want = exp.split(' ');
+                const mine = mine0.slice();
+                let hit = 0;
+                want.forEach(w => { const i = mine.indexOf(w); if (i >= 0) { mine.splice(i, 1); hit++; } });
+                return hit / Math.max(want.length, mine0.length);
+            }));
+        }
+        //   [냐냐 요청] 숫자 노트는 본전이 90% (2026-10-08) — 빈칸(70%)보다 높다.
+        //   긴 숫자를 매번 한 낱말씩 틀려도 몫은 90% 라, 70% 본전이면 틀려도 점수가 올랐다.
+        //   100% +2 · 95% +1 · 90% 0 · 85% −0.5 · 80% −1 · 70% 이하 −2. 본전 아래면 곡선.
+        const NUM_NOTE_PAR = 0.9;
+        function numNoteDelta(rate) {
+            const t = rate >= NUM_NOTE_PAR ? (rate - NUM_NOTE_PAR) / (1 - NUM_NOTE_PAR) : -Math.min(1, (NUM_NOTE_PAR - rate) / 0.2);
+            return clampScore(GRAMMAR_FILL_MAX * Math.max(-1, Math.min(1, t)));
+        }
+        function numPct(x) { return Math.round(x * 100) + '%'; }
+
         //   정답 낱말 중 내 답에 없는 것을 칠한다
         function numMarkExpected(expected, answer) {
             const mine = numNorm(answer).split(' ');
@@ -1865,20 +1889,14 @@
             }).join(' ');
         }
 
-        // [냐냐 요청] 숫자 노트 점수·곡선에도 넣는다 (2026-10-08) — 문법표 빈칸과 같은 잣대.
-        //   한 판이 끝나면 문제를 노트별로 나눠(100 까지 / 그 위) 노트마다 그 판 정답률로 한 번:
-        //   grammarFillDelta (70% 본전, ±2 까지, 하루 +2 상한은 addGrammarScore 가 같은 주머니로),
-        //   70% 미만이면 곡선에 들이거나 한 칸 물린다 (grammarReviewDemote, 하루 한 칸). 악센트만 틀린 것도 틀림.
-        //   그 판에 그 노트 문제가 없으면 안 건드린다. 중간에 나가도 푼 데까지는 넣는다.
-        const NUM_NOTES = [
-            { id: 'numbers', max: 100, title: /숫자\s*1\s*~\s*100/ },
-            { id: 'custom-1783347932005', max: Infinity, title: /숫자\s*100\s*~/ },
-        ];
+        // [냐냐 요청] 숫자 노트 점수·곡선에도 넣는다 (2026-10-08).
+        //   한 판이 끝나면 그 판의 맞힌 몫 평균으로 노트에 한 번: numNoteDelta (90% 본전, ±2 까지,
+        //   하루 +2 상한은 addGrammarScore 가 같은 주머니로), 본전 아래면 곡선에 들이거나 한 칸 물린다
+        //   (grammarReviewDemote, 하루 한 칸). 중간에 나가도 푼 데까지는 넣는다.
+        //   [냐냐 요청] 숫자 노트 둘(1~100 / 100~1조)을 하나로 합쳤다 (2026-10-08) — 'numbers' 하나로 간다.
         function numNoteFor(n) {
-            const spec = NUM_NOTES.find(x => n <= x.max);
             const tables = (typeof customGrammarTables !== 'undefined') ? customGrammarTables : [];
-            const t = tables.find(x => x.id === spec.id) || tables.find(x => spec.title.test(x.title || ''));
-            return t || null;
+            return tables.find(x => x.id === 'numbers') || tables.find(x => /^숫자/.test(x.title || '')) || null;
         }
         function applyNumGrammar(st) {
             if (!st || st.grammarDone || !st.results.length || typeof addGrammarScore !== 'function') return [];
@@ -1887,18 +1905,19 @@
             st.results.forEach(r => {
                 const t = numNoteFor(r.n);
                 if (!t) return;
-                const a = by[t.id] || (by[t.id] = { t: t, ok: 0, all: 0 });
+                const a = by[t.id] || (by[t.id] = { t: t, sum: 0, all: 0 });
                 a.all++;
-                if (r.grade === 'ok') a.ok++;
+                a.sum += r.share;
             });
             const out = Object.values(by).map(a => {
-                const rate = a.ok / a.all;
+                const rate = a.sum / a.all;
+                const low = rate < NUM_NOTE_PAR;
                 const wasMastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[a.t.id];
                 const before = (typeof getGrammarScore === 'function') ? getGrammarScore(a.t.id) : 0;
-                const after = addGrammarScore(a.t.id, grammarFillDelta(rate));
-                if (rate < 0.7 && typeof grammarReviewDemote === 'function') grammarReviewDemote(a.t.id);
+                const after = addGrammarScore(a.t.id, numNoteDelta(rate));
+                if (low && typeof grammarReviewDemote === 'function') grammarReviewDemote(a.t.id);
                 if (wasMastered && !masteredGrammar[a.t.id]) showToast(`"${a.t.title}" 마스터가 해제됐어요 ⚠️`, "warning");
-                return { title: a.t.title, ok: a.ok, all: a.all, delta: Math.round((after - before) * 10) / 10, curve: rate < 0.7 };
+                return { title: a.t.title, rate: rate, all: a.all, delta: Math.round((after - before) * 10) / 10, curve: low };
             });
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
             if (typeof updateStats === 'function') updateStats();
@@ -1981,9 +2000,10 @@
             const answer = input ? input.value : '';
             if (!numNorm(answer)) { showToast("답을 써 주세요", "error"); return; }
             const grade = numGrade(n, answer);
+            const share = grade === 'ok' ? 1 : numShare(n, answer);
             const expected = numAcceptedAnswers(n)[0];
             numState.phase = 'graded';
-            numState.results.push({ n: n, answer: answer.trim(), grade: grade, expected: expected });
+            numState.results.push({ n: n, answer: answer.trim(), grade: grade, share: share, expected: expected });
             if (input) {
                 input.readOnly = true;
                 input.classList.remove('border-slate-200');
@@ -1996,13 +2016,13 @@
                 const alt = numAcceptedAnswers(n)[1];
                 fb.innerHTML = grade === 'ok'
                     ? `<p class="text-emerald-600">✓ 정답!</p>${alt ? `<p class="text-[11px] text-slate-400">${escapeHtml(alt === numNorm(answer) ? expected : alt)} 도 맞아요</p>` : ''}`
-                    : `<p class="${grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${grade === 'accent' ? '악센트만 틀렸어요' : '✗ 틀렸어요'}</p>
-                       <p class="text-slate-700 font-semibold">${grade === 'accent' ? escapeHtml(expected) : numMarkExpected(expected, answer)}</p>`;
+                    : `<p class="${grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${grade === 'accent' ? '악센트만 틀렸어요' : '✗ 틀렸어요'} <span class="text-slate-500">· ${numPct(share)}</span></p>
+                       <p class="text-slate-700 font-semibold">${numMarkExpected(expected, answer)}</p>`;
             }
             const btn = document.getElementById('num-action-btn');
             if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextNumProblem()'); }
-            //   [냐냐 요청] 정답률에 넣는다 (2026-10-08) — 일지에 한 문제씩. 악센트만 틀려도 틀림으로 센다
-            if (typeof logAction === 'function') logAction('num', grade === 'ok');
+            //   [냐냐 요청] 정답률에 넣는다 (2026-10-08) — 일지에 한 문제씩, 맞힌 몫만큼 (13/14 낱말 → 0.93)
+            if (typeof logAction === 'function') logAction('num', share);
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
             if (typeof updateStats === 'function') updateStats();
         }
@@ -2020,11 +2040,12 @@
             const ok = rs.filter(r => r.grade === 'ok').length;
             const accent = rs.filter(r => r.grade === 'accent').length;
             const misses = rs.filter(r => r.grade !== 'ok');
+            const avg = rs.length ? rs.reduce((a, r) => a + r.share, 0) / rs.length : 0;
             const notes = applyNumGrammar(numState);
             const noteHtml = notes.map(x => `
                 <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
                     <span class="text-xs font-bold text-slate-700 truncate">📋 ${escapeHtml(x.title)}</span>
-                    <span class="text-[11px] font-bold text-slate-400 shrink-0">${x.ok}/${x.all}</span>
+                    <span class="text-[11px] font-bold text-slate-400 shrink-0">${x.all}문제 · ${numPct(x.rate)}</span>
                     <span class="text-xs font-black shrink-0 ${x.delta > 0 ? 'text-emerald-600' : x.delta < 0 ? 'text-rose-500' : 'text-slate-400'}">${x.delta > 0 ? '+' : ''}${x.delta}점</span>
                     ${x.curve ? '<span class="text-[10px] font-bold text-amber-600 shrink-0">곡선</span>' : ''}
                 </div>`).join('');
@@ -2032,16 +2053,16 @@
                 <div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
                     <div class="flex items-center justify-between gap-2">
                         <span class="font-black text-slate-800 text-sm tabular-nums">${r.n.toLocaleString('en-US')}</span>
-                        <span class="text-[10px] font-bold ${r.grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${r.grade === 'accent' ? '악센트' : '틀림'}</span>
+                        <span class="text-[10px] font-bold ${r.grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${r.grade === 'accent' ? '악센트' : '틀림'} · ${numPct(r.share)}</span>
                     </div>
-                    <p class="text-xs text-slate-600">${r.grade === 'accent' ? escapeHtml(r.expected) : numMarkExpected(r.expected, r.answer)}</p>
+                    <p class="text-xs text-slate-600">${numMarkExpected(r.expected, r.answer)}</p>
                     <p class="text-[11px] text-slate-400 line-through">${escapeHtml(r.answer)}</p>
                 </div>`).join('');
             play.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 text-center">
                     <div class="text-5xl">${ok === rs.length ? '🏆' : '💪'}</div>
                     <h3 class="text-lg font-black text-slate-900">숫자 쓰기 끝!</h3>
-                    <p class="text-sm font-bold text-slate-500">${rs.length}개 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''}</p>
+                    <p class="text-sm font-bold text-slate-500">${rs.length}개 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''} · 맞힌 몫 <span class="text-indigo-600">${numPct(avg)}</span></p>
                     ${noteHtml ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden">${noteHtml}</div>` : ''}
                     ${misses.length ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden max-h-80 overflow-y-auto">${rows}</div>` : ''}
                     <button onclick="resetNumSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>

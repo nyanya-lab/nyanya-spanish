@@ -4941,9 +4941,10 @@ let vocabulary = [];
                 nyanyaDiary[today].writeTotal = (nyanyaDiary[today].writeTotal || 0) + 1;
                 if (extra) nyanyaDiary[today].writeCorrect = (nyanyaDiary[today].writeCorrect || 0) + 1;
             } else if (type === 'num') {
-                // [냐냐 요청] 숫자 쓰기도 정답률에 (2026-10-08) — 한 문제당 한 번, 악센트만 틀려도 틀림
+                // [냐냐 요청] 숫자 쓰기도 정답률에 (2026-10-08) — 한 문제당 한 번, extra = 맞힌 몫(0~1)
                 nyanyaDiary[today].numTotal = (nyanyaDiary[today].numTotal || 0) + 1;
-                if (extra) nyanyaDiary[today].numCorrect = (nyanyaDiary[today].numCorrect || 0) + 1;
+                const got = typeof extra === 'number' ? extra : (extra ? 1 : 0);
+                if (got) nyanyaDiary[today].numCorrect = Math.round(((nyanyaDiary[today].numCorrect || 0) + got) * 1000) / 1000;
             } else if (type === 'ai') {
                 nyanyaDiary[today].aiSessions++;
             } else if (type === 'new-word') {
