@@ -1457,7 +1457,6 @@
             const on = 'bg-indigo-600 text-white shadow-sm';
             const off = 'text-slate-500 hover:bg-slate-50';
             if (mode === 'vconj' && !vconjState) renderVconjSetup();   // 설정 화면을 그려 둔다
-            if (mode === 'num' && !numState) selectNumCount(numCount);
             Object.entries(btns).forEach(([m, id]) => {
                 const b = document.getElementById(id); if (!b) return;
                 b.className = b.className.replace(on, '').replace(off, '').replace(/\s+/g, ' ').trim();
@@ -1776,7 +1775,6 @@
         //   숫자 문법 노트 점수·곡선(아래 applyNumGrammar)에는 들어간다.
         // ============================================================
         let numState = null;
-        let numCount = 10;
 
         const NUM_UNITS = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve',
             'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve',
@@ -1871,11 +1869,12 @@
         }
         //   [냐냐 요청] 숫자 노트는 본전이 90% (2026-10-08) — 빈칸(70%)보다 높다.
         //   긴 숫자를 매번 한 낱말씩 틀려도 몫은 90% 라, 70% 본전이면 틀려도 점수가 올랐다.
-        //   100% +2 · 95% +1 · 90% 0 · 85% −0.5 · 80% −1 · 70% 이하 −2. 본전 아래면 곡선.
+        //   문제마다 매겨서 한 문제 ±1 까지 (냐냐님): 100% +1 · 95% +0.5 · 90% 0 · 85% −0.25 · 80% −0.5 · 70% 이하 −1. 본전 아래면 곡선.
         const NUM_NOTE_PAR = 0.9;
+        const NUM_NOTE_MAX = 1;
         function numNoteDelta(rate) {
             const t = rate >= NUM_NOTE_PAR ? (rate - NUM_NOTE_PAR) / (1 - NUM_NOTE_PAR) : -Math.min(1, (NUM_NOTE_PAR - rate) / 0.2);
-            return clampScore(GRAMMAR_FILL_MAX * Math.max(-1, Math.min(1, t)));
+            return clampScore(NUM_NOTE_MAX * Math.max(-1, Math.min(1, t)));
         }
         function numPct(x) { return Math.round(x * 100) + '%'; }
 
@@ -1890,86 +1889,57 @@
         }
 
         // [냐냐 요청] 숫자 노트 점수·곡선에도 넣는다 (2026-10-08).
-        //   한 판이 끝나면 그 판의 맞힌 몫 평균으로 노트에 한 번: numNoteDelta (90% 본전, ±2 까지,
-        //   하루 +2 상한은 addGrammarScore 가 같은 주머니로), 본전 아래면 곡선에 들이거나 한 칸 물린다
-        //   (grammarReviewDemote, 하루 한 칸). 중간에 나가도 푼 데까지는 넣는다.
+        //   [냐냐 요청] 첨삭처럼 끝없이 이어 풀고, **문제마다** 노트에 바로 넣는다 (같은 날 — 세트는 없앴다).
+        //   numNoteDelta (90% 본전, 문제당 ±1 까지 — 냐냐님이 ±1 로 정하심, 하루 +2 상한은 addGrammarScore 가
+        //   같은 주머니로), 본전 아래면 곡선에 들이거나 한 칸 물린다 (grammarReviewDemote 가 하루 한 칸까지만).
         //   [냐냐 요청] 숫자 노트 둘(1~100 / 100~1조)을 하나로 합쳤다 (2026-10-08) — 'numbers' 하나로 간다.
         function numNoteFor(n) {
             const tables = (typeof customGrammarTables !== 'undefined') ? customGrammarTables : [];
             return tables.find(x => x.id === 'numbers') || tables.find(x => /^숫자/.test(x.title || '')) || null;
         }
-        function applyNumGrammar(st) {
-            if (!st || st.grammarDone || !st.results.length || typeof addGrammarScore !== 'function') return [];
-            st.grammarDone = true;
-            const by = {};
-            st.results.forEach(r => {
-                const t = numNoteFor(r.n);
-                if (!t) return;
-                const a = by[t.id] || (by[t.id] = { t: t, sum: 0, all: 0 });
-                a.all++;
-                a.sum += r.share;
-            });
-            const out = Object.values(by).map(a => {
-                const rate = a.sum / a.all;
-                const low = rate < NUM_NOTE_PAR;
-                const wasMastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[a.t.id];
-                const before = (typeof getGrammarScore === 'function') ? getGrammarScore(a.t.id) : 0;
-                const after = addGrammarScore(a.t.id, numNoteDelta(rate));
-                if (low && typeof grammarReviewDemote === 'function') grammarReviewDemote(a.t.id);
-                if (wasMastered && !masteredGrammar[a.t.id]) showToast(`"${a.t.title}" 마스터가 해제됐어요 ⚠️`, "warning");
-                return { title: a.t.title, rate: rate, all: a.all, delta: Math.round((after - before) * 10) / 10, curve: low };
-            });
-            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
-            if (typeof updateStats === 'function') updateStats();
-            return out;
-        }
-
-        function selectNumCount(n) {
-            numCount = Number(n) || 10;
-            document.querySelectorAll('.num-count-btn').forEach(b => {
-                const on = Number(b.dataset.numCount) === numCount;
-                b.classList.toggle('border-indigo-500', on); b.classList.toggle('bg-indigo-50', on); b.classList.toggle('text-indigo-600', on);
-                b.classList.toggle('border-slate-200', !on); b.classList.toggle('text-slate-600', !on);
-            });
+        //   한 문제를 노트에 넣고 실제로 움직인 점수를 돌려준다 (상한에 걸리면 0)
+        function applyNumNote(n, share) {
+            const t = numNoteFor(n);
+            if (!t || typeof addGrammarScore !== 'function') return null;
+            const low = share < NUM_NOTE_PAR;
+            const wasMastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[t.id];
+            const before = (typeof getGrammarScore === 'function') ? getGrammarScore(t.id) : 0;
+            const after = addGrammarScore(t.id, numNoteDelta(share));
+            if (low && typeof grammarReviewDemote === 'function') grammarReviewDemote(t.id);
+            if (wasMastered && !masteredGrammar[t.id]) showToast(`"${t.title}" 마스터가 해제됐어요 ⚠️`, "warning");
+            return { title: t.title, delta: Math.round((after - before) * 100) / 100, curve: low };
         }
 
         function startNumPractice() {
-            const qs = [];
-            while (qs.length < numCount) {
-                const n = numMakeQuestion();
-                if (!qs.includes(n)) qs.push(n);
-            }
-            numState = { qs: qs, index: 0, results: [], phase: 'input' };
+            numState = { results: [], phase: 'input', n: null, noteSum: 0, noteTitle: '', curve: false };
             document.getElementById('num-setup').classList.add('hidden');
             document.getElementById('num-play-area').classList.remove('hidden');
             renderNumProblem();
         }
 
         function resetNumSetup() {
-            if (numState) applyNumGrammar(numState);   // 중간에 나가도 푼 데까지는 노트에 넣는다
             numState = null;
             const setup = document.getElementById('num-setup');
             const play = document.getElementById('num-play-area');
             if (setup) setup.classList.remove('hidden');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
-            selectNumCount(numCount);
         }
 
         function renderNumProblem() {
             if (!numState) return;
-            if (numState.index >= numState.qs.length) { endNumPractice(); return; }
             const play = document.getElementById('num-play-area');
-            const n = numState.qs[numState.index];
+            //   이미 푼 숫자는 다시 뽑는다
+            let n = numMakeQuestion();
+            for (let i = 0; i < 5 && numState.results.some(r => r.n === n); i++) n = numMakeQuestion();
+            numState.n = n;
             numState.phase = 'input';
-            const total = numState.qs.length;
+            const rs = numState.results;
+            const avg = rs.length ? rs.reduce((a, r) => a + r.share, 0) / rs.length : null;
             play.innerHTML = `
                 <div class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-4">
                     <div class="flex items-center justify-between">
-                        <button onclick="resetNumSetup()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500">${numState.index + 1} / ${total}</span>
-                    </div>
-                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-indigo-500 transition-all" style="width:${(numState.index / total * 100)}%"></div>
+                        <button onclick="endNumPractice()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-flag-checkered"></i> 그만하기</button>
+                        <span class="text-xs font-bold text-slate-500">${rs.length}문제 풀었어요${avg === null ? '' : ` · 맞힌 몫 <span class="text-indigo-600">${numPct(avg)}</span>`}</span>
                     </div>
                     <div class="text-center py-3">
                         <span class="text-[10px] font-bold text-slate-400 tracking-wider">스페인어로 써 보세요</span>
@@ -1995,7 +1965,7 @@
 
         function submitNumProblem() {
             if (!numState || numState.phase !== 'input') return;
-            const n = numState.qs[numState.index];
+            const n = numState.n;
             const input = document.getElementById('num-input');
             const answer = input ? input.value : '';
             if (!numNorm(answer)) { showToast("답을 써 주세요", "error"); return; }
@@ -2003,6 +1973,8 @@
             const share = grade === 'ok' ? 1 : numShare(n, answer);
             const expected = numAcceptedAnswers(n)[0];
             numState.phase = 'graded';
+            const note = applyNumNote(n, share);
+            if (note) { numState.noteSum += note.delta; numState.noteTitle = note.title; if (note.curve) numState.curve = true; }
             numState.results.push({ n: n, answer: answer.trim(), grade: grade, share: share, expected: expected });
             if (input) {
                 input.readOnly = true;
@@ -2014,10 +1986,13 @@
             if (fb) {
                 fb.classList.remove('hidden');
                 const alt = numAcceptedAnswers(n)[1];
-                fb.innerHTML = grade === 'ok'
+                const tone = (x) => x > 0 ? 'text-emerald-600' : x < 0 ? 'text-rose-500' : 'text-slate-400';
+                const noteLine = note ? `<p class="text-[11px] text-slate-400">📋 ${escapeHtml(note.title)}
+                    <span class="${tone(note.delta)}">${note.delta > 0 ? '+' : ''}${note.delta}점</span>${note.curve ? ' · <span class="text-amber-600">곡선</span>' : ''}</p>` : '';
+                fb.innerHTML = (grade === 'ok'
                     ? `<p class="text-emerald-600">✓ 정답!</p>${alt ? `<p class="text-[11px] text-slate-400">${escapeHtml(alt === numNorm(answer) ? expected : alt)} 도 맞아요</p>` : ''}`
                     : `<p class="${grade === 'accent' ? 'text-amber-600' : 'text-rose-500'}">${grade === 'accent' ? '악센트만 틀렸어요' : '✗ 틀렸어요'} <span class="text-slate-500">· ${numPct(share)}</span></p>
-                       <p class="text-slate-700 font-semibold">${numMarkExpected(expected, answer)}</p>`;
+                       <p class="text-slate-700 font-semibold">${numMarkExpected(expected, answer)}</p>`) + noteLine;
             }
             const btn = document.getElementById('num-action-btn');
             if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextNumProblem()'); }
@@ -2029,7 +2004,6 @@
 
         function nextNumProblem() {
             if (!numState) return;
-            numState.index++;
             renderNumProblem();
         }
 
@@ -2037,18 +2011,18 @@
             const play = document.getElementById('num-play-area');
             if (!play || !numState) return;
             const rs = numState.results;
+            if (!rs.length) { resetNumSetup(); return; }
             const ok = rs.filter(r => r.grade === 'ok').length;
             const accent = rs.filter(r => r.grade === 'accent').length;
             const misses = rs.filter(r => r.grade !== 'ok');
-            const avg = rs.length ? rs.reduce((a, r) => a + r.share, 0) / rs.length : 0;
-            const notes = applyNumGrammar(numState);
-            const noteHtml = notes.map(x => `
-                <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
-                    <span class="text-xs font-bold text-slate-700 truncate">📋 ${escapeHtml(x.title)}</span>
-                    <span class="text-[11px] font-bold text-slate-400 shrink-0">${x.all}문제 · ${numPct(x.rate)}</span>
-                    <span class="text-xs font-black shrink-0 ${x.delta > 0 ? 'text-emerald-600' : x.delta < 0 ? 'text-rose-500' : 'text-slate-400'}">${x.delta > 0 ? '+' : ''}${x.delta}점</span>
-                    ${x.curve ? '<span class="text-[10px] font-bold text-amber-600 shrink-0">곡선</span>' : ''}
-                </div>`).join('');
+            const avg = rs.reduce((a, r) => a + r.share, 0) / rs.length;
+            const sum = Math.round(numState.noteSum * 100) / 100;
+            const noteHtml = numState.noteTitle ? `
+                <div class="flex items-center justify-between gap-2 px-3 py-2">
+                    <span class="text-xs font-bold text-slate-700 truncate">📋 ${escapeHtml(numState.noteTitle)}</span>
+                    <span class="text-xs font-black shrink-0 ${sum > 0 ? 'text-emerald-600' : sum < 0 ? 'text-rose-500' : 'text-slate-400'}">${sum > 0 ? '+' : ''}${sum}점</span>
+                    ${numState.curve ? '<span class="text-[10px] font-bold text-amber-600 shrink-0">곡선</span>' : ''}
+                </div>` : '';
             const rows = misses.map(r => `
                 <div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
                     <div class="flex items-center justify-between gap-2">
@@ -2062,7 +2036,7 @@
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 text-center">
                     <div class="text-5xl">${ok === rs.length ? '🏆' : '💪'}</div>
                     <h3 class="text-lg font-black text-slate-900">숫자 쓰기 끝!</h3>
-                    <p class="text-sm font-bold text-slate-500">${rs.length}개 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''} · 맞힌 몫 <span class="text-indigo-600">${numPct(avg)}</span></p>
+                    <p class="text-sm font-bold text-slate-500">${rs.length}문제 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''} · 맞힌 몫 <span class="text-indigo-600">${numPct(avg)}</span></p>
                     ${noteHtml ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden">${noteHtml}</div>` : ''}
                     ${misses.length ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden max-h-80 overflow-y-auto">${rows}</div>` : ''}
                     <button onclick="resetNumSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>
