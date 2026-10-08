@@ -2370,7 +2370,7 @@ let vocabulary = [];
             if (isWrong) {
                 //   갈래별 정답률 — 푼 게 있는 갈래만 한 줄씩 (맞힌 수/푼 수 · %)
                 const accTone = (pct) => pct < 50 ? 'text-rose-500' : pct < 80 ? 'text-amber-600' : 'text-emerald-600';
-                const accRows = acc ? [['❓ 퀴즈', acc.parts.quiz], ['✍️ 쓰기 (복습·연습)', acc.parts.write], ['🤖 첨삭', acc.parts.ai]]
+                const accRows = acc ? [['❓ 퀴즈', acc.parts.quiz], ['✍️ 쓰기 (복습·연습)', acc.parts.write], ['🔢 숫자', acc.parts.num], ['🤖 첨삭', acc.parts.ai]]
                     .filter(([, p]) => p.t)
                     .map(([label, p]) => `<div class="flex items-baseline gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
                         <span class="text-xs font-bold text-slate-600">${label}</span>
@@ -2379,7 +2379,7 @@ let vocabulary = [];
                     </div>`).join('') : '';
                 const accBox = accRows
                     ? `<div class="border border-slate-200 rounded-xl mb-3">${accRows}</div>`
-                    : '<p class="text-slate-400 text-center text-xs py-3">이 날은 퀴즈·쓰기·첨삭을 안 했어요.</p>';
+                    : '<p class="text-slate-400 text-center text-xs py-3">이 날은 퀴즈·쓰기·숫자·첨삭을 안 했어요.</p>';
                 //   틀린 목록은 오늘만 — 탭도 오늘만 낸다
                 //   ⚠️ 붙박이 줄엔 위 탭(복습 예정 ↔ 정답률)만 둔다. 갈래 탭까지 넣으면
                 //      정답률 표가 그 밑으로 밀려서 팝업을 열자마자 틀린 목록부터 보인다.
@@ -4940,6 +4940,10 @@ let vocabulary = [];
                 // [냐냐 요청] 쓰기 복습 1바퀴 — 한 낱말당 한 번만 (건너뛴 건 안 센다)
                 nyanyaDiary[today].writeTotal = (nyanyaDiary[today].writeTotal || 0) + 1;
                 if (extra) nyanyaDiary[today].writeCorrect = (nyanyaDiary[today].writeCorrect || 0) + 1;
+            } else if (type === 'num') {
+                // [냐냐 요청] 숫자 쓰기도 정답률에 (2026-10-08) — 한 문제당 한 번, 악센트만 틀려도 틀림
+                nyanyaDiary[today].numTotal = (nyanyaDiary[today].numTotal || 0) + 1;
+                if (extra) nyanyaDiary[today].numCorrect = (nyanyaDiary[today].numCorrect || 0) + 1;
             } else if (type === 'ai') {
                 nyanyaDiary[today].aiSessions++;
             } else if (type === 'new-word') {
@@ -5297,7 +5301,7 @@ let vocabulary = [];
         // [냐냐 요청] 일지에 그 날 정답률을 낸다 (2026-09-24). 15일 정답률과 같은 셈을 하루치로.
         //   from ~ to (둘 다 포함) 의 퀴즈·쓰기 복습·첨삭.
         function accuracyBetween(from, to) {
-            const parts = { quiz: { t: 0, c: 0 }, ai: { t: 0, c: 0 }, write: { t: 0, c: 0 } };
+            const parts = { quiz: { t: 0, c: 0 }, ai: { t: 0, c: 0 }, write: { t: 0, c: 0 }, num: { t: 0, c: 0 } };
             Object.keys(nyanyaDiary || {}).forEach(ds => {
                 if (ds < from || ds > to) return;
                 const d = nyanyaDiary[ds] || {};
@@ -5305,6 +5309,8 @@ let vocabulary = [];
                 parts.quiz.c += (d.quizCorrect || 0);
                 parts.write.t += (d.writeTotal || 0);
                 parts.write.c += (d.writeCorrect || 0);
+                parts.num.t += (d.numTotal || 0);     // [냐냐 요청] 숫자 쓰기 (2026-10-08)
+                parts.num.c += (d.numCorrect || 0);
             });
             //   [냐냐 요청] 첨삭은 문장 하나 = 1문제, 맞힌 몫은 그 문장에서 + 받은 항목의 비율 (2026-10-07).
             //   예전엔 '완벽' 이어야 1, 아니면 0 이라 낱말 하나만 고쳐져도 통째로 틀림이었다.
@@ -5330,8 +5336,8 @@ let vocabulary = [];
             Object.keys(parts).forEach(k => {
                 parts[k].pct = parts[k].t ? Math.round((parts[k].c / parts[k].t) * 100) : null;
             });
-            const total = parts.quiz.t + parts.ai.t + parts.write.t;
-            const correct = parts.quiz.c + parts.ai.c + parts.write.c;
+            const total = parts.quiz.t + parts.ai.t + parts.write.t + parts.num.t;
+            const correct = parts.quiz.c + parts.ai.c + parts.write.c + parts.num.c;
             return { total, correct, pct: total ? Math.round((correct / total) * 100) : null, parts };
         }
 
@@ -5738,7 +5744,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   정답률처럼 비율로 쓰는 값은 그래프 쪽에서 합계로 다시 계산하니까 여기선 안 건드린다.
         //   (합계의 비율이라 '평균의 평균'이 되지 않는다)
         // ============================================================
-        const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'writeTotal', 'writeCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
+        const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'writeTotal', 'writeCorrect', 'numTotal', 'numCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
                                    'reviewCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
         const RECORD_LAST_FIELDS = ['registeredTotal', 'masteredTotal', 'perfectTotal', 'weakTotal', 'criticalTotal',
                                     'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal',

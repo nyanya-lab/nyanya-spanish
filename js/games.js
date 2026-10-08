@@ -1772,7 +1772,7 @@
         //   자릿수도 아무렇게나. 대신 헷갈리기 쉬운 숫자(cien/ciento, 500·700·900, 21~29, mil, un millón,
         //   veintiún mil …)를 셋에 하나꼴로 일부러 낸다.
         //   채점은 로컬 — 정답이 정해져 있다. 악센트까지 맞아야 정답, 악센트만 틀리면 '거의' 로 따로 보여 준다.
-        //   숫자는 단어가 아니라 단어 점수·곡선·저장은 건드리지 않는다.
+        //   숫자는 단어가 아니라 단어 점수·곡선은 건드리지 않는다. 정답률(일지 numTotal·numCorrect)에는 들어간다.
         // ============================================================
         let numState = null;
         let numCount = 10;
@@ -1959,6 +1959,10 @@
             }
             const btn = document.getElementById('num-action-btn');
             if (btn) { btn.innerHTML = '다음 (Enter) →'; btn.setAttribute('onclick', 'nextNumProblem()'); }
+            //   [냐냐 요청] 정답률에 넣는다 (2026-10-08) — 일지에 한 문제씩. 악센트만 틀려도 틀림으로 센다
+            if (typeof logAction === 'function') logAction('num', grade === 'ok');
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            if (typeof updateStats === 'function') updateStats();
         }
 
         function nextNumProblem() {
