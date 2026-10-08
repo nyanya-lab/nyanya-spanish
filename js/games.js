@@ -1812,12 +1812,11 @@
             if (r) parts.push(numUnderMillion(r, false));
             return parts.join(' ');
         }
-        //   스페인어로 둘 다 맞는 꼴 — mil 앞의 21·31·…·101 은 veintiún mil 도 veintiuno mil 도 된다 (RAE)
+        //   정답 꼴. ⚠️ mil 앞의 21·31·…·101 은 줄인 꼴만 맞다 — veintiún mil, cincuenta y un mil (RAE).
+        //   (처음엔 veintiuno mil 도 받았는데 틀렸다 — 둘 다 되는 건 여성 명사 앞 veintiuna mil personas 이야기.
+        //    2026-10-08 냐냐님 질문으로 바로잡음.) 배열로 두는 건 나중에 둘 다 맞는 꼴이 생기면 더하려고.
         function numAcceptedAnswers(n) {
-            const main = numberToSpanish(n);
-            //   'un mil' 은 앞에 다른 낱말이 있을 때만 생긴다 (1,000 은 그냥 mil) — treinta y un mil · doscientos un mil
-            const alt = main.replace(/veintiún mil\b/g, 'veintiuno mil').replace(/ un mil\b/g, ' uno mil');
-            return alt !== main ? [main, alt] : [main];
+            return [numberToSpanish(n)];
         }
 
         function numRandInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
@@ -1915,6 +1914,7 @@
             if (want.includes('ciento') && mine.includes('cien')) add('101~199는 ciento + 나머지예요 (ciento uno, ciento treinta). cien은 딱 100일 때만');
             if (/(^| )(un|uno) mil(?!l)/.test(mineS) && !/(un|uno|veintiún) mil(?!l)/.test(exp)) add('1,000은 그냥 mil이에요 (un mil ✗)');
             if (/(^| )(uno|veintiuno) (millón|millones)/.test(mineS)) add('millón·millones 앞에서는 uno가 un으로 줄어요 — un millón, veintiún millones');
+            if (/(^| )(uno|veintiuno) mil(?!l)/.test(mineS) && /(un|veintiún) mil(?!l)/.test(exp)) add('mil 앞에서도 uno가 un으로 줄어요 — veintiún mil, cincuenta y un mil');
             if (want.includes('millón') && mine.includes('millones')) add('1,000,000은 un millón (단수)이에요. 2,000,000부터 millones');
             if (want.includes('millones') && mine.includes('millón')) add('2,000,000부터는 millones (복수)예요. millón은 딱 un millón일 때만');
             //   틀 자체를 잘못 짠 경우(띄어쓰기·억/조)는 낱말 짝짓기가 오히려 헷갈린다 (mil → un) — 규칙 줄만 낸다
