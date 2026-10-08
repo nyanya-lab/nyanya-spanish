@@ -1245,24 +1245,32 @@ let vocabulary = [];
 
         // 단어·관용구·문법 '오늘 복습' 줄에 남은 게 하나도 없나.
         //   하루 안에서는 줄이 줄기만 한다(오늘 틀린 건 내일 차례) — 늘어나는 건 ↺ 로 복습을 무를 때뿐.
-        function isTodayReviewClear() {
-            if (typeof getReviewDueWords !== 'function') return false;
-            return getReviewDueWords().length === 0
-                && (typeof getIdiomDueList !== 'function' || getIdiomDueList().length === 0)
-                && (typeof getGrammarDueList !== 'function' || getGrammarDueList().length === 0);
+        //   남은 개수를 낸다 (못 재면 null)
+        function todayReviewLeft() {
+            if (typeof getReviewDueWords !== 'function') return null;
+            return getReviewDueWords().length
+                + (typeof getIdiomDueList === 'function' ? getIdiomDueList().length : 0)
+                + (typeof getGrammarDueList === 'function' ? getGrammarDueList().length : 0);
         }
+        function isTodayReviewClear() { return todayReviewLeft() === 0; }
 
-        // 지난날의 복습 줄은 나중에 다시 잴 수 없으므로 저장할 때마다 그날 일지에 적어 둔다 (reviewDone).
+        // 지난날의 복습 줄은 나중에 다시 잴 수 없으므로 저장할 때마다 그날 일지에 적어 둔다 (reviewDone · reviewLeft).
         //   매번 다시 재서 덮어쓴다 — ↺ 로 복습을 물러 줄이 다시 생기면 표시도 같이 꺼진다.
         //   일지가 없는 날(앱만 켠 날)은 기록을 새로 만들지 않는다.
         function stampTodayReviewDone() {
             try {
                 const d = nyanyaDiary && nyanyaDiary[getLocalDateString()];
                 if (!d) return;
-                const clear = isTodayReviewClear();
-                if (!!d.reviewDone === clear) return;
+                const left = todayReviewLeft();
+                if (left === null) return;
+                const clear = left === 0;
+                const flip = !!d.reviewDone !== clear;
                 d.reviewDone = clear;
-                if (typeof renderStreakBadge === 'function') renderStreakBadge();
+                d.reviewLeft = left;   // 달력 상세의 복습 칸 '−N' (그날 남기고 끝낸 개수)
+                if (flip) {
+                    if (typeof renderStreakBadge === 'function') renderStreakBadge();
+                    if (typeof renderCalendar === 'function') renderCalendar();
+                }
             } catch (e) {}
         }
 
@@ -1730,6 +1738,10 @@ let vocabulary = [];
                 weak:   ['weak-word', 'weak-idiom', 'weak-grammar'].map(k => diaryFlagCount(ds, log, k))
             };
             const reviewN = log.reviewCount || 0;
+            //   [냐냐 요청] 복습 칸 옆에 남긴 개수 '−N' (2026-10-09) — 오늘은 지금 남은 수, 지난날은 그날 마지막으로 적힌 수.
+            //   기록이 생긴 10/9 부터만 나온다.
+            const reviewLeftN = ds < STREAK_REVIEW_RULE_FROM ? 0
+                : (ds === getLocalDateString() ? (todayReviewLeft() || 0) : (log.reviewLeft || 0));
             //   [냐냐 결정] 마스터·약점 칸은 넷팅이라 음수가 될 수 있다 (2026-09-22).
             //   '총 N개 활동' 에서는 음수를 0 으로 본다 — 약점이 풀린 건 활동이 아니라 결과이고,
             //   그 활동(복습·첨삭)은 아래 줄에서 이미 세고 있다.
@@ -1777,7 +1789,10 @@ let vocabulary = [];
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습</td>
-                            ${cellBtn(reviewN, 'review', 3)}
+                            ${reviewLeftN > 0
+                                ? `<td colspan="3" class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')" class="w-full py-1.5 flex items-baseline justify-center gap-1.5 font-black hover:bg-white rounded transition-colors" title="${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개">
+                                       <span class="${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</span><span class="text-[10px] text-rose-400">−${reviewLeftN}</span></button></td>`
+                                : cellBtn(reviewN, 'review', 3)}
                         </tr>
                         <tr class="border-t border-slate-200">
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">연습</td>
@@ -2506,6 +2521,14 @@ let vocabulary = [];
             }
         }
 
+        // [냐냐 결정] 복습을 **못 끝낸** 날에 주황 테두리 (2026-10-09) — '다 한 날' 쪽은 거의 모든 칸에 둘려서 안 보였다.
+        //   공부는 했는데 오늘 줄을 남긴 지난날만. 오늘은 아직 하는 중이라 빼고, 공부 안 한 날은 ✗ 가 이미 있다.
+        function calReviewBorder(ds, n, isPast) {
+            const d = nyanyaDiary[ds];
+            if (!d || ds < STREAK_REVIEW_RULE_FROM || n === 0 || !isPast || d.reviewDone === true) return { cls: '', title: '' };
+            return { cls: 'border-2 border-orange-400', title: ` · 복습 ${d.reviewLeft || 0}개 남김` };
+        }
+
         function renderCalendar() {
             const container = document.getElementById('learning-calendar');
             const titleEl = document.getElementById('cal-title');
@@ -2548,7 +2571,9 @@ let vocabulary = [];
                     // [냐냐 요청] 지금 펼쳐둔 날은 진하게, 오늘은 늘 테두리로 (둘이 겹치면 진한 쪽)
                     const isPicked = ds === (calSelectedDay || todayStr);
                     const ringCls = isPicked ? 'ring-2 ring-violet-600' : (isToday ? 'ring-2 ring-violet-400' : '');
-                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${ringCls}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${planTitle} (클릭하면 상세)">${inner}</div>`;
+                    //   [냐냐 요청] 복습을 못 끝낸 날은 칸 안쪽 주황 테두리 (2026-10-09) — 보라 테두리(오늘·고른 날)는 바깥(ring)이라 같이 보인다.
+                    const rv = calReviewBorder(ds, n, isPast);
+                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${rv.cls} ${ringCls}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${rv.title}${planTitle} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
             } else if (calView === 'year') {
