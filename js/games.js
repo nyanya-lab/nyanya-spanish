@@ -1772,7 +1772,8 @@
         //   자릿수도 아무렇게나. 대신 헷갈리기 쉬운 숫자(cien/ciento, 500·700·900, 21~29, mil, un millón,
         //   veintiún mil …)를 셋에 하나꼴로 일부러 낸다.
         //   채점은 로컬 — 정답이 정해져 있다. 악센트까지 맞아야 정답, 악센트만 틀리면 '거의' 로 따로 보여 준다.
-        //   숫자는 단어가 아니라 단어 점수·곡선은 건드리지 않는다. 정답률(일지 numTotal·numCorrect)에는 들어간다.
+        //   숫자는 단어가 아니라 단어 점수·곡선은 건드리지 않는다. 정답률(일지 numTotal·numCorrect)과
+        //   숫자 문법 노트 점수·곡선(아래 applyNumGrammar)에는 들어간다.
         // ============================================================
         let numState = null;
         let numCount = 10;
@@ -1864,6 +1865,46 @@
             }).join(' ');
         }
 
+        // [냐냐 요청] 숫자 노트 점수·곡선에도 넣는다 (2026-10-08) — 문법표 빈칸과 같은 잣대.
+        //   한 판이 끝나면 문제를 노트별로 나눠(100 까지 / 그 위) 노트마다 그 판 정답률로 한 번:
+        //   grammarFillDelta (70% 본전, ±2 까지, 하루 +2 상한은 addGrammarScore 가 같은 주머니로),
+        //   70% 미만이면 곡선에 들이거나 한 칸 물린다 (grammarReviewDemote, 하루 한 칸). 악센트만 틀린 것도 틀림.
+        //   그 판에 그 노트 문제가 없으면 안 건드린다. 중간에 나가도 푼 데까지는 넣는다.
+        const NUM_NOTES = [
+            { id: 'numbers', max: 100, title: /숫자\s*1\s*~\s*100/ },
+            { id: 'custom-1783347932005', max: Infinity, title: /숫자\s*100\s*~/ },
+        ];
+        function numNoteFor(n) {
+            const spec = NUM_NOTES.find(x => n <= x.max);
+            const tables = (typeof customGrammarTables !== 'undefined') ? customGrammarTables : [];
+            const t = tables.find(x => x.id === spec.id) || tables.find(x => spec.title.test(x.title || ''));
+            return t || null;
+        }
+        function applyNumGrammar(st) {
+            if (!st || st.grammarDone || !st.results.length || typeof addGrammarScore !== 'function') return [];
+            st.grammarDone = true;
+            const by = {};
+            st.results.forEach(r => {
+                const t = numNoteFor(r.n);
+                if (!t) return;
+                const a = by[t.id] || (by[t.id] = { t: t, ok: 0, all: 0 });
+                a.all++;
+                if (r.grade === 'ok') a.ok++;
+            });
+            const out = Object.values(by).map(a => {
+                const rate = a.ok / a.all;
+                const wasMastered = (typeof masteredGrammar !== 'undefined') && !!masteredGrammar[a.t.id];
+                const before = (typeof getGrammarScore === 'function') ? getGrammarScore(a.t.id) : 0;
+                const after = addGrammarScore(a.t.id, grammarFillDelta(rate));
+                if (rate < 0.7 && typeof grammarReviewDemote === 'function') grammarReviewDemote(a.t.id);
+                if (wasMastered && !masteredGrammar[a.t.id]) showToast(`"${a.t.title}" 마스터가 해제됐어요 ⚠️`, "warning");
+                return { title: a.t.title, ok: a.ok, all: a.all, delta: Math.round((after - before) * 10) / 10, curve: rate < 0.7 };
+            });
+            try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (e) {}
+            if (typeof updateStats === 'function') updateStats();
+            return out;
+        }
+
         function selectNumCount(n) {
             numCount = Number(n) || 10;
             document.querySelectorAll('.num-count-btn').forEach(b => {
@@ -1886,6 +1927,7 @@
         }
 
         function resetNumSetup() {
+            if (numState) applyNumGrammar(numState);   // 중간에 나가도 푼 데까지는 노트에 넣는다
             numState = null;
             const setup = document.getElementById('num-setup');
             const play = document.getElementById('num-play-area');
@@ -1978,6 +2020,14 @@
             const ok = rs.filter(r => r.grade === 'ok').length;
             const accent = rs.filter(r => r.grade === 'accent').length;
             const misses = rs.filter(r => r.grade !== 'ok');
+            const notes = applyNumGrammar(numState);
+            const noteHtml = notes.map(x => `
+                <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
+                    <span class="text-xs font-bold text-slate-700 truncate">📋 ${escapeHtml(x.title)}</span>
+                    <span class="text-[11px] font-bold text-slate-400 shrink-0">${x.ok}/${x.all}</span>
+                    <span class="text-xs font-black shrink-0 ${x.delta > 0 ? 'text-emerald-600' : x.delta < 0 ? 'text-rose-500' : 'text-slate-400'}">${x.delta > 0 ? '+' : ''}${x.delta}점</span>
+                    ${x.curve ? '<span class="text-[10px] font-bold text-amber-600 shrink-0">곡선</span>' : ''}
+                </div>`).join('');
             const rows = misses.map(r => `
                 <div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
                     <div class="flex items-center justify-between gap-2">
@@ -1992,6 +2042,7 @@
                     <div class="text-5xl">${ok === rs.length ? '🏆' : '💪'}</div>
                     <h3 class="text-lg font-black text-slate-900">숫자 쓰기 끝!</h3>
                     <p class="text-sm font-bold text-slate-500">${rs.length}개 중 <span class="text-emerald-600">${ok}개 정답</span>${accent ? ` · <span class="text-amber-600">악센트만 ${accent}개</span>` : ''}</p>
+                    ${noteHtml ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden">${noteHtml}</div>` : ''}
                     ${misses.length ? `<div class="text-left rounded-2xl border border-slate-200 overflow-hidden max-h-80 overflow-y-auto">${rows}</div>` : ''}
                     <button onclick="resetNumSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-sm font-bold transition-all active:scale-95">다시 하기</button>
                 </div>`;
