@@ -341,6 +341,7 @@ let vocabulary = [];
         //   ⚠️ 번호를 못 읽으면(연결 문제) 예전처럼 그냥 올린다 — 확인 때문에 저장이 막히면 더 큰 일이다.
         // ============================================================
         let _knownRev = null;          // 이 창이 마지막으로 서버와 맞춘 저장 번호
+        let _sendingRev = null;        // 지금 올리는 중인 번호 — 올리는 사이 서버를 보면 내 번호가 보인다
         let _saveConflictShown = false;
         let _forceOverwrite = false;
         const newSaveRev = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -397,6 +398,7 @@ let vocabulary = [];
                     }
                 }
                 _savePending = null;
+                _sendingRev = rev;
                 try {
                     const res = await fetch(firebasePath, {
                         method: 'PUT',
@@ -405,12 +407,14 @@ let vocabulary = [];
                     });
                     if (res.ok) {
                         _knownRev = rev || _knownRev;
+                        _sendingRev = null;
                         updateSyncBadge(true);
                         return;
                     }
                 } catch (e) {
                     console.warn("Firebase 저장 실패, 다른 저장소로 대체", e);
                 }
+                _sendingRev = null;
             }
             _savePending = null;
 
@@ -11332,11 +11336,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //     ③ ↺ 는 '채점 전 모습' 으로 되돌린다 — 그 사이 다른 곳에서 그 항목이 바뀌었으면 덮는다
         //        → 맡길 때의 점수 모습을 적어두고, 되살린 데이터와 다르면 그 줄을 잠근다 (aiEntryLocked)
         //     ④ 날짜를 넘기면 하루 상한·오늘 복습 장부가 엇갈린다 → 오늘 채점한 카드만 살린다
-        //   [냐냐 요청] 쉬는 시간은 30분, 쉬어서 뜨는 창엔 [그냥 쓰기] 가 없다 — 다 살아나니 고를 게 없다.
+        //   [냐냐 요청] 쉬어서 뜨는 창엔 [그냥 쓰기] 가 없다 — 다 살아나니 고를 게 없다.
+        //     (2026-10-08 부터 '30분 쉬면' 대신 '다른 곳에서 저장했으면' 뜬다 — 아래 checkServerRev)
         //     새 버전 창은 [그냥 쓰기] 를 남긴다 (같이 고치는 날은 하루에도 여러 번 배포한다).
         // ============================================================
         const RELOAD_STASH_KEY = 'nyanya_reload_stash';
-        const IDLE_RELOAD_MS = 30 * 60 * 1000;
+        const REV_CHECK_MS = 5 * 60 * 1000;   // 보이는 동안 서버 저장 번호를 보는 간격 (아래 checkServerRev)
         let _lastActAt = Date.now();
         let _reloadAskOpen = false;
         let _newVersionSeen = '';      // 서버에서 본 새 버전 번호
@@ -11350,7 +11355,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const modalBoxes = isShown('word-modal') ? ['input-word', 'input-meaning'] : [];
             return modalBoxes.concat(['write-answer-input', 'fill-answer-input']).some(id => boxValue(id).trim());
         }
-        //   지금 새로고침하면 끊기는 일이 있나 — 있으면 1시간 창·새 버전 창을 미룬다
+        //   지금 새로고침하면 끊기는 일이 있나 — 있으면 '다른 곳 저장' 창·새 버전 창을 미룬다
         function reloadWouldInterrupt() {
             if (unrestorableTyping()) return true;
             if ((typeof writePracticeState !== 'undefined' && writePracticeState)
@@ -11604,30 +11609,50 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             } catch (e) {}
         }
 
+        // [냐냐 요청] 다른 곳에서 저장했을 때만 묻는다 (2026-10-08) — 예전엔 30분 쉬면 바뀐 게 없어도 무조건 떴다.
+        //   서버의 저장 번호(savedRev, 몇 글자)만 읽어서 이 창이 아는 번호와 다르면 = 다른 곳이 그 사이 저장한 것.
+        //   창으로 돌아올 때 + 보이는 동안 5분마다 잰다. 10분만 다른 컴퓨터에서 공부하고 와도 잡힌다.
+        //   ⚠️ 이 창이 올리는 중이면 서버에 내 번호가 먼저 보일 수 있다 → _sendingRev 와 같으면 넘어간다.
+        //   ⚠️ 번호를 못 읽으면(연결 문제) 조용히 넘어간다 — 저장 직전 확인이 한 번 더 막는다.
+        let _otherSaveSeen = false;
+        let _revCheckedAt = 0;
+        async function checkServerRev() {
+            const path = getFirebaseDataPath();
+            if (!path || !_knownRev || _otherSaveSeen || document.visibilityState !== 'visible') return;
+            if (Date.now() - _revCheckedAt < 20 * 1000) return;
+            _revCheckedAt = Date.now();
+            try {
+                const r = await fetch(revPathOf(path), { cache: 'no-store' });
+                if (!r.ok) return;
+                const serverRev = await r.json();
+                if (serverRev && serverRev !== _knownRev && serverRev !== _sendingRev) _otherSaveSeen = true;
+            } catch (e) {}
+        }
+
         function askReloadIfDue() {
             if (_reloadAskOpen || reloadWouldInterrupt()) return;
-            const idle = Date.now() - _lastActAt >= IDLE_RELOAD_MS;
+            const other = _otherSaveSeen;
             const fresh = _newVersionSeen && _newVersionSeen !== _newVersionDeclined;
-            if (!idle && !fresh) return;
+            if (!other && !fresh) return;
             _reloadAskOpen = true;
             const typed = ['ai-user-input', 'ai-free-input-es', 'ai-idiom-input', 'question-answer-input'].some(id => boxValue(id).trim());
             const keep = (typed || isShown('ai-feedback-result')) ? ' 보던 첨삭은 그대로 살려둘게요.' : '';
             const done = () => { _reloadAskOpen = false; _lastActAt = Date.now(); };
-            showConfirm(idle ? "30분 넘게 쉬었어요" : "새 버전이 나왔어요",
-                (idle ? "다른 컴퓨터에서 공부한 것과 새 버전을 받아올게요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
+            showConfirm(other ? "다른 곳에서 공부한 게 있어요" : "새 버전이 나왔어요",
+                (other ? "그대로 쓰면 그쪽 공부를 덮어써요. 최신 데이터를 받아올게요." : "고친 것을 받아오려면 새로고침해 주세요.") + keep,
                 () => { done(); hardReloadApp({ quick: true }); },
-                //   쉬어서 뜬 창은 고를 게 없다 — 보던 것이 다 살아나니 [그냥 쓰기] 를 두지 않는다
-                { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true, hideCancel: idle,
+                //   다른 곳 저장으로 뜬 창은 고를 게 없다 — 보던 것이 다 살아나니 [그냥 쓰기] 를 두지 않는다
+                { okLabel: '새로고침', cancelLabel: '그냥 쓰기', okStyle: 'primary', icon: 'info', noEnter: true, hideCancel: other,
                   onCancel: () => { done(); if (fresh) _newVersionDeclined = _newVersionSeen; } });
         }
 
         function initIdleReload() {
-            //   1시간 지나고 처음 누른 것은 실행하지 않고 창부터 띄운다 — 다른 창에 덮여 있다가 눌러서 돌아온 경우.
-            //   그 누름이 버튼을 실행해 저장까지 하면 옛 데이터로 덮어쓴다. 뒤따르는 click 까지 삼킨다.
+            //   다른 곳 저장을 알아챈 뒤 처음 누른 것은 실행하지 않고 창부터 띄운다 — 옛 데이터로 버튼이 돌면 안 된다.
+            //   뒤따르는 click 까지 삼킨다.
             let swallowUntil = 0;
             const onAct = (e) => {
                 if (_reloadAskOpen) return;
-                if (Date.now() - _lastActAt >= IDLE_RELOAD_MS && !reloadWouldInterrupt()) {
+                if (_otherSaveSeen && !reloadWouldInterrupt()) {
                     if (e.type === 'pointerdown' || e.type === 'keydown' || e.type === 'touchstart') {
                         e.preventDefault(); e.stopPropagation(); swallowUntil = Date.now() + 600;
                     }
@@ -11641,11 +11666,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             ['mousedown', 'mouseup', 'click'].forEach(t => document.addEventListener(t, (e) => {
                 if (Date.now() < swallowUntil) { e.preventDefault(); e.stopPropagation(); }
             }, true));
-            //   돌아왔을 때 — 오래 비웠으면 누르기 전에 창이 먼저 떠 있어야 한다. 잰 다음에 bump 가 시각을 새로 적는다
-            const onBack = async () => { askReloadIfDue(); await checkNewAppVersion(); askReloadIfDue(); };
+            //   돌아왔을 때 — 누르기 전에 창이 먼저 떠 있어야 한다
+            const onBack = async () => { _revCheckedAt = 0; await checkServerRev(); askReloadIfDue(); await checkNewAppVersion(); askReloadIfDue(); };
             document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onBack(); });
             window.addEventListener('focus', onBack);
             setInterval(askReloadIfDue, 30 * 1000);
+            setInterval(checkServerRev, REV_CHECK_MS);
             setInterval(checkNewAppVersion, 30 * 60 * 1000);
         }
 
