@@ -1278,11 +1278,10 @@ let vocabulary = [];
         function isStreakDay(ds) {
             const d = nyanyaDiary[ds];
             if (!d) return false;
-            if (ds < STREAK_REVIEW_RULE_FROM) return dayActivity(ds) >= 1;
+            //   옛 날은 그때 기준 그대로 — 연습·숫자만 한 날까지 세면 끊겼던 연속이 되살아난다 (10/8)
+            if (ds < STREAK_REVIEW_RULE_FROM) return dayActivity(ds) - dayPracticeCount(d) >= 1;
             //   복습할 게 없던 날은 뭐든 하나는 해야 한다 (앱만 켠 날은 빼려고).
-            //   숫자 쓰기·스스로 돌린 연습도 '한 일' 로 친다 — 달력 진하기(dayActivity)엔 아직 안 들어가 있다.
-            const did = dayActivity(ds) + (d.practiceCount || 0) + (d.numTotal || 0);
-            return d.reviewDone === true && did >= 1;
+            return d.reviewDone === true && dayActivity(ds) >= 1;
         }
 
         function calcStreak() {
@@ -1669,11 +1668,16 @@ let vocabulary = [];
 
         // [냐냐 요청] 그날 학습장에서 한 일의 개수 — 달력 진하기·✗ 표시·연속 학습일이 전부 이 하나를 쓴다.
         //   '한 일'만 센다: 마스터/완벽 달성 수는 퀴즈·복습의 결과라 같이 세면 한 번 한 걸 두 번 세게 됨.
+        //   [냐냐 요청] 연습(스스로 돌린 쓰기·동사변형·빈칸)과 숫자 쓰기도 '한 일' (2026-10-10) — 숫자 쓰기는 일지 표에서 '연습' 칸에 합친다.
+        function dayPracticeCount(d) {
+            return d ? (d.practiceCount || 0) + (d.numTotal || 0) : 0;
+        }
         function dayActivity(dateStr) {
             const d = nyanyaDiary[dateStr];
             if (!d) return 0;
             return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0)
-                 + (d.reviewCount || 0) + (d.gameCount || 0) + (d.newGrammarCount || 0);
+                 + (d.reviewCount || 0) + (d.gameCount || 0) + (d.newGrammarCount || 0)
+                 + dayPracticeCount(d);
         }
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
@@ -1746,7 +1750,7 @@ let vocabulary = [];
             //   '총 N개 활동' 에서는 음수를 0 으로 본다 — 약점이 풀린 건 활동이 아니라 결과이고,
             //   그 활동(복습·첨삭)은 아래 줄에서 이미 세고 있다.
             const shownTotal = [...cells.reg, ...cells.master, ...cells.weak].reduce((a, b) => a + Math.max(0, b), 0)
-                + reviewN + (log.practiceCount || 0) + (log.aiSessions || 0);
+                + reviewN + dayPracticeCount(log) + (log.aiSessions || 0);
             //   '총 N개 활동' 과 '쉬어갔네요' 판단은 예전처럼 뺀 활동까지 센다 — 퀴즈만 푼 날도 쉰 날이 아니다
             const total = shownTotal + (log.quizTotal || 0) + (log.gameCount || 0);   // 퀴즈·게임은 표에 없지만 활동이다
             //   [냐냐 요청] 색은 줄이고 세로선을 넣는다 (2026-09-17).
@@ -1756,7 +1760,7 @@ let vocabulary = [];
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
             const VLINE = 'border-l border-slate-200';
             const aiN = log.aiSessions || 0;
-            const practiceN = log.practiceCount || 0;
+            const practiceN = dayPracticeCount(log);   // 숫자 쓰기 포함
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
             //   [냐냐 요청] 숫자를 누르면 그 날 무엇이었는지 (openDiaryDetail)
             //   [냐냐 요청] 0 인 칸도 눌러서 열린다 (2026-09-22) — 팝업 안에서 탭으로 오가니
@@ -2133,7 +2137,7 @@ let vocabulary = [];
                 case 'weak-idiom': return log.newIdiomWeakCount || 0;
                 case 'weak-grammar': return log.newGrammarWeakCount || 0;
                 case 'review': return log.reviewCount || 0;
-                case 'practice': return log.practiceCount || 0;
+                case 'practice': return dayPracticeCount(log);   // 숫자 쓰기 포함
                 case 'ai': return log.aiSessions || 0;
                 default: return 0;
             }
@@ -2252,6 +2256,14 @@ let vocabulary = [];
                     const rv = diaryAiNotesOn(ds).filter(n => n.rv);
                     count += rv.length;
                     rows += rv.map(diaryAiNoteRowHtml).join('');
+                }
+                //   연습 목록 맨 위에 숫자 쓰기 한 줄 — 숫자 문제는 낱말 목록이 없어서 푼 수만 적는다 (2026-10-10)
+                if (what === 'practice' && (log.numTotal || 0) > 0) {
+                    count += log.numTotal;
+                    rows = `<div class="px-3 py-2 border-b border-slate-100 last:border-0 flex items-baseline gap-2">
+                                <span class="text-sm font-bold text-slate-700">🔢 숫자 쓰기</span>
+                                <span class="ml-auto text-xs font-black text-slate-500">${log.numTotal}문제</span>
+                            </div>` + rows;
                 }
             }
 
@@ -5814,8 +5826,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   정답률처럼 비율로 쓰는 값은 그래프 쪽에서 합계로 다시 계산하니까 여기선 안 건드린다.
         //   (합계의 비율이라 '평균의 평균'이 되지 않는다)
         // ============================================================
+        //   ⚠️ practiceCount 가 빠져 있어서 활동 그래프의 '연습' 막대가 늘 0 이었다 (2026-10-10 고침)
         const RECORD_SUM_FIELDS = ['quizTotal', 'quizCorrect', 'writeTotal', 'writeCorrect', 'numTotal', 'numCorrect', 'aiSessions', 'newWordsCount', 'newMasteredCount',
-                                   'reviewCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
+                                   'reviewCount', 'practiceCount', 'gameCount', 'newGrammarCount', 'newGrammarMasteredCount', 'newPerfectCount'];
         const RECORD_LAST_FIELDS = ['registeredTotal', 'masteredTotal', 'perfectTotal', 'weakTotal', 'criticalTotal',
                                     'grammarTotal', 'grammarMasteredTotal', 'grammarWeakTotal',
                                     'idiomTotal', 'idiomMasteredTotal', 'idiomWeakTotal'];
@@ -5943,6 +5956,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     newWordsCount: newWords,
                     newMasteredCount: newMastered,
                     reviewCount: (log && log.reviewCount) || 0,
+                    //   [냐냐 지적] 이 두 줄이 없어서 활동 그래프의 '연습' 막대가 늘 0 이었다 (2026-10-10)
+                    practiceCount: (log && log.practiceCount) || 0,
+                    numTotal: (log && log.numTotal) || 0,
                     gameCount: (log && log.gameCount) || 0,
                     newGrammarCount: (log && log.newGrammarCount) || 0,
                     newGrammarMasteredCount: (log && log.newGrammarMasteredCount) || 0,
@@ -6712,6 +6728,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             ];
             // 신규등록(단어+문법) 합산 — 총합엔 실제 갯수 그대로 반영. 기타 = 퀴즈 + 미니게임
             series = series.map(d => ({ ...d,
+                practiceCount: dayPracticeCount(d),   // [냐냐 요청] 숫자 쓰기도 연습에 (2026-10-10)
                 _newReg: (d.newWordsCount || 0) + (d.newGrammarCount || 0),
                 _etc: (d.quizTotal || 0) + (d.gameCount || 0) }));
             const withTotal = series.map(d => ({ ...d, _total: allCats.reduce((s, c) => s + (d[c.key] || 0), 0) }));
