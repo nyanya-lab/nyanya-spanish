@@ -1345,7 +1345,10 @@ let vocabulary = [];
             let sum = 0;
             for (const k in nyanyaDiary) {
                 const d = nyanyaDiary[k];
-                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0);
+                sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0)
+                     //   [냐냐 지적] 연습(9/18 에 복습에서 갈라짐)·숫자 쓰기·문법 등록이 빠져 있어서 쓰기 연습을 해도 알이 안 자랐다 (2026-10-10).
+                     //   냐냐님 결정: 빠졌던 몫(361개)은 돌려받는다 — 기준점(lastCountedTotal)을 안 옮기니 다음 갱신 때 한 번에 들어간다.
+                     + dayPracticeCount(d) + (d.newGrammarCount || 0);
             }
             return sum;
         }
