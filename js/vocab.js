@@ -1228,6 +1228,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             finally { if (icon) icon.className = prev; if (btn) btn.disabled = false; }
         }
 
+        //   AI 가 고친 예문이 '철자·강세·활용만' 고친 것인가 — 낱말 수가 같고, 낱말마다 악센트를 뗀 글자가 3자 안쪽으로만 다르면.
+        //   'en el espejo' → 'al espejo' 처럼 낱말을 합치거나 갈아끼우면 낱말 수·글자가 달라져서 걸린다.
+        function exampleOnlySpellFixed(before, after) {
+            const toks = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[¿?¡!.,;:"«»()]/g, ' ').split(/\s+/).filter(Boolean);
+            const a = toks(before), b = toks(after);
+            if (a.length !== b.length) return false;
+            return a.every((x, i) => x === b[i] || (typeof levenshtein === 'function' && levenshtein(x, b[i]) <= 3 && Math.min(x.length, b[i].length) > 3));
+        }
+
         // [냐냐 요청] 관용구 예문 줄의 AI 버튼 (2026-10-06) — 비어 있으면 만들고, 적어뒀으면 번역·철자를 채운다
         async function autofillIdiomExample(rowId) {
             const row = document.getElementById(rowId);
@@ -1241,13 +1251,24 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const cur = exInp ? exInp.value.trim() : '';
             await withSpinner(row.querySelector('[onclick^="autofillIdiomExample"]'), async () => {
                 const schema = { type: "OBJECT", properties: { example: { type: "STRING" }, exampleMeaning: { type: "STRING" } }, required: ["example", "exampleMeaning"] };
+                //   [냐냐 지적] 'Me miro en el espejo' 를 적어두고 누르면 AI 가 'al espejo' 로 바꿔 넣었다 (2026-10-11) — 둘 다 맞는 말이다.
+                //     고치는 건 철자·강세·활용 오타뿐. 낱말·전치사를 갈아끼우지 말고, 관용구의 낱말은 그대로 쓰게 못박는다.
+                //     아래에서 코드로도 한 번 더 막는다 (exampleOnlySpellFixed).
                 const prompt = cur
-                    ? `스페인어 관용구 "${idiom}"(뜻: ${mean}) 의 예문 "${cur}" 를 한국어로 번역해줘. 철자·강세·활용이 틀렸으면 example 에 고쳐서 넣어줘.`
-                    : `스페인어 관용구 "${idiom}"(뜻: ${mean}) 를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 예문 한 문장과 한국어 번역을 만들어줘. 대괄호 자리는 알맞은 말로 채우고, 동사는 문장에 맞게 활용할 것.`;
+                    ? `스페인어 관용구 "${idiom}"(뜻: ${mean}) 의 예문 "${cur}" 를 한국어로 번역해줘.
+철자·강세·동사 활용이 **틀린 경우에만** example 에 고쳐서 넣어줘. 틀린 게 없으면 example 에 예문을 글자 그대로 돌려줘.
+⚠️ 낱말·전치사·어순은 바꾸지 마 — 맞는 표현이 여럿이면(예: mirarse en el espejo / al espejo) 학생이 쓴 쪽을 그대로 둬. 관용구 "${idiom}" 의 낱말은 그대로 써야 해.`
+                    : `스페인어 관용구 "${idiom}"(뜻: ${mean}) 를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 예문 한 문장과 한국어 번역을 만들어줘. 대괄호 자리는 알맞은 말로 채우고, 동사는 문장에 맞게 활용할 것.
+관용구의 낱말(전치사 포함)은 바꾸지 말고 그대로 쓸 것.`;
                 const res = await callGemini(prompt, "You are a careful Spanish (Spain) teacher. Output strictly the JSON schema. Korean translation. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
-                if (exInp && data.example) exInp.value = data.example.trim();
+                if (exInp && data.example) {
+                    const next = data.example.trim();
+                    if (cur && !exampleOnlySpellFixed(cur, next)) {
+                        showToast(`AI 가 낱말을 바꾸려 해서(${next}) 적어둔 예문을 그대로 뒀어요`, "info");
+                    } else exInp.value = next;
+                }
                 if (exMeInp && data.exampleMeaning) exMeInp.value = data.exampleMeaning.trim();
                 markIdiomExampleToggle(row);
                 showToast(cur ? "예문 번역을 채웠어요! ✨" : "예문을 만들었어요! ✨", "success");
