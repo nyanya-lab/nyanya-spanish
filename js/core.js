@@ -2537,10 +2537,17 @@ let vocabulary = [];
         }
 
         // [냐냐 결정] 복습을 **못 끝낸** 날에 주황 테두리 (2026-10-09) — '다 한 날' 쪽은 거의 모든 칸에 둘려서 안 보였다.
-        //   공부는 했는데 오늘 줄을 남긴 지난날만. 오늘은 아직 하는 중이라 빼고, 공부 안 한 날은 ✗ 가 이미 있다.
+        //   지난날은 공부는 했는데 오늘 줄을 남긴 날만 (공부 안 한 날은 ✗ 가 이미 있다).
+        //   [냐냐 결정] 오늘도 남은 게 있으면 테두리 (2026-10-11) — 테두리 = '복습이 남았다' 한 뜻. 다 끝내면 그 자리에서 사라진다.
         function calReviewBorder(ds, n, isPast) {
+            const none = { cls: '', title: '' };
+            if (ds < STREAK_REVIEW_RULE_FROM) return none;
+            if (ds === getLocalDateString()) {
+                const left = todayReviewLeft() || 0;
+                return left > 0 ? { cls: 'border-2 border-orange-400', title: ` · 복습 ${left}개 남음` } : none;
+            }
             const d = nyanyaDiary[ds];
-            if (!d || ds < STREAK_REVIEW_RULE_FROM || n === 0 || !isPast || d.reviewDone === true) return { cls: '', title: '' };
+            if (!d || n === 0 || !isPast || d.reviewDone === true) return none;
             return { cls: 'border-2 border-orange-400', title: ` · 복습 ${d.reviewLeft || 0}개 남김` };
         }
 
