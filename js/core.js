@@ -1832,6 +1832,14 @@ let vocabulary = [];
                  </button>`;
             const planWI = plan3 ? ((plan3.word || []).length + (plan3.idiom || []).length) : 0;
             const planG = plan3 ? (plan3.grammar || []).length : 0;
+            //   [냐냐 요청] 그날 맞히면 졸업하는 수 (2026-10-11) — 숫자만. 목록엔 따로 표시하지 않는다(힌트가 된다).
+            //   30일 칸에 있고 약점이 아닌 것만 (약점은 맞혀도 30일 칸에 머문다 — holdWeakAtLastStage).
+            const lastStage = REVIEW_INTERVALS.length - 1;
+            const planGrad = plan3 ? (
+                (plan3.word || []).filter(w => (w.reviewStage || 0) === lastStage && !isWeakGrade(getWordGrade(w))).length
+                + (plan3.idiom || []).filter(e => e.stage === lastStage && !isWeakGrade(getIdiomGrade(e.word.id, e.idiom.iid || e.idiom.idiom))).length
+                + (plan3.grammar || []).filter(t => ((grammarReview[t.id] || {}).stage || 0) === lastStage && !isWeakGrade(getGrammarGrade(t.id))).length
+            ) : 0;
             // ============================================================
             // [냐냐 요청] '오늘 틀린 것' 버튼 자리에 정답률을 (2026-09-24).
             //   셈은 15일 정답률과 같다 — 퀴즈 한 문제·쓰기 한 낱말·첨삭 한 문장이 저마다 한 번.
@@ -1858,7 +1866,7 @@ let vocabulary = [];
                             ${/* [냐냐 요청] 줄 이름 오른쪽에 둘을 합친 수도 회색으로 (2026-09-21) */''}
                             <p class="flex items-baseline px-0.5 text-[10px] font-black text-slate-400">
                                 <span>📅 복습 예정</span>
-                                <span class="ml-auto text-slate-400">${planWI + planG}</span>
+                                <span class="ml-auto text-slate-400">${planWI + planG}${planGrad ? ` <span class="text-emerald-600" title="이날 맞히면 졸업하는 것 ${planGrad}개">· 🎓 ${planGrad}</span>` : ''}</span>
                             </p>
                             <div class="flex items-stretch gap-1.5">
                                 ${pill('단어·관용구', planWI, 'word', 'plan', PLAN_TONE)}
