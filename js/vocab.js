@@ -326,15 +326,9 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 }
                 if (!change) return null;
             }
-            //   yo 의 철자만 바뀐 것은 판단하지 않는다 (null → AI 그대로):
-            //   -guir → -go (consigo · sigo) · -ger/-gir → -jo (cojo · elijo) · 자음+cer/cir → -zo (venzo)
-            //   냐냐님 데이터에 둘 다 있다 — seguir·elegir·coger 는 '1인칭' 으로, conseguir 는 아니게 (2026-10-12 여쭘).
-            //   (모음+cer/cir 의 -zco 는 진짜 1인칭 불규칙이다 — conozco · conduzco)
-            const spellYo = [];
-            if (/gu$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'o');
-            if (/g$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'jo');
-            if (/[^aeiouáéíóú]c$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'zo');
-            if (spellYo.includes(f.yo)) return null;
+            //   [냐냐 결정] yo 의 철자만 바뀐 것도 '1인칭' 으로 친다 (2026-10-12) — 문법책은 철자 규칙으로 보지만,
+            //   yo 만 모양이 달라서 따로 외워야 한다: sigo · persigo · consigo · elijo · cojo · venzo.
+            //   그래서 아래에서 yo 가 '바뀐 어간 + o' 와 다르기만 하면 1인칭이다 — 따로 봐줄 것이 없다.
             const yoIrr = f.yo !== newStem + ending[0];
             if (change && yoIrr) return { verbClass: 'irregular', irregularType: '1인칭 및 ' + change };
             if (change) return { verbClass: 'irregular', irregularType: change };
@@ -433,30 +427,138 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             openConjCheck();
         }
         function openConjCheck() {
-            conjCheckState = findConjMismatches();
+            conjCheckState = Object.assign(findConjMismatches(), { ai: null });
             document.getElementById('conj-check-modal').classList.remove('hidden');
+            const sel = document.getElementById('conj-check-tense');
+            if (sel) {
+                const tenses = ['presente', 'indefinido', 'gerundio', 'participio'];
+                sel.innerHTML = tenses.map(t => `<option value="${t}">${escapeHtml(bulkTenseLabel(t))} (${verbsWithTense(t).length})</option>`).join('');
+                sel.disabled = false;
+            }
             renderConjCheck();
         }
         function closeConjCheck() {
+            if (conjCheckState && conjCheckState.ai) conjCheckState.ai.cancelled = true;   // 진행 중이면 중단
             document.getElementById('conj-check-modal').classList.add('hidden');
             conjCheckState = null;
         }
         function conjTypeLabel(t) { return t === 'none' ? '규칙' : t; }
+        function verbsWithTense(t) { return (vocabulary || []).filter(v => v.pos === 'verb' && hasConjValues(getTenseConj(v, t))); }
+
+        // ============================================================
+        // [냐냐 요청] AI 가 처음에 칸을 제대로 채웠나 (2026-10-12) — 형태 자체를 본다.
+        //   ① 저장된 답을 보여주고 'AI 가 먼저 스스로 풀고, 맞으면 그대로 둬라' 로 묻는다 (시제 일괄 추가의 검증과 같은 말).
+        //   ② 저장된 것과 다르게 나온 동사만 아무것도 안 보여주고 한 번 더 새로 풀게 한다.
+        //   ③ **두 번 다** 저장된 것과 다를 때만 짚는다 — 한 번만 다르면 AI 가 헛짚은 것으로 본다.
+        //   두 번 답이 같으면 [이걸로 바꾸기], 서로 다르면 둘 다 보여주고 [단어 열기] 만.
+        // ============================================================
+        async function startConjAiCheck() {
+            if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
+            const st = conjCheckState;
+            if (!st || (st.ai && st.ai.running)) return;
+            const sel = document.getElementById('conj-check-tense');
+            const tense = (sel && sel.value) || 'presente';
+            const targets = verbsWithTense(tense);
+            const ai = st.ai = { tense, rows: [], failed: [], running: true, cancelled: false, done: 0, total: targets.length };
+            if (sel) sel.disabled = true;
+            renderConjCheck();
+            const storedOf = (v) => { const c = getTenseConj(v, tense) || {}; const o = {}; (isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS).forEach(k => { o[k] = c[k] || ''; }); return o; };
+            for (let i = 0; i < targets.length; i += BULK_BATCH) {
+                if (ai.cancelled) break;
+                const batch = targets.slice(i, i + BULK_BATCH);
+                const words = batch.map(v => (v.word || '').trim());
+                const stored = {};
+                batch.forEach(v => { stored[verbKey(v.word)] = storedOf(v); });
+                let first = null;
+                try { first = await bulkConjAsk(tense, words, stored); }
+                catch (e) { console.error(e); batch.forEach(v => ai.failed.push(v.word)); ai.done += batch.length; if (conjCheckState === st) renderConjCheck(); continue; }
+                const odd = batch.filter(v => { const a = first[verbKey(v.word)]; if (!a) { ai.failed.push(v.word); return false; } return !sameConj(tense, a, stored[verbKey(v.word)]); });
+                let second = {};
+                if (odd.length && !ai.cancelled) {
+                    try { second = await bulkConjAsk(tense, odd.map(v => v.word.trim()), null); } catch (e) { console.error(e); second = {}; }
+                }
+                odd.forEach(v => {
+                    const k = verbKey(v.word), a = first[k], b = second[k];
+                    if (b && sameConj(tense, b, stored[k])) return;          // 두 번째엔 저장된 것과 같다 — 헛짚음
+                    const agree = !!b && sameConj(tense, a, b);
+                    ai.rows.push({ id: v.id, word: v.word, tense, stored: conjOneLine(tense, stored[k]),
+                        a: conjOneLine(tense, a), b: b ? conjOneLine(tense, b) : '', agree, pick: agree ? b : null });
+                });
+                ai.done += batch.length;
+                if (conjCheckState !== st) return;   // 창을 닫았으면 그리지 않음
+                renderConjCheck();
+            }
+            if (conjCheckState !== st) return;
+            ai.running = false;
+            if (sel) sel.disabled = false;
+            renderConjCheck();
+        }
+        function applyConjAiPick(i) {
+            const st = conjCheckState, r = st && st.ai && st.ai.rows[i];
+            const v = r && r.pick && vocabulary.find(w => w.id === r.id);
+            if (!v) return;
+            const t = r.tense, data = {};
+            if (isSingleTense(t)) data.form = r.pick.form; else CONJ_PERSON_KEYS.forEach(k => { data[k] = r.pick[k] || ''; });
+            v.conjugationsByTense = v.conjugationsByTense || {};
+            v.conjugationsByTense[t] = data;
+            //   갈래도 새 형태에 맞춘다 — 형태로 잴 수 있으면 그걸로, 못 재면 AI 가 준 갈래
+            const measured = t === 'presente' ? (classifyPresentIrregular(v.word, data) || {}).irregularType
+                : t === 'indefinido' ? classifyIndefinidoIrregular(v.word, data) : null;
+            const irr = measured || r.pick.irregular || 'none';
+            v.verbClassByTense = v.verbClassByTense || {};
+            v.irregularByTense = v.irregularByTense || {};
+            if (irr === 'none') { v.verbClassByTense[t] = 'regular'; delete v.irregularByTense[t]; }
+            else { v.verbClassByTense[t] = 'irregular'; v.irregularByTense[t] = irr; }
+            if (t === 'presente') { v.conjugations = data; v.verbClass = v.verbClassByTense.presente; v.irregularType = v.irregularByTense.presente || 'none'; }
+            st.ai.rows.splice(i, 1);
+            afterConjFix(`${v.word} ${bulkTenseLabel(t)}을(를) 바꿨어요 ✨`);
+        }
+        function conjAiHtml(ai) {
+            if (!ai) return `<div class="bg-violet-50 border border-violet-100 rounded-2xl p-3 text-xs text-violet-700 leading-relaxed font-medium">
+                    🤖 <b>칸에 적힌 형태가 맞는지</b>는 위에서 시제를 고르고 <b>AI로 칸 확인</b>을 눌러 주세요.<br>
+                    AI 가 직접 풀어 맞춰보고, <b>두 번 다</b> 다르게 나온 것만 짚어요.</div>`;
+            if (ai.running) {
+                const p = ai.total ? Math.round(ai.done / ai.total * 100) : 0;
+                return `<div class="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-2">
+                    <p class="text-xs font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} 확인 중… ${ai.done}/${ai.total} <span class="text-violet-500">(${p}%)</span> · 짚은 것 ${ai.rows.length}개</p>
+                    <div class="h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${p}%"></div></div>
+                    <p class="text-[10px] text-violet-400">창을 닫으면 중단돼요</p></div>`;
+            }
+            const head = `<p class="text-[11px] font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} — ${ai.total}개 중 확인할 것 ${ai.rows.length}개${ai.failed.length ? ` · 못 받아온 것 ${ai.failed.length}개` : ''}</p>`;
+            if (!ai.rows.length) return head + `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">AI 가 풀어도 저장된 칸과 같아요 ✨</div>`
+                + (ai.failed.length ? `<p class="text-[11px] text-rose-500 font-bold">못 받아온 동사: ${escapeHtml(ai.failed.join(', '))}</p>` : '');
+            return head + ai.rows.map((r, i) => `
+                <div class="bg-violet-50/60 border border-violet-200 rounded-2xl p-3 space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-slate-800">${escapeHtml(r.word)}</span>
+                        <div class="ml-auto flex gap-1.5">
+                            <button onclick="openWordFromConjCheck('${r.id}')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-100">단어 열기</button>
+                            ${r.agree ? `<button onclick="applyConjAiPick(${i})" class="px-2 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-[11px] font-bold text-white">이걸로 바꾸기</button>` : ''}
+                        </div>
+                    </div>
+                    <p class="text-xs break-words"><span class="font-bold text-slate-400">저장</span> <span class="text-rose-500">${escapeHtml(r.stored)}</span></p>
+                    ${r.agree ? `<p class="text-xs break-words"><span class="font-bold text-slate-400">AI</span> <span class="text-emerald-700 font-bold">${escapeHtml(r.b)}</span></p>`
+                        : `<p class="text-xs break-words"><span class="font-bold text-slate-400">AI ①</span> ${escapeHtml(r.a)}</p>
+                           <p class="text-xs break-words"><span class="font-bold text-slate-400">AI ②</span> ${escapeHtml(r.b || '(못 받음)')}</p>
+                           <p class="text-[10px] text-slate-400">AI 답도 서로 달라요 — 단어를 열어 직접 봐 주세요</p>`}
+                </div>`).join('');
+        }
         function renderConjCheck() {
             const st = conjCheckState;
             const body = document.getElementById('conj-check-body');
             if (!st || !body) return;
             const sub = document.getElementById('conj-check-sub');
-            if (sub) sub.innerText = `동사 ${st.verbs}개 · 시제 칸 ${st.cells}개를 훑었어요 · 확인할 것 ${st.list.length}개`;
+            if (sub) sub.innerText = `동사 ${st.verbs}개 · 시제 칸 ${st.cells}개 · 갈래 어긋남 ${st.list.length}개`;
             const fixable = st.list.filter(x => x.fix);
             const btn = document.getElementById('conj-check-fixall');
-            if (btn) { btn.classList.toggle('hidden', !fixable.length); btn.innerText = `전부 고치기 (${fixable.length})`; }
-            if (!st.list.length) {
-                body.innerHTML = `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-sm text-emerald-700 font-bold text-center">갈래와 형태가 전부 맞아요 ✨</div>
-                    <p class="text-[11px] text-slate-400 leading-relaxed">yo 철자만 바뀌는 동사(sigo · elijo · cojo)와 규칙으로 잴 수 없는 동사(ser · ir · jugar · enviar …)는 건너뛰어요.</p>`;
-                return;
-            }
-            body.innerHTML = st.list.map((x, i) => `
+            if (btn) { btn.classList.toggle('hidden', !fixable.length); btn.innerText = `갈래 전부 고치기 (${fixable.length})`; }
+            const aiBtn = document.getElementById('conj-check-ai-btn');
+            if (aiBtn) aiBtn.disabled = !!(st.ai && st.ai.running);
+            const codeHtml = !st.list.length
+                ? `<p class="text-[11px] font-bold text-slate-500">📋 갈래 ↔ 형태</p>
+                   <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">갈래와 형태가 전부 맞아요 ✨</div>
+                   <p class="text-[11px] text-slate-400 leading-relaxed">규칙으로 잴 수 없는 동사(ser · ir · ver · jugar · enviar …)는 건너뛰어요.</p>`
+                : `<p class="text-[11px] font-bold text-slate-500">📋 갈래 ↔ 형태 — 어긋남 ${st.list.length}개</p>` + st.list.map((x, i) => `
                 <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1">
                     <div class="flex items-center gap-2">
                         <span class="font-extrabold text-slate-800">${escapeHtml(x.word)}</span>
@@ -471,6 +573,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         ${x.fix ? `<span class="text-slate-300">→</span> <span class="text-slate-400">형태로 보면</span> <span class="text-emerald-600">${escapeHtml(conjTypeLabel(x.fix))}</span>`
                                 : `<span class="text-slate-400">· 형태가 규칙형과 달라요${x.note ? ` (${escapeHtml(x.note)})` : ''} — 단어를 열어 갈래를 골라 주세요</span>`}</p>
                 </div>`).join('');
+            body.innerHTML = `<div class="space-y-2">${conjAiHtml(st.ai)}</div><div class="space-y-2 pt-2">${codeHtml}</div>`;
         }
         function applyConjFix(x) {
             const v = vocabulary.find(w => w.id === x.id);
@@ -489,7 +592,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             saveToStorage();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
-            conjCheckState = findConjMismatches();
+            const ai = conjCheckState && conjCheckState.ai;   // AI 확인 결과는 남겨 둔다
+            conjCheckState = Object.assign(findConjMismatches(), { ai });
             renderConjCheck();
             showToast(msg, "success");
         }
