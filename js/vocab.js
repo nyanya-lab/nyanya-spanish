@@ -2851,7 +2851,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             nos: { type: "STRING", description: "nosotros (1인칭 복수)" },
                             vos: { type: "STRING", description: "vosotros — 스페인식 2인칭 복수 '너희'. 아르헨티나 voseo 아님. -áis/-éis/-ís 어미 사용" },
                             ellos: { type: "STRING", description: "ellos/ellas (3인칭 복수)" }
-                        }
+                        },
+                        //   [냐냐 지적] 순서를 안 주면 Gemini 가 칸 이름순(el·ellos·nos·tu·vos·yo)으로 쓴다 — 3.5 가 그 순서에서 헷갈려
+                        //   yo 칸에 여섯 꼴과 칸 이름을 몰아 쓰곤 했다 ('tengo tienes … el ellos nos tu vos'). 활용표 순서대로 못박는다 (2026-10-12).
+                        propertyOrdering: ["yo", "tu", "el", "nos", "vos", "ellos"]
                     },
                     // [냐냐 요청] AI 추천 한 번에 현재분사까지 같이 받는다 (현재진행은 여기서 자동 생성됨)
                     gerundio: {
@@ -2882,7 +2885,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" },
                             nos: { type: "STRING" }, vos: { type: "STRING", description: "vosotros (-asteis/-isteis)" }, ellos: { type: "STRING" },
                             irregular: { type: "STRING", enum: IRREGULAR_TYPES_BY_TENSE.indefinido, description: INDEFINIDO_TYPE_GUIDE }
-                        }
+                        },
+                        propertyOrdering: ["yo", "tu", "el", "nos", "vos", "ellos", "irregular"]   // 현재시제와 같은 까닭
                     },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
                     idioms: {
