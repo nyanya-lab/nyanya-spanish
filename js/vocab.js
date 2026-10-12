@@ -3751,10 +3751,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
         }
 
-        function saveWord() {
+        function saveWord(skipIdiomMeaningCheck) {
             const wordVal = document.getElementById('input-word').value.trim();
             const meaningVal = document.getElementById('input-meaning').value.trim();
-            
+
             if (!wordVal || !meaningVal) {
                 showToast("단어 이름과 뜻은 필수입니다!", "error");
                 return;
@@ -3765,6 +3765,27 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const el = document.getElementById('input-pos');
                 if (el) el.focus();
                 return;
+            }
+            //   [냐냐 요청] 뜻이 빈 관용구가 있으면 저장 전에 묻는다 (2026-10-12) — 그대로 저장할 수도, 돌아가서 채울 수도
+            if (!skipIdiomMeaningCheck) {
+                const blank = Array.prototype.slice.call(document.querySelectorAll('#idiom-entries-box > div')).filter(row => {
+                    const t = row.querySelector('[data-idiom-field="idiom"]'), m = row.querySelector('[data-idiom-field="meaning"]');
+                    return t && t.value.trim() && m && !m.value.trim();
+                });
+                if (blank.length) {
+                    const names = blank.map(r => r.querySelector('[data-idiom-field="idiom"]').value.trim());
+                    //   ⚠️ 저장은 한 박자 뒤에 — 저장이 또 확인 창(계속 등록?)을 띄우면 이 창의 뒷정리가 그 창을 닫아 버린다
+                    //   noEnter — '엔터 = 저장' 으로 누른 엔터가 이 창까지 그냥 넘겨 버리지 않게
+                    showConfirm("뜻이 빈 관용구가 있어요", names.join(' · '), () => setTimeout(() => saveWord(true), 0), {
+                        okLabel: '그대로 저장', cancelLabel: '돌아가서 채우기', okStyle: 'primary', icon: 'info', noEnter: true,
+                        onCancel: () => {
+                            const box = document.getElementById('idiom-fields-box');
+                            if (box && box.classList.contains('hidden') && typeof toggleIdiomSection === 'function') toggleIdiomSection();
+                            const m = blank[0].querySelector('[data-idiom-field="meaning"]');
+                            if (m) { m.scrollIntoView({ block: 'center' }); m.focus(); }
+                        } });
+                    return;
+                }
             }
 
             const modalId = document.getElementById('modal-word-id').value;
