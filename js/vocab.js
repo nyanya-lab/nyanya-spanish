@@ -342,6 +342,171 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             return null;
         }
 
+        // [냐냐 요청] 부정과거 갈래도 형태로 잰다 (2026-10-12) — 냐냐님 갈래(IRREGULAR_TYPES_BY_TENSE.indefinido) 그대로.
+        //   yo·él 은 악센트까지 본다 — 규칙형은 -é/-í/-ó 에 악센트가 있고, 악센트 없는 vi·vio·di·dio 는 불규칙이다.
+        //   나머지 칸은 악센트를 떼고 본다 — leer 의 leíste·leímos 는 악센트만 붙은 규칙형이라 걸리면 안 된다.
+        //   못 재면 null.
+        const IND_ENDINGS = { ar: ['é', 'aste', 'ó', 'amos', 'asteis', 'aron'], er: ['í', 'iste', 'ió', 'imos', 'isteis', 'ieron'], ir: ['í', 'iste', 'ió', 'imos', 'isteis', 'ieron'] };
+        function classifyIndefinidoIrregular(infinitive, forms) {
+            if (!forms) return null;
+            const unacc = (s) => s.replace(/[áéíóú]/g, ch => 'aeiou'['áéíóú'.indexOf(ch)]);
+            const bare = (s) => conjNorm(s).replace(/^(me|te|se|nos|os)\s+/, '');
+            const keepAcc = (k) => k === 'yo' || k === 'el';
+            const cmp = (k, s) => keepAcc(k) ? s : unacc(s);
+            let w = unacc(bare(infinitive));
+            if (/\s/.test(w)) return null;
+            w = w.replace(/se$/, '');
+            const end = IND_ENDINGS[w.slice(-2)], stem = w.slice(0, -2);
+            if (!end || !stem) return null;
+            const f = {}, r = {};
+            REG_PERSON_KEYS.forEach((k, i) => { f[k] = cmp(k, bare(forms[k])); r[k] = cmp(k, stem + end[i]); });
+            if (REG_PERSON_KEYS.some(k => !f[k])) return null;
+            const diff = REG_PERSON_KEYS.filter(k => f[k] !== r[k]);
+            const is = (...ks) => diff.length === ks.length && ks.every(k => diff.includes(k));
+            if (!diff.length) return 'none';
+            if (is('yo')) {
+                if (/car$/.test(w) && f.yo === stem.slice(0, -1) + 'qué') return '1인칭 -car ➡️ -qué';
+                if (/zar$/.test(w) && f.yo === stem.slice(0, -1) + 'cé') return '1인칭 -zar ➡️ -cé';
+                if (/gar$/.test(w) && f.yo === stem + 'ué') return '1인칭 -gar ➡️ -gué';
+                return null;
+            }
+            if (is('el', 'ellos')) {
+                if (f.el === stem + 'yó' && f.ellos === stem + 'yeron') return '3인칭 i ➡️ y';
+                for (const [from, to, label] of [['e', 'i', '3인칭 e ➡️ i'], ['o', 'u', '3인칭 o ➡️ u']]) {
+                    const at = stem.lastIndexOf(from);
+                    if (at < 0) continue;
+                    const s2 = stem.slice(0, at) + to + stem.slice(at + 1);
+                    if (f.el === s2 + end[2] && f.ellos === s2 + end[5]) return label;
+                }
+                return null;
+            }
+            if (/ducir$/.test(w) && f.yo === stem.slice(0, -1) + 'je') return '-ducir ➡️ -uj-';
+            if (diff.includes('nos') && diff.includes('tu')) return '완전 불규칙';
+            return null;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 활용 점검 (2026-10-12) — 저장된 갈래(규칙·불규칙 유형)가 칸에 적힌 형태와 맞는지 코드로 훑는다.
+        //   AI 를 안 부르니 바로 끝난다. 형태 자체가 맞는지는 여기서 모른다 — 갈래와 형태가 서로 맞는지만 본다.
+        //   현재 · 부정과거는 유형까지, 현재분사 · 과거분사는 규칙/불규칙만 (갈래 목록이 형태로 갈리지 않는다).
+        //   고칠 답을 잴 수 있으면 [고치기], 못 재면 [단어 열기] 만.
+        // ============================================================
+        function conjLabelOf(v, t) {
+            const cls = (v.verbClassByTense || {})[t] || (t === 'presente' ? v.verbClass : 'regular') || 'regular';
+            const irr = (v.irregularByTense || {})[t] || (t === 'presente' ? v.irregularType : 'none') || 'none';
+            return cls === 'irregular' ? irr : 'none';
+        }
+        function findConjMismatches() {
+            const out = [];
+            let cells = 0;
+            const verbs = (vocabulary || []).filter(v => v.pos === 'verb');
+            verbs.forEach(v => {
+                ['presente', 'indefinido', 'gerundio', 'participio'].forEach(t => {
+                    const c = getTenseConj(v, t);
+                    if (!hasConjValues(c)) return;
+                    cells++;
+                    const saved = conjLabelOf(v, t);
+                    let fix = null, note = '';
+                    if (t === 'presente' || t === 'indefinido') {
+                        const m = t === 'presente' ? classifyPresentIrregular(v.word, c) : classifyIndefinidoIrregular(v.word, c);
+                        const got = m && typeof m === 'object' ? m.irregularType : m;
+                        if (!got || got === saved) return;
+                        fix = got;
+                    } else {
+                        const reg = t === 'gerundio' ? regularGerundioForm(v.word) : regularParticipioForm(v.word);
+                        if (!reg) return;
+                        const same = conjNorm(c.form) === reg;
+                        if (same && saved !== 'none') fix = 'none';
+                        else if (!same && saved === 'none') note = `규칙형이면 ${reg}`;
+                        else return;
+                    }
+                    out.push({ id: v.id, word: v.word, tense: t, saved, fix, note,
+                        forms: isSingleTense(t) ? c.form : CONJ_PERSON_KEYS.map(k => c[k]).filter(Boolean).join(' · ') });
+                });
+            });
+            return { list: out, verbs: verbs.length, cells };
+        }
+        let conjCheckState = null;
+        function openConjCheckFromPanel(ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            closeDisplayPanel();
+            openConjCheck();
+        }
+        function openConjCheck() {
+            conjCheckState = findConjMismatches();
+            document.getElementById('conj-check-modal').classList.remove('hidden');
+            renderConjCheck();
+        }
+        function closeConjCheck() {
+            document.getElementById('conj-check-modal').classList.add('hidden');
+            conjCheckState = null;
+        }
+        function conjTypeLabel(t) { return t === 'none' ? '규칙' : t; }
+        function renderConjCheck() {
+            const st = conjCheckState;
+            const body = document.getElementById('conj-check-body');
+            if (!st || !body) return;
+            const sub = document.getElementById('conj-check-sub');
+            if (sub) sub.innerText = `동사 ${st.verbs}개 · 시제 칸 ${st.cells}개를 훑었어요 · 확인할 것 ${st.list.length}개`;
+            const fixable = st.list.filter(x => x.fix);
+            const btn = document.getElementById('conj-check-fixall');
+            if (btn) { btn.classList.toggle('hidden', !fixable.length); btn.innerText = `전부 고치기 (${fixable.length})`; }
+            if (!st.list.length) {
+                body.innerHTML = `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-sm text-emerald-700 font-bold text-center">갈래와 형태가 전부 맞아요 ✨</div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">yo 철자만 바뀌는 동사(sigo · elijo · cojo)와 규칙으로 잴 수 없는 동사(ser · ir · jugar · enviar …)는 건너뛰어요.</p>`;
+                return;
+            }
+            body.innerHTML = st.list.map((x, i) => `
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-slate-800">${escapeHtml(x.word)}</span>
+                        <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5">${escapeHtml(bulkTenseLabel(x.tense))}</span>
+                        <div class="ml-auto flex gap-1.5">
+                            <button onclick="openWordFromConjCheck('${x.id}')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-100">단어 열기</button>
+                            ${x.fix ? `<button onclick="fixConjMismatch(${i})" class="px-2 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-[11px] font-bold text-white">고치기</button>` : ''}
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 break-words">${escapeHtml(x.forms)}</p>
+                    <p class="text-xs font-bold"><span class="text-slate-400">저장된 갈래</span> <span class="text-rose-500">${escapeHtml(conjTypeLabel(x.saved))}</span>
+                        ${x.fix ? `<span class="text-slate-300">→</span> <span class="text-slate-400">형태로 보면</span> <span class="text-emerald-600">${escapeHtml(conjTypeLabel(x.fix))}</span>`
+                                : `<span class="text-slate-400">· 형태가 규칙형과 달라요${x.note ? ` (${escapeHtml(x.note)})` : ''} — 단어를 열어 갈래를 골라 주세요</span>`}</p>
+                </div>`).join('');
+        }
+        function applyConjFix(x) {
+            const v = vocabulary.find(w => w.id === x.id);
+            if (!v || !x.fix) return false;
+            v.verbClassByTense = v.verbClassByTense || {};
+            v.irregularByTense = v.irregularByTense || {};
+            if (x.fix === 'none') { v.verbClassByTense[x.tense] = 'regular'; delete v.irregularByTense[x.tense]; }
+            else { v.verbClassByTense[x.tense] = 'irregular'; v.irregularByTense[x.tense] = x.fix; }
+            if (x.tense === 'presente') {   // 구버전 호환 필드도 같이 (saveBulkConj 와 같다)
+                v.verbClass = v.verbClassByTense.presente;
+                v.irregularType = v.irregularByTense.presente || 'none';
+            }
+            return true;
+        }
+        function afterConjFix(msg) {
+            saveToStorage();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
+            conjCheckState = findConjMismatches();
+            renderConjCheck();
+            showToast(msg, "success");
+        }
+        function fixConjMismatch(i) {
+            const x = conjCheckState && conjCheckState.list[i];
+            if (x && applyConjFix(x)) afterConjFix(`${x.word} ${bulkTenseLabel(x.tense)} → ${conjTypeLabel(x.fix)} ✨`);
+        }
+        function fixAllConjMismatches() {
+            if (!conjCheckState) return;
+            const n = conjCheckState.list.filter(x => x.fix && applyConjFix(x)).length;
+            if (n) afterConjFix(`${n}개를 고쳤어요 ✨`);
+        }
+        function openWordFromConjCheck(id) {
+            closeConjCheck();
+            openWordModal(id);
+        }
+
         // 화면에 쓸 실제 분류. 라벨이 불규칙인데 형태가 규칙형이면 규칙으로 돌려준다.
         function resolveTenseIrregularity(word, tenseKey, verbClass, irrType) {
             if (verbClass !== 'irregular') return { verbClass: verbClass, irrType: irrType };
