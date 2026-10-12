@@ -267,7 +267,8 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const w = conjNorm(infinitive);
             if (w.endsWith('se')) return null;   // 재귀는 대명사를 떼야 해서 여기선 판단하지 않는다
             // 원형에 악센트가 있으면(oír·reír·freír) 어미를 못 알아본다 — 떼고 본다
-            const bare = w.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            //   ⚠️ 모음 악센트만 뗀다 — 통째로 NFD 를 쓰면 ñ 도 n 이 되어 diseñar → 'disenado' 가 됐다 (2026-10-12)
+            const bare = w.replace(/[áéíóú]/g, ch => 'aeiou'['áéíóú'.indexOf(ch)]);
             const type = bare.slice(-2);
             if (!REG_ENDINGS[type]) return null;
             const stem = bare.slice(0, -2);
@@ -294,6 +295,53 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (!reg) return false;
             return REG_PERSON_KEYS.every(k => conjNorm(c[k]) === conjNorm(reg[k]));
         }
+        // ============================================================
+        // [냐냐 지적] 현재시제 갈래를 여섯 칸의 형태로 직접 가른다 (2026-10-12).
+        //   AI 가 levantarse(완전 규칙)를 '기타 변형' 으로, pedir(pido·pides)를 '1인칭 및 e ➡️ i' 로 골랐다.
+        //   형태가 이미 있으니 코드로 잴 수 있다:
+        //     tú·él·ellos 의 어간 모음이 바뀌었나 (e➡️ie · o➡️ue · e➡️i — 어간의 마지막 모음 하나)
+        //     + yo 가 그 바뀐 어간으로도 설명이 안 되나 (tengo · digo · conozco → 1인칭)
+        //   nosotros·vosotros 가 규칙형과 다르거나, 위 셋으로 설명이 안 되면(ser · ir · estar · jugar ·
+        //   enviar 처럼 악센트만 옮겨가는 것) null — 그때는 AI 판단을 그대로 둔다.
+        // ============================================================
+        const PRESENT_STEM_CHANGES = [['e', 'ie', 'e ➡️ ie'], ['o', 'ue', 'o ➡️ ue'], ['e', 'i', 'e ➡️ i']];
+        function classifyPresentIrregular(infinitive, forms) {
+            const reg = regularPresentForms(infinitive);
+            if (!reg || !forms) return null;
+            const bare = (s) => conjNorm(s).replace(/^(me|te|se|nos|os)\s+/, '');
+            const f = {}, r = {};
+            REG_PERSON_KEYS.forEach(k => { f[k] = bare(forms[k]); r[k] = bare(reg[k]); });
+            if (REG_PERSON_KEYS.some(k => !f[k])) return null;
+            if (REG_PERSON_KEYS.every(k => f[k] === r[k])) return { verbClass: 'regular', irregularType: 'none' };
+            if (f.nos !== r.nos || f.vos !== r.vos) return null;
+            const w = conjNorm(infinitive).replace(/se$/, '');
+            const stem = w.slice(0, -2), ending = REG_ENDINGS[w.slice(-2)];
+            let change = null, newStem = stem;
+            if (f.tu !== r.tu || f.el !== r.el || f.ellos !== r.ellos) {
+                for (const [from, to, label] of PRESENT_STEM_CHANGES) {
+                    const at = stem.lastIndexOf(from);
+                    if (at < 0) continue;
+                    const s2 = stem.slice(0, at) + to + stem.slice(at + from.length);
+                    if (f.tu === s2 + ending[1] && f.el === s2 + ending[2] && f.ellos === s2 + ending[5]) { change = label; newStem = s2; break; }
+                }
+                if (!change) return null;
+            }
+            //   yo 의 철자만 바뀐 것은 판단하지 않는다 (null → AI 그대로):
+            //   -guir → -go (consigo · sigo) · -ger/-gir → -jo (cojo · elijo) · 자음+cer/cir → -zo (venzo)
+            //   냐냐님 데이터에 둘 다 있다 — seguir·elegir·coger 는 '1인칭' 으로, conseguir 는 아니게 (2026-10-12 여쭘).
+            //   (모음+cer/cir 의 -zco 는 진짜 1인칭 불규칙이다 — conozco · conduzco)
+            const spellYo = [];
+            if (/gu$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'o');
+            if (/g$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'jo');
+            if (/[^aeiouáéíóú]c$/.test(newStem)) spellYo.push(newStem.slice(0, -1) + 'zo');
+            if (spellYo.includes(f.yo)) return null;
+            const yoIrr = f.yo !== newStem + ending[0];
+            if (change && yoIrr) return { verbClass: 'irregular', irregularType: '1인칭 및 ' + change };
+            if (change) return { verbClass: 'irregular', irregularType: change };
+            if (yoIrr) return { verbClass: 'irregular', irregularType: '1인칭' };
+            return null;
+        }
+
         // 화면에 쓸 실제 분류. 라벨이 불규칙인데 형태가 규칙형이면 규칙으로 돌려준다.
         function resolveTenseIrregularity(word, tenseKey, verbClass, irrType) {
             if (verbClass !== 'irregular') return { verbClass: verbClass, irrType: irrType };
@@ -2594,6 +2642,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 }
             } else if (result.pos === 'verb') {
                 // [냐냐 PATCH] AI 자동완성은 현재시제 블록을 채움 (없으면 만들고, 빈칸만 채움)
+                //   갈래는 AI 말보다 형태로 잰 쪽을 믿는다 (classifyPresentIrregular — 못 재면 AI 그대로)
+                const measured = classifyPresentIrregular(((document.getElementById('input-word') || {}).value || '').trim(), result.conjugations);
+                if (measured) { result.verbClass = measured.verbClass; result.irregularType = measured.irregularType; }
                 const box = document.getElementById('conj-tense-blocks');
                 let presenteBlock = box ? [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'presente') : null;
                 if (!presenteBlock && box) {
