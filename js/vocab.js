@@ -2167,6 +2167,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.${pickedPosLine}
             - **영어와 철자가 같은 낱말(rock, club, fan, test 등 외래어)은 스페인어에서 실제로 쓰이는 뜻만 적을 것. 영어 뜻을 섞지 말 것** (rock = 록 음악. '바위' 는 영어 뜻이라 안 됨 — 스페인어 바위는 roca). 유의어·반의어도 그 스페인어 뜻 기준으로.
             - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
+            - 동사면 indefinido(직설법 부정과거) 6인칭도 전부 채우고, 부정과거 갈래(indefinido.irregular)를 그 목록에서 고를 것. 현재시제 갈래(irregularType)와 섞지 말 것 — buscar 는 현재 규칙이지만 부정과거는 '1인칭 -car ➡️ -qué'.
             - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
             - 명사면 nounUsualForm 도 볼 것: 실제로 보통 쓰는 꼴이 입력과 단·복수가 다르면 그 꼴을 (gafa→gafas, vacación→vacaciones, casas→casa). 입력이 이미 보통 꼴이거나 둘 다 흔하면 빈 문자열.
@@ -2267,6 +2268,17 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         properties: {
                             form: { type: "STRING", description: "과거분사 형태 (남성 단수, 악센트 정확히)" },
                             irregular: { type: "STRING", enum: ["none", "불규칙", "두 꼴 다 씀"], description: "none=규칙(-ado/-ido, -ído 포함). '불규칙'=abierto·escrito·puesto·dicho·hecho 처럼 어미가 다른 것. '두 꼴 다 씀'=imprimir→imprimido/impreso, freír→freído/frito 처럼 두 꼴이 다 살아 있는 것" }
+                        }
+                    },
+                    // [냐냐 요청] 직설법 부정과거도 같이 받는다 (2026-10-12) — 부정과거를 배우기 시작하셨다 (10/7).
+                    //   갈래는 부정과거 전용 목록(IRREGULAR_TYPES_BY_TENSE.indefinido)을 쓴다 — 현재시제 갈래와 아예 다르다.
+                    indefinido: {
+                        type: "OBJECT",
+                        description: "동사일 때만 채울 것. 직설법 부정과거(pretérito indefinido) 6인칭. 표준 스페인 스페인어 — 'vos' 키는 vosotros (-asteis/-isteis). 재귀동사는 재귀대명사를 앞에 (levantarse→me levanté, te levantaste…). 동사가 아니면 빈 값.",
+                        properties: {
+                            yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" },
+                            nos: { type: "STRING" }, vos: { type: "STRING", description: "vosotros (-asteis/-isteis)" }, ellos: { type: "STRING" },
+                            irregular: { type: "STRING", enum: IRREGULAR_TYPES_BY_TENSE.indefinido, description: INDEFINIDO_TYPE_GUIDE }
                         }
                     },
                     example: { type: "STRING", description: "자연스러운 스페인어 예문 1개" },
@@ -2631,6 +2643,23 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         const cell = parBlock.querySelector('[data-person="form"]');
                         if (cell && (forceOverwrite || !cell.value.trim())) cell.value = parForm;
                         applySingleTenseIrregular(parBlock, 'participio', par.irregular);
+                    }
+                }
+                // [냐냐 요청] 직설법 부정과거도 같이 등록 (2026-10-12) — 블록이 없으면 만들고, 있으면 빈칸만
+                const ind = result.indefinido || {};
+                if (box && CONJ_PERSON_KEYS.some(k => String(ind[k] || '').trim())) {
+                    const indIrr = irregularTypesFor('indefinido').includes(ind.irregular) ? ind.irregular : 'none';
+                    const indBlock = [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'indefinido');
+                    if (!indBlock) {
+                        const data = {};
+                        CONJ_PERSON_KEYS.forEach(k => { data[k] = String(ind[k] || '').trim(); });
+                        addTenseBlock('indefinido', data, indIrr !== 'none' ? 'irregular' : 'regular', indIrr);
+                    } else {
+                        CONJ_PERSON_KEYS.forEach(k => {
+                            const cell = indBlock.querySelector(`[data-person="${k}"]`);
+                            if (cell && (forceOverwrite || !cell.value.trim())) cell.value = String(ind[k] || '').trim();
+                        });
+                        applySingleTenseIrregular(indBlock, 'indefinido', indIrr);   // 이름은 '1칸' 이지만 갈래만 고치는 거라 여섯 칸 블록에도 맞다
                     }
                 }
             }
