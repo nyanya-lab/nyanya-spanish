@@ -600,7 +600,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const codeHtml = !st.list.length
                 ? `<p class="text-[11px] font-bold text-slate-500">📋 갈래 ↔ 형태</p>
                    <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">갈래와 형태가 전부 맞아요 ✨</div>
-                   <p class="text-[11px] text-slate-400 leading-relaxed">규칙으로 잴 수 없는 동사(ser · ir · ver · jugar · enviar …)는 건너뛰어요.</p>`
+                   <p class="text-[11px] text-slate-400 leading-relaxed">통째로 다른 동사(ser · ir · estar · haber · oír)는 규칙형에서 잴 수가 없어 건너뛰어요 — 형태는 🤖 AI로 칸 확인이 봐요.</p>`
                 : `<p class="text-[11px] font-bold text-slate-500">📋 갈래 ↔ 형태 — 어긋남 ${st.list.length}개</p>` + st.list.map((x, i) => `
                 <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-1">
                     <div class="flex items-center gap-2">
