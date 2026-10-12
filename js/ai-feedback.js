@@ -2750,13 +2750,36 @@ ${buildLearnerProfileSummary()}`;
             syncAiBonusReview(e, aiIdiomAlsoReviewed(e));
         }
         //   덤으로 채운 오늘 몫을 일지 복습 칸에 맞춘다 — 점수를 0 으로 돌리면 도로 뺀다
+        //   [냐냐 지적] 숫자만 올리고 무엇이었는지는 안 적어서, 일지에서 복습 칸을 눌러도 첨삭으로 한 복습이 목록에 없었다 (2026-10-12).
+        //   쓰기 복습처럼 번호도 적는다 — 단어 id · 관용구 '단어id::번호' · 문법 노트 id (diaryRowHtml 이 셋 다 읽는다).
+        //   ↺ 로 무를 때는 이 줄이 적어 넣은 번호만 뺀다 (쓰기 복습에서 따로 들어간 같은 번호는 두고).
+        function aiBonusReviewId(e) {
+            if (e.note && e.note.id) return e.note.id;
+            if (e.w && e.it && typeof idiomKey === 'function') return idiomKey(e.w.id, e.it.iid || e.it.idiom);
+            if (e.word) return (typeof e.word === 'object') ? e.word.id : e.word;
+            return null;
+        }
         function syncAiBonusReview(e, want) {
             const now = want ? 1 : 0;
             const had = e.reviewLogged || 0;
-            if (now > had && typeof logAction === 'function') logAction('review');
+            const d0 = (typeof nyanyaDiary !== 'undefined') ? nyanyaDiary[getLocalDateString()] : null;
+            const id = aiBonusReviewId(e);
+            if (now > had && typeof logAction === 'function') {
+                const already = !!(id && d0 && Array.isArray(d0.reviewIds) && d0.reviewIds.indexOf(id) >= 0);
+                logAction('review', null, id);
+                e.reviewIdAdded = !!id && !already;
+            }
             if (now < had && typeof nyanyaDiary !== 'undefined') {
                 const d = nyanyaDiary[getLocalDateString()];
-                if (d) d.reviewCount = Math.max(0, (d.reviewCount || 0) - 1);
+                if (d) {
+                    d.reviewCount = Math.max(0, (d.reviewCount || 0) - 1);
+                    if (e.reviewIdAdded && id && Array.isArray(d.reviewIds)) {
+                        const i = d.reviewIds.indexOf(id);
+                        if (i >= 0) d.reviewIds.splice(i, 1);
+                        if (!d.reviewIds.length) delete d.reviewIds;
+                    }
+                }
+                e.reviewIdAdded = false;
             }
             e.reviewLogged = now;
         }
