@@ -2734,6 +2734,15 @@ ${buildLearnerProfileSummary()}`;
         //   틀려도 오늘 몫은 끝난다 (복습에서 틀린 것과 같다). 그 밖에서 틀린 건 지금처럼 오늘 줄에 남는다.
         //   덤으로 채운 오늘 몫은 일지 복습 +1 (쓰기 복습이 하나 풀 때마다 +1 인 것과 같은 잣대).
         // ============================================================
+        //   [냐냐 요청] 첨삭 결과의 관용구를 누르면 관용구 조회창으로 바로 (2026-10-12) — 예전엔 주인 단어 창을 열어 관용구를 찾아봐야 했다.
+        //   조회창은 주인 단어 밑에서 찾으므로, 같이 걸린 단어(alsoUnder)로 들어온 것이면 주인을 찾아 연다. 번호가 없는 옛 관용구는 단어 창으로.
+        function openIdiomFromAi(wid, iid) {
+            if (!iid || typeof openIdiomView !== 'function') { openWordView(wid); return; }
+            const hasIt = (w) => w && Array.isArray(w.idioms) && w.idioms.some(x => x && x.iid === iid);
+            const w0 = (vocabulary || []).find(v => v.id === wid);
+            const owner = hasIt(w0) ? w0 : (vocabulary || []).find(hasIt);
+            if (owner) openIdiomView(owner.id, iid); else openWordView(wid);
+        }
         function aiIdiomAlsoReviewed(e) {
             return !!e && e.delta !== 0 && ((e.delta > 0 && e.due) || e.missionReview);
         }
@@ -5846,7 +5855,7 @@ ${buildLearnerProfileSummary()}`;
                             const moved = e.delta !== bucket.g;
                             const mean = String(e.it.idiomMeaning || '').trim();
                             return `<span class="inline-flex items-center gap-1 max-w-full border rounded-lg pl-2 pr-1 py-0.5 ${moved ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-white'}">
-                                <button type="button" onclick="openWordView('${escapeAttr(e.w.id)}')" class="min-w-0 text-left break-keep hover:opacity-70 transition-opacity">
+                                <button type="button" onclick="openIdiomFromAi('${escapeAttr(e.w.id)}', '${escapeAttr(e.it.iid || '')}')" class="min-w-0 text-left break-keep hover:opacity-70 transition-opacity">
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(e.it.idiom)}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${e.delta > 0 ? 'text-emerald-600' : (e.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(e.delta)}</span>` : ''}
