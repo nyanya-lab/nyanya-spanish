@@ -2977,9 +2977,16 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     isRealCorrection = false;
                 }
                 const usualKey = stripAccents(usualForm.toLowerCase());
+                //   [냐냐 지적] impuestos 를 '보통 단수' 라며 바꾸자 했는데, 같은 답의 예문·관용구는 다 impuestos 였다 (2026-10-12).
+                //   AI 가 바꾸자는 꼴이 제 예문·관용구에 한 번도 없고 입력한 꼴만 있으면 묻지 않는다 — 그 꼴로 쓰는 말이다.
+                const aiTexts = stripAccents([result.example, ...((result.idioms || []).map(it => it && it.idiom)), ...((result.idioms || []).map(it => it && it.example))]
+                    .filter(Boolean).join(' ').toLowerCase());
+                const hasWord = (k) => !!k && new RegExp(`(^|[^a-zñ])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-zñ]|$)`).test(aiTexts);
+                const aiUsesTyped = hasWord(inputKey) && !hasWord(usualKey);
                 const isUsualNumber = !isRealCorrection && !isFeminineAdj && result.pos === 'noun' && usualForm
                     && usualKey !== inputKey && usualKey.slice(0, 3) === inputKey.slice(0, 3)
-                    && typeof levenshtein === 'function' && levenshtein(usualKey, inputKey) <= 4;
+                    && typeof levenshtein === 'function' && levenshtein(usualKey, inputKey) <= 4
+                    && !aiUsesTyped;
 
                 if (isRealCorrection) {
                     showConfirm(
