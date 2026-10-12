@@ -139,6 +139,61 @@ Conjugate each verb in this tense: ${label} (internal key: ${tense}), all 6 pers
 ${REFLEXIVE_RULE}
 Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map(t => `"${t}"`).join(', ')} ("none" = fully regular).${tense === 'indefinido' ? '\n' + INDEFINIDO_TYPE_GUIDE : ''}`;
         }
+        // ============================================================
+        // [냐냐 결정] 단어 등록 AI 추천 — 활용표는 시제 하나씩 따로 묻는다 (2026-10-12).
+        //   통째 요청과 **동시에** 출발시켜서 기다림은 늘지 않는다. 동사처럼 보일 때만 (-ar/-er/-ir(se) 한 낱말, 품사를 동사로 골랐거나 안 골랐을 때).
+        //   표가 깨졌는지는 코드로 본다 — 여섯 칸이 다 차고, 칸마다 글자만 세 낱말 이내.
+        //   따로 받은 표가 멀쩡하면 그걸 쓰고, 못 받았으면 통째 답의 표, 둘 다 깨졌으면 그 시제만 3.1 로 다시.
+        // ============================================================
+        const FOCUS_CONJ_TENSES = ['presente', 'indefinido'];
+        function looksLikeVerbInput(raw, pickedPos) {
+            if (pickedPos && pickedPos !== 'verb') return false;
+            return /^[a-záéíóúüñ]+(ar|er|ir|ír)(se)?$/i.test(String(raw || '').trim());
+        }
+        function focusedConjAsk(verb, tense, model) {
+            const props = {};
+            CONJ_PERSON_KEYS.forEach(k => { props[k] = { type: "STRING" }; });
+            props.irregular = { type: "STRING", enum: irregularTypesFor(tense) };
+            const keys = CONJ_PERSON_KEYS.concat(['irregular']);
+            const schema = { type: "OBJECT", properties: props, required: keys, propertyOrdering: keys };
+            return callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${verb}". Return JSON: {"yo","tu","el","nos","vos","ellos","irregular"}`,
+                'Return ONLY JSON.', schema, 'minimal', model).then(t => extractAndParseJson(t));
+        }
+        function startFocusedConjAsks(raw, pickedPos) {
+            if (!looksLikeVerbInput(raw, pickedPos)) return null;
+            const out = {};
+            FOCUS_CONJ_TENSES.forEach(t => { out[t] = focusedConjAsk(String(raw).trim(), t, GEMINI_MODEL_GRADE).catch(() => null); });
+            return out;
+        }
+        function conjTableOk(c) {
+            return !!c && CONJ_PERSON_KEYS.every(k => {
+                const v = String(c[k] || '').trim();
+                return !!v && v.split(/\s+/).length <= 3 && /^[a-záéíóúüñ ]+$/i.test(v);
+            });
+        }
+        async function mergeFocusedConj(result, raw, asks) {
+            for (const t of FOCUS_CONJ_TENSES) {
+                let got = asks ? await asks[t] : null;
+                const mainTable = t === 'presente' ? result.conjugations : result.indefinido;
+                if (!conjTableOk(got) && !conjTableOk(mainTable)) {
+                    try { got = await focusedConjAsk(String(raw).trim(), t, GEMINI_MODEL_FLASH_LITE); } catch (e) { got = null; }
+                }
+                if (!conjTableOk(got)) continue;   // 따로 받은 게 없으면 통째 답 그대로
+                const table = {};
+                CONJ_PERSON_KEYS.forEach(k => { table[k] = String(got[k]).trim(); });
+                if (t === 'presente') {
+                    result.conjugations = table;
+                    if (IRREGULAR_TYPE_OPTIONS.includes(got.irregular)) {   // 갈래는 뒤에서 형태로 다시 잰다 (classifyPresentIrregular)
+                        result.verbClass = got.irregular === 'none' ? 'regular' : 'irregular';
+                        result.irregularType = got.irregular;
+                    }
+                } else {
+                    const irr = irregularTypesFor('indefinido').includes(got.irregular) ? got.irregular : ((result.indefinido || {}).irregular || 'none');
+                    result.indefinido = Object.assign(table, { irregular: irr });
+                }
+            }
+        }
+
         // AI가 준 불규칙 갈래를 블록 콤보박스에 반영 (사용자가 이미 불규칙으로 지정해 뒀으면 건드리지 않음)
         // [냐냐 지적] 1칸짜리 시제가 둘(현재분사·과거분사)이 되면서 시제별 갈래를 봐야 한다.
         //   예전엔 현재분사 목록으로만 검사해서 과거분사의 '불규칙' 이 걸러졌다.
@@ -2936,9 +2991,19 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
             try {
                 // 실시간 API 호출 시도 (thinkingLevel: minimal → 단순 사전 조회라 깊은 추론 불필요, 가장 빠름)
-                const responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
+                //   [냐냐 결정] 3.5 로 통째 + 동사면 현재·부정과거만 동시에 따로 (2026-10-12) — 3.1 이 그날 3~20초로 들쭉날쭉했다.
+                //   3.5 통째는 활용을 틀린다(8개 중 3개). 같은 3.5 도 시제 하나만 따로 물으면 12/12 — 표는 따로 받은 쪽을 쓴다.
+                //   3.5 가 실패하면 예전처럼 3.1 로.
+                const conjAsks = startFocusedConjAsks(rawWord, pickedPos);
+                let responseText;
+                try { responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 15000); }
+                catch (e35) {
+                    console.warn('단어 추천: 3.5 실패 → 3.1 로 다시', e35);
+                    responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
+                }
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
+                if (result && result.pos === 'verb') await mergeFocusedConj(result, rawWord, conjAsks);
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
