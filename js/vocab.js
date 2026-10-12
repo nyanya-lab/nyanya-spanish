@@ -1715,15 +1715,26 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                     },
                     required: ["idiom", "meaning", "example", "exampleMeaning"]
                 };
+                //   [냐냐 지적] 명사로 시작하는 표현에 관사를 붙여 주던 게 10/6 부터 안 됐다 (2026-10-12) — 그날 '적어 둔 줄은 그대로' 로
+                //   바꾸면서 AI 것으로 갈아 끼우지 않게 됐다. 여기서 직접 시킨다.
                 const prompt = cur
-                    ? `스페인어 표현 "${cur}" 의 한국어 뜻을 채워줘. 철자나 강세가 틀렸으면 idiom 에 고쳐서 넣어줘. (관련 단어: "${word}"${meaning ? `, 뜻: ${meaning}` : ''})`
+                    ? `스페인어 표현 "${cur}" 의 한국어 뜻을 채워줘. 철자나 강세가 틀렸으면 idiom 에 고쳐서 넣어줘. (관련 단어: "${word}"${meaning ? `, 뜻: ${meaning}` : ''})
+명사로 시작하는 표현(명사구)인데 앞에 관사가 없으면, 그 표현을 실제로 쓸 때 붙는 관사(el·la·los·las·un·una 중 하나)를 붙여서 idiom 에 넣어줘 (예: lata de atún → una lata de atún, cepillo de dientes → el cepillo de dientes).
+동사·전치사·부사·형용사로 시작하거나 이미 관사가 있으면 관사를 더하지 마.
+대괄호 [ ] 안의 글자(빈칸 이름)는 적힌 그대로 둬 — [사람]을 [alguien] 처럼 바꾸지 마.`
                     : `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 를 쓰는 자주 쓰이는 관용구나 표현을 하나만 추천해줘.${others.length ? ` 다음과 겹치지 않게: ${others.join(', ')}` : ''}`;
                 const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
 
-                if (idiomInp && data.idiom) idiomInp.value = data.idiom.trim();
+                if (idiomInp && data.idiom) {
+                    //   빈칸 이름은 적어 둔 그대로 — 대괄호 수가 같으면 차례대로 되돌려 끼운다 ([alguien] → [사람])
+                    let next = data.idiom.trim();
+                    const mine = cur.match(/\[[^\]]*\]/g) || [], theirs = next.match(/\[[^\]]*\]/g) || [];
+                    if (mine.length && mine.length === theirs.length) { let i = 0; next = next.replace(/\[[^\]]*\]/g, () => mine[i++]); }
+                    idiomInp.value = next;
+                }
                 if (meanInp && data.meaning) meanInp.value = data.meaning.trim();
                 //   예문은 비어 있을 때만 채운다 — 손으로 적어 둔 예문은 안 덮는다
                 if (exInp && !exInp.value.trim() && data.example) exInp.value = data.example.trim();
@@ -3091,6 +3102,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     if (!item || !item.idiom) return;
                     const same = rowsNow.find(r => keyOf((r.querySelector('[data-idiom-field="idiom"]') || {}).value) === keyOf(item.idiom));
                     if (!same) { addIdiomRow(item.idiom, item.idiomMeaning, '', '', item.example, item.exampleMeaning); return; }
+                    //   [냐냐 지적] 관사만 다르면(lata de atún ↔ una lata de atún) 글자만 AI 것으로 — 줄(번호·점수)은 그대로 (2026-10-12)
+                    const tInp = same.querySelector('[data-idiom-field="idiom"]');
+                    const ART = /^(el|la|los|las|un|una|unos|unas)\s+/i;
+                    if (tInp && !ART.test(tInp.value.trim()) && ART.test(String(item.idiom).trim())) tInp.value = String(item.idiom).trim();
                     [['meaning', item.idiomMeaning], ['example', item.example], ['exampleMeaning', item.exampleMeaning]].forEach(([f, v]) => {
                         const inp = same.querySelector(`[data-idiom-field="${f}"]`);
                         if (inp && !inp.value.trim() && v) inp.value = String(v).trim();
