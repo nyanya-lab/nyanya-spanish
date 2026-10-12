@@ -65,7 +65,7 @@
             //   조회 화면에서도 퀴즈에서도 자리만 차지했다.
         ];
         // 불규칙 유형 (틀 — 학습하며 나중에 채우기)
-        const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
+        const IRREGULAR_TYPE_OPTIONS = ['none','1인칭','e ➡️ ie','o ➡️ ue','e ➡️ i','u ➡️ ue','완전 불규칙','1인칭 및 e ➡️ ie','1인칭 및 e ➡️ i','1인칭 및 o ➡️ ue','기타 변형'];
         // [냐냐 요청] 현재분사는 불규칙 갈래가 현재시제와 아예 달라서 목록을 따로 쓴다.
         //   e➡️i: pedir→pidiendo · decir→diciendo · reír→riendo
         //   o➡️u: dormir→durmiendo · poder→pudiendo
@@ -301,25 +301,39 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   형태가 이미 있으니 코드로 잴 수 있다:
         //     tú·él·ellos 의 어간 모음이 바뀌었나 (e➡️ie · o➡️ue · e➡️i — 어간의 마지막 모음 하나)
         //     + yo 가 그 바뀐 어간으로도 설명이 안 되나 (tengo · digo · conozco → 1인칭)
-        //   nosotros·vosotros 가 규칙형과 다르거나, 위 셋으로 설명이 안 되면(ser · ir · estar · jugar ·
-        //   enviar 처럼 악센트만 옮겨가는 것) null — 그때는 AI 판단을 그대로 둔다.
+        //   nosotros·vosotros 가 규칙형과 다르거나, 아래 모양들로 설명이 안 되면(ser · ir · estar · haber …) null
+        //   — 그때는 AI 판단(또는 저장된 갈래)을 그대로 둔다.
         // ============================================================
-        const PRESENT_STEM_CHANGES = [['e', 'ie', 'e ➡️ ie'], ['o', 'ue', 'o ➡️ ue'], ['e', 'i', 'e ➡️ i']];
+        //   [냐냐 요청] 건너뛰던 모양도 알아본다 (2026-10-12) — 어간의 마지막 글자 하나가 이렇게 바뀌면:
+        //     u ➡️ ue (jugar → juego, 갈래 새로 만듦) · o → hue (oler → huelo, o ➡️ ue 로 침)
+        //     e → í (reír → río, e ➡️ i 로 침) · i → ie (adquirir → adquiero, 기타 변형)
+        //     i → í · u → ú (enviar → envío · continuar → continúo) — 악센트만 옮겨감, 9월에 '규칙' 으로 두기로 한 것
+        //     어간 + y (construir → construyo · huir → huyo, 기타 변형)
+        //   ⚠️ 차례가 중요하다 — 같은 글자에서 여럿이 맞으면 앞의 것이 이긴다.
+        const PRESENT_STEM_CHANGES = [
+            ['e', 'ie', 'e ➡️ ie'], ['o', 'ue', 'o ➡️ ue'], ['e', 'i', 'e ➡️ i'],
+            ['u', 'ue', 'u ➡️ ue'], ['o', 'hue', 'o ➡️ ue'], ['e', 'í', 'e ➡️ i'],
+            ['i', 'ie', '기타 변형'], ['i', 'í', 'none'], ['u', 'ú', 'none'], ['', 'y', '기타 변형']
+        ];
         function classifyPresentIrregular(infinitive, forms) {
-            const reg = regularPresentForms(infinitive);
-            if (!reg || !forms) return null;
+            if (!forms) return null;
+            const unacc = (s) => s.replace(/[áéíóú]/g, ch => 'aeiou'['áéíóú'.indexOf(ch)]);
             const bare = (s) => conjNorm(s).replace(/^(me|te|se|nos|os)\s+/, '');
-            const f = {}, r = {};
-            REG_PERSON_KEYS.forEach(k => { f[k] = bare(forms[k]); r[k] = bare(reg[k]); });
-            if (REG_PERSON_KEYS.some(k => !f[k])) return null;
-            if (REG_PERSON_KEYS.every(k => f[k] === r[k])) return { verbClass: 'regular', irregularType: 'none' };
-            if (f.nos !== r.nos || f.vos !== r.vos) return null;
-            const w = conjNorm(infinitive).replace(/se$/, '');
+            let w = conjNorm(infinitive).replace(/se$/, '');
+            if (/\s/.test(w)) return null;
+            if (/ír$/.test(w)) w = w.slice(0, -2) + 'ir';   // reír · oír · freír — 원형의 악센트는 어미를 가리는 데 방해만 된다
             const stem = w.slice(0, -2), ending = REG_ENDINGS[w.slice(-2)];
+            if (!ending || !stem) return null;
+            const f = {}, r = {};
+            REG_PERSON_KEYS.forEach((k, i) => { f[k] = bare(forms[k]); r[k] = stem + ending[i]; });
+            if (REG_PERSON_KEYS.some(k => !f[k])) return null;
+            //   nosotros·vosotros 는 악센트를 떼고 본다 — reímos · dais · veis 는 악센트만 다른 규칙형이다
+            const sameNV = (k) => unacc(f[k]) === unacc(r[k]);
+            if (!sameNV('nos') || !sameNV('vos')) return null;
             let change = null, newStem = stem;
             if (f.tu !== r.tu || f.el !== r.el || f.ellos !== r.ellos) {
                 for (const [from, to, label] of PRESENT_STEM_CHANGES) {
-                    const at = stem.lastIndexOf(from);
+                    const at = from ? stem.lastIndexOf(from) : stem.length;
                     if (at < 0) continue;
                     const s2 = stem.slice(0, at) + to + stem.slice(at + from.length);
                     if (f.tu === s2 + ending[1] && f.el === s2 + ending[2] && f.ellos === s2 + ending[5]) { change = label; newStem = s2; break; }
@@ -330,10 +344,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             //   yo 만 모양이 달라서 따로 외워야 한다: sigo · persigo · consigo · elijo · cojo · venzo.
             //   그래서 아래에서 yo 가 '바뀐 어간 + o' 와 다르기만 하면 1인칭이다 — 따로 봐줄 것이 없다.
             const yoIrr = f.yo !== newStem + ending[0];
-            if (change && yoIrr) return { verbClass: 'irregular', irregularType: '1인칭 및 ' + change };
-            if (change) return { verbClass: 'irregular', irregularType: change };
-            if (yoIrr) return { verbClass: 'irregular', irregularType: '1인칭' };
-            return null;
+            if (!change || change === 'none') {
+                if (!yoIrr) return { verbClass: 'regular', irregularType: 'none' };
+                return change ? null : { verbClass: 'irregular', irregularType: '1인칭' };   // 악센트 이동 + yo 불규칙은 이름이 없다
+            }
+            if (yoIrr) {
+                //   '1인칭 및 …' 은 세 가지뿐이다 — 나머지(oír 의 oigo · oyes 처럼)는 이름이 없어 판단하지 않는다
+                const both = '1인칭 및 ' + change;
+                return IRREGULAR_TYPE_OPTIONS.includes(both) ? { verbClass: 'irregular', irregularType: both } : null;
+            }
+            return { verbClass: 'irregular', irregularType: change };
         }
 
         // [냐냐 요청] 부정과거 갈래도 형태로 잰다 (2026-10-12) — 냐냐님 갈래(IRREGULAR_TYPES_BY_TENSE.indefinido) 그대로.
@@ -671,7 +691,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             if (t.startsWith('3인칭')) return ['el', 'ellos'];   // 부정과거 — 아래 현재시제 e ➡️ i 보다 먼저
             const s = new Set();
             if (t.includes('1인칭')) s.add('yo');
-            if (t.includes('e ➡️ ie') || t.includes('o ➡️ ue') || t.includes('e ➡️ i')) ['yo', 'tu', 'el', 'ellos'].forEach(p => s.add(p));
+            if (t.includes('e ➡️ ie') || t.includes('o ➡️ ue') || t.includes('e ➡️ i') || t.includes('u ➡️ ue')) ['yo', 'tu', 'el', 'ellos'].forEach(p => s.add(p));
             return [...s];
         }
         function paintTenseBlock(block) {
@@ -2506,7 +2526,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //     예문은 셋 다 음악 이야기였다 — 철자가 영어와 같아서 뜻 칸에만 샌다. 이 한 줄로 세 번 다 '록 음악' 만 나왔다.
             const prompt = `스페인어 단어 "${rawWord}"를 분석해서 JSON 스키마에 맞게 채워주세요.${pickedPosLine}
             - **영어와 철자가 같은 낱말(rock, club, fan, test 등 외래어)은 스페인어에서 실제로 쓰이는 뜻만 적을 것. 영어 뜻을 섞지 말 것** (rock = 록 음악. '바위' 는 영어 뜻이라 안 됨 — 스페인어 바위는 roca). 유의어·반의어도 그 스페인어 뜻 기준으로.
-            - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
+            - 동사면 1인칭/e➡️ie/o➡️ue/e➡️i/u➡️ue(jugar)/완전불규칙 중 정확히 분류하고 현재시제 변형 전부 채울 것.
             - 동사면 indefinido(직설법 부정과거) 6인칭도 전부 채우고, 부정과거 갈래(indefinido.irregular)를 그 목록에서 고를 것. 현재시제 갈래(irregularType)와 섞지 말 것 — buscar 는 현재 규칙이지만 부정과거는 '1인칭 -car ➡️ -qué'.
             - 어간모음 변화와 1인칭 불규칙이 함께 있으면 '1인칭 및 e ➡️ ie', '1인칭 및 e ➡️ i', '1인칭 및 o ➡️ ue'로 분류할 것. 예: tener(tengo, tienes...) = '1인칭 및 e ➡️ ie', decir(digo, dices, dice, decimos, decís, dicen) = '1인칭 및 e ➡️ i', venir(vengo, vienes...) = '1인칭 및 e ➡️ ie'.
             - 명사면 gender(성별)와 isPlural(복수형 여부)을 정확히 판단할 것. 입력 단어 자체가 이미 복수형이면(casas, libros 등) isPlural=true.
@@ -2577,7 +2597,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
                     adjMasculineBase: { type: "STRING", description: "형용사이고 입력이 여성형(또는 복수형)이면, 사전 표제형인 '남성 단수형'을 여기에 (관사 없이). 예: 입력이 'buena'/'buenas'/'buenos'면 'bueno', 'roja'면 'rojo'. 이미 남성 단수형이거나(bueno) 성별로 안 변하는 형용사(feliz, azul, tolerante)이거나 형용사가 아니면 빈 문자열." },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
-                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 e ➡️ i", "1인칭 및 o ➡️ ue", "기타 변형"] },
+                    irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "u ➡️ ue", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 e ➡️ i", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
                         type: "OBJECT",
                         description: "현재시제 6인칭 변형. 반드시 표준 스페인(카스티야) 스페인어 기준으로 작성할 것 — 'vos' 키는 아르헨티나식 단수 'vos'가 아니라 스페인의 2인칭 복수 'vosotros'를 의미함 (예: tener→vos:'tenéis', llevar→vos:'lleváis'). 절대 -ás/-és 같은 아르헨티나식 voseo 어미를 쓰지 말 것.",
@@ -4116,7 +4136,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (irr.includes('o ➡️ ue') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
                     isIrregular = true;
                 }
-                if (irr.includes('e ➡️ i') && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
+                if ((irr.includes('e ➡️ i') || irr.includes('u ➡️ ue')) && ['yo', 'tú', 'él', 'ellos'].includes(person)) {
                     isIrregular = true;
                 }
                 if (irr.includes('완전 불규칙')) {
