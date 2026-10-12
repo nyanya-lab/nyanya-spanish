@@ -266,3 +266,11 @@ html {
         .gfill-note-body { filter: blur(5px); transition: filter .25s ease; }
         .gfill-note-revealed .gfill-note-body { filter: none; }
         .gfill-note-revealed .gfill-note-cover { display: none; }
+
+        /* [냐냐 요청] 단어 등록 창을 연 채로도 'AI 질문' 을 쓴다 (2026-10-12).
+           등록 창(z-50)의 어두운 판이 버튼(z-45)·대화 패널(z-46)을 덮어서 눌리지 않았다.
+           등록 창이 열려 있을 때만 둘을 그 위로 올린다 — 다른 창들(z-50)엔 그대로 덮인다.
+           같은 자리의 '단어 찾기' 버튼은 그동안 숨긴다 (그 패널은 등록 창 밑이라 열어도 안 보인다). */
+        body:has(#word-modal:not(.hidden)) #fab-wrap,
+        body:has(#word-modal:not(.hidden)) #ask-ai-panel { z-index: 55; }
+        body:has(#word-modal:not(.hidden)) #quick-word-fab { display: none; }
