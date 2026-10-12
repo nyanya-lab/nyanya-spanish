@@ -452,6 +452,28 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   ③ **두 번 다** 저장된 것과 다를 때만 짚는다 — 한 번만 다르면 AI 가 헛짚은 것으로 본다.
         //   두 번 답이 같으면 [이걸로 바꾸기], 서로 다르면 둘 다 보여주고 [단어 열기] 만.
         // ============================================================
+        //   [냐냐 지적] 무료 키는 1분에 15번까지다 (2026-10-12) — 301개 × 두 번이면 금방 걸려서 과거분사가 통째로 '못 받음' 이 됐다.
+        //   429 가 오면 Gemini 가 알려주는 만큼('retry in 27s') 쉬었다가 같은 묶음을 다시 묻는다 (세 번까지).
+        async function conjAskWithRetry(ai, fn) {
+            for (let tryNo = 0; ; tryNo++) {
+                try { return await fn(); }
+                catch (e) {
+                    const msg = String((e && e.message) || e);
+                    if (!/429/.test(msg) || tryNo >= 3 || ai.cancelled) throw e;
+                    const m = /retry in ([\d.]+)s/i.exec(msg);
+                    const waitS = Math.min(90, Math.ceil(m ? parseFloat(m[1]) : 30) + 2);
+                    ai.waiting = waitS;
+                    if (conjCheckState && conjCheckState.ai === ai) renderConjCheck();
+                    await new Promise(r => setTimeout(r, waitS * 1000));
+                    ai.waiting = 0;
+                }
+            }
+        }
+        //   저장된 칸에 '/' 로 두 꼴을 적어 둔 것(imprimido/impreso · freído/frito — '두 꼴 다 씀')은 AI 가 그중 하나만 내도 같다
+        function sameConjAllowingAlts(tense, ai, stored) {
+            const keys = isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS;
+            return keys.every(k => String(stored[k] || '').split('/').some(alt => sameForm(alt, ai[k])));
+        }
         async function startConjAiCheck() {
             if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
             const st = conjCheckState;
@@ -470,16 +492,16 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const stored = {};
                 batch.forEach(v => { stored[verbKey(v.word)] = storedOf(v); });
                 let first = null;
-                try { first = await bulkConjAsk(tense, words, stored); }
+                try { first = await conjAskWithRetry(ai, () => bulkConjAsk(tense, words, stored)); }
                 catch (e) { console.error(e); batch.forEach(v => ai.failed.push(v.word)); ai.done += batch.length; if (conjCheckState === st) renderConjCheck(); continue; }
-                const odd = batch.filter(v => { const a = first[verbKey(v.word)]; if (!a) { ai.failed.push(v.word); return false; } return !sameConj(tense, a, stored[verbKey(v.word)]); });
+                const odd = batch.filter(v => { const a = first[verbKey(v.word)]; if (!a) { ai.failed.push(v.word); return false; } return !sameConjAllowingAlts(tense, a, stored[verbKey(v.word)]); });
                 let second = {};
                 if (odd.length && !ai.cancelled) {
-                    try { second = await bulkConjAsk(tense, odd.map(v => v.word.trim()), null); } catch (e) { console.error(e); second = {}; }
+                    try { second = await conjAskWithRetry(ai, () => bulkConjAsk(tense, odd.map(v => v.word.trim()), null)); } catch (e) { console.error(e); second = {}; }
                 }
                 odd.forEach(v => {
                     const k = verbKey(v.word), a = first[k], b = second[k];
-                    if (b && sameConj(tense, b, stored[k])) return;          // 두 번째엔 저장된 것과 같다 — 헛짚음
+                    if (b && sameConjAllowingAlts(tense, b, stored[k])) return;   // 두 번째엔 저장된 것과 같다 — 헛짚음
                     const agree = !!b && sameConj(tense, a, b);
                     ai.rows.push({ id: v.id, word: v.word, tense, stored: conjOneLine(tense, stored[k]),
                         a: conjOneLine(tense, a), b: b ? conjOneLine(tense, b) : '', agree, pick: agree ? b : null });
@@ -521,6 +543,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 const p = ai.total ? Math.round(ai.done / ai.total * 100) : 0;
                 return `<div class="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-2">
                     <p class="text-xs font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} 확인 중… ${ai.done}/${ai.total} <span class="text-violet-500">(${p}%)</span> · 짚은 것 ${ai.rows.length}개</p>
+                    ${ai.waiting ? `<p class="text-[11px] font-bold text-amber-600">⏳ AI 무료 한도(1분에 15번)에 걸려서 ${ai.waiting}초 쉬었다가 이어서 해요</p>` : ''}
                     <div class="h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${p}%"></div></div>
                     <p class="text-[10px] text-violet-400">창을 닫으면 중단돼요</p></div>`;
             }
