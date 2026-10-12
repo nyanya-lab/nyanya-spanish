@@ -1708,7 +1708,7 @@ ${missionTenseRuleText(!!grammarContext)}
             const refGrammar = isIdiom
                 ? `\n            This mission was built around the student's set expression "${idiomMission.it.idiom}" (= ${String(idiomMission.it.idiomMeaning || '').replace(/"/g, "'")}). It is only the material the Korean sentence was made from: the student does NOT have to use it. Any correct translation is correct, and never mark the answer down or ask for that expression in "message", "changes" or "tip".\n`
                 : aiCurrentGrammarForMission
-                ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n${aiCurrentGrammarDetailForMission ? `            The mission was aimed at THIS line of that note: ${aiCurrentGrammarDetailForMission}\n` : ''}`
+                ? `\n            This mission was built from one of the notes listed above. Its full content (the student's own note):\n            제목: ${aiCurrentGrammarForMission.title || ''}\n            ${buildGrammarContextForMission(aiCurrentGrammarForMission).replace(/\n/g, '\n            ')}\n${aiCurrentGrammarDetailForMission ? `            The mission was aimed at THIS line of that note: ${aiCurrentGrammarDetailForMission}\n` : ''}            ⚠️ JUDGE THIS NOTE ("${String(aiCurrentGrammarForMission.title || '').replace(/"/g, "'")}") ON ITS OWN: if the student's answer uses it, you MUST list it with its exact title and the proving fragment — in "grammarOk" if that part is right, in "grammarBad" if that part is wrong — even when the rest of the sentence has other mistakes (a spelling slip or a wrong tense elsewhere does not make this note wrong, and does not let you skip it). Only if the answer does not use it at all, leave it out.\n`
                 : '';
             const refWords = '';   // [냐냐 요청] 덧붙임 단어를 안 주므로 채점에도 알릴 게 없다
 
@@ -1861,6 +1861,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 //   복습으로 센 번역은 노트에 표시해 둔다 — 일지에서 첨삭 목록이 아니라 복습 목록에 나오게
                 recordAiNote(isIdiom ? 'idiom' : 'ko-es', missionSentence, userText, feedback, undefined, countAsReview);
                 logAction(countAsReview ? 'review' : 'ai');
+                if (countAsReview) judgeMissedReviewTarget(feedback, grammarReviewLastNoteId);   // 목표 문법을 채점이 빠뜨렸으면 따로 (기다리지 않음)
                 saveToStorage();
                 updateStats();
                 scrollAiResultIntoView();
@@ -5614,6 +5615,57 @@ ${buildLearnerProfileSummary()}`;
                 </button>`;
             }).join('');
         }
+        // ============================================================
+        // [냐냐 지적] 문법 복습 세 개를 풀었는데 하나도 복습으로 안 잡혔다 (2026-10-12).
+        //   채점 AI 가 미션의 목표 문법(목적격 대명사 lo · hay)을 목록에서 빠뜨렸고, 문장은 다른 데가 틀려서
+        //   9/7 규칙('아무도 안 짚었고 문장이 틀렸으면 건드리지 않는다')에 걸려 곡선이 그대로였다 — 목표 문법은 맞게 썼는데도.
+        //   지시문으로 '목표 노트는 꼭 따로 판정' 을 시켰지만(4번 중 3번 잡음) 그래도 빠뜨리면 그 노트 하나만 따로 묻는다.
+        //   안 썼다고 하면(none) 9/7 규칙대로 건드리지 않는다. 결과는 기다리지 않고 들어오는 대로 카드에 붙는다.
+        // ============================================================
+        async function judgeMissedReviewTarget(feedback, noteId) {
+            try {
+                if (!noteId || !feedback || (aiLastEsKoGrammar || []).some(g => g.note.id === noteId)) return;
+                const note = aiScoringNoteList().find(t => t.id === noteId);
+                if (!note) return;
+                const noteKey = _lastAiNoteKey;
+                const mine = aiStripTags(feedback.originalMarked || ''), fixed = aiStripTags(feedback.correctedText || '');
+                const schema = { type: "OBJECT", properties: {
+                    verdict: { type: "STRING", enum: ["ok", "wrong", "none"] },
+                    ev: { type: "STRING", description: "the exact Spanish fragment of the student's answer that uses this rule, or empty" }
+                }, required: ["verdict", "ev"] };
+                const prompt = `A Korean learner wrote a Spanish sentence for a mission built to practise ONE grammar note (the student's own note):
+제목: ${note.title || ''}
+${buildGrammarContextForMission(note)}
+
+Student's answer: "${mine}"
+Teacher's corrected sentence: "${fixed}"
+
+Does the student's answer use THIS note's rule?
+- "ok": it uses it and that part is right (other mistakes elsewhere in the sentence do not matter)
+- "wrong": it uses it but that part is wrong (the teacher had to fix that very part)
+- "none": it does not use this rule at all
+Give the fragment in "ev".`;
+                const r = extractAndParseJson(await callGeminiGrade(prompt, 'Return ONLY JSON.', schema, 20000));
+                if (!r || (r.verdict !== 'ok' && r.verdict !== 'wrong')) return;
+                if ((aiLastEsKoGrammar || []).some(g => g.note.id === noteId) || noteKey !== _lastAiNoteKey) return;   // 그 사이 손으로 더했거나 다음 문제로 넘어갔다
+                const ok = r.verdict === 'ok';
+                const prev = {
+                    score: grammarScores[noteId], transUsed: grammarTransUsed[noteId], mastered: masteredGrammar[noteId],
+                    review: grammarReview[noteId] ? JSON.parse(JSON.stringify(grammarReview[noteId])) : undefined
+                };
+                const delta = ok ? GRAMMAR_TRANS_OK : GRAMMAR_TRANS_BAD;
+                addGrammarScore(noteId, delta, { transUsed: ok });
+                applyGrammarCurve(noteId, ok, true);
+                aiLastEsKoGrammar.push({ note, usage: ok ? 'correct' : 'wrong', delta, baseDelta: delta, prev, canMove: true,
+                    ev: String(r.ev || '').trim(), state: 'normal', undone: false, isReviewTarget: true, reviewLogged: 0 });
+                setAiNoteGramOk(noteKey, noteId, ok, note.title);
+                if (typeof saveToStorage === 'function') saveToStorage();
+                renderEsKoGrammarRefs();
+                if (typeof renderGrammarTables === 'function') renderGrammarTables();
+                if (typeof renderTodayReview === 'function') { try { renderTodayReview(); } catch (e) {} }
+            } catch (e) { console.warn('복습 목표 문법 따로 판정 실패', e); }
+        }
+
         function addGrammarEntryManually(noteId) {
             const notes = (typeof aiScoringNoteList === 'function') ? aiScoringNoteList() : [];
             const note = notes.find(t => t.id === noteId);
