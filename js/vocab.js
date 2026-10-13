@@ -1663,6 +1663,7 @@ Output one item per line, same id, no line skipped.`;
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // 모달 열 때 초기화
+            regIdiomVetSeen = new Set();   // 등록 창 관용구 미리 점검 기록도
             //   [냐냐 요청] '계속 등록?' 은 단어장에서 연 등록창에서만 묻는다 (2026-09-17).
             //   기본은 안 묻고, 단어장의 + 버튼·빈 목록 버튼(openWordModalFromVocab)만 켠다.
             _skipContinueRegisterPrompt = true;
@@ -2129,6 +2130,8 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                 } else {
                     r.addedAt = now;                             // 이번에 새로 적은 줄
                 }
+                //   등록 창에서 미리 점검한 글자 그대로면 '봤음' (걸렸던 것도 — 이미 보셨다)
+                if (!r.vetted && r.idiom && regIdiomVetSeen.has(String(r.idiom).trim())) markIdiomVetted(r);
             });
             return rows;
         }
@@ -2785,6 +2788,96 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }).join(', ');
         }
 
+        // ============================================================
+        // [냐냐 요청] 뜻의 지역 표시 (스)·(남) 는 따로 한 번 더 묻는다 (2026-10-13).
+        //   단어 추천을 한 번에 받으면 지역 표시가 뒤로 밀렸다 — maletero 를 세 번 다 '트렁크, (남)차 트렁크' 처럼.
+        //   생각을 보통·높음으로 올려도 그대로였다(높음은 13~32초). 이미 나온 뜻을 하나씩 보고 스/남/양쪽만 고르게 하면
+        //   거의 맞았고(maletero·coger·zumo·recién…), 양쪽 다 쓰는 흔한 낱말(agua·libro·comer…)엔 하나도 안 붙였다.
+        //   뜻을 새로 쓰게 하면 없는 뜻을 지어내고 (역)·(재) 를 잃어서 그건 안 한다 — 뜻은 그대로, 지역만 고친다.
+        //   실패하면 본 추천의 뜻을 그대로 쓴다.
+        // ============================================================
+        function splitMeaningTop(meaning) {
+            //   괄호 안의 쉼표는 자르지 않는다 — '(기차 등의) 짐칸' 같은 뜻
+            const out = []; let depth = 0, cur = '';
+            for (const ch of String(meaning || '')) {
+                if (ch === '(') depth++;
+                if (ch === ')') depth = Math.max(0, depth - 1);
+                if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+                cur += ch;
+            }
+            out.push(cur);
+            return out.map(x => x.trim()).filter(Boolean);
+        }
+        async function askMeaningRegions(word, meaning) {
+            const parts = splitMeaningTop(meaning);
+            if (!parts.length) return meaning;
+            const bare = parts.map(x => x.replace(/\((남|스)\)\s*/g, '').trim());
+            //   뜻마다 '스페인에선 뭐라 하나 / 중남미에선 뭐라 하나' 를 먼저 적게 한다 — 그냥 고르라면 conducir 를
+            //   양쪽 다로 보더니, 다른 쪽 낱말(manejar)을 떠올리게 하자 (스) 로 맞혔다 (2026-10-13 시험).
+            const schema = { type: "OBJECT", properties: { items: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                meaning: { type: "STRING" },
+                spainWord: { type: "STRING", description: "이 뜻을 스페인에서 보통 말하는 낱말" },
+                latamWord: { type: "STRING", description: "이 뜻을 중남미에서 보통 말하는 낱말" },
+                region: { type: "STRING", enum: ["both", "스", "남"] }
+            }, required: ["meaning", "spainWord", "latamWord", "region"] } } }, required: ["items"] };
+            const prompt = `스페인어 낱말 "${word}" 의 한국어 뜻들: ${bare.map(x => x.replace(/^(\((역|재|구|속)\))+/, '')).join(' / ')}
+뜻마다 먼저 그 뜻을 스페인에서 보통 뭐라고 하는지(spainWord), 중남미에서 보통 뭐라고 하는지(latamWord) 적어라.
+그 다음 region 을 판정하라:
+- "스": 이 뜻으로 "${word}" 를 쓰는 건 주로 스페인이고, 중남미는 보통 다른 낱말을 쓴다
+- "남": 이 뜻으로 "${word}" 를 쓰는 건 주로 중남미이고, 스페인은 보통 다른 낱말을 쓴다
+- "both": 양쪽 다 이 뜻으로 "${word}" 를 흔히 쓴다
+뜻은 주어진 순서 그대로 하나씩 돌려줄 것.`;
+            try {
+                const resp = await callGemini(prompt, 'You are a Spanish dialectology expert. Output JSON only.', schema, 'medium', GEMINI_MODEL_GRADE, 20000);
+                const items = ((extractAndParseJson(resp) || {}).items) || [];
+                if (items.length !== bare.length) return meaning;   // 줄 수가 안 맞으면 믿지 않는다
+                return normalizeMeaningMarks(bare.map((m, i) => {
+                    const r = items[i] && items[i].region;
+                    return (r === '스' || r === '남') ? `(${r})${m}` : m;
+                }).join(', '));
+            } catch (e) {
+                console.warn('뜻 지역 묻기 실패 — 본 추천 그대로', e);
+                return meaning;
+            }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 관용구 점검을 등록 창에서도 미리 (2026-10-13).
+        //   AI 추천이 관용구 줄을 채우면 뒤에서 바로 점검하고, 걸린 줄 밑에 작게 적는다 (기다리지 않는다).
+        //   본 글자(정확히 같은 글자)는 저장 때 vetted 로 남긴다 — 걸렸어도 이미 보셨으니 저장 뒤 점검이 또 알리지 않는다.
+        //   글자를 고치거나 새로 적은 줄은 저장 뒤 점검(vetIdiomsAfterSave)이 지금처럼 본다.
+        // ============================================================
+        let regIdiomVetSeen = new Set();   // 등록 창에서 점검을 마친 관용구 글자(trim) — 창을 새로 열면 비운다
+        async function preVetModalIdioms() {
+            try {
+                if (!hasGeminiApiKey()) return;
+                const rows = [...document.querySelectorAll('#idiom-entries-box > div')];
+                const wordText = (document.getElementById('input-word') || {}).value || '';
+                const targets = rows.map(r => ({ r, idiom: ((r.querySelector('[data-idiom-field="idiom"]') || {}).value || '').trim(),
+                    meaning: ((r.querySelector('[data-idiom-field="meaning"]') || {}).value || '').trim() }))
+                    .filter(x => x.idiom && !regIdiomVetSeen.has(x.idiom));
+                if (!targets.length) return;
+                const items = targets.map((x, i) => ({ k: 'i' + i, idiom: x.idiom, meaning: x.meaning, word: wordText, row: x.r }));
+                const res = await idiomVetRun(items, null);
+                [...res.passed, ...res.flagged].forEach(x => regIdiomVetSeen.add(x.idiom));
+                res.flagged.forEach(f => {
+                    const inp = f.row && f.row.querySelector('[data-idiom-field="idiom"]');
+                    if (!inp || !document.body.contains(f.row) || inp.value.trim() !== f.idiom) return;   // 그새 고쳤거나 지웠다
+                    let note = f.row.querySelector('.idiom-vet-note');
+                    if (!note) {
+                        note = document.createElement('p');
+                        note.className = 'idiom-vet-note text-[11px] font-bold text-amber-700 pl-1 leading-snug';
+                        f.row.firstElementChild.insertAdjacentElement('afterend', note);
+                        //   글자를 고치면 이 말은 더 맞지 않으니 치운다
+                        inp.addEventListener('input', () => { if (inp.value.trim() !== f.idiom) note.remove(); });
+                    }
+                    note.innerHTML = `⚠️ ${escapeHtml(IDIOM_VERDICT_LABEL[f.verdict] || f.verdict)}${f.region ? ` (${escapeHtml(f.region)})` : ''}`
+                        + (f.suggestion ? ` → <span class="text-slate-700">${escapeHtml(f.suggestion)}</span>` : '')
+                        + (f.why ? ` <span class="font-medium text-amber-600">· ${escapeHtml(f.why)}</span>` : '');
+                });
+            } catch (e) { console.warn('관용구 점검(등록 창) 실패', e); }
+        }
+
         // PREMIUM LIVE AI AUTOFILL (Improved with actual Gemini intelligence for phrase & tip generation)
         async function triggerAiAutofill(force = true) {
             const rawWord = document.getElementById('input-word').value.trim();
@@ -3010,7 +3103,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 }
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
+                const regionAsk = (result && typeof result.meaning === 'string' && result.meaning.trim())
+                    ? askMeaningRegions(rawWord, result.meaning) : null;
                 if (result && result.pos === 'verb') await mergeFocusedConj(result, rawWord, conjAsks);
+                if (regionAsk) result.meaning = await regionAsk;
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
@@ -3431,6 +3527,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const idiomIconAi = document.getElementById('idiom-toggle-icon');
                 if (idiomBoxAi) idiomBoxAi.classList.remove('hidden');
                 if (idiomIconAi) idiomIconAi.className = "fa-solid fa-minus text-xs";
+                preVetModalIdioms();   // 기다리지 않는다 — 걸린 줄 밑에 나중에 붙는다
             }
 
             const notesInput = document.getElementById('input-notes');
