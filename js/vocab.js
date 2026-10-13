@@ -2583,6 +2583,13 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     iconEl.className = "fa-solid fa-triangle-exclamation";
                 }
             }
+            //   [냐냐 요청] 그림을 넣는 팝업 (알 부화 메달) — 동그란 아이콘 자리를 그림이 대신한다
+            const artBox = document.getElementById('confirm-modal-art');
+            if (artBox) {
+                artBox.innerHTML = options.artHtml || '';
+                artBox.classList.toggle('hidden', !options.artHtml);
+                if (iconBox) iconBox.classList.toggle('hidden', !!options.artHtml);
+            }
 
             const btnOk = document.getElementById('confirm-ok-btn');
             const btnCancel = document.getElementById('confirm-cancel-btn');

@@ -1406,9 +1406,14 @@ let vocabulary = [];
             showHatchCelebration(creature);
         }
 
-        function showHatchCelebration(creature) {
+        async function showHatchCelebration(creature) {
             const info = RARITY_INFO[creature.rarity];
             const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
+            //   [냐냐 요청] 팝업에 메달을 보여준다 (2026-10-13). 그림을 아직 안 받았으면 받고 띄운다 —
+            //   늦어도 3초면 그냥 띄운다(그땐 이모지 메달).
+            if (creature.icon && !window.CREATURE_ICONS) {
+                await Promise.race([loadCreatureIcons(), new Promise(r => setTimeout(r, 3000))]);
+            }
             if (typeof AudioFX !== 'undefined' && AudioFX.playSuccess) AudioFX.playSuccess();
             // [냐냐 요청] 부화했다고 탭을 옮기지 않는다. 하던 걸 계속하게 두고 팝업으로만 알린다.
             //   확인 버튼이 '도감 보기'(=탭 이동)였던 데다 엔터로 자동 실행돼서, 쓰기 복습 중에
@@ -1416,7 +1421,7 @@ let vocabulary = [];
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
             showConfirm(
                 `🎉 부화 성공!`,
-                `${creature.emoji} ${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
+                `${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
                 () => { /* 닫기만 — 하던 화면 그대로 */ },
                 {
                     icon: 'happy',
@@ -1424,7 +1429,8 @@ let vocabulary = [];
                     okStyle: 'primary',
                     cancelLabel: '도감 보기',
                     noEnter: true,
-                    onCancel: openEggCollection
+                    onCancel: openEggCollection,
+                    artHtml: creatureMedalSvg(creature, 112)
                 }
             );
         }
@@ -1595,6 +1601,76 @@ let vocabulary = [];
             showToast(`"${es}" 등록 창을 열었어요`, "info");
         }
 
+        // ============================================================
+        // [냐냐 요청] 도감을 이모지 대신 메달로 (2026-10-13).
+        //   game-icons.net 실루엣(CC BY 3.0)을 메달 안에 금속빛으로 찍는다. 테두리 금속 = 희귀도
+        //   (일반 동 · 레어 은 · 에픽 금 · 전설 홀로그램). 속성 색으로 테두리를 바꾸면 희귀도가 안 보여서 안 된다.
+        //   그림(path)은 700KB 넘어서 js/creature-icons.js 로 따로 두고, 도감을 볼 때·알이 깰 때만 불러온다.
+        //   ⚠️ 그 파일은 ?v= 자동 올리기(index.html 훅)에 안 걸린다 — 커밋마다 다시 받지 않게 일부러.
+        //      파일을 다시 만들면 CREATURE_ICONS_VER 를 손으로 올릴 것.
+        //   맞는 그림이 없는 생물(icon 칸 없음)은 이모지를 메달 안에 넣는다.
+        // ============================================================
+        const CREATURE_ICONS_VER = '1';
+        const CREATURE_METAL = {
+            common:    { stops: ['#f6d2a8', '#c9844a', '#8a4b1f', '#e2a36b'], disc: ['#3a2416', '#1c110a'] },
+            rare:      { stops: ['#ffffff', '#cfd6df', '#7c8696', '#e8edf3'], disc: ['#26334d', '#0e1526'] },
+            epic:      { stops: ['#fff6c4', '#f3c742', '#a9761a', '#ffe58a'], disc: ['#2b1d4f', '#120b26'] },
+            legendary: { stops: ['#fbcfe8', '#a5f3fc', '#fde68a', '#c4b5fd', '#f0abfc'], disc: ['#101a3d', '#050814'] },
+        };
+        let creatureIconsPromise = null;
+        let creatureIconsFailedAt = 0;   // 못 받은 시각 — 30초 안엔 다시 안 받는다 (다시 그리기 → 또 받기 되풀이 막기)
+        function loadCreatureIcons() {
+            if (window.CREATURE_ICONS) return Promise.resolve(true);
+            if (creatureIconsPromise) return creatureIconsPromise;
+            creatureIconsPromise = new Promise(resolve => {
+                const s = document.createElement('script');
+                s.src = 'js/creature-icons.js?v=' + CREATURE_ICONS_VER;
+                s.onload = () => resolve(!!window.CREATURE_ICONS);
+                //   못 받으면(오프라인 등) 이모지로 그리고, 다음에 도감을 열 때 다시 받아 본다
+                s.onerror = () => { creatureIconsPromise = null; creatureIconsFailedAt = Date.now(); s.remove(); resolve(false); };
+                document.head.appendChild(s);
+            });
+            return creatureIconsPromise;
+        }
+
+        //   메달 한 개. locked 면 그림 대신 '?' (못 만난 칸 — 이름·모양이 드러나면 안 된다)
+        //   그라데이션 id 가 겹치면 다른 메달 색을 끌어다 쓰니 메달마다 번호를 새로 붙인다.
+        let creatureMedalSeq = 0;
+        function creatureMedalSvg(c, size, locked) {
+            const m = CREATURE_METAL[c.rarity] || CREATURE_METAL.common;
+            const id = 'cm' + (++creatureMedalSeq);
+            const holo = c.rarity === 'legendary';
+            const stops = m.stops.map((col, i) => `<stop offset="${(i / (m.stops.length - 1)).toFixed(2)}" stop-color="${col}"/>`).join('');
+            const rays = Array.from({ length: 24 }, (_, i) => `<rect x="99" y="14" width="2" height="8" rx="1" transform="rotate(${i * 15} 100 100)"/>`).join('');
+            const stars = holo ? Array.from({ length: 14 }, (_, i) => {
+                const a = i * 2.39996, r = 20 + (i * 37) % 48;
+                return `<circle cx="${(100 + Math.cos(a) * r).toFixed(1)}" cy="${(100 + Math.sin(a) * r).toFixed(1)}" r="${(0.6 + (i % 3) * 0.4).toFixed(1)}" fill="#fff" opacity="${0.35 + (i % 4) * 0.15}"/>`;
+            }).join('') : '';
+            const ds = (!locked && c.icon && window.CREATURE_ICONS) ? window.CREATURE_ICONS[c.icon] : null;
+            let inner;
+            if (locked) {
+                inner = `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" font-size="78" font-weight="900" fill="url(#m${id})" opacity=".55" font-family="system-ui,sans-serif">?</text>`;
+            } else if (ds) {
+                inner = `<g transform="translate(37 37) scale(0.246)" filter="url(#s${id})">${ds.map(d => `<path d="${d}" fill="url(#m${id})"/>`).join('')}</g>`;
+            } else if (c.icon && !creatureIconsFailedAt) {
+                inner = '';   // 그림 받는 중 — 다 받으면 다시 그린다
+            } else {
+                inner = `<text x="100" y="106" text-anchor="middle" dominant-baseline="central" font-size="80">${c.emoji}</text>`;
+            }
+            return `<svg viewBox="0 0 200 200" width="${size}" height="${size}" aria-hidden="true"><defs>
+                <linearGradient id="m${id}" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient>
+                <radialGradient id="d${id}" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="${m.disc[0]}"/><stop offset="1" stop-color="${m.disc[1]}"/></radialGradient>
+                <filter id="s${id}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".55"/></filter>
+            </defs>
+            ${holo ? `<circle cx="100" cy="100" r="98" fill="url(#m${id})" opacity=".25"/>` : ''}
+            <circle cx="100" cy="100" r="90" fill="url(#m${id})"/>
+            <circle cx="100" cy="100" r="90" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="1.5"/>
+            <g fill="#000" opacity=".22">${rays}</g>
+            <circle cx="100" cy="100" r="76" fill="url(#d${id})" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+            <circle cx="100" cy="100" r="72" fill="none" stroke="url(#m${id})" stroke-width="1.2" stroke-dasharray="2 4" opacity=".8"/>
+            ${stars}${inner}</svg>`;
+        }
+
         function renderCollectionGrid() {
             if (!eggState) eggState = defaultEggState();
             if (!Array.isArray(eggState.collection)) eggState.collection = [];
@@ -1607,6 +1683,12 @@ let vocabulary = [];
                 .sort((a, b) => (RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity]) || (a._i - b._i));
             if (eggCollectionOwnedOnly) list = list.filter(c => owned.has(c.id));
             if (eggCollectionRarity !== 'all') list = list.filter(c => c.rarity === eggCollectionRarity);
+            //   메달 그림은 학습기록 탭에서 도감이 보일 때만 받는다 (앱 켤 때마다 700KB 받지 않게)
+            if (!window.CREATURE_ICONS && !creatureIconsPromise && activeTab === 'records'
+                && Date.now() - creatureIconsFailedAt > 30000
+                && list.some(c => c.icon && owned.has(c.id))) {
+                loadCreatureIcons().then(() => renderEggCollectionSection());
+            }
 
             // 등급별 수집 현황 요약 — 누르면 그 등급만 본다 (맨 앞은 '전체')
             const chip = (key, star, label, color, bg, got, total) => {
@@ -1632,14 +1714,14 @@ let vocabulary = [];
                         <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
-                        <span class="text-3xl">${c.emoji}</span>
+                        ${creatureMedalSvg(c, 64)}
                         <span class="text-[13px] font-black ${info.color} leading-tight">${c.name}</span>
                         <span class="text-[10px] text-slate-600 leading-snug">${c.desc}</span>
                     </div>`;
                 } else {
                     return `<div class="relative flex flex-col items-center justify-center gap-1 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
                         <span class="absolute top-1 left-1.5 text-[9px] opacity-50">${info.star}</span>
-                        <span class="text-3xl grayscale">❔</span>
+                        ${creatureMedalSvg(c, 64, true)}
                         <span class="text-[13px] font-bold text-slate-300 leading-tight">???</span>
                         <span class="text-[10px] text-slate-400">아직 못 만났어요</span>
                     </div>`;
@@ -1661,6 +1743,7 @@ let vocabulary = [];
                     </div>
                     ${emptyMsg}
                     <div class="grid grid-cols-3 gap-2">${cells}</div>
+                    <p class="text-[10px] text-slate-400 text-center pt-1">메달 그림: Lorc · Delapouite 외 (<a href="https://game-icons.net" target="_blank" rel="noopener" class="underline hover:text-slate-500">game-icons.net</a>, CC BY 3.0)</p>
                 </div>`;
         }
 
