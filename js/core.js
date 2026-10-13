@@ -1332,13 +1332,13 @@ let vocabulary = [];
         const EGG_HATCH_GOAL = 500;
 
 
+        //   [냐냐 요청] 카드 색 = 메달 금속 (2026-10-13). 회색·파랑·연보라는 서로 잘 구분이 안 됐다.
+        //   일반 구리 · 레어 은 · 에픽 금 · 전설 오로라(무지개). 전설이 금빛이던 걸 에픽에 주고 전설은 오로라로.
         const RARITY_INFO = {
-            common:    { label: '일반',   color: 'text-slate-500',  bg: 'bg-slate-100',   star: '⭐' },
-            rare:      { label: '레어',   color: 'text-blue-600',   bg: 'bg-blue-50',     star: '⭐⭐' },
-            epic:      { label: '에픽',   color: 'text-violet-600', bg: 'bg-violet-50',   star: '⭐⭐⭐' },
-            // [냐냐 지적] 도감 칸 배경이 amber-50→yellow-50 이라 전설 카드(amber-50)가 묻혔다 (2026-09-29).
-            //   진한 금빛 + 금테로 띄운다.
-            legendary: { label: '전설',   color: 'text-amber-700',  bg: 'bg-gradient-to-br from-amber-200 to-yellow-100', border: 'border-amber-400', star: '👑' },
+            common:    { label: '일반',   color: 'text-[#9A5B2E]',  bg: 'bg-[#F6E2D0]', border: 'border-[#E0B48E]', star: '⭐' },
+            rare:      { label: '레어',   color: 'text-slate-600',  bg: 'bg-[#E6EBF1]', border: 'border-[#BFC8D4]', star: '⭐⭐' },
+            epic:      { label: '에픽',   color: 'text-amber-700',  bg: 'bg-[#FFF1BF]', border: 'border-[#E8C35A]', star: '⭐⭐⭐' },
+            legendary: { label: '전설',   color: 'text-violet-700', bg: 'bg-gradient-to-br from-pink-100 via-cyan-50 to-violet-200', border: 'border-violet-300', star: '👑' },
         };
 
         // 총 학습 활동 수 (누적) — 알 성장의 기준
