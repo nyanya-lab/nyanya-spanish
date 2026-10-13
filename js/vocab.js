@@ -2828,7 +2828,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 - "both": 양쪽 다 이 뜻으로 "${word}" 를 흔히 쓴다
 뜻은 주어진 순서 그대로 하나씩 돌려줄 것.`;
             try {
-                const resp = await callGemini(prompt, 'You are a Spanish dialectology expert. Output JSON only.', schema, 'medium', GEMINI_MODEL_GRADE, 20000);
+                //   보통 2~4.6초. AI 가 붐빌 때(503·멈춤) 등록이 오래 서 있지 않게 8초에서 끊고 본 추천 그대로 간다
+                const resp = await callGemini(prompt, 'You are a Spanish dialectology expert. Output JSON only.', schema, 'medium', GEMINI_MODEL_GRADE, 8000);
                 const items = ((extractAndParseJson(resp) || {}).items) || [];
                 if (items.length !== bare.length) return meaning;   // 줄 수가 안 맞으면 믿지 않는다
                 return normalizeMeaningMarks(bare.map((m, i) => {
