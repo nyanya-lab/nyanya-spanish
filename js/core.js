@@ -1435,7 +1435,7 @@ let vocabulary = [];
             //   부화하면 제출용 엔터가 그대로 눌려 팝업을 못 보고 탭만 넘어가 있었다.
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
             showConfirm(
-                `🎉 부화 성공!`,
+                `🎉 상자를 열었어요!`,
                 `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}`,
                 () => { /* 닫기만 — 하던 화면 그대로 */ },
                 {
@@ -1457,15 +1457,18 @@ let vocabulary = [];
         //   보여주지 않는다(500마리 중 뭐가 나올지 모르니까) — 금빛이 새고 틈 사이로 눈만.
         //   '꿈틀꿈틀'(4단계)부터 실제로 흔들린다 (.egg-wobble / .egg-hop, style.css).
         // ============================================================
+        //   [냐냐 요청] 알 → 보물상자 (2026-10-13). 이제 생물 말고 물건·보물도 메달로 나와서 알이 어색했다.
+        //   땅에서 파낸 흙투성이 상자 → 털어서 반짝 → 덜컹 → 걸쇠 풀림 → 틈으로 빛 → 열림.
+        //   마지막에도 안에 뭐가 있는지는 보여주지 않는다 (알 때와 같은 이유). 이름(EGG_*, eggSvg)은 그대로 둔다.
         const EGG_STAGES = [
-            '갓 태어난 알이에요',
-            '따끈따끈해졌어요',
-            '콩닥콩닥, 뭔가 살아 있어요',
-            '꿈틀꿈틀 움직여요!',
-            '톡, 작은 금이 생겼어요',
-            '쩍! 금이 한 바퀴 돌았어요',
-            '누가 밖을 보고 있어요…',
-            '곧 부화해요!! 두근두근'
+            '땅속에서 보물상자를 찾았어요',
+            '흙을 털었더니 반짝반짝',
+            '안에서 달그락 소리가 나요',
+            '덜컹덜컹 흔들려요!',
+            '찰칵, 걸쇠가 풀렸어요',
+            '뚜껑 틈으로 빛이 새어 나와요',
+            '반짝이는 게 보여요…',
+            '곧 열려요!! 두근두근'
         ];
         function eggStageVisual(ratio) {
             const idx = Math.max(0, Math.min(EGG_STAGES.length - 1, Math.floor(ratio * EGG_STAGES.length)));
@@ -1473,39 +1476,70 @@ let vocabulary = [];
             return { idx, label: EGG_STAGES[idx], anim };
         }
         //   단계 그림 (SVG 글자). px 는 너비 — 높이는 비율대로.
+        //   [냐냐 요청] 보물상자 (2026-10-13) — 밝은 갈색·진갈색 판자, 놋쇠 띠, 뚜껑에서 내려오는 걸쇠 + 열쇠 구멍 판.
+        //   보라 띠는 '왜 있냐' 하셔서 뺐고, 매끈한 뚜껑 + 반사광은 '대머리 같다' 하셔서 판자 줄로 바꿨다.
+        //   따로 그린 자물쇠는 '그냥 자물쇠잖아' 하셔서 상자에 붙은 걸쇠로.
         function eggSvg(idx, px) {
-            const E = 'M42 12 C58 12 70 40 70 58 C70 77 57 88 42 88 C27 88 14 77 14 58 C14 40 26 12 42 12 Z';
-            const shell = (fill, stroke) => `<path d="${E}" fill="${fill || '#FFF8EC'}" stroke="${stroke || '#E9C9A0'}" stroke-width="2"/>`;
-            const band = '<path d="M14 66 l7 -4 l7 4 l7 -4 l7 4 l7 -4 l7 4 l7 -4 l7 4" fill="none" stroke="#AFA9EC" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
-            const shine = '<ellipse cx="31" cy="34" rx="4" ry="9" fill="#fff" opacity=".85" transform="rotate(22 31 34)"/><circle cx="36" cy="22" r="1.8" fill="#fff" opacity=".85"/>';
-            const shadow = '<ellipse cx="42" cy="93" rx="22" ry="3.5" fill="#CECBF6" opacity=".55"/>';
-            const eyes = (y) => `<circle cx="35" cy="${y}" r="3" fill="#fff"/><circle cx="49" cy="${y}" r="3" fill="#fff"/><circle cx="35.9" cy="${y - .8}" r="1" fill="#3D2B1F"/><circle cx="49.9" cy="${y - .8}" r="1" fill="#3D2B1F"/>`;
+            const WOOD = '#D39A62', WOOD_D = '#8B5A2B', EDGE = '#5E3A1A', GOLD = '#FFD966', GOLD_D = '#B7791F';
+            const STRAP = '#C9953F', STRAP_D = '#8A5E1C', HOLE = '#4A2C12';
+            const shadow = '<ellipse cx="42" cy="91" rx="32" ry="4" fill="#CECBF6" opacity=".55"/>';
             const star = (x, y, s, c) => `<path d="M0 -6 Q1 -1 6 0 Q1 1 0 6 Q-1 1 -6 0 Q-1 -1 0 -6 Z" fill="${c}" transform="translate(${x},${y}) scale(${s})"/>`;
             const heart = (x, y, s) => `<path d="M0 2 C0 -2 -6 -2 -6 2 C-6 5 0 8 0 9 C0 8 6 5 6 2 C6 -2 0 -2 0 2 Z" fill="#ED93B1" transform="translate(${x},${y}) scale(${s})"/>`;
-            const crackLine = '<path d="M15 46 l7 -5 l6 7 l7 -7 l7 6 l7 -6 l7 6 l7 -4" fill="none" stroke="#9A6A4A" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>';
-            let body = '';
+            const rivet = (x, y) => `<circle cx="${x}" cy="${y}" r="1.3" fill="${STRAP_D}"/>`;
+            const body = `<rect x="10" y="50" width="64" height="37" rx="4" fill="${WOOD}" stroke="${EDGE}" stroke-width="2"/>`
+                + `<rect x="11" y="62" width="62" height="12" fill="${WOOD_D}"/>`
+                + `<path d="M12 62 H72 M12 74 H72" stroke="${EDGE}" stroke-width="1.2" opacity=".6"/>`
+                + `<rect x="19" y="50" width="6" height="37" fill="${STRAP}" stroke="${STRAP_D}" stroke-width="1"/><rect x="59" y="50" width="6" height="37" fill="${STRAP}" stroke="${STRAP_D}" stroke-width="1"/>`
+                + rivet(22, 56) + rivet(22, 80) + rivet(62, 56) + rivet(62, 80)
+                + `<path d="M10 79 V87 H18 M74 79 V87 H66" fill="none" stroke="${STRAP_D}" stroke-width="3" stroke-linejoin="round"/>`
+                + `<rect x="10" y="50" width="64" height="37" rx="4" fill="none" stroke="${EDGE}" stroke-width="2"/>`;
+            //   열쇠 구멍 판 (몸통 앞)
+            const plate = `<path d="M33 57 Q33 54 36 54 H48 Q51 54 51 57 V70 Q51 75.5 42 77.5 Q33 75.5 33 70 Z" fill="${GOLD}" stroke="${GOLD_D}" stroke-width="2" stroke-linejoin="round"/>`
+                + `<circle cx="35.8" cy="57" r="1" fill="${GOLD_D}"/><circle cx="48.2" cy="57" r="1" fill="${GOLD_D}"/>`
+                + `<circle cx="42" cy="66.5" r="2.4" fill="${HOLE}"/><path d="M40.7 67.5 L40 72.5 H44 L43.3 67.5 Z" fill="${HOLE}"/>`;
+            //   걸쇠 — 뚜껑에 붙어 있다. up 이면 위로 젖혀짐 (풀림)
+            const hasp = (up) => up
+                ? `<path d="M38 50 V41 Q38 37.5 42 37 Q46 37.5 46 41 V50 Z" fill="${GOLD}" stroke="${GOLD_D}" stroke-width="1.8" stroke-linejoin="round"/><rect x="40.5" y="40" width="3" height="4" rx="1" fill="${HOLE}"/>`
+                : `<path d="M38 49 V59 Q38 62 42 62.5 Q46 62 46 59 V49 Z" fill="${GOLD}" stroke="${GOLD_D}" stroke-width="1.8" stroke-linejoin="round"/><rect x="40.5" y="56" width="3" height="4" rx="1" fill="${HOLE}"/>`;
+            //   뚜껑 (납작한 반원통). dy: 들림, rot: 기울기
+            const LID = 'M10 50 V41 Q10 29 42 29 Q74 29 74 41 V50 Z';
+            const lid = (dy = 0, rot = 0, haspUp = false) => `<g transform="translate(0 ${-dy}) rotate(${rot} 42 40)">`
+                + `<path d="${LID}" fill="${WOOD}" stroke="${EDGE}" stroke-width="2" stroke-linejoin="round"/>`
+                + `<path d="M11 43 Q11 35 42 35 Q73 35 73 43 V48 H11 Z" fill="${WOOD_D}"/>`
+                + `<path d="M11 43 Q11 35 42 35 Q73 35 73 43" fill="none" stroke="${EDGE}" stroke-width="1.2" opacity=".6"/>`
+                + `<path d="M19 50 V31.5 Q22 30.8 25 30.5 V50 Z M59 30.5 Q62 30.8 65 31.5 V50 Z" fill="${STRAP}" stroke="${STRAP_D}" stroke-width="1"/>`
+                + rivet(22, 36) + rivet(62, 36)
+                + `<path d="${LID}" fill="none" stroke="${EDGE}" stroke-width="2" stroke-linejoin="round"/>`
+                + `<rect x="8" y="47" width="68" height="5" rx="2" fill="${STRAP}" stroke="${STRAP_D}" stroke-width="1.4"/>`
+                + hasp(haspUp) + `</g>`;
+            //   흙 — 1단계는 반쯤 묻힘, 2단계는 자국만 조금
+            const SOIL = '#7A5A3C', SOIL_L = '#9C7A55';
+            const mound = `<path d="M-4 92 Q2 74 16 78 Q26 70 34 80 Q44 72 54 80 Q62 70 72 78 Q84 74 88 92 Z" fill="${SOIL}"/>`
+                + `<path d="M4 88 Q14 82 24 86 M56 86 Q66 80 78 86" fill="none" stroke="${SOIL_L}" stroke-width="2" stroke-linecap="round"/>`
+                + `<circle cx="10" cy="86" r="2" fill="${SOIL_L}"/><circle cx="76" cy="84" r="2.4" fill="${SOIL_L}"/><circle cx="44" cy="88" r="1.6" fill="${SOIL_L}"/>`;
+            const smudges = (n) => [[30, 34, 6, 2.6], [58, 40, 4, 2], [14, 58, 4, 3], [50, 68, 5, 2.4], [68, 60, 3, 2], [36, 44, 3, 1.6]]
+                .slice(0, n).map(([x, y, rx, ry]) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${SOIL}" opacity=".85"/>`).join('');
+            const closed = body + plate + lid();
+            let g;
             switch (idx) {
-                case 0: body = shell() + band + shine; break;
-                case 1: body = shell('#FFEFE4', '#F0B9A0') + band + shine
-                    + '<path d="M6 44 q-5 6 0 12 q5 6 0 12 M78 44 q5 6 0 12 q-5 6 0 12" fill="none" stroke="#ED93B1" stroke-width="1.8" stroke-linecap="round"/>'; break;
-                case 2: body = shell() + band + shine + heart(72, 22, 1) + heart(80, 36, .6); break;
-                case 3: body = shell() + band + shine
-                    + '<path d="M74 26 q5 3 6 8 M77 16 q7 3 8 11 M10 30 q-5 3 -6 8" fill="none" stroke="#AFA9EC" stroke-width="1.8" stroke-linecap="round"/>'; break;
-                case 4: body = shell() + band + shine
-                    + '<path d="M50 20 l-3 6 l4 4 l-3 6 l3 3" fill="none" stroke="#9A6A4A" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'; break;
-                case 5: body = shell() + band + shine + crackLine; break;
-                case 6: body = shell() + band + shine
-                    + '<path d="M15 44 l7 -5 l6 7 l7 -7 l7 6 l7 -6 l7 6 l7 -4 L70 55 l-7 3 l-7 -5 l-7 6 l-7 -6 l-7 6 l-6 -6 l-7 5 l-8 -2 Z" fill="#3D2B1F"/>'
-                    + eyes(49); break;
-                default: body =
-                    '<path d="M42 44 L12 2 M42 44 L42 -8 M42 44 L72 2 M42 44 L-2 26 M42 44 L86 26" stroke="#FAC775" stroke-width="5" stroke-linecap="round" opacity=".7"/>'
-                    + '<path d="M14 58 C14 77 27 88 42 88 C57 88 70 77 70 58 l-7 -4 l-7 6 l-7 -6 l-7 6 l-7 -6 l-7 6 l-7 -6 Z" fill="#FFF8EC" stroke="#E9C9A0" stroke-width="2"/>'
-                    + band
-                    + '<ellipse cx="42" cy="56" rx="22" ry="6" fill="#3D2B1F"/>' + eyes(53)
-                    + '<path d="M14 54 C14 40 26 12 42 12 C58 12 70 40 70 54 l-7 4 l-7 -6 l-7 6 l-7 -6 l-7 6 l-7 -6 l-7 6 Z" fill="#FFF8EC" stroke="#E9C9A0" stroke-width="2" transform="rotate(-16 42 40) translate(0,-14)"/>'
-                    + star(76, 16, 1, '#EF9F27') + star(8, 22, .7, '#ED93B1') + star(80, 70, .6, '#AFA9EC');
+                case 0: g = closed + smudges(6) + mound; break;
+                case 1: g = closed + smudges(2) + star(66, 30, .7, '#fff') + star(16, 70, .5, '#fff') + star(78, 22, .8, '#FAC775') + star(4, 40, .6, '#FAC775'); break;
+                case 2: g = closed + heart(80, 20, 1) + heart(86, 34, .6)
+                    + '<path d="M2 58 q-4 3 0 6 M-2 54 q-6 5 0 14" fill="none" stroke="#ED93B1" stroke-width="1.6" stroke-linecap="round"/>'; break;
+                case 3: g = closed
+                    + '<path d="M80 30 q5 3 6 8 M83 20 q7 3 8 11 M4 32 q-5 3 -6 8 M1 22 q-7 3 -8 11" fill="none" stroke="#AFA9EC" stroke-width="1.8" stroke-linecap="round"/>'; break;
+                case 4: g = body + plate + lid(0, 0, true) + star(56, 38, .55, '#FAC775'); break;
+                case 5: g = '<path d="M20 46 L8 36 M42 46 L42 30 M64 46 L76 36 M10 48 L-2 46 M74 48 L86 46" stroke="#FAC775" stroke-width="2.5" stroke-linecap="round" opacity=".85"/>'
+                    + body + plate + '<rect x="10" y="43" width="64" height="8" rx="2" fill="#FFE9A8"/>' + lid(7, 0, true); break;
+                case 6: g = '<path d="M42 44 L8 24 M42 44 L42 4 M42 44 L76 24 M42 44 L-4 42 M42 44 L88 42" stroke="#FAC775" stroke-width="4" stroke-linecap="round" opacity=".65"/>'
+                    + body + plate + '<rect x="10" y="34" width="64" height="17" rx="3" fill="#FFF3C4"/>'
+                    + star(26, 44, .6, '#fff') + star(56, 42, .75, '#fff') + star(42, 46, .45, '#EF9F27') + lid(17, -5, true); break;
+                default: g = '<path d="M42 48 L10 6 M42 48 L42 -6 M42 48 L74 6 M42 48 L-4 30 M42 48 L88 30" stroke="#FAC775" stroke-width="5" stroke-linecap="round" opacity=".7"/>'
+                    + body + plate + '<ellipse cx="42" cy="50" rx="34" ry="9" fill="#FFF3C4"/>'
+                    + star(26, 46, .8, '#fff') + star(58, 44, 1, '#fff') + star(42, 40, .6, '#EF9F27') + lid(34, -12, true)
+                    + star(80, 14, 1, '#EF9F27') + star(4, 18, .7, '#ED93B1') + star(84, 70, .6, '#AFA9EC');
             }
-            return `<svg viewBox="-8 -12 100 110" width="${px}" height="${Math.round(px * 1.1)}" aria-hidden="true">${shadow}${body}</svg>`;
+            return `<svg viewBox="-8 -12 100 110" width="${px}" height="${Math.round(px * 1.1)}" aria-hidden="true">${shadow}${g}</svg>`;
         }
 
         function renderEgg() {
@@ -1521,8 +1555,8 @@ let vocabulary = [];
                 //   [냐냐 요청] 학습기록 맨 아래에서 도감과 한 장으로 (2026-10-02) — 이 줄이 그 카드의 머리다
                 container.innerHTML = `
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="text-sm">🥚</span>
-                        <h3 class="text-xs font-bold text-slate-700">알 키우기 · 도감 <span class="font-normal text-slate-400">(${new Set(eggState.collection).size}/${CREATURES.length} 수집)</span></h3>
+                        <span class="text-sm">🗝️</span>
+                        <h3 class="text-xs font-bold text-slate-700">보물상자 · 도감 <span class="font-normal text-slate-400">(${new Set(eggState.collection).size}/${CREATURES.length} 수집)</span></h3>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="shrink-0 ${stage.anim}">${eggSvg(stage.idx, 64)}</div>
@@ -1531,7 +1565,7 @@ let vocabulary = [];
                             <div class="h-2.5 bg-white/80 rounded-full overflow-hidden">
                                 <div class="h-full bg-gradient-to-r from-indigo-400 to-violet-500 transition-all duration-500" style="width:${pct}%"></div>
                             </div>
-                            <p class="text-[11px] text-slate-500">부화까지 <b class="text-indigo-500">${remain}</b> 학습 (${pct}%) · 🐣 <b class="text-violet-600">${eggState.totalHatched || 0}마리</b> 부화</p>
+                            <p class="text-[11px] text-slate-500">열기까지 <b class="text-indigo-500">${remain}</b> 학습 (${pct}%) · 🗝️ <b class="text-violet-600">${eggState.totalHatched || 0}번</b> 열었어요</p>
                         </div>
                     </div>
                 `;
@@ -1539,9 +1573,9 @@ let vocabulary = [];
             // [냐냐 요청] 사이드바 일지 밑의 작은 알 — 그림과 남은 학습만 (2026-10-02)
             const mini = document.getElementById('egg-mini');
             if (mini) {
-                mini.title = `${stage.label} · 누르면 알 키우기로`;
+                mini.title = `${stage.label} · 누르면 보물상자로`;
                 mini.innerHTML = `<span class="${stage.anim}">${eggSvg(stage.idx, 56)}</span>
-                    <span class="text-[11px] font-bold text-slate-500">부화까지 <b class="text-violet-600">${remain}</b> 학습</span>`;
+                    <span class="text-[11px] font-bold text-slate-500">열기까지 <b class="text-violet-600">${remain}</b> 학습</span>`;
             }
             // 도감(별도 하단 섹션)도 같이 갱신
             renderEggCollectionSection();
@@ -1832,9 +1866,9 @@ let vocabulary = [];
             }).join('');
 
             const emptyMsg = (eggCollectionOwnedOnly && list.length === 0)
-                ? '<p class="text-xs text-slate-400 text-center py-6">아직 모은 생물이 없어요! 알을 부화시켜 보세요 🥚</p>'
+                ? '<p class="text-xs text-slate-400 text-center py-6">아직 모은 메달이 없어요! 보물상자를 열어 보세요 🗝️</p>'
                 : ((list.length === 0)
-                    ? '<p class="text-xs text-slate-400 text-center py-6">이 등급은 아직 없어요 🥚</p>' : '');
+                    ? '<p class="text-xs text-slate-400 text-center py-6">이 등급은 아직 없어요 🗝️</p>' : '');
 
             return `
                 <div class="mt-3 space-y-2">
