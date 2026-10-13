@@ -1323,6 +1323,7 @@ let vocabulary = [];
                 progress: 0,        // 현재 알의 누적 학습 포인트
                 collection: [],     // 부화시킨 생물들의 id 목록 (도감)
                 totalHatched: 0,    // 총 부화 수
+                legendColors: {},   // 전설만: { 생물id: ['aurora','fuego',…] } 모은 오로라 색, 맨 끝이 가장 최근 (도감에 보이는 색)
                 lastCountedTotal: null // 학습량 델타 계산용 (총 학습 활동 수 스냅샷)
             };
         }
@@ -1402,13 +1403,27 @@ let vocabulary = [];
             const creature = pool[Math.floor(Math.random() * pool.length)];
             eggState.collection.push(creature.id);
             eggState.totalHatched = (eggState.totalHatched || 0) + 1;
+            //   [냐냐 요청] 전설은 오로라 5색 중 하나로 깬다 (2026-10-13, 가안). 도감 칸은 생물 하나에 한 칸이고
+            //   모은 색은 legendColors 에 쌓는다. 같은 색이 또 나오면 맨 뒤로 옮겨 그 색을 보여준다.
+            let color = null, newColor = false;
+            if (creature.rarity === 'legendary') {
+                color = LEGEND_COLORS[Math.floor(Math.random() * LEGEND_COLORS.length)].key;
+                const had = creatureLegendColors(creature.id);
+                newColor = !had.includes(color);
+                eggState.legendColors[creature.id] = had.filter(k => k !== color).concat(color);
+            }
             // 부화 축하 팝업
-            showHatchCelebration(creature);
+            showHatchCelebration(creature, color, newColor);
         }
 
-        async function showHatchCelebration(creature) {
+        async function showHatchCelebration(creature, color, newColor) {
             const info = RARITY_INFO[creature.rarity];
             const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
+            //   전설이면 몇 번째 색인지도 알린다 — 처음 만난 전설 / 이미 있는 전설의 새 색 / 이미 있는 색
+            const lc = color ? LEGEND_COLORS.find(x => x.key === color) : null;
+            const colorTag = lc ? `\n${lc.badge} ${lc.ko} 오로라` : '';
+            const tail = isNew ? '\n\n✨ 도감에 새로 추가됐어요!'
+                : (lc && newColor ? `\n\n✨ 새 색이에요! (${creatureLegendColors(creature.id).length}/${LEGEND_COLORS.length})` : '\n\n(이미 도감에 있어요)');
             //   [냐냐 요청] 팝업에 메달을 보여준다 (2026-10-13). 그림을 아직 안 받았으면 받고 띄운다 —
             //   늦어도 3초면 그냥 띄운다(그땐 이모지 메달).
             if (creature.icon && !window.CREATURE_ICONS) {
@@ -1421,7 +1436,7 @@ let vocabulary = [];
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
             showConfirm(
                 `🎉 부화 성공!`,
-                `${creature.name} (${info.label} ${info.star})\n\n${creature.desc}${isNew ? '\n\n✨ 도감에 새로 추가됐어요!' : '\n\n(이미 도감에 있어요)'}`,
+                `${creature.name} (${info.label} ${info.star})${colorTag}\n\n${creature.desc}${tail}`,
                 () => { /* 닫기만 — 하던 화면 그대로 */ },
                 {
                     icon: 'happy',
@@ -1430,7 +1445,7 @@ let vocabulary = [];
                     cancelLabel: '도감 보기',
                     noEnter: true,
                     onCancel: openEggCollection,
-                    artHtml: creatureMedalSvg(creature, 112)
+                    artHtml: creatureMedalSvg(creature, 112, false, color)
                 }
             );
         }
@@ -1636,29 +1651,29 @@ let vocabulary = [];
         //   메달 한 개. locked 면 그림 대신 '?' (못 만난 칸 — 이름·모양이 드러나면 안 된다)
         //   그라데이션 id 가 겹치면 다른 메달 색을 끌어다 쓰니 메달마다 번호를 새로 붙인다.
         let creatureMedalSeq = 0;
-        function creatureMedalSvg(c, size, locked) {
+        //   메달 안의 그림 — 실루엣 / 이모지(맞는 그림 없음·못 받음) / 빈칸(받는 중) / '?'(못 만남)
+        function creatureMedalInner(c, id, fill, locked) {
+            const ds = (!locked && c.icon && window.CREATURE_ICONS) ? window.CREATURE_ICONS[c.icon] : null;
+            if (locked) return `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" font-size="78" font-weight="900" fill="url(#${fill})" opacity=".55" font-family="system-ui,sans-serif">?</text>`;
+            if (ds) return `<g transform="translate(37 37) scale(0.246)" filter="url(#s${id})">${ds.map(d => `<path d="${d}" fill="url(#${fill})"/>`).join('')}</g>`;
+            if (c.icon && !creatureIconsFailedAt) return '';   // 그림 받는 중 — 다 받으면 다시 그린다
+            return `<text x="100" y="106" text-anchor="middle" dominant-baseline="central" font-size="80">${c.emoji}</text>`;
+        }
+        const svgStops = arr => arr.map((col, i) => `<stop offset="${(i / (arr.length - 1)).toFixed(2)}" stop-color="${col}"/>`).join('');
+
+        //   color: 전설만 — 'aurora'(무지개 홀로그램) · 'fuego' · 'agua' · 'bosque' · 'noche'. 없으면 무지개.
+        function creatureMedalSvg(c, size, locked, color) {
+            if (c.rarity === 'legendary' && !locked && color && LEGEND_ELEM[color]) return legendElemMedalSvg(c, size, color);
             const m = CREATURE_METAL[c.rarity] || CREATURE_METAL.common;
             const id = 'cm' + (++creatureMedalSeq);
             const holo = c.rarity === 'legendary';
-            const stops = m.stops.map((col, i) => `<stop offset="${(i / (m.stops.length - 1)).toFixed(2)}" stop-color="${col}"/>`).join('');
             const rays = Array.from({ length: 24 }, (_, i) => `<rect x="99" y="14" width="2" height="8" rx="1" transform="rotate(${i * 15} 100 100)"/>`).join('');
             const stars = holo ? Array.from({ length: 14 }, (_, i) => {
                 const a = i * 2.39996, r = 20 + (i * 37) % 48;
                 return `<circle cx="${(100 + Math.cos(a) * r).toFixed(1)}" cy="${(100 + Math.sin(a) * r).toFixed(1)}" r="${(0.6 + (i % 3) * 0.4).toFixed(1)}" fill="#fff" opacity="${0.35 + (i % 4) * 0.15}"/>`;
             }).join('') : '';
-            const ds = (!locked && c.icon && window.CREATURE_ICONS) ? window.CREATURE_ICONS[c.icon] : null;
-            let inner;
-            if (locked) {
-                inner = `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" font-size="78" font-weight="900" fill="url(#m${id})" opacity=".55" font-family="system-ui,sans-serif">?</text>`;
-            } else if (ds) {
-                inner = `<g transform="translate(37 37) scale(0.246)" filter="url(#s${id})">${ds.map(d => `<path d="${d}" fill="url(#m${id})"/>`).join('')}</g>`;
-            } else if (c.icon && !creatureIconsFailedAt) {
-                inner = '';   // 그림 받는 중 — 다 받으면 다시 그린다
-            } else {
-                inner = `<text x="100" y="106" text-anchor="middle" dominant-baseline="central" font-size="80">${c.emoji}</text>`;
-            }
             return `<svg viewBox="0 0 200 200" width="${size}" height="${size}" aria-hidden="true"><defs>
-                <linearGradient id="m${id}" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient>
+                <linearGradient id="m${id}" x1="0" y1="0" x2="1" y2="1">${svgStops(m.stops)}</linearGradient>
                 <radialGradient id="d${id}" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="${m.disc[0]}"/><stop offset="1" stop-color="${m.disc[1]}"/></radialGradient>
                 <filter id="s${id}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".55"/></filter>
             </defs>
@@ -1668,7 +1683,71 @@ let vocabulary = [];
             <g fill="#000" opacity=".22">${rays}</g>
             <circle cx="100" cy="100" r="76" fill="url(#d${id})" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
             <circle cx="100" cy="100" r="72" fill="none" stroke="url(#m${id})" stroke-width="1.2" stroke-dasharray="2 4" opacity=".8"/>
-            ${stars}${inner}</svg>`;
+            ${stars}${creatureMedalInner(c, id, 'm' + id, locked)}</svg>`;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 전설 = 오로라 계열 5가지 (2026-10-13).
+        //   무지개(홀로그램) · 불 · 물 · 숲 · 밤. 속성 변종은 전설에만 있다 — 전설끼리라 테두리 장식까지
+        //   속성마다 달라도 희귀도가 안 헷갈린다 (냐냐님이 고른 견본: 불꽃·물결·잎·별과 초승달 테두리).
+        //   깰 때 다섯 중 하나가 같은 확률로 나온다. 도감은 생물 한 칸, 모은 색은 카드에 점으로.
+        // ============================================================
+        const LEGEND_COLORS = [
+            { key: 'aurora', ko: '무지개', badge: '🌈', dot: 'linear-gradient(135deg,#fbcfe8,#a5f3fc,#fde68a,#c4b5fd)' },
+            { key: 'fuego',  ko: '불',     badge: '🔥', dot: '#ff9f43' },
+            { key: 'agua',   ko: '물',     badge: '💧', dot: '#38bdf8' },
+            { key: 'bosque', ko: '숲',     badge: '🍃', dot: '#86c55a' },
+            { key: 'noche',  ko: '밤',     badge: '🌙', dot: '#a78bfa' },
+        ];
+        const LEGEND_ELEM = {
+            fuego:  { ring: ['#ffe29a', '#ff9f43', '#d9480f', '#ffb86b'], disc: ['#5a1208', '#1f0603'], fill: ['#fff3b0', '#ffb347', '#ff5e3a'] },
+            agua:   { ring: ['#e0f7ff', '#7dd3fc', '#0369a1', '#bae6fd'], disc: ['#0c3a5e', '#04121f'], fill: ['#ffffff', '#a5f3fc', '#38bdf8'] },
+            bosque: { ring: ['#ecfccb', '#86c55a', '#3f6212', '#bef264'], disc: ['#163b1c', '#07140a'], fill: ['#fefce8', '#bef264', '#65a30d'] },
+            noche:  { ring: ['#f5f3ff', '#c4b5fd', '#5b21b6', '#ddd6fe'], disc: ['#1e1450', '#070418'], fill: ['#ffffff', '#ddd6fe', '#a78bfa'] },
+        };
+        //   모은 오로라 색 — 예전에 깬 전설(색 기록 없음)은 무지개 하나로 친다
+        function creatureLegendColors(id) {
+            if (!eggState.legendColors || typeof eggState.legendColors !== 'object') eggState.legendColors = {};
+            const got = eggState.legendColors[id];
+            if (Array.isArray(got) && got.length) return got.slice();
+            return eggState.collection.includes(id) ? ['aurora'] : [];
+        }
+        function legendElemMedalSvg(c, size, kind) {
+            const e = LEGEND_ELEM[kind];
+            const id = 'cm' + (++creatureMedalSeq);
+            const around = (n, fn) => Array.from({ length: n }, (_, i) => fn(i * 360 / n)).join('');
+            const ring = {
+                fuego: around(16, a => `<path transform="rotate(${a} 100 100)" d="M100 2 C106 10 104 14 100 16 C96 14 94 10 100 2Z" fill="url(#r${id})" stroke="#9a2a06" stroke-width=".8"/>`)
+                    + around(16, a => `<path transform="rotate(${a + 11.25} 100 100)" d="M100 6 C104 11 103 14 100 15 C97 14 96 11 100 6Z" fill="#ffd166" opacity=".9"/>`),
+                agua: around(20, a => `<path transform="rotate(${a} 100 100)" d="M90 9 Q95 3 100 9 Q105 3 110 9" fill="none" stroke="#e0f7ff" stroke-width="2.2" stroke-linecap="round"/>`)
+                    + around(6, a => `<path transform="rotate(${a + 15} 100 100)" d="M100 1 C103 6 104 9 100 11 C96 9 97 6 100 1Z" fill="#7dd3fc" stroke="#0369a1" stroke-width=".8"/>`),
+                bosque: around(18, a => `<path transform="rotate(${a} 100 100)" d="M100 4 C108 6 108 13 100 15 C92 13 92 6 100 4Z M100 5 L100 14" fill="#86c55a" stroke="#3f6212" stroke-width="1"/>`)
+                    + `<circle cx="100" cy="100" r="93" fill="none" stroke="#3f6212" stroke-width="1.2" stroke-dasharray="1 3"/>`,
+                noche: around(12, a => `<path transform="rotate(${a} 100 100) translate(100 7) scale(.55)" d="M0 -10 C1 -3 3 -1 10 0 C3 1 1 3 0 10 C-1 3 -3 1 -10 0 C-3 -1 -1 -3 0 -10Z" fill="#fef9c3"/>`)
+                    + `<path d="M88 4 A14 14 0 1 0 112 4 A11 11 0 1 1 88 4Z" fill="#fde68a" stroke="#a16207" stroke-width="1" transform="translate(0 -1)"/>`,
+            }[kind];
+            const disc = {
+                noche: Array.from({ length: 16 }, (_, i) => { const a = i * 2.39996, r = 18 + (i * 37) % 50; return `<circle cx="${(100 + Math.cos(a) * r).toFixed(1)}" cy="${(100 + Math.sin(a) * r).toFixed(1)}" r="${(0.6 + (i % 3) * 0.45).toFixed(1)}" fill="#fff" opacity="${0.3 + (i % 4) * 0.15}"/>`; }).join(''),
+                agua: `<path d="M30 136 Q50 128 70 136 T110 136 T150 136 T190 136 L190 180 L10 180Z" fill="#38bdf8" opacity=".12"/><path d="M20 150 Q40 142 60 150 T100 150 T140 150 T180 150" fill="none" stroke="#7dd3fc" stroke-width="1.5" opacity=".35"/>`,
+                fuego: `<radialGradient id="e${id}" cx="50%" cy="90%" r="60%"><stop offset="0" stop-color="#ff7a18" stop-opacity=".45"/><stop offset="1" stop-color="#ff7a18" stop-opacity="0"/></radialGradient><circle cx="100" cy="100" r="76" fill="url(#e${id})"/>`,
+                bosque: `<path d="M40 150 Q60 120 70 150 M150 152 Q140 124 128 150" stroke="#4d7c0f" stroke-width="2" fill="none" opacity=".5"/><circle cx="58" cy="60" r="2" fill="#bef264" opacity=".5"/><circle cx="146" cy="68" r="1.6" fill="#bef264" opacity=".5"/><circle cx="132" cy="44" r="1.2" fill="#bef264" opacity=".5"/>`,
+            }[kind];
+            const ticks = Array.from({ length: 24 }, (_, i) => `<rect x="99" y="16" width="2" height="7" rx="1" transform="rotate(${i * 15} 100 100)"/>`).join('');
+            return `<svg viewBox="-6 -6 212 212" width="${size}" height="${size}" aria-hidden="true"><defs>
+                <linearGradient id="r${id}" x1="0" y1="0" x2="1" y2="1">${svgStops(e.ring)}</linearGradient>
+                <linearGradient id="f${id}" x1="0" y1="0" x2="0" y2="1">${svgStops(e.fill)}</linearGradient>
+                <radialGradient id="d${id}" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="${e.disc[0]}"/><stop offset="1" stop-color="${e.disc[1]}"/></radialGradient>
+                <filter id="s${id}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#000" flood-opacity=".6"/></filter>
+                <clipPath id="c${id}"><circle cx="100" cy="100" r="76"/></clipPath>
+            </defs>
+            ${ring}
+            <circle cx="100" cy="100" r="88" fill="url(#r${id})"/>
+            <circle cx="100" cy="100" r="88" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="1.5"/>
+            <g fill="#000" opacity=".2">${ticks}</g>
+            <circle cx="100" cy="100" r="76" fill="url(#d${id})" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+            <g clip-path="url(#c${id})">${disc}</g>
+            <circle cx="100" cy="100" r="72" fill="none" stroke="url(#r${id})" stroke-width="1.2" stroke-dasharray="2 4" opacity=".8"/>
+            ${creatureMedalInner(c, id, 'f' + id, false)}</svg>`;
         }
 
         function renderCollectionGrid() {
@@ -1710,15 +1789,19 @@ let vocabulary = [];
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
                     const inVocab = !!creatureVocabWord(c);
+                    const legend = c.rarity === 'legendary' ? creatureLegendColors(c.id) : null;
                     //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
                     return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
                         <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
-                        <span class="shrink-0">${creatureMedalSvg(c, 88)}</span>
+                        <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
                         <div class="min-w-0 flex-1 space-y-1">
                             <p class="text-[9px] leading-none">${info.star}</p>
                             <p class="text-sm font-black ${info.color} leading-tight">${c.name}</p>
                             <p class="text-[11px] text-slate-600 leading-snug">${c.desc}</p>
+                            ${legend ? `<p class="flex items-center gap-1 pt-0.5" title="모은 오로라 색 ${legend.length}/${LEGEND_COLORS.length}">${LEGEND_COLORS.map(lc => legend.includes(lc.key)
+                                ? `<span class="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style="background:${lc.dot}" title="${lc.ko}"></span>`
+                                : `<span class="w-2.5 h-2.5 rounded-full border border-slate-300 bg-white/60"></span>`).join('')}<span class="text-[9px] font-bold text-amber-700 ml-0.5">${legend.length}/${LEGEND_COLORS.length}</span></p>` : ''}
                         </div>
                     </div>`;
                 } else {
