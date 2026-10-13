@@ -1625,7 +1625,7 @@ let vocabulary = [];
         //      파일을 다시 만들면 CREATURE_ICONS_VER 를 손으로 올릴 것.
         //   맞는 그림이 없는 생물(icon 칸 없음)은 이모지를 메달 안에 넣는다.
         // ============================================================
-        const CREATURE_ICONS_VER = '1';
+        const CREATURE_ICONS_VER = '2';   // 2: 환상 생물 26 추가 (2026-10-13)
         const CREATURE_METAL = {
             common:    { stops: ['#f6d2a8', '#c9844a', '#8a4b1f', '#e2a36b'], disc: ['#3a2416', '#1c110a'] },
             rare:      { stops: ['#ffffff', '#cfd6df', '#7c8696', '#e8edf3'], disc: ['#26334d', '#0e1526'] },
@@ -1711,6 +1711,16 @@ let vocabulary = [];
             const got = eggState.legendColors[id];
             if (Array.isArray(got) && got.length) return got.slice();
             return eggState.collection.includes(id) ? ['aurora'] : [];
+        }
+        //   [냐냐 요청] 카드의 모은 색 점을 누르면 그 색 메달을 크게 (2026-10-13)
+        function showLegendColorMedal(id, key) {
+            const c = CREATURES.find(x => x.id === id);
+            const lc = LEGEND_COLORS.find(x => x.key === key);
+            if (!c || !lc || !creatureLegendColors(id).includes(key)) return;
+            showConfirm(`${lc.badge} ${lc.ko} 오로라`, c.name, () => {}, {
+                okLabel: '닫기', okStyle: 'primary', hideCancel: true,
+                artHtml: creatureMedalSvg(c, 168, false, key)
+            });
         }
         function legendElemMedalSvg(c, size, kind) {
             const e = LEGEND_ELEM[kind];
@@ -1800,7 +1810,7 @@ let vocabulary = [];
                             <p class="text-sm font-black ${info.color} leading-tight">${c.name}</p>
                             <p class="text-[11px] text-slate-600 leading-snug">${c.desc}</p>
                             ${legend ? `<p class="flex items-center gap-1 pt-0.5" title="모은 오로라 색 ${legend.length}/${LEGEND_COLORS.length}">${LEGEND_COLORS.map(lc => legend.includes(lc.key)
-                                ? `<span class="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style="background:${lc.dot}" title="${lc.ko}"></span>`
+                                ? `<button type="button" onclick="event.stopPropagation(); showLegendColorMedal('${c.id}', '${lc.key}')" title="${lc.ko} 메달 보기" class="p-0.5 -m-0.5 rounded-full hover:scale-125 transition-transform"><span class="block w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style="background:${lc.dot}"></span></button>`
                                 : `<span class="w-2.5 h-2.5 rounded-full border border-slate-300 bg-white/60"></span>`).join('')}<span class="text-[9px] font-bold text-amber-700 ml-0.5">${legend.length}/${LEGEND_COLORS.length}</span></p>` : ''}
                         </div>
                     </div>`;
