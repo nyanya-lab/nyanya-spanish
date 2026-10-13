@@ -2140,10 +2140,36 @@ let vocabulary = [];
         //   ⚠️ 옛 기록은 들어온 날을 '마지막 틀린 날' 로 채웠다(migrateCurveEnteredDates).
         //      실제보다 짧게 나올 수 있는데, 냐냐님이 그냥 표시하기로 하셨다 — 곧 새 졸업이 쌓인다.
         // ============================================================
-        //   [냐냐 요청] 그날 곡선을 졸업한 수 (2026-10-13) — 졸업일은 lastReviewDate (위와 같은 까닭).
-        //   ⚠️ 졸업한 뒤 다시 틀려 곡선에 돌아온 것은 빠진다 (졸업 기록을 따로 남기지 않는다).
+        //   [냐냐 요청] 졸업을 그날 일지에 적어 둔다 (2026-10-13) — d.graduated = ['w:단어id', 'i:관용구키', 'g:문법id'].
+        //   예전엔 lastReviewDate 로 거꾸로 셌는데, 졸업한 뒤 다시 틀리면 그날 숫자에서 빠졌다.
+        function noteGraduation(key) {
+            try {
+                if (typeof touchDiarySnapshot === 'function') touchDiarySnapshot();
+                const d = nyanyaDiary && nyanyaDiary[getLocalDateString()];
+                if (!d) return;
+                const list = Array.isArray(d.graduated) ? d.graduated : [];
+                if (list.indexOf(key) < 0) list.push(key);
+                d.graduated = list;
+            } catch (e) {}
+        }
+        //   그날 졸업한 수. 적어 둔 목록이 있으면 그걸 센다:
+        //   지금도 졸업해 있거나, 그 뒤에 다시 틀려 돌아온 것(lastWrongDate 가 그날보다 뒤)은 센다.
+        //   둘 다 아니면 첨삭 ↺ 처럼 졸업 자체가 무른 것이라 뺀다.
+        //   목록이 없는 옛날(10/13 전)은 lastReviewDate 로 거꾸로 센다 — 다시 틀린 것은 빠진다.
         function countGraduatedOn(ds) {
             const last = REVIEW_INTERVALS.length;
+            const d = nyanyaDiary && nyanyaDiary[ds];
+            if (d && Array.isArray(d.graduated)) {
+                return d.graduated.filter(k => {
+                    const id = k.slice(2);
+                    let rec = null, stage = 0;
+                    if (k[0] === 'w') { rec = (vocabulary || []).find(w => String(w.id) === id); stage = rec ? (rec.reviewStage || 0) : 0; }
+                    else if (k[0] === 'i') { rec = (idiomReview || {})[id]; stage = rec ? (rec.stage || 0) : 0; }
+                    else if (k[0] === 'g') { rec = (grammarReview || {})[id]; stage = rec ? (rec.stage || 0) : 0; }
+                    if (!rec) return true;   // 지워진 것은 그날 졸업한 그대로 센다
+                    return stage >= last || (rec.lastWrongDate || '') > ds;
+                }).length;
+            }
             const done = (rec, stage) => rec && rec.lastWrongDate && stage >= last && rec.lastReviewDate === ds;
             let n = 0;
             (vocabulary || []).forEach(w => {
@@ -3554,6 +3580,7 @@ let vocabulary = [];
             if (holdWeakAtLastStage(rec, 'stage', getIdiomGrade(wordId, idiomText), idiomText)) return;   // 약점이면 30일 칸에 머문다
             if (before < REVIEW_INTERVALS.length && rec.stage >= REVIEW_INTERVALS.length && typeof showToast === 'function') {
                 showToast(`"${idiomText}" 망각곡선 졸업! 🎓`, "success");
+                noteGraduation('i:' + key);
             }
         }
 
@@ -3699,6 +3726,7 @@ let vocabulary = [];
                 && typeof showToast === 'function') {
                 const t = tt;
                 showToast(`"${(t && t.title) || '이 문법'}" 망각곡선 졸업! 🎓`, "success");
+                noteGraduation('g:' + id);
             }
         }
 
@@ -3952,6 +3980,7 @@ let vocabulary = [];
                     && typeof showToast === 'function') {
                     const lastGap = REVIEW_INTERVALS[REVIEW_INTERVALS.length - 1];
                     showToast(`"${w.word}" 망각곡선 졸업! 🎓 ${lastGap}일을 버텼어요`, "success");
+                    noteGraduation('w:' + w.id);
                 }
             }
             else demoteReviewStage(w); // [냐냐 요청] 처음으로 되돌리지 않고 한 단계만 뒤로
