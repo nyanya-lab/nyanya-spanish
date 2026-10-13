@@ -1479,7 +1479,8 @@ let vocabulary = [];
         //   [냐냐 요청] 보물상자 (2026-10-13) — 밝은 갈색·진갈색 판자, 놋쇠 띠, 뚜껑에서 내려오는 걸쇠 + 열쇠 구멍 판.
         //   보라 띠는 '왜 있냐' 하셔서 뺐고, 매끈한 뚜껑 + 반사광은 '대머리 같다' 하셔서 판자 줄로 바꿨다.
         //   따로 그린 자물쇠는 '그냥 자물쇠잖아' 하셔서 상자에 붙은 걸쇠로.
-        function eggSvg(idx, px) {
+        //   tight: 사이드바용 — 뚜껑이 닫힌 단계(1~5)는 위쪽 빈자리를 잘라 상자가 칸을 위아래로 채우게. 이때 px 는 높이.
+        function eggSvg(idx, px, tight) {
             const WOOD = '#D39A62', WOOD_D = '#8B5A2B', EDGE = '#5E3A1A', GOLD = '#FFD966', GOLD_D = '#B7791F';
             const STRAP = '#C9953F', STRAP_D = '#8A5E1C', HOLE = '#4A2C12';
             const shadow = '<ellipse cx="42" cy="91" rx="32" ry="4" fill="#CECBF6" opacity=".55"/>';
@@ -1539,6 +1540,10 @@ let vocabulary = [];
                     + star(26, 46, .8, '#fff') + star(58, 44, 1, '#fff') + star(42, 40, .6, '#EF9F27') + lid(34, -12, true)
                     + star(80, 14, 1, '#EF9F27') + star(4, 18, .7, '#ED93B1') + star(84, 70, .6, '#AFA9EC');
             }
+            if (tight) {
+                const vb = idx <= 4 ? [-8, 18, 100, 78] : [-8, -12, 100, 110];
+                return `<svg viewBox="${vb.join(' ')}" width="${Math.round(px * vb[2] / vb[3])}" height="${px}" aria-hidden="true">${shadow}${g}</svg>`;
+            }
             return `<svg viewBox="-8 -12 100 110" width="${px}" height="${Math.round(px * 1.1)}" aria-hidden="true">${shadow}${g}</svg>`;
         }
 
@@ -1573,9 +1578,10 @@ let vocabulary = [];
             // [냐냐 요청] 사이드바 일지 밑의 작은 알 — 그림과 남은 학습만 (2026-10-02)
             const mini = document.getElementById('egg-mini');
             if (mini) {
-                mini.title = `${stage.label} · 누르면 보물상자로`;
-                mini.innerHTML = `<span class="${stage.anim}">${eggSvg(stage.idx, 56)}</span>
-                    <span class="text-[11px] font-bold text-slate-500">열기까지 <b class="text-violet-600">${remain}</b> 학습</span>`;
+                //   [냐냐 요청] 상자가 칸을 위아래로 채우게 키우고, 남은 학습은 오른쪽 위 모서리에 숫자만 (2026-10-13)
+                mini.title = `열기까지 ${remain} 학습 · ${stage.label} · 누르면 보물상자로`;
+                mini.innerHTML = `<span class="${stage.anim}">${eggSvg(stage.idx, 92, true)}</span>
+                    <span class="absolute top-1.5 right-3 text-sm font-black text-violet-600">${remain}</span>`;
             }
             // 도감(별도 하단 섹션)도 같이 갱신
             renderEggCollectionSection();
