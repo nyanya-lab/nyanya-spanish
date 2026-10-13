@@ -1710,20 +1710,25 @@ let vocabulary = [];
                 const info = RARITY_INFO[c.rarity];
                 if (has) {
                     const inVocab = !!creatureVocabWord(c);
-                    return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex flex-col items-center text-center gap-1 p-2.5 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
+                    //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
+                    return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
                         <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
-                        <span class="absolute top-1 left-1.5 text-[9px]">${info.star}</span>
-                        ${creatureMedalSvg(c, 64)}
-                        <span class="text-[13px] font-black ${info.color} leading-tight">${c.name}</span>
-                        <span class="text-[10px] text-slate-600 leading-snug">${c.desc}</span>
+                        <span class="shrink-0">${creatureMedalSvg(c, 88)}</span>
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <p class="text-[9px] leading-none">${info.star}</p>
+                            <p class="text-sm font-black ${info.color} leading-tight">${c.name}</p>
+                            <p class="text-[11px] text-slate-600 leading-snug">${c.desc}</p>
+                        </div>
                     </div>`;
                 } else {
-                    return `<div class="relative flex flex-col items-center justify-center gap-1 p-2.5 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
-                        <span class="absolute top-1 left-1.5 text-[9px] opacity-50">${info.star}</span>
-                        ${creatureMedalSvg(c, 64, true)}
-                        <span class="text-[13px] font-bold text-slate-300 leading-tight">???</span>
-                        <span class="text-[10px] text-slate-400">아직 못 만났어요</span>
+                    return `<div class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
+                        <span class="shrink-0">${creatureMedalSvg(c, 88, true)}</span>
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <p class="text-[9px] leading-none opacity-50">${info.star}</p>
+                            <p class="text-sm font-bold text-slate-300 leading-tight">???</p>
+                            <p class="text-[11px] text-slate-400">아직 못 만났어요</p>
+                        </div>
                     </div>`;
                 }
             }).join('');
@@ -1742,7 +1747,7 @@ let vocabulary = [];
                         </button>
                     </div>
                     ${emptyMsg}
-                    <div class="grid grid-cols-3 gap-2">${cells}</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${cells}</div>
                     <p class="text-[10px] text-slate-400 text-center pt-1">메달 그림: Lorc · Delapouite 외 (<a href="https://game-icons.net" target="_blank" rel="noopener" class="underline hover:text-slate-500">game-icons.net</a>, CC BY 3.0)</p>
                 </div>`;
         }
