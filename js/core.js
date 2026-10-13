@@ -1436,7 +1436,7 @@ let vocabulary = [];
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
             showConfirm(
                 `🎉 부화 성공!`,
-                `${creature.name} (${info.label} ${info.star})${colorTag}\n\n${creature.desc}${tail}`,
+                `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}`,
                 () => { /* 닫기만 — 하던 화면 그대로 */ },
                 {
                     icon: 'happy',
@@ -1594,6 +1594,8 @@ let vocabulary = [];
         //   ⚠️ 활용형 찾기(findVocabWordByForm)는 쓰지 않는다 — 'vino' 가 venir 로 갈 수 있다.
         // ============================================================
         function creatureSpanish(c) { return String((c && c.name) || '').split(' (')[0].trim(); }
+        //   [냐냐 요청] 'pez (물고기)' 를 괄호 없이 두 줄로 — 스페인어 위, 한국어 아래 (2026-10-13). 저장된 이름은 그대로.
+        function creatureKorean(c) { const m = String((c && c.name) || '').match(/ \((.*)\)$/); return m ? m[1] : ''; }
         function creatureVocabWord(c) {
             const es = creatureSpanish(c);
             if (!es || typeof vocabulary === 'undefined' || typeof normalizeSpanishAnswer !== 'function') return null;
@@ -1717,7 +1719,7 @@ let vocabulary = [];
             const c = CREATURES.find(x => x.id === id);
             const lc = LEGEND_COLORS.find(x => x.key === key);
             if (!c || !lc || !creatureLegendColors(id).includes(key)) return;
-            showConfirm(`${lc.badge} ${lc.ko} 오로라`, c.name, () => {}, {
+            showConfirm(`${lc.badge} ${lc.ko} 오로라`, `${creatureSpanish(c)}\n${creatureKorean(c)}`, () => {}, {
                 okLabel: '닫기', okStyle: 'primary', hideCancel: true,
                 artHtml: creatureMedalSvg(c, 168, false, key)
             });
@@ -1807,7 +1809,10 @@ let vocabulary = [];
                         <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
                         <div class="min-w-0 flex-1 space-y-1">
                             <p class="text-[9px] leading-none">${info.star}</p>
-                            <p class="text-sm font-black ${info.color} leading-tight">${c.name}</p>
+                            <div>
+                                <p class="text-sm font-black ${info.color} leading-tight break-words">${creatureSpanish(c)}</p>
+                                <p class="text-[11px] font-bold text-slate-400 leading-tight">${creatureKorean(c)}</p>
+                            </div>
                             <p class="text-[11px] text-slate-600 leading-snug">${c.desc}</p>
                             ${legend ? `<p class="flex items-center gap-1 pt-0.5" title="모은 오로라 색 ${legend.length}/${LEGEND_COLORS.length}">${LEGEND_COLORS.map(lc => legend.includes(lc.key)
                                 ? `<button type="button" onclick="event.stopPropagation(); showLegendColorMedal('${c.id}', '${lc.key}')" title="${lc.ko} 메달 보기" class="p-0.5 -m-0.5 rounded-full hover:scale-125 transition-transform"><span class="block w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style="background:${lc.dot}"></span></button>`
@@ -1840,7 +1845,7 @@ let vocabulary = [];
                         </button>
                     </div>
                     ${emptyMsg}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${cells}</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${cells}</div>
                     <p class="text-[10px] text-slate-400 text-center pt-1">메달 그림: Lorc · Delapouite 외 (<a href="https://game-icons.net" target="_blank" rel="noopener" class="underline hover:text-slate-500">game-icons.net</a>, CC BY 3.0)</p>
                 </div>`;
         }
