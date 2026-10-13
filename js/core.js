@@ -1334,11 +1334,13 @@ let vocabulary = [];
 
         //   [냐냐 요청] 카드 색 = 메달 금속 (2026-10-13). 회색·파랑·연보라는 서로 잘 구분이 안 됐다.
         //   일반 구리 · 레어 은 · 에픽 금 · 전설 오로라(무지개). 전설이 금빛이던 걸 에픽에 주고 전설은 오로라로.
+        //   [냐냐 요청] 효과는 계단식 — 등급이 오를 때마다 하나씩 붙는다:
+        //   일반 단색 → 레어 + 금속 결(그라데이션) → 에픽 + 진한 테두리(2px) → 전설 + 빛줄기(legend-shine).
         const RARITY_INFO = {
-            common:    { label: '일반',   color: 'text-[#9A5B2E]',  bg: 'bg-[#F6E2D0]', border: 'border-[#E0B48E]', star: '⭐' },
-            rare:      { label: '레어',   color: 'text-slate-600',  bg: 'bg-[#E6EBF1]', border: 'border-[#BFC8D4]', star: '⭐⭐' },
-            epic:      { label: '에픽',   color: 'text-amber-700',  bg: 'bg-[#FFF1BF]', border: 'border-[#E8C35A]', star: '⭐⭐⭐' },
-            legendary: { label: '전설',   color: 'text-violet-700', bg: 'bg-gradient-to-br from-pink-100 via-cyan-50 to-violet-200', border: 'border-violet-300', star: '👑' },
+            common:    { label: '일반',   color: 'text-[#9A5B2E]',  bg: 'bg-[#F6E2D0]', border: 'border border-[#E0B48E]', star: '⭐' },
+            rare:      { label: '레어',   color: 'text-slate-600',  bg: 'bg-[linear-gradient(135deg,#F7F9FB_0%,#CDD5DF_45%,#F1F4F7_70%,#BCC6D2_100%)]', border: 'border border-[#BFC8D4]', star: '⭐⭐' },
+            epic:      { label: '에픽',   color: 'text-amber-700',  bg: 'bg-[linear-gradient(135deg,#FFF7D6_0%,#F3D06A_45%,#FFF0B3_70%,#E9BE4C_100%)]', border: 'border-2 border-[#C9971C]', star: '⭐⭐⭐' },
+            legendary: { label: '전설',   color: 'text-violet-700', bg: 'bg-gradient-to-br from-pink-100 via-cyan-50 to-violet-200', border: 'border-2 border-[#A78BFA]', star: '👑' },
         };
 
         // 총 학습 활동 수 (누적) — 알 성장의 기준
@@ -1843,7 +1845,7 @@ let vocabulary = [];
                     const inVocab = !!creatureVocabWord(c);
                     const legend = c.rarity === 'legendary' ? creatureLegendColors(c.id) : null;
                     //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
-                    return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} border ${info.border || 'border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
+                    return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} ${info.border || 'border border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
                         <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
