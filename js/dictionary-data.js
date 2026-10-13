@@ -328,7 +328,7 @@
         const GEMINI_MODEL_GRADE = 'gemini-3.5-flash-lite';
         const AI_GRADE_THINKING = 'medium';
         //   timeoutMs: 재시도까지 다 합친 기다림 상한 (0 = 제한 없음). 넘기면 err.timedOut 을 달아 던진다.
-        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0) {
+        async function callGeminiRaw(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
@@ -432,6 +432,40 @@
                 } finally {
                     clearTimeout(timer);
                 }
+            }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 3.5 가 멈추면 10분 동안 건너뛴다 (2026-10-14).
+        //   10/13 저녁부터 3.5 Flash-Lite 가 구글 쪽 과부하(503 high demand)로 오래 멈췄다 — 'Say OK' 한 줄도 30초 무응답.
+        //   그동안 채점은 매번 3.5 를 20초 기다린 뒤 3.1 로, 단어 추천은 15초 기다린 뒤 3.1 로 가서 한 번에 20~30초씩 걸렸다.
+        //   3.5 가 시간 초과·5xx 를 내면 그때부터 10분은 3.5 를 부르지 않고 바로 3.1 로 간다 (생각 medium·high 는 3.1 low 로 —
+        //   채점이 3.1 로 넘어갈 때 쓰던 그 설정). 10분 뒤 다시 3.5 를 한 번 해 보고 되면 원래대로.
+        //   3.5 가 멀쩡하면 아무것도 달라지지 않는다. 기기마다 따로 기억한다 (localStorage).
+        //   ⚠️ 429(한도)·400·401·403 은 모델 탓이 아니라 건너뛰기를 켜지 않는다.
+        // ============================================================
+        const GRADE_DOWN_KEY = 'nyanya_grade_model_down_until';
+        const GRADE_DOWN_MS = 10 * 60 * 1000;
+        let gradeDownUntil = 0;
+        try { gradeDownUntil = Number(localStorage.getItem(GRADE_DOWN_KEY)) || 0; } catch (e) {}
+        function isGradeModelDown() { return Date.now() < gradeDownUntil; }
+        function markGradeModelDown() {
+            gradeDownUntil = Date.now() + GRADE_DOWN_MS;
+            try { localStorage.setItem(GRADE_DOWN_KEY, String(gradeDownUntil)); } catch (e) {}
+            console.warn(`${GEMINI_MODEL_GRADE} 가 멈춘 것 같아 10분 동안 ${GEMINI_MODEL_FLASH_LITE} 로 바로 갑니다`);
+        }
+        async function callGemini(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0) {
+            const isGrade = model === GEMINI_MODEL_GRADE && GEMINI_MODEL_GRADE !== GEMINI_MODEL_FLASH_LITE;
+            if (isGrade && isGradeModelDown()) {
+                const lvl = /^(medium|high)$/i.test(thinkingLevel) ? 'low' : thinkingLevel;
+                return callGeminiRaw(promptText, systemInstruction, jsonSchema, lvl, GEMINI_MODEL_FLASH_LITE, 0);   // 3.1 쪽엔 시간 제한을 안 건다 (callGeminiGrade 와 같은 까닭)
+            }
+            try {
+                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, thinkingLevel, model, timeoutMs);
+            } catch (e) {
+                const down = e && (e.timedOut || [500, 502, 503, 504].includes(e.status));
+                if (isGrade && down) markGradeModelDown();
+                throw e;
             }
         }
 

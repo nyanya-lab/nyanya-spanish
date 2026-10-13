@@ -2810,6 +2810,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return out.map(x => x.trim()).filter(Boolean);
         }
         async function askMeaningRegions(word, meaning) {
+            //   3.5 가 멈춰 3.1 로 가는 동안은 건너뛴다 — 지역·뜻 확인은 3.5 medium 으로 맞춘 것이다
+            if (typeof isGradeModelDown === 'function' && isGradeModelDown()) return { meaning, suspects: [] };
             const parts = splitMeaningTop(meaning);
             if (!parts.length) return meaning;
             const bare = parts.map(x => x.replace(/\((남|스)\)\s*/g, '').trim());
