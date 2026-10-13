@@ -1977,6 +1977,8 @@ let vocabulary = [];
             //   기록이 생긴 10/9 부터만 나온다.
             const reviewLeftN = ds < STREAK_REVIEW_RULE_FROM ? 0
                 : (ds === getLocalDateString() ? (todayReviewLeft() || 0) : (log.reviewLeft || 0));
+            //   [냐냐 요청] 그날 곡선을 졸업한 수 '🎓N' — 한 수 옆에, 오늘도 지난날과 같이 (2026-10-13). 졸업 '예정' 은 오늘 칸에 안 띄운다.
+            const gradN = countGraduatedOn(ds);
             //   [냐냐 결정] 마스터·약점 칸은 넷팅이라 음수가 될 수 있다 (2026-09-22).
             //   '총 N개 활동' 에서는 음수를 0 으로 본다 — 약점이 풀린 건 활동이 아니라 결과이고,
             //   그 활동(복습·첨삭)은 아래 줄에서 이미 세고 있다.
@@ -2024,9 +2026,9 @@ let vocabulary = [];
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
                             <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습</td>
-                            ${reviewLeftN > 0
-                                ? `<td colspan="3" class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')" class="w-full py-1.5 flex items-baseline justify-center gap-1.5 font-black hover:bg-white rounded transition-colors" title="${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개">
-                                       <span class="${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</span><span class="text-[10px] text-rose-400">−${reviewLeftN}</span></button></td>`
+                            ${(reviewLeftN > 0 || gradN > 0)
+                                ? `<td colspan="3" class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')" class="w-full py-1.5 flex items-baseline justify-center gap-1.5 font-black hover:bg-white rounded transition-colors" title="${gradN ? `이 날 졸업 ${gradN}개` : ''}${gradN && reviewLeftN ? ' · ' : ''}${reviewLeftN ? `${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개` : ''}">
+                                       <span class="${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</span>${gradN ? `<span class="text-[10px] text-emerald-600">🎓${gradN}</span>` : ''}${reviewLeftN > 0 ? `<span class="text-[10px] text-rose-400">−${reviewLeftN}</span>` : ''}</button></td>`
                                 : cellBtn(reviewN, 'review', 3)}
                         </tr>
                         <tr class="border-t border-slate-200">
@@ -2138,6 +2140,21 @@ let vocabulary = [];
         //   ⚠️ 옛 기록은 들어온 날을 '마지막 틀린 날' 로 채웠다(migrateCurveEnteredDates).
         //      실제보다 짧게 나올 수 있는데, 냐냐님이 그냥 표시하기로 하셨다 — 곧 새 졸업이 쌓인다.
         // ============================================================
+        //   [냐냐 요청] 그날 곡선을 졸업한 수 (2026-10-13) — 졸업일은 lastReviewDate (위와 같은 까닭).
+        //   ⚠️ 졸업한 뒤 다시 틀려 곡선에 돌아온 것은 빠진다 (졸업 기록을 따로 남기지 않는다).
+        function countGraduatedOn(ds) {
+            const last = REVIEW_INTERVALS.length;
+            const done = (rec, stage) => rec && rec.lastWrongDate && stage >= last && rec.lastReviewDate === ds;
+            let n = 0;
+            (vocabulary || []).forEach(w => {
+                if (done(w, w.reviewStage || 0)) n++;
+                const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
+                list.forEach(it => { const r = (idiomReview || {})[idiomKey(w.id, it.idiom)]; if (done(r, (r && r.stage) || 0)) n++; });
+            });
+            const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
+            tables.forEach(t => { const r = (grammarReview || {})[t.id]; if (done(r, (r && r.stage) || 0)) n++; });
+            return n;
+        }
         function curveAgeHtml(kind, it) {
             let rec = null, stage = 0;
             if (kind === 'word') { rec = it; stage = it.reviewStage || 0; }
