@@ -1625,7 +1625,7 @@ let vocabulary = [];
         //      파일을 다시 만들면 CREATURE_ICONS_VER 를 손으로 올릴 것.
         //   맞는 그림이 없는 생물(icon 칸 없음)은 이모지를 메달 안에 넣는다.
         // ============================================================
-        const CREATURE_ICONS_VER = '2';   // 2: 환상 생물 26 추가 (2026-10-13)
+        const CREATURE_ICONS_VER = '3';   // 2: 환상 생물 26 추가 · 3: 옛날 동물 10 (2026-10-13)
         const CREATURE_METAL = {
             common:    { stops: ['#f6d2a8', '#c9844a', '#8a4b1f', '#e2a36b'], disc: ['#3a2416', '#1c110a'] },
             rare:      { stops: ['#ffffff', '#cfd6df', '#7c8696', '#e8edf3'], disc: ['#26334d', '#0e1526'] },

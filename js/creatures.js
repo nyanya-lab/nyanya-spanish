@@ -531,5 +531,16 @@
             { id: "ent", emoji: "🌳", icon: "lorc/ent-mouth", name: "ent (엔트)", rarity: "legendary", desc: "걸어 다니는 오래된 나무예요." },
             { id: "golem_hierro", emoji: "🤖", icon: "delapouite/metal-golem-head", name: "gólem de hierro (강철 골렘)", rarity: "legendary", desc: "쇠로 만든 튼튼한 수호자예요." },
             { id: "angel", emoji: "😇", icon: "lorc/angel-outfit", name: "ángel (천사)", rarity: "legendary", desc: "하얀 날개로 지켜 줘요." },
+            // [냐냐 요청] 옛날 동물도 전설로 (2026-10-13)
+            { id: "mamut", emoji: "🦣", icon: "delapouite/mammoth", name: "mamut (매머드)", rarity: "legendary", desc: "털이 북슬북슬한 빙하기 코끼리예요." },
+            { id: "tiranosaurio", emoji: "🦖", icon: "lorc/dinosaur-rex", name: "tiranosaurio (티라노사우루스)", rarity: "legendary", desc: "공룡의 왕이에요." },
+            { id: "triceratops", emoji: "🦕", icon: "delapouite/triceratops-head", name: "triceratops (트리케라톱스)", rarity: "legendary", desc: "뿔이 세 개예요." },
+            { id: "velocirraptor", emoji: "🦖", icon: "delapouite/velociraptor", name: "velocirraptor (벨로키랍토르)", rarity: "legendary", desc: "작지만 아주 빨라요." },
+            { id: "diplodoco", emoji: "🦕", icon: "delapouite/diplodocus", name: "diplodoco (디플로도쿠스)", rarity: "legendary", desc: "목이 아주아주 길어요." },
+            { id: "pterodactilo", emoji: "🦅", icon: "delapouite/pterodactylus", name: "pterodáctilo (익룡)", rarity: "legendary", desc: "하늘을 나는 옛날 파충류예요." },
+            { id: "arqueopterix", emoji: "🪶", icon: "caro-asercion/archaeopteryx-fossil", name: "arqueópterix (시조새)", rarity: "legendary", desc: "공룡과 새 사이에 있는 동물이에요." },
+            { id: "dodo", emoji: "🐦", icon: "caro-asercion/dodo", name: "dodo (도도새)", rarity: "legendary", desc: "날지 못하는 새였는데 지금은 사라졌어요." },
+            { id: "amonita", emoji: "🐚", icon: "lorc/ammonite", name: "amonita (암모나이트)", rarity: "legendary", desc: "소용돌이 껍데기를 가졌어요." },
+            { id: "trilobites", emoji: "🪲", icon: "lorc/trilobite", name: "trilobites (삼엽충)", rarity: "legendary", desc: "아주아주 옛날 바다에 살았어요." },
             { id: "el_final", emoji: "🏁", icon: "delapouite/checkered-flag", name: "el final (마지막)", rarity: "legendary", desc: "도감의 끝에 도달했어요! 축하해요 🎉" },
         ];
