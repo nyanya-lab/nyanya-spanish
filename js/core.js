@@ -12164,7 +12164,29 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             el.style.fontWeight = f.weight || 400;
             el.style.textTransform = f.upper ? 'uppercase' : 'none';
             el.style.letterSpacing = f.spacing || 'normal';
-            el.title = ko;
+            el.dataset.meaning = ko;
+        }
+        //   [냐냐 요청] 제목을 누르면 뜻이 제목 밑 말풍선으로 2초쯤 (2026-10-13).
+        //   예전엔 마우스를 올리고 1초 기다려야 나오는 title 풍선이었다 — 기다려야 하는 줄 모르셨고 폰에선 아예 안 나왔다.
+        //   그 title 풍선은 없앴다 (냐냐님 요청).
+        function showTitleMeaning() {
+            const el = document.getElementById('app-title');
+            if (!el || !el.dataset.meaning) return;
+            let b = document.getElementById('title-meaning');
+            if (!b) {
+                b = document.createElement('div');
+                b.id = 'title-meaning';
+                b.className = 'fixed z-[80] px-2.5 py-1 rounded-lg bg-slate-800 text-white text-xs font-bold shadow-lg pointer-events-none whitespace-nowrap transition-opacity duration-200';
+                document.body.appendChild(b);
+            }
+            b.textContent = el.dataset.meaning;
+            const r = el.getBoundingClientRect();
+            b.style.opacity = '1';
+            b.style.top = (r.bottom + 6) + 'px';
+            const w = b.offsetWidth;
+            b.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+            clearTimeout(b._hideTimer);
+            b._hideTimer = setTimeout(() => { b.style.opacity = '0'; }, 2000);
         }
         renderDailyTitle();
         //   켜둔 채로 날짜가 넘어가면 다시 보러 왔을 때 바꾼다
