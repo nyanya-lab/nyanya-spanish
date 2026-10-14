@@ -755,10 +755,24 @@ Output one item per line, same id, no line skipped.`;
             });
             return out;
         }
+        //   [냐냐 요청] 천천히 보내기 (2026-10-14) — 무료 한도가 1분에 15번이라 도구는 1분에 13번까지만 부른다.
+        //   1,258개를 돌릴 때 240개를 못 받아온 게 이 한도에 걸린 탓으로 봤다.
+        function makeIdiomVetLimiter(perMin) {
+            const stamps = [];
+            return async function () {
+                for (;;) {
+                    const now = Date.now();
+                    while (stamps.length && now - stamps[0] >= 60000) stamps.shift();
+                    if (stamps.length < perMin) { stamps.push(now); return; }
+                    await new Promise(r => setTimeout(r, 60000 - (now - stamps[0]) + 50));
+                }
+            };
+        }
         //   한 묶음: 한 번 보고, 걸린 것만 다시 — 두 번 다 걸린 것만 돌려준다. 429 면 기다렸다 다시 (onWait 로 알린다)
-        async function idiomVetRun(items, onWait) {
+        async function idiomVetRun(items, onWait, limiter) {
             const retry = async (fn) => {
                 for (let n = 0; ; n++) {
+                    if (limiter) await limiter();
                     try { return await fn(); }
                     catch (e) {
                         const msg = String((e && e.message) || e);
@@ -832,30 +846,172 @@ Output one item per line, same id, no line skipped.`;
         }
 
         // ── 도구: 표시 설정 › 도구 › 📘 관용구 점검 ──
+        // ============================================================
+        // [냐냐 지적] 실용적으로 고치기 (2026-10-14)
+        //   ① '단어 열기' 를 누르면 창이 닫히며 걸린 목록(26개)이 통째로 사라졌다 (como si 하나 고치고 나머지를 잃음).
+        //     → 걸린 줄은 이 기기(localStorage)에 남긴다. 창을 닫거나 단어를 열어도 남고, 다시 열면 남은 것부터.
+        //       단어 창을 닫으면 점검 창이 저절로 다시 뜬다.
+        //       줄에는 단어 id · 관용구 iid · 그때 글자만 적고 그릴 때마다 단어장에서 다시 찾는다 —
+        //       단어를 저장하면 객체가 통째로 바뀌기 때문. 글자가 바뀌었으면(손으로 고쳤으면) 줄을 뺀다,
+        //       저장 뒤 점검이 새 글자를 다시 보니까.
+        //   ② 수정 창만 열어 줘서 다 손으로 쳐야 했다.
+        //     → 줄마다 '지금 / AI 추천' 을 나란히 두고, 어떤 경우인지 코드가 갈라 버튼을 단다:
+        //       A  추천에 주인 단어(활용형 포함)가 있음 → [추천으로 바꾸기] 글자만 갈아끼움. iid 그대로라 점수·곡선 그대로
+        //       B  추천이 낱말 하나 → [그 낱말 등록하기] 저장하면 옛 관용구 지울지 한 번 묻는다
+        //       C1 추천 속 다른 낱말이 단어장에 있음 → [○○ 밑으로 옮겨 바꾸기] 점수·곡선도 옮긴다
+        //       C2 단어장에 없음 → [새 단어 등록하고 옮기기] 등록 창에 단어+관용구 줄. 저장해야 옛 주인에서 뺀다 (새로 시작)
+        //       모든 줄에 [괜찮음] [지우기] [단어 열기] 는 남긴다.
+        //   ⚠️ 동사 원형으로 적은 틀 표현(¿Dónde estar (장소)?)은 냐냐님 약속이라 걸려도 [괜찮음] 쪽이다.
+        // ============================================================
         let idiomCheckState = null;
+        const IDIOM_CHECK_LS = 'nyanya_idiom_check_left';
+        const IDIOM_ARTICLES = new Set('el la los las lo un una unos unas'.split(' '));
+        const IDIOM_STOP = new Set(('el la los las lo un una unos unas a al del de en con por para sin sobre entre hasta desde hacia según tras ante contra '
+            + 'y e o u ni que como si no me te se nos os le les mi mis tu tus su sus muy más').split(' '));
+        //   주인으로 삼지 않는 흔한 동사 — hacer cola 는 hacer 가 아니라 la cola 밑이다
+        const IDIOM_COMMON_VERBS = new Set('hacer tener estar ser ir dar poner pedir tomar haber llevar echar dejar quedar coger sacar meter venir salir'.split(' '));
+
         function allOwnIdiomPairs() {
             const out = [];
             (vocabulary || []).forEach(w => (Array.isArray(w.idioms) ? w.idioms : []).forEach(it => { if (it && String(it.idiom || '').trim()) out.push({ w, it }); }));
             return out;
         }
+        function idiomNorm(s) {
+            return String(s || '').toLowerCase().normalize('NFC')
+                .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
+                .replace(/[¿?¡!.,;:…"'“”‘’«»\/~]/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+        }
+        function idiomTokens(s) { return idiomNorm(s).split(' ').filter(Boolean); }
+        //   AI 추천이 'A / B' 로 둘을 주면 앞의 것을 쓴다
+        function idiomCheckSug(r) { return String((r && r.suggestion) || '').split(/\s*[\/;]\s*/)[0].trim(); }
+        //   단어 하나가 문장에서 보일 수 있는 모양 — 낱말 · 복수 · 형용사 성수 · 재귀동사 원형 · 등록한 활용형
+        function idiomFormsOf(w) {
+            const out = new Set();
+            if (!w) return out;
+            idiomTokens(w.word).filter(t => !IDIOM_STOP.has(t)).forEach(t => {
+                out.add(t);
+                if (w.pos === 'noun' || w.pos === 'adjective') { out.add(t + 's'); out.add(t + 'es'); }
+                if (w.pos === 'adjective' && /o$/.test(t)) { const s = t.slice(0, -1); ['a', 'os', 'as'].forEach(x => out.add(s + x)); }
+                if (/(ar|er|ir|ír)se$/.test(t)) out.add(t.slice(0, -2));
+            });
+            const walk = v => {
+                if (!v) return;
+                if (typeof v === 'string') { idiomTokens(v).forEach(t => { if (!IDIOM_STOP.has(t)) out.add(t); }); return; }
+                if (typeof v === 'object') Object.keys(v).forEach(k => walk(v[k]));
+            };
+            if (w.pos === 'verb') { walk(w.conjugationsByTense); walk(w.conjugations); }
+            return out;
+        }
+        function idiomBaseOf(w) {
+            const t = idiomTokens(w && w.word).filter(x => !IDIOM_STOP.has(x));
+            return t.length === 1 ? t[0] : '';
+        }
+        function idiomIsCommonVerb(w) {
+            const b = idiomBaseOf(w);
+            return !!b && (IDIOM_COMMON_VERBS.has(b) || IDIOM_COMMON_VERBS.has(b.replace(/se$/, '')));
+        }
+        //   낱말 하나짜리 단어만 — 모양 → 단어
+        function idiomCheckVocabIndex() {
+            const idx = new Map();
+            (vocabulary || []).forEach(w => {
+                if (!idiomBaseOf(w)) return;
+                idiomFormsOf(w).forEach(f => { if (!idx.has(f)) idx.set(f, w); });
+            });
+            return idx;
+        }
+        //   이 줄은 어느 경우인가 → { kind: 'A'|'B'|'Bopen'|'self'|'C1'|'C2'|'', ... }
+        function idiomCheckCase(r, w, idx) {
+            const sug = idiomCheckSug(r);
+            if (!sug || idiomNorm(sug) === idiomNorm(r.t)) return { kind: '' };
+            const toks = idiomTokens(sug);
+            const own = idiomFormsOf(w);
+            const bare = toks.filter(t => !IDIOM_ARTICLES.has(t));
+            if (bare.length === 1) {
+                if (own.has(bare[0])) return { kind: 'self' };   // 추천이 이 단어 그 자체 — 관용구로 따로 둘 까닭이 없다
+                const have = idx.get(bare[0]);
+                return have ? { kind: 'Bopen', to: have } : { kind: 'B', head: sug.replace(/^(el|la|los|las|un|una)\s+/i, '') };
+            }
+            if (toks.some(t => own.has(t))) return { kind: 'A' };
+            const content = toks.filter(t => !IDIOM_STOP.has(t));
+            const hits = [];
+            content.forEach(t => {
+                const v = idx.get(t);
+                if (v && v !== w && !idiomIsCommonVerb(v) && hits.indexOf(v) < 0) hits.push(v);
+            });
+            if (hits.length) return { kind: 'C1', to: hits.slice(0, 2) };
+            const head = content.find(t => t.length >= 3 && !IDIOM_COMMON_VERBS.has(t) && !IDIOM_COMMON_VERBS.has(t.replace(/se$/, '')) && !idx.has(t));
+            return head ? { kind: 'C2', head } : { kind: '' };
+        }
+
+        // ── 남은 목록 (이 기기) ──
+        function idiomCheckLoadLeft() {
+            try {
+                const d = JSON.parse(localStorage.getItem(IDIOM_CHECK_LS) || 'null');
+                return d && Array.isArray(d.rows) ? d : null;
+            } catch (e) { return null; }
+        }
+        function idiomCheckSaveLeft() {
+            const st = idiomCheckState;
+            if (!st) return;
+            try {
+                if (!st.rows.length && !st.failed) localStorage.removeItem(IDIOM_CHECK_LS);
+                else localStorage.setItem(IDIOM_CHECK_LS, JSON.stringify({ rows: st.rows, failed: st.failed || 0, d: st.savedDate || getLocalDateString() }));
+            } catch (e) {}
+        }
+        //   줄 → 지금 단어장의 { w, it }. 없어졌거나 글자가 바뀌었거나 이미 봤음이면 null
+        function idiomCheckResolve(r) {
+            const w = r && (vocabulary || []).find(v => v.id === r.wid);
+            const it = w && (Array.isArray(w.idioms) ? w.idioms : []).find(x => x && x.iid === r.iid);
+            if (!it || String(it.idiom || '').trim() !== r.t || idiomIsVetted(it)) return null;
+            return { w, it };
+        }
+        function idiomCheckPrune(st) {
+            const before = st.rows.length;
+            st.rows = st.rows.filter(r => idiomCheckResolve(r));
+            if (st.rows.length !== before) idiomCheckSaveLeft();
+        }
+        function idiomCheckRowOf(f) {
+            if (!f.it.iid && typeof ensureIdiomIds === 'function') ensureIdiomIds(f.w);
+            return { wid: f.w.id, iid: f.it.iid, t: f.idiom, meaning: f.meaning, word: f.word,
+                     verdict: f.verdict, suggestion: f.suggestion || '', region: f.region || '', why: f.why || '' };
+        }
+
         function openIdiomCheckFromPanel(ev) {
             if (ev && ev.stopPropagation) ev.stopPropagation();
             closeDisplayPanel();
             openIdiomCheck();
         }
         function openIdiomCheck() {
-            idiomCheckState = { running: false, cancelled: false, rows: [], done: 0, total: 0, failed: 0, waiting: 0, ran: false };
-            const all = allOwnIdiomPairs(), fresh = all.filter(p => !idiomIsVetted(p.it));
-            const sel = document.getElementById('idiom-check-scope');
-            if (sel) {
-                sel.innerHTML = `<option value="fresh">아직 안 본 것 (${fresh.length})</option><option value="all">전부 (${all.length})</option>`;
-                sel.disabled = false;
+            const modal = document.getElementById('idiom-check-modal');
+            //   보는 중에 단어를 열었다가 다시 들어온 것 — 하던 것을 그대로 보여준다
+            if (idiomCheckState && idiomCheckState.running) {
+                idiomCheckState.awayForWord = false;
+                modal.classList.remove('hidden');
+                renderIdiomCheck();
+                return;
             }
-            document.getElementById('idiom-check-modal').classList.remove('hidden');
+            const saved = idiomCheckLoadLeft();
+            idiomCheckState = { running: false, cancelled: false, rows: saved ? saved.rows : [], done: 0, total: 0,
+                                failed: saved ? (saved.failed || 0) : 0, waiting: 0, ran: false, savedDate: saved ? saved.d : '' };
+            idiomCheckPrune(idiomCheckState);
+            idiomCheckState.ran = idiomCheckState.rows.length > 0;
+            idiomCheckFillScope();
+            modal.classList.remove('hidden');
             renderIdiomCheck();
         }
+        function idiomCheckFillScope() {
+            const st = idiomCheckState;
+            const listed = new Set(st.rows.map(r => r.wid + '::' + r.iid));
+            const all = allOwnIdiomPairs(), fresh = all.filter(p => !idiomIsVetted(p.it) && !listed.has(p.w.id + '::' + p.it.iid));
+            const sel = document.getElementById('idiom-check-scope');
+            if (sel) {
+                sel.innerHTML = `<option value="fresh">아직 안 본 것 (${fresh.length})</option><option value="all">전부 다시 (${all.length})</option>`;
+                sel.disabled = false;
+            }
+        }
         function closeIdiomCheck() {
-            if (idiomCheckState) idiomCheckState.cancelled = true;
+            if (idiomCheckState) { idiomCheckState.cancelled = true; idiomCheckSaveLeft(); }
             document.getElementById('idiom-check-modal').classList.add('hidden');
             idiomCheckState = null;
         }
@@ -865,11 +1021,15 @@ Output one item per line, same id, no line skipped.`;
             if (!st || st.running) return;
             const sel = document.getElementById('idiom-check-scope');
             const all = allOwnIdiomPairs();
-            const pairs = (sel && sel.value === 'all') ? all : all.filter(p => !idiomIsVetted(p.it));
-            Object.assign(st, { running: true, rows: [], done: 0, total: pairs.length, failed: 0, waiting: 0, retrying: 0, ran: true });
+            //   '아직 안 본 것' 은 남은 목록을 두고 그 밖의 것만 본다. '전부 다시' 는 목록도 새로 만든다
+            if (sel && sel.value === 'all') st.rows = [];
+            const listed = new Set(st.rows.map(r => r.wid + '::' + r.iid));
+            const pairs = (sel && sel.value === 'all') ? all : all.filter(p => !idiomIsVetted(p.it) && !listed.has(p.w.id + '::' + p.it.iid));
+            Object.assign(st, { running: true, done: 0, total: pairs.length, failed: 0, waiting: 0, retrying: 0, ran: true, savedDate: getLocalDateString() });
             if (sel) sel.disabled = true;
             renderIdiomCheck();
             const items = idiomVetItemsOf(pairs);
+            const limiter = makeIdiomVetLimiter(13);
             let marked = 0;
             //   [냐냐 요청] 못 받아온 묶음은 끝에 한 번 더 (2026-10-14) — 1,258개 중 240개(40개 묶음 6개)를 못 받아왔다.
             //   그때 3.5 가 붐볐거나(503·무응답) 1분 한도에 걸린 것 — 같은 묶음을 나중에 보내니 3.7초에 다 왔다.
@@ -879,38 +1039,42 @@ Output one item per line, same id, no line skipped.`;
                     if (st.cancelled || idiomCheckState !== st) return false;
                     const batch = list.slice(i, i + size);
                     try {
-                        const res = await idiomVetRun(batch, (s) => { st.waiting = s; if (idiomCheckState === st) renderIdiomCheck(); });
+                        const res = await idiomVetRun(batch, (s) => { st.waiting = s; if (idiomCheckState === st) renderIdiomCheck(); }, limiter);
                         res.passed.forEach(x => { markIdiomVetted(x.it); marked++; });
-                        st.rows = st.rows.concat(res.flagged);
+                        st.rows = st.rows.concat(res.flagged.map(idiomCheckRowOf));
                         res.missing.forEach(x => failedOut.push(x));
                     } catch (e) { console.error(e); batch.forEach(x => failedOut.push(x)); }
                     if (!st.retrying) st.done += batch.length;
+                    idiomCheckSaveLeft();   // 도중에 창을 닫아도 짚은 것까지는 남게
                     if (idiomCheckState !== st) return false;
                     renderIdiomCheck();
                 }
                 return true;
             };
             let failedItems = [];
-            if (!await runBatches(items, IDIOM_VET_BATCH, failedItems)) return;
+            const finish = () => { if (marked) saveToStorage(); };
+            if (!await runBatches(items, IDIOM_VET_BATCH, failedItems)) { finish(); return; }
             if (failedItems.length) {
                 st.retrying = failedItems.length;
                 for (let left = 30; left > 0; left--) {
-                    if (st.cancelled || idiomCheckState !== st) return;
+                    if (st.cancelled || idiomCheckState !== st) { finish(); return; }
                     st.waiting = left; renderIdiomCheck();
                     await new Promise(r => setTimeout(r, 1000));
                 }
                 st.waiting = 0;
                 const again = [];
-                if (!await runBatches(failedItems, 20, again)) return;
+                if (!await runBatches(failedItems, 20, again)) { finish(); return; }
                 failedItems = again;
                 st.retrying = 0;
             }
             st.failed = failedItems.length;
-            if (marked) saveToStorage();
+            finish();
             st.running = false;
-            if (sel) sel.disabled = false;
+            idiomCheckSaveLeft();
+            idiomCheckFillScope();
             renderIdiomCheck();
         }
+
         function renderIdiomCheck() {
             const st = idiomCheckState;
             const body = document.getElementById('idiom-check-body');
@@ -921,46 +1085,228 @@ Output one item per line, same id, no line skipped.`;
                 body.innerHTML = `<div class="bg-sky-50 border border-sky-100 rounded-2xl p-3 text-xs text-sky-800 leading-relaxed font-medium">
                     📘 AI 가 관용구를 보고 <b>없는 말 · 더 흔한 말이 있는 것 · 한 지역 말</b>을 골라요.<br>
                     걸린 것만 한 번 더 보게 해서 <b>두 번 다</b> 걸린 것만 보여드려요. 통과한 건 '봤음' 으로 남아서 다음엔 건너뛰어요.<br>
-                    단어를 저장할 때도 새로 적은 관용구는 저절로 봐요.</div>`;
+                    걸린 목록은 창을 닫아도 남아요. 단어를 저장할 때도 새로 적은 관용구는 저절로 봐요.</div>`;
                 return;
             }
+            idiomCheckPrune(st);
             const p = st.total ? Math.round(st.done / st.total * 100) : 100;
+            const failTxt = st.failed ? ` · 못 받아온 것 ${st.failed}개` : '';
             const head = st.running
                 ? `<div class="bg-sky-50 border border-sky-100 rounded-2xl p-3 space-y-2">
-                    <p class="text-xs font-bold text-sky-800">📘 보는 중… ${st.done}/${st.total} (${p}%) · 짚은 것 ${st.rows.length}개</p>
+                    <p class="text-xs font-bold text-sky-800">📘 보는 중… ${st.done}/${st.total} (${p}%) · 확인할 것 ${st.rows.length}개</p>
                     <div class="h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-sky-500 transition-all" style="width:${p}%"></div></div>
                     ${st.retrying ? `<p class="text-[11px] font-bold text-amber-600">🔁 못 받아온 ${st.retrying}개를 ${st.waiting ? `${st.waiting}초 뒤에 ` : ''}다시 보는 중이에요</p>`
                         : (st.waiting ? `<p class="text-[11px] font-bold text-amber-600">⏳ AI 무료 한도에 걸려서 ${st.waiting}초 쉬었다가 이어서 해요</p>` : '')}
-                    <p class="text-[10px] text-sky-500">창을 닫으면 중단돼요 (본 것까지는 남아요)</p></div>`
-                : `<p class="text-[11px] font-bold text-sky-800">📘 ${st.total}개 중 확인할 것 ${st.rows.length}개${st.failed ? ` · 못 받아온 것 ${st.failed}개` : ''}</p>`
-                  + (!st.rows.length ? `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">${st.total ? '전부 실제로 쓰는 말이에요 ✨' : '아직 안 본 관용구가 없어요 ✨'}</div>` : '');
-            body.innerHTML = head + st.rows.map((f, i) => `
-                <div class="bg-white border border-slate-200 rounded-2xl p-3 space-y-1">
+                    <p class="text-[10px] text-sky-500">무료 한도(1분 15번)에 안 걸리게 천천히 보내요 · 창을 닫으면 중단돼요 (본 것·짚은 것은 남아요)</p></div>`
+                : (st.total
+                    ? `<p class="text-[11px] font-bold text-sky-800">📘 ${st.total}개 봤어요 · 확인할 것 ${st.rows.length}개${failTxt}</p>`
+                    : `<p class="text-[11px] font-bold text-sky-800">📘 지난 점검${st.savedDate ? `(${escapeHtml(st.savedDate.slice(5).replace('-', '/'))})` : ''}에서 남은 것 ${st.rows.length}개${failTxt}</p>`)
+                  + (!st.rows.length ? `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">${st.total ? '전부 실제로 쓰는 말이에요 ✨' : '남은 것이 없어요 ✨'}</div>` : '');
+            const idx = st.rows.length ? idiomCheckVocabIndex() : null;
+            const b = (cls) => `px-2 py-1 rounded-lg text-[11px] font-bold ${cls}`;
+            const btnGo = b('bg-emerald-600 hover:bg-emerald-700 text-white');
+            body.innerHTML = head + st.rows.map((r, i) => {
+                const hit = idiomCheckResolve(r);
+                const c = idiomCheckCase(r, hit.w, idx);
+                const sug = idiomCheckSug(r);
+                let action = '', hint = '';
+                if (c.kind === 'A') {
+                    action = `<button onclick="idiomCheckReplace(${i})" class="${btnGo}">추천으로 바꾸기</button>`;
+                    hint = '글자만 바꿔요 · 점수·곡선 그대로';
+                } else if (c.kind === 'B') {
+                    action = `<button onclick="idiomCheckRegister(${i})" class="${btnGo}">${escapeHtml(c.head)} 등록하기</button>`;
+                    hint = '저장하면 옛 관용구를 지울지 여쭤봐요';
+                } else if (c.kind === 'Bopen') {
+                    action = `<button onclick="idiomCheckOpenWord('${c.to.id}')" class="${btnGo}">${escapeHtml(c.to.word)} 열기</button>`;
+                    hint = '추천 낱말은 이미 단어장에 있어요';
+                } else if (c.kind === 'self') {
+                    hint = `추천이 '${escapeHtml(hit.w.word)}' 그 자체예요 — 관용구로 따로 안 둬도 돼요`;
+                } else if (c.kind === 'C1') {
+                    action = c.to.map(v => `<button onclick="idiomCheckMove(${i}, '${v.id}')" class="${btnGo}">${escapeHtml(v.word)} ${idiomCheckDupIn(v, sug) ? '에 이미 있음 · 합치기' : '밑으로 옮겨 바꾸기'}</button>`).join('');
+                    hint = '점수·곡선도 같이 옮겨요';
+                } else if (c.kind === 'C2') {
+                    action = `<button onclick="idiomCheckRegister(${i})" class="${btnGo}">새 단어 등록하고 옮기기</button>`;
+                    hint = `'${escapeHtml(c.head)}' 로 등록 창을 열어요 · 저장해야 옮겨지고 새로 시작해요`;
+                }
+                const asking = st.askDel === r.wid + '::' + r.iid;
+                return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
                     <div class="flex items-center gap-2">
-                        <span class="font-extrabold text-slate-800 break-words">${escapeHtml(f.idiom)}</span>
-                        <span class="shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5 ${f.verdict === 'wrong' ? 'text-rose-600 bg-rose-50' : f.verdict === 'regional' ? 'text-sky-700 bg-sky-50' : 'text-amber-700 bg-amber-50'}">${escapeHtml(IDIOM_VERDICT_LABEL[f.verdict] || f.verdict)}${f.region ? ` (${escapeHtml(f.region)})` : ''}</span>
-                        <div class="ml-auto flex gap-1.5 shrink-0">
-                            <button onclick="idiomCheckOk(${i})" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-100">괜찮음</button>
-                            <button onclick="openWordFromIdiomCheck('${f.w.id}')" class="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-[11px] font-bold text-white">단어 열기</button>
+                        <span class="text-[11px] text-slate-400 font-bold truncate">${escapeHtml(hit.w.word)}</span>
+                        <span class="shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5 ${r.verdict === 'wrong' ? 'text-rose-600 bg-rose-50' : r.verdict === 'regional' ? 'text-sky-700 bg-sky-50' : 'text-amber-700 bg-amber-50'}">${escapeHtml(IDIOM_VERDICT_LABEL[r.verdict] || r.verdict)}${r.region ? ` (${escapeHtml(r.region)})` : ''}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="rounded-xl bg-slate-50 border border-slate-100 p-2 min-w-0">
+                            <p class="text-[10px] font-bold text-slate-400">지금</p>
+                            <p class="text-sm font-extrabold text-slate-800 break-words">${escapeHtml(r.t)}</p>
+                            <p class="text-[11px] text-slate-500 break-words">${escapeHtml(hit.it.idiomMeaning || r.meaning || '(뜻 없음)')}</p>
+                        </div>
+                        <div class="rounded-xl ${sug ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'} border p-2 min-w-0">
+                            <p class="text-[10px] font-bold ${sug ? 'text-emerald-600' : 'text-slate-400'}">AI 추천</p>
+                            <p class="text-sm font-extrabold ${sug ? 'text-emerald-800' : 'text-slate-400'} break-words">${sug ? escapeHtml(r.suggestion) : '(없음)'}</p>
                         </div>
                     </div>
-                    <p class="text-xs text-slate-500">${escapeHtml(f.meaning || '(뜻 없음)')} · <span class="text-slate-400">${escapeHtml(f.word)}</span></p>
-                    ${f.suggestion ? `<p class="text-xs font-bold text-emerald-700">→ ${escapeHtml(f.suggestion)}</p>` : ''}
-                    ${f.why ? `<p class="text-[11px] text-slate-500">${escapeHtml(f.why)}</p>` : ''}
-                </div>`).join('');
+                    ${r.why ? `<p class="text-[11px] text-slate-500">${escapeHtml(r.why)}</p>` : ''}
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        ${action}
+                        <button onclick="idiomCheckOk(${i})" class="${b('bg-white border border-slate-200 text-slate-500 hover:bg-slate-100')}">괜찮음</button>
+                        <button onclick="idiomCheckDelete(${i})" class="${asking ? b('bg-rose-600 hover:bg-rose-700 text-white') : b('bg-white border border-rose-200 text-rose-500 hover:bg-rose-50')}">${asking ? '정말 지울까요?' : '지우기'}</button>
+                        <button onclick="idiomCheckOpenWord('${r.wid}')" class="${b('bg-sky-600 hover:bg-sky-700 text-white')}">단어 열기</button>
+                    </div>
+                    ${hint ? `<p class="text-[10px] text-slate-400">${hint}</p>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        // ── 줄 버튼 ──
+        function idiomCheckRow(i) {
+            const st = idiomCheckState, r = st && st.rows[i];
+            const hit = r && idiomCheckResolve(r);
+            return hit ? Object.assign({ r }, hit) : null;
+        }
+        //   단어장을 바꾼 뒤 — 저장하고, 줄을 빼고, 카드와 창을 다시 그린다
+        function idiomCheckAfterChange(r, msg) {
+            const st = idiomCheckState;
+            if (st && r) st.rows = st.rows.filter(x => !(x.wid === r.wid && x.iid === r.iid));
+            if (st) { st.askDel = ''; idiomCheckSaveLeft(); }
+            saveToStorage();
+            if (typeof renderWordList === 'function') renderWordList();
+            if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
+            renderIdiomCheck();
+            if (msg) showToast(msg, 'success');
         }
         //   [괜찮음] — 이 글자로 봤음 표시를 남겨 다음 점검에서 건너뛴다
         function idiomCheckOk(i) {
-            const st = idiomCheckState, f = st && st.rows[i];
-            if (!f) return;
-            markIdiomVetted(f.it);
-            saveToStorage();
-            st.rows.splice(i, 1);
-            renderIdiomCheck();
+            const x = idiomCheckRow(i);
+            if (!x) return;
+            markIdiomVetted(x.it);
+            idiomCheckAfterChange(x.r);
         }
-        function openWordFromIdiomCheck(id) {
-            closeIdiomCheck();
+        //   [지우기] — 한 번 더 눌러야 지운다 (확인창은 이 창 밑에 깔려서 안 쓴다)
+        function idiomCheckDelete(i) {
+            const st = idiomCheckState, x = idiomCheckRow(i);
+            if (!x) return;
+            const key = x.r.wid + '::' + x.r.iid;
+            if (st.askDel !== key) { st.askDel = key; renderIdiomCheck(); return; }
+            removeIdiomFromWord(x.w, x.it);
+            idiomCheckAfterChange(x.r, `"${x.r.t}" 를 지웠어요`);
+        }
+        //   A [추천으로 바꾸기] — 관용구 글자만 갈아끼운다. iid 가 그대로라 점수·곡선·같이 걸린 단어도 그대로
+        function idiomCheckReplace(i) {
+            const x = idiomCheckRow(i);
+            const sug = x && idiomCheckSug(x.r);
+            if (!sug) return;
+            x.it.idiom = sug;
+            markIdiomVetted(x.it);   // AI 가 준 말이라 다시 묻지 않는다
+            idiomCheckAfterChange(x.r, `"${x.r.t}" → "${sug}" 로 바꿨어요 (기록 그대로)`);
+        }
+        //   C1 [○○ 밑으로 옮겨 바꾸기] — 옛 주인에서 빼고 새 주인 밑에 추천 글자로. 점수·곡선도 옮긴다
+        function idiomCheckMove(i, toId) {
+            const x = idiomCheckRow(i);
+            const sug = x && idiomCheckSug(x.r);
+            const to = (vocabulary || []).find(v => v.id === toId);
+            if (!sug || !to || to === x.w) return;
+            if (!Array.isArray(to.idioms)) to.idioms = [];
+            const dup = idiomCheckDupIn(to, sug);
+            removeIdiomFromWord(x.w, x.it);
+            if (dup) {
+                //   이미 있으면 그 줄로 합친다 — 그쪽에 기록이 없을 때만 옛 기록을 넘긴다
+                if (!dup.iid && typeof ensureIdiomIds === 'function') ensureIdiomIds(to);
+                const from = `${x.w.id}::${x.it.iid}`, into = `${to.id}::${dup.iid}`;
+                [idiomScores, idiomReview].forEach(store => {
+                    if (store && store[from] && !store[into]) { store[into] = store[from]; delete store[from]; }
+                });
+            } else {
+                const moved = Object.assign({}, x.it, { idiom: sug });
+                if (Array.isArray(moved.alsoUnder)) {
+                    moved.alsoUnder = moved.alsoUnder.filter(id => id !== to.id);
+                    if (!moved.alsoUnder.length) delete moved.alsoUnder;
+                }
+                markIdiomVetted(moved);
+                to.idioms.push(moved);
+                moveIdiomRecords(x.w.id, x.it, to.id);
+            }
+            idiomCheckAfterChange(x.r, dup ? `"${to.word}" 에 이미 있는 "${dup.idiom}" 로 합쳤어요`
+                                           : `"${sug}" 를 "${to.word}" 밑으로 옮겼어요 (기록 같이)`);
+        }
+        function idiomCheckDupIn(w, text) {
+            return (Array.isArray(w && w.idioms) ? w.idioms : []).find(t => t && idiomNorm(t.idiom) === idiomNorm(text)) || null;
+        }
+        //   B [그 낱말 등록하기] · C2 [새 단어 등록하고 옮기기] — 등록 창을 채워 연다. 낱말은 냐냐님이 바꿔도 된다 (empapado → empapar)
+        function idiomCheckRegister(i) {
+            const st = idiomCheckState, x = idiomCheckRow(i);
+            if (!x) return;
+            const c = idiomCheckCase(x.r, x.w, idiomCheckVocabIndex());
+            if (c.kind !== 'B' && c.kind !== 'C2') return;
+            st.pendingReg = { kind: c.kind, wid: x.r.wid, iid: x.r.iid, t: x.r.t };
+            idiomCheckAwayForWord();
+            openWordModal(null);
+            document.getElementById('input-word').value = c.head;
+            if (c.kind === 'C2') {
+                addIdiomRow(idiomCheckSug(x.r), x.it.idiomMeaning || x.r.meaning || '');
+                const box = document.getElementById('idiom-fields-box');
+                const icon = document.getElementById('idiom-toggle-icon');
+                if (box) box.classList.remove('hidden');
+                if (icon) icon.className = "fa-solid fa-minus text-xs";
+            }
+        }
+        //   [단어 열기] — 점검 창은 숨겨만 두고, 단어 창을 닫으면 다시 띄운다 (목록은 그대로)
+        function idiomCheckOpenWord(id) {
+            idiomCheckAwayForWord();
             openWordModal(id);
+        }
+        function idiomCheckAwayForWord() {
+            const st = idiomCheckState;
+            if (!st) return;
+            st.awayForWord = true;
+            st.askDel = '';
+            document.getElementById('idiom-check-modal').classList.add('hidden');
+        }
+        //   closeWordModal 이 부른다. 유의어 채우기·확인창이 이어서 뜨면 그게 다 끝난 뒤에 띄운다
+        function idiomCheckBackFromWord() {
+            const st = idiomCheckState;
+            if (!st || !st.awayForWord || st.backWaiting) return;
+            st.backWaiting = true;
+            let n = 0;
+            const shown = id => { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); };
+            const tick = () => {
+                if (idiomCheckState !== st || !st.awayForWord) { st.backWaiting = false; return; }
+                const syn = (typeof _inSynonymFill !== 'undefined') && _inSynonymFill;
+                if ((shown('word-modal') || shown('confirm-modal') || shown('idiom-dup-modal') || syn) && n++ < 1500) { setTimeout(tick, 400); return; }
+                st.backWaiting = false;
+                st.awayForWord = false;
+                st.pendingReg = null;   // 등록 창을 그냥 닫았으면 옛 관용구는 그대로
+                document.getElementById('idiom-check-modal').classList.remove('hidden');
+                if (!st.running) idiomCheckFillScope();
+                renderIdiomCheck();
+            };
+            setTimeout(tick, 300);
+        }
+        //   performSaveWord 가 새 단어를 저장한 직후 부른다 — 점검 창에서 연 등록이면 옛 관용구를 정리한다
+        function idiomCheckAfterNewWord(wordObj) {
+            const st = idiomCheckState, pend = st && st.pendingReg;
+            if (!pend) return;
+            st.pendingReg = null;
+            const r = st.rows.find(x => x.wid === pend.wid && x.iid === pend.iid);
+            const hit = r && idiomCheckResolve(r);
+            if (!hit) return;
+            if (pend.kind === 'C2') {
+                //   새 단어 밑에 추천 글자로 새로 들어갔다 — 옛 주인에서 뺀다 (점수는 새로 시작)
+                removeIdiomFromWord(hit.w, hit.it);
+                idiomCheckAfterChange(r);
+                showToast(`"${pend.t}" 는 ${hit.w.word} 에서 뺐어요 — "${wordObj.word}" 밑에서 새로 시작해요`, 'info');
+                return;
+            }
+            showActionNotice(`📘 "${escapeHtml(wordObj.word)}" 를 등록했어요.<br>옛 관용구 <b>${escapeHtml(pend.t)}</b> (${escapeHtml(hit.w.word)}) 는 지울까요?`, [
+                { label: '지우기', onClick: () => {
+                    const h = idiomCheckResolve(r);
+                    if (h) { removeIdiomFromWord(h.w, h.it); idiomCheckAfterChange(r, `"${pend.t}" 를 지웠어요`); }
+                } },
+                { label: '남겨두기', onClick: () => {
+                    const h = idiomCheckResolve(r);
+                    if (h) { markIdiomVetted(h.it); idiomCheckAfterChange(r); }
+                } }
+            ], 60000);
         }
 
         // 화면에 쓸 실제 분류. 라벨이 불규칙인데 형태가 규칙형이면 규칙으로 돌려준다.
@@ -2583,6 +2929,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (typeof dropWordModalAfterWordLink === 'function' && dropWordModalAfterWordLink()) {
                 if (typeof renderGrammarWordLink === 'function') renderGrammarWordLink();
             }
+            //   관용구 점검 창에서 연 단어면 점검 창을 다시 띄운다 (목록 그대로)
+            if (typeof idiomCheckBackFromWord === 'function') idiomCheckBackFromWord();
         }
 
         function showConfirm(title, desc, onOk, options = {}) {
@@ -4288,6 +4636,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
             //   [냐냐 요청] 새로 적었거나 고친 관용구는 저장 뒤 조용히 점검한다 — 기다리지 않는다, 걸리면 알림 하나 (2026-10-12)
             vetIdiomsAfterSave(wordObj, prevWordForIdioms);
+            //   [냐냐 요청] 관용구 점검 창에서 연 등록이면 옛 관용구를 정리한다 (2026-10-14)
+            if (!modalId && typeof idiomCheckAfterNewWord === 'function') idiomCheckAfterNewWord(wordObj);
             // ============================================================
             // [냐냐 지적] 유의어를 채우다가 또 유의어가 뜨면, 앞에서 기다리던 것이 사라졌다 (2026-09-22).
             //   여기서 큐를 통째로 덮어쓰고 있었다:
