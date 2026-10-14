@@ -502,8 +502,17 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             openConjCheck();
         }
         function openConjCheck() {
-            conjCheckState = Object.assign(findConjMismatches(), { ai: null });
-            document.getElementById('conj-check-modal').classList.remove('hidden');
+            const modal = document.getElementById('conj-check-modal');
+            //   AI 확인 중에 단어를 열었다가 다시 들어온 것 — 하던 것을 그대로 보여준다
+            if (conjCheckState && conjCheckState.ai && conjCheckState.ai.running) {
+                conjCheckState.awayForWord = false;
+                modal.classList.remove('hidden');
+                renderConjCheck();
+                return;
+            }
+            conjCheckState = Object.assign(findConjMismatches(), { ai: conjAiLoadLeft() });
+            if (conjCheckState.ai) conjAiPrune(conjCheckState.ai);
+            modal.classList.remove('hidden');
             const sel = document.getElementById('conj-check-tense');
             if (sel) {
                 const tenses = ['presente', 'indefinido', 'gerundio', 'participio'];
@@ -513,9 +522,47 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             renderConjCheck();
         }
         function closeConjCheck() {
-            if (conjCheckState && conjCheckState.ai) conjCheckState.ai.cancelled = true;   // 진행 중이면 중단
+            if (conjCheckState && conjCheckState.ai) { conjCheckState.ai.cancelled = true; conjAiSaveLeft(conjCheckState.ai); }   // 진행 중이면 중단, 짚은 것까지는 남긴다
             document.getElementById('conj-check-modal').classList.add('hidden');
             conjCheckState = null;
+        }
+
+        // ============================================================
+        // [냐냐 요청] 관용구 점검처럼 (2026-10-14)
+        //   ① AI 가 짚은 줄은 이 기기(localStorage)에 남긴다 — 창을 닫거나 단어를 열어도 남고, 다시 열면 남은 것부터.
+        //     시제마다 따로 남는다 (현재를 돌린 뒤 과거분사를 돌려도 현재 줄이 그대로). 같은 시제를 다시 돌리면 그 시제 줄만 새로.
+        //     칸을 고쳐서 저장된 형태가 달라졌으면 그 줄은 저절로 빠진다.
+        //   ② [단어 열기] 는 창을 숨겨만 두고, 단어 창을 닫으면 다시 띄운다.
+        //   ③ AI 는 1분에 13번까지만 부른다 (무료 한도 15번).
+        //   ④ [괜찮음] — AI 가 헛짚었으면 줄만 뺀다 (다음에 같은 시제를 돌리면 또 걸릴 수 있다).
+        // ============================================================
+        const CONJ_CHECK_LS = 'nyanya_conj_check_left';
+        function conjStoredOf(v, tense) {
+            const c = getTenseConj(v, tense) || {}, o = {};
+            (isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS).forEach(k => { o[k] = c[k] || ''; });
+            return o;
+        }
+        function conjAiLoadLeft() {
+            try {
+                const d = JSON.parse(localStorage.getItem(CONJ_CHECK_LS) || 'null');
+                if (!d || !Array.isArray(d.rows) || !d.rows.length) return null;
+                return { tense: '', rows: d.rows, failed: [], running: false, cancelled: false, done: 0, total: 0, savedDate: d.d || '' };
+            } catch (e) { return null; }
+        }
+        function conjAiSaveLeft(ai) {
+            try {
+                if (!ai || !ai.rows.length) localStorage.removeItem(CONJ_CHECK_LS);
+                else localStorage.setItem(CONJ_CHECK_LS, JSON.stringify({ rows: ai.rows, d: ai.savedDate || getLocalDateString() }));
+            } catch (e) {}
+        }
+        //   동사가 없어졌거나 칸이 바뀐 줄은 뺀다
+        function conjAiPrune(ai) {
+            const before = ai.rows.length;
+            ai.rows = ai.rows.filter(r => {
+                const v = (vocabulary || []).find(w => w.id === r.id);
+                return v && conjOneLine(r.tense, conjStoredOf(v, r.tense)) === r.stored;
+            });
+            if (ai.rows.length !== before && !ai.running) conjAiSaveLeft(ai);
         }
         function conjTypeLabel(t) { return t === 'none' ? '규칙' : t; }
         function verbsWithTense(t) { return (vocabulary || []).filter(v => v.pos === 'verb' && hasConjValues(getTenseConj(v, t))); }
@@ -531,6 +578,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         //   429 가 오면 Gemini 가 알려주는 만큼('retry in 27s') 쉬었다가 같은 묶음을 다시 묻는다 (세 번까지).
         async function conjAskWithRetry(ai, fn) {
             for (let tryNo = 0; ; tryNo++) {
+                if (ai.limiter) await ai.limiter();
                 try { return await fn(); }
                 catch (e) {
                     const msg = String((e && e.message) || e);
@@ -556,10 +604,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const sel = document.getElementById('conj-check-tense');
             const tense = (sel && sel.value) || 'presente';
             const targets = verbsWithTense(tense);
-            const ai = st.ai = { tense, rows: [], failed: [], running: true, cancelled: false, done: 0, total: targets.length };
+            //   다른 시제에서 남은 줄은 그대로 두고, 이 시제 줄만 새로 만든다
+            const keep = st.ai ? st.ai.rows.filter(r => r.tense !== tense) : [];
+            const ai = st.ai = { tense, rows: keep, failed: [], running: true, cancelled: false, done: 0, total: targets.length,
+                                 savedDate: getLocalDateString(), limiter: makeIdiomVetLimiter(13) };
             if (sel) sel.disabled = true;
             renderConjCheck();
-            const storedOf = (v) => { const c = getTenseConj(v, tense) || {}; const o = {}; (isSingleTense(tense) ? ['form'] : CONJ_PERSON_KEYS).forEach(k => { o[k] = c[k] || ''; }); return o; };
+            const storedOf = (v) => conjStoredOf(v, tense);
             for (let i = 0; i < targets.length; i += BULK_BATCH) {
                 if (ai.cancelled) break;
                 const batch = targets.slice(i, i + BULK_BATCH);
@@ -582,12 +633,22 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                         a: conjOneLine(tense, a), b: b ? conjOneLine(tense, b) : '', agree, pick: agree ? b : null });
                 });
                 ai.done += batch.length;
+                conjAiSaveLeft(ai);   // 도중에 창을 닫아도 짚은 것까지는 남게
                 if (conjCheckState !== st) return;   // 창을 닫았으면 그리지 않음
                 renderConjCheck();
             }
             if (conjCheckState !== st) return;
             ai.running = false;
+            conjAiSaveLeft(ai);
             if (sel) sel.disabled = false;
+            renderConjCheck();
+        }
+        //   [괜찮음] — AI 가 헛짚은 줄을 뺀다
+        function dismissConjAiRow(i) {
+            const ai = conjCheckState && conjCheckState.ai;
+            if (!ai || !ai.rows[i]) return;
+            ai.rows.splice(i, 1);
+            if (!ai.running) conjAiSaveLeft(ai);
             renderConjCheck();
         }
         function applyConjAiPick(i) {
@@ -620,17 +681,22 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                     <p class="text-xs font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} 확인 중… ${ai.done}/${ai.total} <span class="text-violet-500">(${p}%)</span> · 짚은 것 ${ai.rows.length}개</p>
                     ${ai.waiting ? `<p class="text-[11px] font-bold text-amber-600">⏳ AI 무료 한도(1분에 15번)에 걸려서 ${ai.waiting}초 쉬었다가 이어서 해요</p>` : ''}
                     <div class="h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-violet-500 transition-all" style="width:${p}%"></div></div>
-                    <p class="text-[10px] text-violet-400">창을 닫으면 중단돼요</p></div>`;
+                    <p class="text-[10px] text-violet-400">무료 한도(1분 15번)에 안 걸리게 천천히 보내요 · 창을 닫으면 중단돼요 (짚은 것은 남아요)</p></div>`;
             }
-            const head = `<p class="text-[11px] font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} — ${ai.total}개 중 확인할 것 ${ai.rows.length}개${ai.failed.length ? ` · 못 받아온 것 ${ai.failed.length}개` : ''}</p>`;
-            if (!ai.rows.length) return head + `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">AI 가 풀어도 저장된 칸과 같아요 ✨</div>`
-                + (ai.failed.length ? `<p class="text-[11px] text-rose-500 font-bold">못 받아온 동사: ${escapeHtml(ai.failed.join(', '))}</p>` : '');
-            return head + ai.rows.map((r, i) => `
+            const failTxt = ai.failed.length ? ` · 못 받아온 것 ${ai.failed.length}개` : '';
+            const head = ai.tense
+                ? `<p class="text-[11px] font-bold text-violet-700">🤖 ${escapeHtml(bulkTenseLabel(ai.tense))} ${ai.total}개 봤어요 · 확인할 것 ${ai.rows.length}개${failTxt}</p>`
+                : `<p class="text-[11px] font-bold text-violet-700">🤖 지난 확인${ai.savedDate ? `(${escapeHtml(ai.savedDate.slice(5).replace('-', '/'))})` : ''}에서 남은 것 ${ai.rows.length}개</p>`;
+            const failList = ai.failed.length ? `<p class="text-[11px] text-rose-500 font-bold">못 받아온 동사: ${escapeHtml(ai.failed.join(', '))}</p>` : '';
+            if (!ai.rows.length) return head + `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">${ai.tense ? 'AI 가 풀어도 저장된 칸과 같아요 ✨' : '남은 것이 없어요 ✨'}</div>` + failList;
+            return head + failList + ai.rows.map((r, i) => `
                 <div class="bg-violet-50/60 border border-violet-200 rounded-2xl p-3 space-y-1">
                     <div class="flex items-center gap-2">
                         <span class="font-extrabold text-slate-800">${escapeHtml(r.word)}</span>
+                        <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 rounded-full px-2 py-0.5">${escapeHtml(bulkTenseLabel(r.tense))}</span>
                         <div class="ml-auto flex gap-1.5">
-                            <button onclick="openWordFromConjCheck('${r.id}')" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-100">단어 열기</button>
+                            <button onclick="dismissConjAiRow(${i})" class="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-slate-100">괜찮음</button>
+                            <button onclick="openWordFromConjCheck('${r.id}')" class="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-[11px] font-bold text-white">단어 열기</button>
                             ${r.agree ? `<button onclick="applyConjAiPick(${i})" class="px-2 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-[11px] font-bold text-white">이걸로 바꾸기</button>` : ''}
                         </div>
                     </div>
@@ -690,8 +756,11 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             saveToStorage();
             if (typeof renderWordList === 'function') renderWordList();
             if (typeof restoreExpandedCards === 'function') restoreExpandedCards();
-            const ai = conjCheckState && conjCheckState.ai;   // AI 확인 결과는 남겨 둔다
-            conjCheckState = Object.assign(findConjMismatches(), { ai });
+            if (!conjCheckState) return;
+            //   AI 확인 결과는 남겨 둔다 — 객체를 갈아끼우면 돌고 있던 AI 확인이 '창을 닫았다' 로 알고 멈춰서 그대로 덮는다
+            const ai = conjCheckState.ai;
+            Object.assign(conjCheckState, findConjMismatches());
+            if (ai) { conjAiPrune(ai); if (!ai.running) conjAiSaveLeft(ai); }
             renderConjCheck();
             showToast(msg, "success");
         }
@@ -704,9 +773,42 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const n = conjCheckState.list.filter(x => x.fix && applyConjFix(x)).length;
             if (n) afterConjFix(`${n}개를 고쳤어요 ✨`);
         }
+        //   [단어 열기] — 점검 창은 숨겨만 두고, 단어 창을 닫으면 다시 띄운다 (AI 확인 결과 그대로)
         function openWordFromConjCheck(id) {
-            closeConjCheck();
+            const st = conjCheckState;
+            if (st) {
+                st.awayForWord = true;
+                document.getElementById('conj-check-modal').classList.add('hidden');
+            }
             openWordModal(id);
+        }
+        //   closeWordModal 이 부른다
+        function conjCheckBackFromWord() {
+            const st = conjCheckState;
+            if (!st || !st.awayForWord || st.backWaiting) return;
+            st.backWaiting = true;
+            afterWordFlowDone(() => conjCheckState === st && st.awayForWord, () => {
+                st.backWaiting = false;
+                st.awayForWord = false;
+                //   단어 창에서 갈래·칸을 고쳤을 수 있으니 코드 훑기는 새로, AI 줄은 바뀐 것만 뺀다
+                Object.assign(st, findConjMismatches());   // 객체는 그대로 — AI 확인이 돌고 있으면 이어서 간다
+                if (st.ai) conjAiPrune(st.ai);
+                document.getElementById('conj-check-modal').classList.remove('hidden');
+                renderConjCheck();
+            }, () => { st.backWaiting = false; });
+        }
+        //   단어 창(과 이어 뜨는 유의어 채우기·확인창·관용구 겹침 창)이 다 닫힐 때까지 기다렸다가 fn.
+        //   점검 창에서 단어를 열었다가 돌아올 때 쓴다. 그새 점검 창이 바뀌었으면(wanted 가 false) 그만둔다
+        function afterWordFlowDone(wanted, fn, onGiveUp) {
+            let n = 0;
+            const shown = id => { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); };
+            const tick = () => {
+                if (!wanted()) { if (onGiveUp) onGiveUp(); return; }
+                const syn = (typeof _inSynonymFill !== 'undefined') && _inSynonymFill;
+                if ((shown('word-modal') || shown('confirm-modal') || shown('idiom-dup-modal') || syn) && n++ < 1500) { setTimeout(tick, 400); return; }
+                fn();
+            };
+            setTimeout(tick, 300);
         }
 
         // ============================================================
@@ -1267,20 +1369,14 @@ Output one item per line, same id, no line skipped.`;
             const st = idiomCheckState;
             if (!st || !st.awayForWord || st.backWaiting) return;
             st.backWaiting = true;
-            let n = 0;
-            const shown = id => { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); };
-            const tick = () => {
-                if (idiomCheckState !== st || !st.awayForWord) { st.backWaiting = false; return; }
-                const syn = (typeof _inSynonymFill !== 'undefined') && _inSynonymFill;
-                if ((shown('word-modal') || shown('confirm-modal') || shown('idiom-dup-modal') || syn) && n++ < 1500) { setTimeout(tick, 400); return; }
+            afterWordFlowDone(() => idiomCheckState === st && st.awayForWord, () => {
                 st.backWaiting = false;
                 st.awayForWord = false;
                 st.pendingReg = null;   // 등록 창을 그냥 닫았으면 옛 관용구는 그대로
                 document.getElementById('idiom-check-modal').classList.remove('hidden');
                 if (!st.running) idiomCheckFillScope();
                 renderIdiomCheck();
-            };
-            setTimeout(tick, 300);
+            }, () => { st.backWaiting = false; });
         }
         //   performSaveWord 가 새 단어를 저장한 직후 부른다 — 점검 창에서 연 등록이면 옛 관용구를 정리한다
         function idiomCheckAfterNewWord(wordObj) {
@@ -2929,8 +3025,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (typeof dropWordModalAfterWordLink === 'function' && dropWordModalAfterWordLink()) {
                 if (typeof renderGrammarWordLink === 'function') renderGrammarWordLink();
             }
-            //   관용구 점검 창에서 연 단어면 점검 창을 다시 띄운다 (목록 그대로)
+            //   관용구 점검·활용 점검 창에서 연 단어면 그 창을 다시 띄운다 (목록 그대로)
             if (typeof idiomCheckBackFromWord === 'function') idiomCheckBackFromWord();
+            if (typeof conjCheckBackFromWord === 'function') conjCheckBackFromWord();
         }
 
         function showConfirm(title, desc, onOk, options = {}) {
