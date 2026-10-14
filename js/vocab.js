@@ -866,24 +866,46 @@ Output one item per line, same id, no line skipped.`;
             const sel = document.getElementById('idiom-check-scope');
             const all = allOwnIdiomPairs();
             const pairs = (sel && sel.value === 'all') ? all : all.filter(p => !idiomIsVetted(p.it));
-            Object.assign(st, { running: true, rows: [], done: 0, total: pairs.length, failed: 0, waiting: 0, ran: true });
+            Object.assign(st, { running: true, rows: [], done: 0, total: pairs.length, failed: 0, waiting: 0, retrying: 0, ran: true });
             if (sel) sel.disabled = true;
             renderIdiomCheck();
             const items = idiomVetItemsOf(pairs);
             let marked = 0;
-            for (let i = 0; i < items.length; i += IDIOM_VET_BATCH) {
-                if (st.cancelled) return;
-                const batch = items.slice(i, i + IDIOM_VET_BATCH);
-                try {
-                    const res = await idiomVetRun(batch, (s) => { st.waiting = s; if (idiomCheckState === st) renderIdiomCheck(); });
-                    res.passed.forEach(x => { markIdiomVetted(x.it); marked++; });
-                    st.rows = st.rows.concat(res.flagged);
-                    st.failed += res.missing.length;
-                } catch (e) { console.error(e); st.failed += batch.length; }
-                st.done += batch.length;
-                if (idiomCheckState !== st) return;
-                renderIdiomCheck();
+            //   [냐냐 요청] 못 받아온 묶음은 끝에 한 번 더 (2026-10-14) — 1,258개 중 240개(40개 묶음 6개)를 못 받아왔다.
+            //   그때 3.5 가 붐볐거나(503·무응답) 1분 한도에 걸린 것 — 같은 묶음을 나중에 보내니 3.7초에 다 왔다.
+            //   그래서 다 돈 뒤 30초 쉬고, 못 받아온 것만 20개씩 작게 나눠 다시 보낸다. 그래도 안 되면 그때 '못 받아온 것' 으로 남긴다.
+            const runBatches = async (list, size, failedOut) => {
+                for (let i = 0; i < list.length; i += size) {
+                    if (st.cancelled || idiomCheckState !== st) return false;
+                    const batch = list.slice(i, i + size);
+                    try {
+                        const res = await idiomVetRun(batch, (s) => { st.waiting = s; if (idiomCheckState === st) renderIdiomCheck(); });
+                        res.passed.forEach(x => { markIdiomVetted(x.it); marked++; });
+                        st.rows = st.rows.concat(res.flagged);
+                        res.missing.forEach(x => failedOut.push(x));
+                    } catch (e) { console.error(e); batch.forEach(x => failedOut.push(x)); }
+                    if (!st.retrying) st.done += batch.length;
+                    if (idiomCheckState !== st) return false;
+                    renderIdiomCheck();
+                }
+                return true;
+            };
+            let failedItems = [];
+            if (!await runBatches(items, IDIOM_VET_BATCH, failedItems)) return;
+            if (failedItems.length) {
+                st.retrying = failedItems.length;
+                for (let left = 30; left > 0; left--) {
+                    if (st.cancelled || idiomCheckState !== st) return;
+                    st.waiting = left; renderIdiomCheck();
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                st.waiting = 0;
+                const again = [];
+                if (!await runBatches(failedItems, 20, again)) return;
+                failedItems = again;
+                st.retrying = 0;
             }
+            st.failed = failedItems.length;
             if (marked) saveToStorage();
             st.running = false;
             if (sel) sel.disabled = false;
@@ -907,7 +929,8 @@ Output one item per line, same id, no line skipped.`;
                 ? `<div class="bg-sky-50 border border-sky-100 rounded-2xl p-3 space-y-2">
                     <p class="text-xs font-bold text-sky-800">📘 보는 중… ${st.done}/${st.total} (${p}%) · 짚은 것 ${st.rows.length}개</p>
                     <div class="h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-sky-500 transition-all" style="width:${p}%"></div></div>
-                    ${st.waiting ? `<p class="text-[11px] font-bold text-amber-600">⏳ AI 무료 한도에 걸려서 ${st.waiting}초 쉬었다가 이어서 해요</p>` : ''}
+                    ${st.retrying ? `<p class="text-[11px] font-bold text-amber-600">🔁 못 받아온 ${st.retrying}개를 ${st.waiting ? `${st.waiting}초 뒤에 ` : ''}다시 보는 중이에요</p>`
+                        : (st.waiting ? `<p class="text-[11px] font-bold text-amber-600">⏳ AI 무료 한도에 걸려서 ${st.waiting}초 쉬었다가 이어서 해요</p>` : '')}
                     <p class="text-[10px] text-sky-500">창을 닫으면 중단돼요 (본 것까지는 남아요)</p></div>`
                 : `<p class="text-[11px] font-bold text-sky-800">📘 ${st.total}개 중 확인할 것 ${st.rows.length}개${st.failed ? ` · 못 받아온 것 ${st.failed}개` : ''}</p>`
                   + (!st.rows.length ? `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-xs text-emerald-700 font-bold">${st.total ? '전부 실제로 쓰는 말이에요 ✨' : '아직 안 본 관용구가 없어요 ✨'}</div>` : '');
