@@ -3058,6 +3058,16 @@ let vocabulary = [];
         //   ⚠️ 하루에 한 번만 물린다. 같은 오답 한 건에 addWordScore 와
         //      markWordReviewedToday 가 잇따라 불려서 두 단계씩 떨어지면 안 된다.
         //      (예전엔 둘 다 0으로 만들어서 몇 번을 불러도 결과가 같았다)
+        // ============================================================
+        // [냐냐 요청] 30일 칸(마지막 단계)에서 틀려 미끄러지면 '졸업에 실패했어요' 알림 (2026-10-14).
+        //   졸업은 '망각곡선 졸업! 🎓' 이 뜨는데, 그 앞에서 미끄러진 건 아무 말 없이 14일 칸으로 내려가 있었다.
+        //   단어·관용구·문법이 같은 말을 쓴다. 이미 졸업한 것을 다시 틀린 건 여기 안 든다 (30일 칸을 기다리던 것만).
+        // ============================================================
+        function showGraduationFail(label) {
+            if (typeof showToast !== 'function') return;
+            const back = REVIEW_INTERVALS[REVIEW_INTERVALS.length - 2];
+            showToast(`"${label}" 졸업에 실패했어요 😢 ${back}일 칸으로 내려가요`, "info");
+        }
         function demoteReviewStage(w) {
             if (!w) return;
             const today = getLocalDateString();
@@ -3065,7 +3075,9 @@ let vocabulary = [];
             w.lastDemoteDate = today;
             // 졸업한 단어(마지막 칸 밖)는 마지막 칸으로 당겨놓고 뺀다 — 안 그러면
             // 방금 잊어버린 단어를 30일 뒤에나 다시 묻게 된다
-            const cur = Math.min(w.reviewStage || 0, REVIEW_INTERVALS.length - 1);
+            const last = REVIEW_INTERVALS.length - 1;
+            if (w.lastWrongDate && (w.reviewStage || 0) === last) showGraduationFail(w.word);
+            const cur = Math.min(w.reviewStage || 0, last);
             w.reviewStage = Math.max(0, cur - 1);
         }
 
@@ -3563,6 +3575,7 @@ let vocabulary = [];
                 return;
             }
             rec.lastDemoteDate = today;
+            if (rec.lastWrongDate && (rec.stage || 0) === REVIEW_INTERVALS.length - 1) showGraduationFail(idiomText);
             const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
             rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;
             rec.lastWrongDate = today;
@@ -3705,6 +3718,10 @@ let vocabulary = [];
                 return;
             }
             rec.lastDemoteDate = today;
+            if (rec.lastWrongDate && (rec.stage || 0) === REVIEW_INTERVALS.length - 1) {
+                const tt = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === id);
+                showGraduationFail((tt && tt.title) || '이 문법');
+            }
             const cur = Math.min(rec.stage || 0, REVIEW_INTERVALS.length - 1);
             rec.stage = rec.lastWrongDate ? Math.max(0, cur - 1) : 0;   // 처음 들어오면 0단계부터
             rec.lastWrongDate = today;

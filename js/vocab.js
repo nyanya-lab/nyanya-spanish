@@ -5918,7 +5918,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 feedback: null,           // 1바퀴 채점 결과 화면 (정답/오답 표시)
                 feedbackTimer: null,
                 retryReason: null,        // 1바퀴 점수 기준 — 'synonym'(+2) | 'typo'(+1)
-                usedRetries: {},          // 종류별로 한 번씩만 봐준다 { synonym, typo }
+                usedRetries: {},          // 종류별로 한 번씩만 봐준다 { synonym, typo } — 유의어는 아래 synonymTried 로 따로
+                synonymTried: [],         // 이 낱말에서 이미 되물은 유의어 답 (같은 답을 또 쓰면 오답)
                 hint: '',                 // 1바퀴 재입력 안내 문구
                 grading: false,           // AI 채점 중
                 wrongCount: 0,            // 최종(3바퀴) 오답 수
@@ -5999,7 +6000,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     s.phase = 2;
                     s.pool = s.wrongPool.slice();
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
-                    s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
                     gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
                         `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
@@ -6010,7 +6011,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     s.phase = 3;
                     s.pool = shuffleArray(s.wrongPool.slice());
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
-                    s.retryReason = null; s.usedRetries = {}; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
                     gate('🙈', '이제 가리고 써볼 차례!',
                         '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
                         '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
@@ -6317,7 +6318,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.retry = false;
             s.lastWrong = '';
             s.retryReason = null;   // [냐냐 요청] 봐준 이유는 단어마다 초기화
-            s.usedRetries = {};
+            s.usedRetries = {}; s.synonymTried = [];
             s.hint = '';
             s.hintMine = '';
             s.feedback = null;
@@ -6702,7 +6703,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (s.feedbackTimer) { clearTimeout(s.feedbackTimer); s.feedbackTimer = null; }
             s.feedback = null;
             s.retryReason = null;
-            s.usedRetries = {};
+            s.usedRetries = {}; s.synonymTried = [];
             s.hint = '';
             s.hintMine = '';
             s.lastWrong = '';
@@ -6726,6 +6727,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const s = writePracticeState;
             s.usedRetries = s.usedRetries || {};
             s.usedRetries[reason] = true;
+            if (reason === 'synonym') {
+                s.synonymTried = s.synonymTried || [];
+                const k = normalizeWriteAnswer(String(mine || ''));
+                if (k && !s.synonymTried.includes(k)) s.synonymTried.push(k);
+            }
             // 오타가 한 번이라도 끼면 점수는 오타 기준(+1). 유의어만이면 +2
             s.retryReason = s.usedRetries.typo ? 'typo' : reason;
             s.hint = hintHtml;
@@ -6733,6 +6739,21 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.hintReason = reason;
             renderWritePractice();
         }
+        // ============================================================
+        // [냐냐 지적] 유의어를 두 번째로 쓰면 기회 없이 바로 오답이었다 (2026-10-14).
+        //   de cuando en cuando 문제에 a veces → (d… 힌트) → de vez en cuando 를 썼는데, 같은 뜻을 또 떠올린 것이라 억울했다.
+        //   다른 유의어면 한 번 더 되묻는다 — 힌트는 내 답과 겹친 만큼 길어진다(d… → de c…). 같은 답을 또 쓰면 오답, 3번까지.
+        //   점수는 그대로 유의어 대접(+2) — 오타가 한 번이라도 끼면 오타 기준(+1).
+        // ============================================================
+        const WRITE_SYNONYM_TRIES = 3;
+        function writeCanSynonymRetry(userAnswer) {
+            const s = writePracticeState;
+            if (!s) return false;
+            const tried = s.synonymTried || [];
+            const k = normalizeWriteAnswer(String(userAnswer || ''));
+            return !tried.includes(k) && tried.length < WRITE_SYNONYM_TRIES;
+        }
+
         // 앞글자 힌트: 정답과 내 답이 공유하는 앞부분 + 다음 한 글자
         //   [냐냐 요청] 유의어 힌트의 앞글자는 원형으로 (2026-10-02) — 활용형 문제 'nos llevamos' 에서 'n…' 은
         //   재귀대명사 첫 글자라 아무 도움이 안 됐다. 활용형 문제면 그 동사 원형(llevarse → 'l…')으로 준다.
@@ -6802,7 +6823,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const plainV = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
                 if (plainV && baseW && plainV.id !== baseW.id && String(plainV.pos || '').toLowerCase() === 'verb') {
                     const isSyn = (Array.isArray(baseW.synonyms) ? baseW.synonyms : []).some(sy => sy && sy.type !== 'antonym' && sy.id === plainV.id);
-                    if (isSyn && !used.synonym) {
+                    if (isSyn && writeCanSynonymRetry(userAnswer)) {
                         const p = writePrefixHint(userAnswer, writeHintBase(w));
                         writeAskRetry('synonym', `💡 그렇게 쓰면 <b>${escapeHtml(plainV.word)}</b>(${escapeHtml(String(plainV.meaning || '').trim())})예요. 이번엔 외우려던 동사로 써볼까요?${p ? ' ' + hintStartHtml(p) : ''}`, userAnswer);
                         return;
@@ -6845,7 +6866,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
 
             // 3-1) 내가 등록해 둔 유의어 — AI 없이 그 자리에서 되묻는다
-            if (!used.synonym) {
+            if (writeCanSynonymRetry(userAnswer)) {
                 const syn = writeRegisteredSynonym(userAnswer, w);
                 if (syn) {
                     //   [냐냐 지적] 이 길만 '무엇으로 시작하는지' 를 안 알려주고 있었다 (2026-09-07).
@@ -6894,7 +6915,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!ai) {
                 const a = (typeof analyzeSubjectiveAnswer === 'function') ? analyzeSubjectiveAnswer(userAnswer, q) : { isCorrect: false };
                 if (a.isCorrect) { writeFirstRoundPass(w, 2); return; }
-                if (a.isSynonym && !used.synonym) {
+                if (a.isSynonym && writeCanSynonymRetry(userAnswer)) {
                     const got = awardSynonymScore(userAnswer, w);
                     writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint) + synonymAwardNote(got), userAnswer);
                     return;
@@ -6924,7 +6945,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
             if (verdict === 'correct') { writeFirstRoundPass(w, 2); return; }
             // [냐냐 요청] 같은 이유로는 한 번만 봐준다. 이유가 다르면(유의어 → 오타) 한 번 더.
-            if (verdict === 'synonym' && !used.synonym) {
+            if (verdict === 'synonym' && writeCanSynonymRetry(userAnswer)) {
                 const got = awardSynonymScore(userAnswer, w, ai.answerMeaning);
                 writeAskRetry('synonym', writeSynonymHint(userAnswer, w,
                     `💡 그것도 같은 뜻이에요! 다른 단어를 생각해 볼까요? ${hintStartHtml(writePrefixHint(userAnswer, writeHintBase(w)))}`) + synonymAwardNote(got), userAnswer);
