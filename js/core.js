@@ -12138,6 +12138,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function stashForReload() {
             try {
                 const s = { at: Date.now(), tab: activeTab };
+                if (typeof aiGradedKeys !== 'undefined' && aiGradedKeys.size) s.gradedKeys = Array.from(aiGradedKeys);   // 다시 낸 답은 첨삭만 — 새로고침해도 이어지게
                 const mode = (typeof currentAiMode !== 'undefined') ? currentAiMode : null;
                 s.aiMode = mode;
                 const graded = isShown('ai-feedback-result');   // 지금 모드에서 채점 결과를 보는 중
@@ -12200,6 +12201,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             try { s = JSON.parse(sessionStorage.getItem(RELOAD_STASH_KEY) || 'null'); sessionStorage.removeItem(RELOAD_STASH_KEY); } catch (e) {}
             if (!s || !s.at || Date.now() - s.at > 10 * 60 * 1000) return;   // 우리가 막 맡긴 것만
             try {
+                if (Array.isArray(s.gradedKeys) && typeof aiGradedKeys !== 'undefined') s.gradedKeys.forEach(k => aiGradedKeys.add(k));
                 if (s.tab && document.getElementById(`tab-${s.tab}`)) changeTab(s.tab);
                 if (s.aiMode && typeof switchAiMode === 'function') switchAiMode(s.aiMode);
                 const setBox = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };

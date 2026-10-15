@@ -723,6 +723,7 @@
             currentQuestionForAnswer = picked;
             updateSaveAiQuestionBtn();
             document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            aiGradedKeys.delete(aiMissionKey('question', currentQuestionForAnswer.question));   // 다시 뽑힌 질문은 처음처럼 채점
             // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
             const topicBadge = document.getElementById('question-topic-badge');
             const revealBtn = document.getElementById('question-topic-reveal-btn');
@@ -909,6 +910,22 @@
             }
         }
 
+        // ============================================================
+        // [냐냐 요청] 같은 미션에 두 번째로 낸 답은 첨삭만, 점수는 없이 (2026-10-16)
+        //   결과가 나온 뒤에도 입력칸·제출이 그대로라, 같은 답(또는 고친 답)을 다시 내면 처음부터 다시 채점돼 점수가 또 붙었다.
+        //   한→스 번역 · 관용구 미션 · 문법 복습 미션 · 질문에 답하기만 — 미션이 있는 곳. 스→한 자유 작문은 기준(미션)이 없어 그대로.
+        //   두 번째부터: 첨삭 화면은 그대로 보여주고, 단어·관용구·문법 점수 · 복습 · 일지 · 보물상자 · 첨삭 노트 · 학습 수준은 건드리지 않는다.
+        //   새로고침해도 이어진다 (stashForReload 가 같이 맡긴다).
+        // ============================================================
+        let aiGradedKeys = new Set();
+        function aiMissionKey(mode, ask) { return `${mode}::${String(ask || '').replace(/\s+/g, ' ').trim()}`; }
+        function showAiRegradeNotice() {
+            const box = document.getElementById('ai-mission-refs');
+            if (!box) return;
+            box.innerHTML = `<div class="bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-500">🔁 이 미션은 이미 채점했어요 — 다시 낸 답은 첨삭만 하고 점수는 안 붙여요</div>`;
+            box.classList.remove('hidden');
+        }
+
         async function submitQuestionAnswer() {
             if (!currentQuestionForAnswer) {
                 showToast("먼저 '랜덤 질문 뽑기'를 눌러서 질문을 받아주세요!", "error");
@@ -935,6 +952,8 @@
             // [냐냐 요청] 여기도 스페인어를 직접 쓰는 곳이라 스→한과 똑같이 단어·문법 점수를 매긴다
             const qScoreNotes = aiScoringNoteList();
             resetAiWritingScores();
+            const gradeKey = aiMissionKey('question', currentQuestionForAnswer.question);
+            const regrade = aiGradedKeys.has(gradeKey);
 
             const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
             Student's Spanish Answer: "${userAnswer}"
@@ -1011,7 +1030,8 @@
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
 
                 // [냐냐 요청] 이 답변이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
-                applyAiWritingScores(feedback, qScoreNotes);
+                if (regrade) showAiRegradeNotice();
+                else { aiGradedKeys.add(gradeKey); applyAiWritingScores(feedback, qScoreNotes); }
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
@@ -1053,11 +1073,13 @@
                 renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
+                if (!regrade) {
                 learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
                 if (feedback.isCorrect) {
                     learnerProfile.totalCorrect++;
                 } else if (feedback.issueType && feedback.issueType !== '없음') {
                     learnerProfile.wrongByGrammarType[feedback.issueType] = (learnerProfile.wrongByGrammarType[feedback.issueType] || 0) + 1;
+                }
                 }
 
                 aiChatHistory = [
@@ -1066,9 +1088,11 @@
                 ];
                 renderChatThread();
 
-                recordAiNote('question', currentQuestionForAnswer.question, userAnswer, feedback);
-                if (typeof noteEssaySentences === 'function') noteEssaySentences(userAnswer);   // 보물상자: 문장마다 4점
-                logAction('ai');
+                if (!regrade) {
+                    recordAiNote('question', currentQuestionForAnswer.question, userAnswer, feedback);
+                    if (typeof noteEssaySentences === 'function') noteEssaySentences(userAnswer);   // 보물상자: 문장마다 4점
+                    logAction('ai');
+                }
                 saveToStorage();
                 updateStats();
                 // [냐냐 PATCH] 연관 질문 생성 버튼 노출 + 직전 문답 맥락 저장
@@ -1651,6 +1675,7 @@ ${missionTenseRuleText(!!grammarContext)}
 
                 aiCurrentWordForMission = null;   // 목표 단어는 이제 없다
                 aiCurrentKoreanSentence = candidateSentence;
+                aiGradedKeys.delete(aiMissionKey('ko-es', candidateSentence));   // 새로 뽑은 미션 — 같은 글이 또 나와도 처음처럼
                 // [냐냐 요청] 첨삭 때 근거로 쓰려고 이번 미션이 참고한 것들을 기억해 둔다
                 aiCurrentGrammarForMission = grammarNote || null;
                 aiCurrentGrammarDetailForMission = grammarDetail || '';
@@ -1696,6 +1721,8 @@ ${missionTenseRuleText(!!grammarContext)}
             }
 
             renderAiNatural(null); // 지난 결과의 '더 자연스러운 표현'을 먼저 치운다
+            const gradeKey = aiMissionKey(isIdiom ? 'idiom' : 'ko-es', missionSentence);
+            const regrade = aiGradedKeys.has(gradeKey);   // 같은 미션에 두 번째 답 — 첨삭만
             const submitBtn = document.getElementById(isIdiom ? 'ai-idiom-submit-btn' : 'ai-ko-es-submit-btn');
             const originalHtml = submitBtn.innerHTML;
             
@@ -1819,14 +1846,15 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 // [냐냐 요청] '이번 미션이 참고한 내용' 카드는 없앴다 (2026-09-02).
                 //   채점 결과에 '이 문장이 쓴 내 문법' 이 이미 나오므로 겹치고,
                 //   복습으로 들어온 미션이면 어떤 문법인지 미리 알려주는 셈이라 짐작하게 된다.
-                applyAiWritingScores(feedback, koEsScoreNotes, !isIdiom);   // 점수 카드는 그 아래에 이어 붙는다
+                if (regrade) showAiRegradeNotice();
+                else { aiGradedKeys.add(gradeKey); applyAiWritingScores(feedback, koEsScoreNotes, !isIdiom); }   // 점수 카드는 그 아래에 이어 붙는다
                 //   ⚠️ true = 한→스 (문법) 미션의 답. 이 한 군데만 복습으로 쳐준다 (다른 탭은 안 넘긴다)
                 //   [냐냐 요청] 문법 복습으로 낸 미션은 일지에 'AI 첨삭' 이 아니라 '복습' 으로 센다 (2026-09-17).
                 //   ⚠️ 둘 다 세면 안 된다 — 알 키우기가 첨삭 횟수와 복습 개수를 더해서 자란다.
                 //   관용구 미션은 문법 복습 줄과 상관이 없다 — 건드리지 않는다.
-                const countAsReview = !isIdiom && !!(aiMissionReviewGrammarId && grammarReviewTotal);
+                const countAsReview = !regrade && !isIdiom && !!(aiMissionReviewGrammarId && grammarReviewTotal);
                 if (!isIdiom) {
-                    if (aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
+                    if (!regrade && aiMissionReviewGrammarId && grammarReviewTotal) { grammarReviewDone++; grammarReviewSlotGraded = true; }
                     grammarReviewLastNoteId = aiMissionReviewGrammarId || grammarReviewCurrentId;
                     aiMissionReviewGrammarId = null;   // 복습 한 번에 한 칸. 같은 미션을 다시 내도 또 나가지 않는다
                     renderGrammarReviewBar('graded');
@@ -1858,8 +1886,10 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
                 //   목표 단어가 없어졌으므로 품사별 오답 집계는 여기서 안 한다 (예문 연습 쪽은 그대로)
-                learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
-                if (feedback.isCorrect) learnerProfile.totalCorrect++;
+                if (!regrade) {
+                    learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
+                    if (feedback.isCorrect) learnerProfile.totalCorrect++;
+                }
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 번역 피드백에 이어지는 냐냐님의 추가 질문이나 의구심에 대해 명쾌하고 친근하게 한국어로 대답해주세요." },
@@ -1868,10 +1898,12 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 renderChatThread();
 
                 //   복습으로 센 번역은 노트에 표시해 둔다 — 일지에서 첨삭 목록이 아니라 복습 목록에 나오게
-                recordAiNote(isIdiom ? 'idiom' : 'ko-es', missionSentence, userText, feedback, undefined, countAsReview);
-                if (typeof noteEssaySentences === 'function') noteEssaySentences(userText);   // 보물상자: 문장마다 4점 (복습 미션도 같이)
-                logAction(countAsReview ? 'review' : 'ai');
-                if (countAsReview) judgeMissedReviewTarget(feedback, grammarReviewLastNoteId);   // 목표 문법을 채점이 빠뜨렸으면 따로 (기다리지 않음)
+                if (!regrade) {
+                    recordAiNote(isIdiom ? 'idiom' : 'ko-es', missionSentence, userText, feedback, undefined, countAsReview);
+                    if (typeof noteEssaySentences === 'function') noteEssaySentences(userText);   // 보물상자: 문장마다 4점 (복습 미션도 같이)
+                    logAction(countAsReview ? 'review' : 'ai');
+                    if (countAsReview) judgeMissedReviewTarget(feedback, grammarReviewLastNoteId);
+                }   // 목표 문법을 채점이 빠뜨렸으면 따로 (기다리지 않음)
                 saveToStorage();
                 updateStats();
                 scrollAiResultIntoView();
@@ -2110,6 +2142,7 @@ ${buildLearnerProfileSummary()}`;
                 if (!sentence) throw new Error('EMPTY');
                 if (/[a-zA-Z]/.test(sentence)) throw new Error('SENTENCE_CONTAINS_SPANISH');
                 aiIdiomMission = { w: pick.w, it: pick.it, key: pick.key, sentence, review: isReview };
+                aiGradedKeys.delete(aiMissionKey('idiom', sentence));
                 aiIdiomRecent = [pick.key].concat(aiIdiomRecent.filter(k => k !== pick.key)).slice(0, 20);
                 heading.innerText = sentence;
                 document.getElementById('ai-idiom-review-pill')?.classList.toggle('hidden', !isReview);
