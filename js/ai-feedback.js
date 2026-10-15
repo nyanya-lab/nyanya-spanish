@@ -2746,6 +2746,42 @@ ${buildLearnerProfileSummary()}`;
             const owner = hasIt(w0) ? w0 : (vocabulary || []).find(hasIt);
             if (owner) openIdiomView(owner.id, iid); else openWordView(wid);
         }
+        // ============================================================
+        // [냐냐 요청] 결과 카드에도 졸업 · 졸업 실패를 그 줄 옆에 단다 (2026-10-15) — 🔁 오늘 복습 칩처럼.
+        //   토스트('망각곡선 졸업! 🎓' · '졸업에 실패했어요 😢')는 결과가 뜨는 순간 같이 지나가서 놓친다.
+        //   반영 전(prev) 칸과 지금 칸을 견준다. ↺ 로 점수를 바꾸면 칸도 따라 바뀌므로 그릴 때마다 잰다.
+        //   졸업 = 곡선 안에서 마지막 칸을 넘음 · 졸업 실패 = 30일 칸(마지막 칸)에서 미끄러짐 (showGraduationFail 과 같은 잣대).
+        //   약점이라 30일 칸에 머문 것은 둘 다 아니다.
+        // ============================================================
+        function aiCurveShift(before, after) {   // { inCurve, stage } 둘 → 'grad' | 'fail' | ''
+            if (typeof REVIEW_INTERVALS === 'undefined' || !before || !before.inCurve || !after || !after.inCurve) return '';
+            const L = REVIEW_INTERVALS.length, b = before.stage || 0, a = after.stage || 0;
+            if (b < L && a >= L) return 'grad';
+            if (b === L - 1 && a < L - 1) return 'fail';
+            return '';
+        }
+        function aiCurveChip(kind, small) {
+            if (!kind) return '';
+            const size = small ? 'text-[9px] px-1.5' : 'text-[10px] px-2';
+            const back = (typeof REVIEW_INTERVALS !== 'undefined') ? REVIEW_INTERVALS[REVIEW_INTERVALS.length - 2] : 14;
+            return kind === 'grad'
+                ? `<span title="이번 첨삭으로 망각곡선을 졸업했어요" class="shrink-0 ${size} font-black text-emerald-700 bg-emerald-100 rounded-full py-0.5">🎓 졸업</span>`
+                : `<span title="30일 칸에서 미끄러져 ${back}일 칸으로 내려갔어요" class="shrink-0 ${size} font-black text-rose-600 bg-rose-100 rounded-full py-0.5">😢 졸업 실패</span>`;
+        }
+        function aiWordCurveShift(e) {
+            const p = e && e.prev, w = e && e.word;
+            if (!p || !w || typeof w !== 'object') return '';
+            return aiCurveShift({ inCurve: !!p.lastWrongDate, stage: p.reviewStage }, { inCurve: !!w.lastWrongDate, stage: w.reviewStage });
+        }
+        function aiIdiomCurveShift(e) {
+            const p = e && e.prev && e.prev.review, now = e && (idiomReview || {})[e.key];
+            return aiCurveShift(p && { inCurve: !!p.lastWrongDate, stage: p.stage }, now && { inCurve: !!now.lastWrongDate, stage: now.stage });
+        }
+        function aiGrammarCurveShift(g) {
+            const p = g && g.prev && g.prev.review;
+            const now = g && g.note && (typeof grammarReview !== 'undefined') ? grammarReview[g.note.id] : null;
+            return aiCurveShift(p && { inCurve: !!p.lastWrongDate, stage: p.stage }, now && { inCurve: !!now.lastWrongDate, stage: now.stage });
+        }
         function aiIdiomAlsoReviewed(e) {
             return !!e && e.delta !== 0 && ((e.delta > 0 && e.due) || e.missionReview);
         }
@@ -5857,6 +5893,7 @@ Give the fragment in "ev".`;
                     ${(g.alsoReviewed || g.isReviewTarget) && g.delta !== 0
                         ? `<span title="${g.isReviewTarget ? '지금 복습하는 문법이에요' : '이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다'}" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
                         : ''}
+                    ${aiCurveChip(aiGrammarCurveShift(g))}
                     ${g.locked ? lockMark : cycleBtn('cycleGrammarEntry', i)}
                 </div>`).join('');
 
@@ -5886,6 +5923,7 @@ Give the fragment in "ev".`;
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
                                 ${w.alsoReviewed ? `<span title="${w.delta > 0 ? '오늘 차례였던 단어 — 오늘 복습으로 쳤어요 (한 칸 앞으로)' : '오늘 차례였던 단어 — 철자가 틀려 복습 실패로 쳤어요 (한 칸 뒤로)'}" class="shrink-0 text-[9px] font-black rounded-full px-1.5 py-0.5 ${w.delta > 0 ? 'text-amber-700 bg-amber-100' : 'text-rose-600 bg-rose-100'}">🔁 ${w.delta > 0 ? '오늘 복습' : '복습 실패'}</span>` : ''}
+                                ${aiCurveChip(aiWordCurveShift(w), true)}
                                 ${w.locked ? lockMark : `<button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                             </span>`;
                         }).join('')}
@@ -5914,6 +5952,7 @@ Give the fragment in "ev".`;
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${e.delta > 0 ? 'text-emerald-600' : (e.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(e.delta)}</span>` : ''}
                                 ${aiIdiomAlsoReviewed(e) ? `<span title="이 관용구는 오늘 복습으로 쳤어요" class="shrink-0 text-[9px] font-black text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">🔁 오늘 복습</span>` : ''}
+                                ${aiCurveChip(aiIdiomCurveShift(e), true)}
                                 ${e.locked ? lockMark : `<button type="button" onclick="cycleIdiomEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                             </span>`;
                         }).join('')}
