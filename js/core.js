@@ -1774,10 +1774,33 @@ let vocabulary = [];
         //   그라데이션 id 가 겹치면 다른 메달 색을 끌어다 쓰니 메달마다 번호를 새로 붙인다.
         let creatureMedalSeq = 0;
         //   메달 안의 그림 — 실루엣 / 이모지(맞는 그림 없음·못 받음) / 빈칸(받는 중) / '?'(못 만남)
+        const creatureIconFitCache = {};
+        function creatureIconTransform(key, ds) {
+            const plain = 'translate(37 37) scale(0.246)';   // 512 판 그림 (거의 전부)
+            if (String(key).indexOf('badges/') !== 0) return plain;
+            if (creatureIconFitCache[key]) return creatureIconFitCache[key];
+            try {
+                const ns = 'http://www.w3.org/2000/svg';
+                const svg = document.createElementNS(ns, 'svg');
+                svg.setAttribute('style', 'position:absolute;left:-9999px;top:0;width:600px;height:600px');
+                const g = document.createElementNS(ns, 'g');
+                ds.forEach(d => { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); g.appendChild(p); });
+                svg.appendChild(g); document.body.appendChild(svg);
+                const b = g.getBBox();
+                svg.remove();
+                if (!b.width || !b.height) return plain;
+                const s = 118 / Math.max(b.width, b.height);
+                const tx = 100 - (b.x + b.width / 2) * s, ty = 100 - (b.y + b.height / 2) * s;
+                return (creatureIconFitCache[key] = `translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${s.toFixed(3)})`);
+            } catch (e) { return 'translate(37 37) scale(0.492)'; }
+        }
         function creatureMedalInner(c, id, fill, locked) {
             const ds = (!locked && c.icon && window.CREATURE_ICONS) ? window.CREATURE_ICONS[c.icon] : null;
             if (locked) return `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" font-size="78" font-weight="900" fill="url(#${fill})" opacity=".55" font-family="system-ui,sans-serif">?</text>`;
-            if (ds) return `<g transform="translate(37 37) scale(0.246)" filter="url(#s${id})">${ds.map(d => `<path d="${d}" fill="url(#${fill})"/>`).join('')}</g>`;
+            //   [냐냐 지적] 왕관이 너무 작았다 (2026-10-15) — 'badges/' 묶음 10개(왕관·해·달·잎·구름·동전…)는
+            //   512 판이 아니라 256 판에, 그것도 가운데 절반에만 그려져 있어서 1/4 크기로 나왔다.
+            //   그 묶음은 그림의 실제 크기(getBBox)를 재서 다른 메달 그림만 하게(가로세로 큰 쪽 118) 가운데에 맞춘다.
+            if (ds) return `<g transform="${creatureIconTransform(c.icon, ds)}" filter="url(#s${id})">${ds.map(d => `<path d="${d}" fill="url(#${fill})"/>`).join('')}</g>`;
             if (c.icon && !creatureIconsFailedAt) return '';   // 그림 받는 중 — 다 받으면 다시 그린다
             return `<text x="100" y="106" text-anchor="middle" dominant-baseline="central" font-size="80">${c.emoji}</text>`;
         }

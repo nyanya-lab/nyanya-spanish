@@ -3412,10 +3412,32 @@ ${buildLearnerProfileSummary()}`;
                     return !!fw && fw.id === w.id;
                 });
             };
+            // ============================================================
+            // [냐냐 지적] 'Mi hermano se está poniendo la ropa' 의 poniendo 를 poner 로 잡았다 (2026-10-15) — ponerse 가 단어장에 있는데.
+            //   poniendo · pone 같은 꼴은 poner 와 ponerse 가 같이 갖고 있어서, 단어장에서 먼저 나온 쪽이 잡혔다.
+            //   그래서 앞을 본다: 바로 앞에 재귀대명사가 있거나(se pone), 보조동사만 건너 대명사가 있으면
+            //   (se está poniendo · me voy a poner · te puedes poner) 재귀형이 단어장에 있을 때 그쪽으로.
+            //   ⚠️ 사이에 목적대명사(lo·la·le…)가 끼면 '그에게 입혀 주다' 일 수 있어 건드리지 않는다.
+            // ============================================================
+            const REFL_PRON = new Set(['me', 'te', 'se', 'nos', 'os']);
+            const AUX_LINK = new Set(['a', 'que', 'de']);
+            const AUX_FORM = /^(esto|esta|estas|estamos|estais|estan|estaba|estabas|estabamos|estaban|estuve|estuvo|voy|vas|va|vamos|vais|van|iba|ibas|ibamos|iban|puedo|puedes|puede|podemos|podeis|pueden|podia|pude|pudo|quiero|quieres|quiere|queremos|quereis|quieren|queria|quise|quiso|debo|debes|debe|debemos|debeis|deben|debia|tengo|tienes|tiene|tenemos|teneis|tienen|tenia|tuve|tuvo|acabo|acabas|acaba|acabamos|acaban|acabe|acabo|empiezo|empiezas|empieza|empezamos|empiezan|empece|empezo|suelo|sueles|suele|solemos|suelen|necesito|necesitas|necesita|necesitamos|necesitan|voy|sigo|sigues|sigue|seguimos|siguen)$/;
+            const preferReflexive = (w, idx) => {
+                if (!w || w.pos !== 'verb' || /se$/i.test(String(w.word || '').trim())) return w;
+                const refl = vocabulary.find(v => v.pos === 'verb' && norm(v.word) === norm(w.word) + 'se');
+                if (!refl) return w;
+                for (let j = idx - 1, steps = 0; j >= 0 && steps < 4; j--, steps++) {
+                    const t = deAccent(mineToks[j]);
+                    if (REFL_PRON.has(t)) return refl;
+                    if (AUX_LINK.has(t) || AUX_FORM.test(t)) continue;
+                    break;
+                }
+                return w;
+            };
             mineToks.forEach((tok, i) => {
                 if (usedTok[i]) return;
                 const survived = fixedSet.has(norm(tok));
-                const w = resolveHere(tok, i);
+                const w = preferReflexive(resolveHere(tok, i), i);
                 push(w, survived, !survived && accentOnlyMiss(tok, w));
             });
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
