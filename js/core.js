@@ -2080,13 +2080,15 @@ let vocabulary = [];
             //   번호가 없던 옛날은 나눌 수 없어 예전처럼 한 칸. 🎓 졸업·−남은 것도 그 갈래 것만.
             //   남은 것을 갈래별로 적기 시작한 건 10/15 부터라, 그 전 날은 '복습' 이름 밑에 합친 −N 을 둔다.
             // ============================================================
+            //   [냐냐 지적] 10/12 문법이 10 으로 나왔다 (팝업은 3) — 번호 없이 적힌 복습(첨삭 덤 복습에 번호를 붙이기 전)까지
+            //   '나머지 = 문법' 으로 몰았기 때문. 문법은 문법 번호 + 문법 복습 번역 기록으로 세고,
+            //   그래도 어느 갈래인지 모르는 복습이 남는 날(10/12 이전 며칠)은 나누지 않고 예전처럼 한 칸.
             const rIds = Array.isArray(log.reviewIds) ? log.reviewIds : [];
             let reviewSplit = null;
             if (rIds.length) {
-                const gIds = new Set(((typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : []).map(t => t.id));
-                let w = 0, i = 0;
-                rIds.forEach(id => { if (String(id).includes('::')) i++; else if (!gIds.has(id)) w++; });
-                reviewSplit = [w, i, Math.max(0, reviewN - w - i)];
+                const p = diaryReviewParts(ds, log);
+                const split = [p.word.length, p.idiom.length, p.grammar.length + p.rv.length];
+                if (reviewN - split[0] - split[1] - split[2] <= 0) reviewSplit = split;
             }
             const reviewLeftBy = ds < STREAK_REVIEW_RULE_FROM ? null
                 : (ds === getLocalDateString() ? todayReviewLeftBy() : (Array.isArray(log.reviewLeftBy) ? log.reviewLeftBy : null));
