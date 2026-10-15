@@ -2127,7 +2127,7 @@ let vocabulary = [];
                             ${reviewSplit ? reviewSplit.map((v, ci) => {
                                 const g = countGraduatedOn(ds, 'wig'[ci]), l = reviewLeftBy ? (reviewLeftBy[ci] || 0) : 0;
                                 const tip = [g ? `이 날 졸업 ${g}개` : '', l ? `${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${l}개` : ''].filter(Boolean).join(' · ');
-                                return `<td class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')"${tip ? ` title="${tip}"` : ''} class="w-full py-1.5 flex flex-wrap items-baseline justify-center gap-x-1 font-black hover:bg-white rounded transition-colors">
+                                return `<td class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review', '${['word', 'idiom', 'grammar'][ci]}')"${tip ? ` title="${tip}"` : ''} class="w-full py-1.5 flex flex-wrap items-baseline justify-center gap-x-1 font-black hover:bg-white rounded transition-colors">
                                     <span class="${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</span>${g ? `<span class="text-[10px] text-emerald-600">🎓${g}</span>` : ''}${l > 0 ? `<span class="text-[10px] text-rose-400">−${l}</span>` : ''}</button></td>`;
                               }).join('')
                             : (reviewLeftN > 0 || gradN > 0)
@@ -2617,7 +2617,31 @@ let vocabulary = [];
                         ${n.fixed ? `<p class="text-xs text-emerald-600 break-words">→ ${escapeHtml(n.fixed)}</p>` : ''}
                     </div>`;
         }
-        function openDiaryDetail(ds, what) {
+        let diaryReviewKind = 'all';
+        //   그 날 복습한 것을 갈래로 — 관용구는 '단어id::번호', 문법은 노트 id, 나머지는 단어
+        function diaryReviewParts(ds, log) {
+            const gIds = new Set(((typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : []).map(t => t.id));
+            const all = Array.isArray(log.reviewIds) ? log.reviewIds : [];
+            const out = { all, word: [], idiom: [], grammar: [], rv: diaryAiNotesOn(ds).filter(n => n.rv) };
+            all.forEach(id => {
+                if (String(id).includes('::')) out.idiom.push(id);
+                else if (gIds.has(id)) out.grammar.push(id);
+                else out.word.push(id);
+            });
+            return out;
+        }
+        function diaryReviewTabsHtml(ds, log) {
+            const p = diaryReviewParts(ds, log);
+            const tabs = [['all', '전체', p.all.length + p.rv.length], ['word', '단어', p.word.length],
+                          ['idiom', '관용구', p.idiom.length], ['grammar', '문법', p.grammar.length + p.rv.length]];
+            return `<div class="${STICKY_TABS_WRAP}"><div class="flex gap-1.5">${tabs.map(([k, label, n]) => {
+                const on = k === diaryReviewKind;
+                return `<button type="button" onclick="openDiaryDetail('${ds}', 'review', '${k}')"
+                    class="flex-1 py-1.5 rounded-xl border text-xs font-black transition-colors ${on ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}">
+                    ${label} <span class="${on ? 'text-violet-200' : (n ? 'text-slate-400' : 'text-slate-300')}">${n}</span></button>`;
+            }).join('')}</div></div>`;
+        }
+        function openDiaryDetail(ds, what, kind) {
             const meta = DIARY_DETAIL_META[what];
             const modal = document.getElementById('review-plan-modal');
             if (!meta || !modal) return;
@@ -2638,15 +2662,23 @@ let vocabulary = [];
                 const notes = diaryAiNotesOn(ds).filter(n => !n.rv);
                 count = notes.length;
                 rows = notes.map(diaryAiNoteRowHtml).join('');
+            } else if (what === 'review') {
+                //   [냐냐 요청] 복습 목록은 전체 · 단어 · 관용구 · 문법 탭으로 (2026-10-15) — 달력 표의 세 칸을 누르면 그 탭으로 열린다.
+                //   ◀ ▶ 로 날을 넘겨도 보던 탭 그대로 (diaryReviewKind).
+                if (kind) diaryReviewKind = kind;
+                else if (modal.classList.contains('hidden')) diaryReviewKind = 'all';   // 갈래 없이 새로 열면 전체
+                const parts = diaryReviewParts(ds, log);
+                const k = diaryReviewKind;
+                const ids = k === 'all' ? parts.all : parts[k];
+                count = ids.length; rows = ids.map(diaryRowHtml).join('');
+                //   문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것) — 문법 탭에도
+                if (k === 'all' || k === 'grammar') {
+                    count += parts.rv.length;
+                    rows += parts.rv.map(diaryAiNoteRowHtml).join('');
+                }
             } else {
                 const ids = log[meta.field] || [];
                 count = ids.length; rows = ids.map(diaryRowHtml).join('');
-                //   복습 목록엔 문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것)
-                if (what === 'review') {
-                    const rv = diaryAiNotesOn(ds).filter(n => n.rv);
-                    count += rv.length;
-                    rows += rv.map(diaryAiNoteRowHtml).join('');
-                }
                 //   연습 목록 맨 위에 숫자 쓰기 한 줄 — 숫자 문제는 낱말 목록이 없어서 푼 수만 적는다 (2026-10-10)
                 if (what === 'practice' && (log.numTotal || 0) > 0) {
                     count += log.numTotal;
@@ -2689,7 +2721,7 @@ let vocabulary = [];
             }
             //   ⚠️ 벗어난 것이 있어서 숫자가 다른 것은 안내하지 않는다 — 아래 목록이 그 사정이다.
             //      (예전 "일지엔 5개인데 지금 남아 있는 건 6개예요" 가 여기서 나왔다. 지워진 게 아니다)
-            else if (count && shownCount && count !== shownCount && !leftIds.length) {
+            else if (count && shownCount && count !== shownCount && !leftIds.length && !(what === 'review' && diaryReviewKind !== 'all')) {
                 note = (what === 'review' || what === 'practice')
                     ? `같은 것을 여러 번 푼 것은 하나로 묶었어요 (${shownCount}번 → ${count}개).`
                     //   등록은 지운 것이 빠지고, 유의어 자동 등록처럼 등록일이 없는 것도 빠진다
@@ -2737,7 +2769,7 @@ let vocabulary = [];
             const noteBlock = note
                 ? `<p class="px-0.5 pt-1 text-[11px] font-semibold text-slate-400">${escapeHtml(note)}</p>`
                 : '';
-            if (bodyEl) bodyEl.innerHTML = diaryTabsHtml(ds, log, what) + (rows
+            if (bodyEl) bodyEl.innerHTML = (what === 'review' ? diaryReviewTabsHtml(ds, log) : diaryTabsHtml(ds, log, what)) + (rows
                 ? `<div>${headLabel}<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">${rows}</div></div>`
                 : `<p class="text-center text-sm text-slate-400 ${leftRows ? 'py-4' : 'py-10'}">${note ? '목록이 없어요' : '이 날은 없어요'}</p>`) + leftBlock + noteBlock;
             modal.classList.remove('hidden');
