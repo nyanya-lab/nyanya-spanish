@@ -1423,6 +1423,7 @@ let vocabulary = [];
         // 학습할 때마다 호출 — 델타만큼 알 성장, 목표 도달 시 부화
         function updateEggProgress() {
             if (!eggState) eggState = defaultEggState();
+            ensureRewardState();   // 새로 여는 상자보다 먼저 — 이미 연 상자 몫을 채워 둔다
             migrateEssaySentences();
             const total = totalLearningActivity();
             if (eggState.lastCountedTotal === null) {
@@ -1464,12 +1465,119 @@ let vocabulary = [];
             return 'common';
         }
 
+        // ============================================================
+        // [냐냐 요청] 상자를 열면 등급대로 적립금 (2026-10-15) — 욱진보드 실천계획표의 쿠폰 상자를 보고.
+        //   전설 7만 · 에픽 3만 · 레어(은) 1만 · 일반(동) 5천. 쓴 것은 지갑 창에서 적으면 빠지고 내역으로 남는다 (사진은 안 넣기로 함).
+        //   eggState.reward = { earned: [{ t, id, r, amt }], spent: [{ t, what, amt, memo }] } — 잔액은 늘 합으로 센다.
+        //   냐냐님 결정: 이미 연 상자도 친다 — 처음 한 번 collection 으로 채운다 (t 없음 = 예전 상자).
+        // ============================================================
+        const REWARD_AMOUNT = { legendary: 70000, epic: 30000, rare: 10000, common: 5000 };
+        function ensureRewardState() {
+            if (!eggState) return null;
+            const rw = eggState.reward;
+            if (rw && Array.isArray(rw.earned) && Array.isArray(rw.spent)) return rw;
+            const earned = (Array.isArray(eggState.collection) ? eggState.collection : []).map(id => {
+                const c = CREATURES.find(x => x.id === id);
+                return c ? { t: null, id, r: c.rarity, amt: REWARD_AMOUNT[c.rarity] || 0 } : null;
+            }).filter(Boolean);
+            eggState.reward = { earned, spent: (rw && Array.isArray(rw.spent)) ? rw.spent : [] };
+            return eggState.reward;
+        }
+        function rewardBalance() {
+            const rw = ensureRewardState();
+            if (!rw) return 0;
+            const sum = (arr) => arr.reduce((s, x) => s + (Number(x && x.amt) || 0), 0);
+            return sum(rw.earned) - sum(rw.spent);
+        }
+        function fmtWon(n) { return `${(Number(n) || 0).toLocaleString('ko-KR')}원`; }
+
+        // ── 지갑 창 ──
+        let rewardTab = 'all', rewardAskDel = null;
+        function openRewardWallet() {
+            ensureRewardState();
+            rewardTab = 'all'; rewardAskDel = null;
+            document.getElementById('reward-modal').classList.remove('hidden');
+            renderRewardWallet();
+        }
+        function closeRewardWallet() { document.getElementById('reward-modal').classList.add('hidden'); }
+        function setRewardTab(t) { rewardTab = t; rewardAskDel = null; renderRewardWallet(); }
+        function renderRewardWallet() {
+            const rw = ensureRewardState();
+            if (!rw) return;
+            const bal = rewardBalance();
+            document.getElementById('reward-balance').innerText = fmtWon(bal);
+            //   이번 달 쌓인 것·쓴 것 — 소비를 돌아보는 한 줄
+            const ym = getLocalDateString().slice(0, 7);
+            const inMonth = (x) => x.t && getLocalDateString(new Date(x.t)).slice(0, 7) === ym;
+            const mEarn = rw.earned.filter(inMonth).reduce((s, x) => s + x.amt, 0);
+            const mSpend = rw.spent.filter(inMonth).reduce((s, x) => s + x.amt, 0);
+            document.getElementById('reward-sub').innerText = `이번 달 +${fmtWon(mEarn)} · 쓴 것 −${fmtWon(mSpend)}`;
+            const tabs = [['all', '전체'], ['earned', '쌓인 것'], ['spent', '쓴 것']];
+            document.getElementById('reward-tabs').innerHTML = tabs.map(([k, label]) => `<button type="button" onclick="setRewardTab('${k}')"
+                class="flex-1 py-1.5 rounded-xl border text-xs font-black transition-colors ${rewardTab === k ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}">${label}</button>`).join('');
+            const rows = [];
+            if (rewardTab !== 'spent') rw.earned.forEach((x, i) => rows.push({ kind: 'e', x, i, t: x.t || 0 }));
+            if (rewardTab !== 'earned') rw.spent.forEach((x, i) => rows.push({ kind: 's', x, i, t: x.t || 0 }));
+            rows.sort((a, b) => b.t - a.t || b.i - a.i);
+            const day = (t) => t ? getLocalDateString(new Date(t)).slice(5).replace('-', '/') : '예전';
+            document.getElementById('reward-body').innerHTML = rows.length ? rows.map(({ kind, x, i }) => {
+                if (kind === 'e') {
+                    const c = CREATURES.find(y => y.id === x.id);
+                    const info = RARITY_INFO[x.r] || {};
+                    return `<div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-400 w-9 shrink-0">${day(x.t)}</span>
+                        <span class="text-sm">🗝️</span>
+                        <span class="text-sm font-bold text-slate-700 truncate min-w-0">${escapeHtml(c ? creatureKorean(c) || creatureSpanish(c) : x.id)}</span>
+                        <span class="text-[10px] font-bold ${info.color || 'text-slate-500'} shrink-0">${escapeHtml(info.label || '')}</span>
+                        <span class="ml-auto text-sm font-black text-emerald-600 shrink-0">+${fmtWon(x.amt)}</span>
+                    </div>`;
+                }
+                const asking = rewardAskDel === i;
+                return `<div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50/60 border border-amber-100">
+                    <span class="text-[10px] font-bold text-slate-400 w-9 shrink-0">${day(x.t)}</span>
+                    <span class="text-sm">🛍️</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-bold text-slate-700 truncate">${escapeHtml(x.what || '')}</p>
+                        ${x.memo ? `<p class="text-[11px] text-slate-400 truncate">${escapeHtml(x.memo)}</p>` : ''}
+                    </div>
+                    <span class="text-sm font-black text-rose-500 shrink-0">−${fmtWon(x.amt)}</span>
+                    <button type="button" onclick="delRewardSpend(${i})" title="이 기록 지우기" class="shrink-0 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${asking ? 'bg-rose-600 text-white' : 'text-slate-300 hover:text-rose-500'}">${asking ? '지울까요?' : '<i class="fa-solid fa-xmark"></i>'}</button>
+                </div>`;
+            }).join('') : `<p class="text-center text-sm text-slate-400 py-8">${rewardTab === 'spent' ? '아직 쓴 것이 없어요' : '아직 없어요'}</p>`;
+        }
+        function addRewardSpend() {
+            const rw = ensureRewardState();
+            const whatEl = document.getElementById('reward-what'), amtEl = document.getElementById('reward-amt'), memoEl = document.getElementById('reward-memo');
+            const what = whatEl.value.trim(), amt = Math.round(Number(amtEl.value) || 0), memo = memoEl.value.trim();
+            if (!what) { showToast('무엇을 샀는지 적어 주세요', 'error'); whatEl.focus(); return; }
+            if (amt <= 0) { showToast('금액을 적어 주세요', 'error'); amtEl.focus(); return; }
+            //   적립금보다 많이는 못 쓴다 — 모은 만큼만 (소비를 줄이자고 만든 것)
+            if (amt > rewardBalance()) { showToast(`적립금이 모자라요 (지금 ${fmtWon(rewardBalance())})`, 'error'); amtEl.focus(); return; }
+            rw.spent.push({ t: Date.now(), what, amt, memo: memo || undefined });
+            whatEl.value = ''; amtEl.value = ''; memoEl.value = '';
+            saveToStorage();
+            renderRewardWallet(); renderEgg();
+            showToast(`${what} −${fmtWon(amt)} 적었어요 · 남은 적립금 ${fmtWon(rewardBalance())}`, 'success');
+        }
+        //   잘못 적은 것 — 두 번 눌러야 지운다 (확인창이 이 창 밑에 깔려서)
+        function delRewardSpend(i) {
+            const rw = ensureRewardState();
+            if (!rw || !rw.spent[i]) return;
+            if (rewardAskDel !== i) { rewardAskDel = i; renderRewardWallet(); return; }
+            rw.spent.splice(i, 1);
+            rewardAskDel = null;
+            saveToStorage();
+            renderRewardWallet(); renderEgg();
+        }
+
         function hatchEgg() {
             const rarity = rollRarity();
             const pool = CREATURES.filter(c => c.rarity === rarity);
             const creature = pool[Math.floor(Math.random() * pool.length)];
+            const rw = ensureRewardState();   // ⚠️ collection 에 넣기 전에 — 뒤에 부르면 방금 연 것까지 '예전 상자' 로 한 번 더 센다
             eggState.collection.push(creature.id);
             eggState.totalHatched = (eggState.totalHatched || 0) + 1;
+            if (rw) rw.earned.push({ t: Date.now(), id: creature.id, r: creature.rarity, amt: REWARD_AMOUNT[creature.rarity] || 0 });
             //   [냐냐 요청] 전설은 오로라 5색 중 하나로 깬다 (2026-10-13, 가안). 도감 칸은 생물 하나에 한 칸이고
             //   모은 색은 legendColors 에 쌓는다. 같은 색이 또 나오면 맨 뒤로 옮겨 그 색을 보여준다.
             let color = null, newColor = false;
@@ -1514,9 +1622,10 @@ let vocabulary = [];
             //   확인 버튼이 '도감 보기'(=탭 이동)였던 데다 엔터로 자동 실행돼서, 쓰기 복습 중에
             //   부화하면 제출용 엔터가 그대로 눌려 팝업을 못 보고 탭만 넘어가 있었다.
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
+            const won = REWARD_AMOUNT[creature.rarity] || 0;
             showConfirm(
                 `🎉 상자를 열었어요!`,
-                `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}`,
+                `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}${won ? `\n\n💰 ${fmtWon(won)} 적립! (잔액 ${fmtWon(rewardBalance())})` : ''}`,
                 () => { setTimeout(nextHatchCelebration, 250); /* 닫기만 — 하던 화면 그대로 */ },
                 {
                     icon: 'happy',
@@ -1652,6 +1761,11 @@ let vocabulary = [];
                             </div>
                             <p class="text-[11px] text-slate-500">열기까지 <b class="text-indigo-500">${remain}</b> 학습 (${pct}%) · 🗝️ <b class="text-violet-600">${eggState.totalHatched || 0}번</b> 열었어요</p>
                         </div>
+                        <button type="button" onclick="openRewardWallet()" title="적립금 · 쓴 내역"
+                            class="shrink-0 flex flex-col items-center px-3 py-2 rounded-2xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors">
+                            <span class="text-[10px] font-bold text-amber-700">💰 적립금</span>
+                            <span class="text-sm font-black text-amber-800">${fmtWon(rewardBalance())}</span>
+                        </button>
                     </div>
                 `;
             }
