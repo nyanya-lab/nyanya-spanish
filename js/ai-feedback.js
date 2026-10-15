@@ -317,6 +317,7 @@
                 return;
             }
             customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
+            s3('question', customQuestions[customQuestions.length - 1].id);
             input.value = '';
             // 새로 만든 주제가 숨김 목록에 있었으면 다시 보이게
             const hi = hiddenQuestionTopics.indexOf(topic);
@@ -371,6 +372,7 @@
 
         function deleteCustomQuestion(id) {
             customQuestions = customQuestions.filter(q => q.id !== id);
+            s3('question', id);
             saveToStorage();
             renderCustomQuestionsList();
             refreshTopicsDatalist();
@@ -405,7 +407,7 @@
             if (newName === _renamingTopic) { closeTopicRenameModal(); return; }
             let count = 0;
             customQuestions.forEach(q => {
-                if ((q.topic || '기타') === _renamingTopic) { q.topic = newName; count++; }
+                if ((q.topic || '기타') === _renamingTopic) { q.topic = newName; count++; s3('question', q.id); }
             });
             // 접힘 상태도 새 이름으로 옮김
             if (questionTopicOpen[_renamingTopic] !== undefined) {
@@ -426,6 +428,7 @@
                 `이 주제의 질문 ${qs.length}개가 모두 삭제돼요. 되돌릴 수 없어요.`,
                 async () => {
                     customQuestions = customQuestions.filter(q => (q.topic || '기타') !== topic);
+                    qs.forEach(q => s3('question', q.id));
                     await saveToStorage();
                     renderCustomQuestionsList();
                     refreshTopicsDatalist();
@@ -519,6 +522,7 @@
             if (q) {
                 q.question = newText;
                 q.topic = newTopic;
+                s3('question', q.id);
                 saveToStorage();
                 renderCustomQuestionsList();
                 refreshTopicsDatalist();
@@ -635,6 +639,7 @@
                 && x.question.trim().toLowerCase() === text.toLowerCase());
             if (dup) { showToast(`'${topic}' 주제에 이미 같은 질문이 있어요!`, "info"); q._saved = true; updateSaveAiQuestionBtn(); return; }
             customQuestions.push({ id: 'q-' + Date.now(), question: text, topic: topic });
+            s3('question', customQuestions[customQuestions.length - 1].id);
             q._saved = true;
             const hi = hiddenQuestionTopics.indexOf(topic);
             if (hi >= 0) hiddenQuestionTopics.splice(hi, 1);
@@ -810,6 +815,7 @@
                 const responseText = await callGemini(prompt, "당신은 스페인어-한국어 번역가입니다. 번역문만 간결하게 출력하세요.", null, 'low');
                 const ko = (responseText || '').trim().replace(/^["']|["']$/g, '');
                 currentQuestionForAnswer._koreanTranslation = ko;
+                s3('question', currentQuestionForAnswer.id);
                 transEl.innerText = '💬 ' + ko;
                 transEl.classList.remove('hidden');
             } catch (e) {
@@ -1047,7 +1053,7 @@
                 renderAiNatural(feedback);
 
                 // [냐냐 PATCH-수준맞춤] 질문 답하기 결과도 학습 프로필에 반영
-                learnerProfile.totalAnswered++;
+                learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
                 if (feedback.isCorrect) {
                     learnerProfile.totalCorrect++;
                 } else if (feedback.issueType && feedback.issueType !== '없음') {
@@ -1852,7 +1858,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(한->스) 결과도 학습 프로필에 반영
                 //   목표 단어가 없어졌으므로 품사별 오답 집계는 여기서 안 한다 (예문 연습 쪽은 그대로)
-                learnerProfile.totalAnswered++;
+                learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
                 if (feedback.isCorrect) learnerProfile.totalCorrect++;
 
                 aiChatHistory = [
@@ -2722,6 +2728,7 @@ ${buildLearnerProfileSummary()}`;
         }
         function restoreIdiomScoreState(e) {
             const before = getIdiomGrade(e.w.id, e.it.idiom);
+            s3('idiom', e.key);
             if (e.prev.score === undefined) delete idiomScores[e.key]; else idiomScores[e.key] = aiClone(e.prev.score);
             if (e.prev.review === undefined) delete idiomReview[e.key]; else idiomReview[e.key] = aiClone(e.prev.review);
             //   일지의 관용구 마스터·약점 칸도 같이 되돌린다 (점수를 붙일 때 addIdiomScore 가 적어둔 것)
@@ -2821,6 +2828,7 @@ ${buildLearnerProfileSummary()}`;
             }
             if (now < had && typeof nyanyaDiary !== 'undefined') {
                 const d = nyanyaDiary[getLocalDateString()];
+                s3('diary');
                 if (d) {
                     d.reviewCount = Math.max(0, (d.reviewCount || 0) - 1);
                     if (e.reviewIdAdded && id && Array.isArray(d.reviewIds)) {
@@ -4822,6 +4830,7 @@ ${buildLearnerProfileSummary()}`;
                 const next = Object.assign({}, t, { blocks, _edited: true });
                 const i = customGrammarTables.findIndex(c => c.id === noteId);
                 if (i >= 0) customGrammarTables[i] = next; else customGrammarTables.push(next);
+                s3('table', noteId);
                 touched++;
             });
             if (typeof saveToStorage === 'function') saveToStorage();
@@ -5090,7 +5099,9 @@ ${buildLearnerProfileSummary()}`;
                 ok: !!feedback.isCorrect
             });
             aiScoreNoteKey = stamp;
-            if (aiNotes.length > AI_NOTE_LIMIT) aiNotes.length = AI_NOTE_LIMIT;
+            //   상한에 밀려 나가는 것은 새 자리에서도 지운다 (값을 못 찾으면 null 로 간다)
+            if (aiNotes.length > AI_NOTE_LIMIT) { aiNotes.slice(AI_NOTE_LIMIT).forEach(x => { if (x) s3('note', x.t); }); aiNotes.length = AI_NOTE_LIMIT; }
+            s3('note', stamp);
         }
 
         // ============================================================
@@ -5112,7 +5123,7 @@ ${buildLearnerProfileSummary()}`;
         function syncAiNoteScore() {
             if (!aiScoreNoteKey || typeof aiNotes === 'undefined') return;
             const n = aiNotes.find(x => x && x.t === aiScoreNoteKey);
-            if (n) n.sc = aiCountScoreItems();
+            if (n) { n.sc = aiCountScoreItems(); s3('note', n.t); }
         }
 
         // ============================================================
@@ -5386,6 +5397,7 @@ ${buildLearnerProfileSummary()}`;
             const n = aiNotes.find(x => x && x.t === noteKey);      // 상한에 밀려 사라졌으면 그냥 넘어간다
             if (!n || !Array.isArray(n.gram)) return false;
             const before = n.gram.length;
+            s3('note', n.t);
             n.gram = n.gram.filter(g => g.id !== gramId);
             return n.gram.length !== before;
         }
@@ -5398,6 +5410,7 @@ ${buildLearnerProfileSummary()}`;
             const n = aiNotes.find(x => x && x.t === noteKey);
             if (!n || !Array.isArray(n.gram)) return;
             const g = n.gram.find(x => x.id === gramId);
+            s3('note', n.t);
             if (g) g.ok = ok;
             else n.gram.push({ id: gramId, n: name || '', ok: ok });
         }
@@ -5408,6 +5421,7 @@ ${buildLearnerProfileSummary()}`;
             const i = aiNotes.findIndex(x => x && x.t === key);
             if (i < 0) return;
             aiNotes.splice(i, 1);
+            s3('note', key);
             if (typeof saveToStorage === 'function') saveToStorage();
             renderAiNoteList();
             showToast("첨삭 노트에서 뺐어요", "info");
@@ -5470,6 +5484,7 @@ ${buildLearnerProfileSummary()}`;
         //   새 상태를 처음부터 다시 매긴다. 그래야 점수가 겹쳐 쌓이지 않는다.
         function restoreGrammarPrev(e) {
             const id = e.note.id;
+            s3('grammar', id);
             //   [냐냐 요청] 하루 상한 장부도 되돌린다 (2026-09-14). 안 되돌리면 점수를 껐다 켤 때
             //   그날 몫이 이미 쓰인 것으로 남아, 다시 켜도 0 점이 붙는다.
             if (typeof setGrammarDayGain === 'function') setGrammarDayGain(id, e.prev.dayGain || 0);
@@ -6177,7 +6192,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
 
                 // [냐냐 PATCH-수준맞춤] 1:1 첨삭(스->한 자유작문) 결과도 학습 프로필에 반영
                 // (자유 작문은 특정 단어/품사가 없는 대신, AI가 분류한 문법 실수 유형으로 추적)
-                learnerProfile.totalAnswered++;
+                learnerProfile.totalAnswered++; s3('misc', 'learnerProfile');
                 if (feedback.isCorrect) {
                     learnerProfile.totalCorrect++;
                 } else if (feedback.issueType && feedback.issueType !== '없음') {

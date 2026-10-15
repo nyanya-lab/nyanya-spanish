@@ -3267,7 +3267,7 @@ Return JSON only, no markdown.`;
             const ids = [...document.querySelectorAll('.gfill-master-chk:checked')].map(c => c.dataset.id);
             if (ids.length === 0) { showToast("선택된 표가 없어요", "error"); return; }
             let n = 0;
-            ids.forEach(id => { if (!masteredGrammar[id]) { masteredGrammar[id] = true; if (typeof logAction === 'function') logAction('new-grammar-mastered'); n++; } });
+            ids.forEach(id => { if (!masteredGrammar[id]) { s3('grammar', id); masteredGrammar[id] = true; if (typeof logAction === 'function') logAction('new-grammar-mastered'); n++; } });
             saveToStorage();
             if (typeof updateStats === 'function') updateStats();
             if (typeof renderGrammarTables === 'function') renderGrammarTables();

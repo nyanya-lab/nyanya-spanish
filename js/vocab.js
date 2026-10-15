@@ -655,6 +655,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             const st = conjCheckState, r = st && st.ai && st.ai.rows[i];
             const v = r && r.pick && vocabulary.find(w => w.id === r.id);
             if (!v) return;
+            s3('word', v);
             const t = r.tense, data = {};
             if (isSingleTense(t)) data.form = r.pick.form; else CONJ_PERSON_KEYS.forEach(k => { data[k] = r.pick[k] || ''; });
             v.conjugationsByTense = v.conjugationsByTense || {};
@@ -742,6 +743,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         function applyConjFix(x) {
             const v = vocabulary.find(w => w.id === x.id);
             if (!v || !x.fix) return false;
+            s3('word', v);
             v.verbClassByTense = v.verbClassByTense || {};
             v.irregularByTense = v.irregularByTense || {};
             if (x.fix === 'none') { v.verbClassByTense[x.tense] = 'regular'; delete v.irregularByTense[x.tense]; }
@@ -823,7 +825,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         // ============================================================
         const IDIOM_VET_BATCH = 40;
         function idiomIsVetted(it) { return !!(it && it.vetted && it.vetted.t === String(it.idiom || '').trim()); }
-        function markIdiomVetted(it) { if (it) it.vetted = { t: String(it.idiom || '').trim(), d: getLocalDateString() }; }
+        function markIdiomVetted(it) { if (it) { it.vetted = { t: String(it.idiom || '').trim(), d: getLocalDateString() }; s3('wordOfIdiom', it); } }
 
         //   items: [{ k, idiom, meaning, word }] → { k: { verdict, suggestion, region, why } }
         async function idiomVetAsk(items, recheck) {
@@ -1317,6 +1319,7 @@ Output one item per line, same id, no line skipped.`;
                 const from = `${x.w.id}::${x.it.iid}`, into = `${to.id}::${dup.iid}`;
                 [idiomScores, idiomReview].forEach(store => {
                     if (store && store[from] && !store[into]) { store[into] = store[from]; delete store[from]; }
+                    s3('idiom', from); s3('idiom', into);
                 });
             } else {
                 const moved = Object.assign({}, x.it, { idiom: sug });
@@ -2955,6 +2958,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     };
                     if (target.pos === 'noun') target.gender = r.gender || 'none';
                     vocabulary.unshift(target);
+                    s3('word', target); s3('wordOrder');
                     newIds.push(target.id);
                     //   [냐냐 요청] 등록하는 그 자리에서 DELE 레벨도 채운다 (유의어 자동 등록도 같이)
                     if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(target.id);
@@ -2965,6 +2969,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 links.push({ id: target.id, type: r.type, difference: r.difference || '' });
 
                 // 4) 양방향 자동 연결 — 상대 단어에도 나를 걸어줌 (차이 설명은 그대로 공유)
+                s3('word', target);
                 if (!Array.isArray(target.synonyms)) target.synonyms = [];
                 const already = target.synonyms.find(l => l.id === wordObj.id);
                 if (already) {
@@ -2983,6 +2988,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const other = vocabulary.find(v => v.id === old.id);
                 if (other && Array.isArray(other.synonyms)) {
                     other.synonyms = other.synonyms.filter(l => l.id !== wordObj.id);
+                    s3('word', other);
                 }
             });
 
@@ -4258,10 +4264,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     // 사라지는 단어를 유의어로 걸어둔 곳에서 링크 제거
                     vocabulary.forEach(other => {
                         if (Array.isArray(other.synonyms)) {
+                            if (other.synonyms.some(l => l.id === dying.id)) s3('word', other);
                             other.synonyms = other.synonyms.filter(l => l.id !== dying.id);
                         }
                     });
                     vocabulary = vocabulary.filter(v => v.id !== dying.id);
+                    s3('word', target); s3('wordGone', dying.id);
                     if (typeof logAction === 'function') logAction('undo-new-word'); // 단어 수 -1
                     mergedNote = ' (중복 단어 2개를 하나로 합쳤어요)';
                 }
@@ -4432,6 +4440,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (!store || !store[from]) return;
                 if (!store[to]) store[to] = store[from];
                 delete store[from];
+                s3('idiom', from); s3('idiom', to);
             });
         }
 
@@ -4442,6 +4451,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
 
         function removeIdiomFromWord(w, it) {
+            s3('word', w);
             if (Array.isArray(w.idioms) && w.idioms.length) w.idioms = w.idioms.filter(x => x !== it && !(it.iid && x.iid === it.iid));
             else if (w.idiom) { w.idiom = ''; w.idiomMeaning = ''; }
         }
@@ -4488,6 +4498,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             [idiomScores, idiomReview].forEach(store => {
                                 const from = `${o.w.id}::${oPart}`, to = `${keep.w.id}::${part}`;
                                 if (store && store[from] && !store[to]) { store[to] = store[from]; delete store[from]; }
+                                s3('idiom', from); s3('idiom', to);
                             });
                         }
                         removeIdiomFromWord(o.w, o.it);
@@ -4533,6 +4544,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const owner = vocabulary.find(v => v.id === r.owner);
                 const it = owner ? wordIdiomList(owner).find(x => x.iid === r.iid) : null;
                 if (!it) return;
+                s3('word', owner);
                 it.idiom = r.idiom;
                 if (r.idiomMeaning) it.idiomMeaning = r.idiomMeaning;
                 if (r.example) it.example = r.example; else delete it.example;
@@ -4543,6 +4555,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             });
             linkedIdiomsOf(wordObj).forEach(({ owner, it }) => {
                 if (keep.has(owner.id + '::' + it.iid)) return;
+                s3('word', owner);
                 it.alsoUnder = it.alsoUnder.filter(id => id !== wordObj.id);
                 if (!it.alsoUnder.length) delete it.alsoUnder;
             });
@@ -4709,6 +4722,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     wordObj.updatedAt = Date.now();
                     stampIdiomDates(wordObj.idioms, prev);   // 새로 더한 관용구에만 오늘 날짜
                     vocabulary[index] = wordObj; // 제자리 교체
+                    s3('word', wordObj);
                     // 끝낼 때 한 번만 알린다 — 여기서도 띄우면 같은 말이 두 줄로 뜬다
                 }
                 logAction('snapshot');
@@ -4716,6 +4730,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
                 stampIdiomDates(wordObj.idioms, null);
                 vocabulary.unshift(wordObj);
+                s3('word', wordObj); s3('wordOrder');
                 //   [냐냐 요청] 등록하는 그 순간 DELE 레벨을 물어서 채운다 (2026-09-15).
                 //   기다리지 않는다 — 오는 대로 단어에 적히고 카드에 뱃지가 끼워진다.
                 if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(wordObj.id);
@@ -4858,9 +4873,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     vocabulary.forEach(other => {
                         if (Array.isArray(other.synonyms) && other.synonyms.some(l => l.id === wordId)) {
                             other.synonyms = other.synonyms.filter(l => l.id !== wordId);
+                            s3('word', other);
                         }
                     });
                     vocabulary = vocabulary.filter(item => item.id !== wordId);
+                    s3('wordGone', wordId);
                     // [냐냐 PATCH] 일지/그래프 감소 — 등록/마스터 카운트 취소
                     if (typeof logAction === 'function') {
                         if (wasMastered) logAction('undo-new-mastered');
@@ -5683,6 +5700,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (rest.length) moved.alsoUnder = rest; else delete moved.alsoUnder;
             if (!Array.isArray(to.idioms)) to.idioms = [];
             to.idioms.push(moved);
+            s3('word', to);
             if (typeof moveIdiomRecords === 'function') moveIdiomRecords(fromW.id, it, to.id);
             return true;
         }
@@ -5690,7 +5708,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function releaseWordIdioms(w) {
             if (!w) return;
             wordIdiomList(w).forEach(it => handOverIdiom(w, it));
-            linkedIdiomsOf(w).forEach(({ it }) => {
+            linkedIdiomsOf(w).forEach(({ owner, it }) => {
+                s3('word', owner);
                 it.alsoUnder = it.alsoUnder.filter(id => id !== w.id);
                 if (!it.alsoUnder.length) delete it.alsoUnder;
             });

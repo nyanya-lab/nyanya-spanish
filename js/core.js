@@ -4,7 +4,12 @@ let vocabulary = [];
         let isFlashcardFlipped = false;
         let isMenuCollapsed = false;
         
-        let nyanyaDiary = {}; 
+        let nyanyaDiary = {};
+
+        // [냐냐 결정] 새 저장 자리(v3, js/store3.js) — 데이터를 고치는 곳마다 그 항목을 쓴다 (욱진보드처럼).
+        //   s3('word', w) · s3('idiom', key) · s3('grammar', id) · s3('diary') · s3('note', t) · s3('table', id) · s3('question', id) · s3('misc', '이름')
+        //   값은 보내는 순간에 읽으니, 고치기 전에 불러도 되고 같은 것을 여러 번 불러도 한 번만 간다.
+        function s3(kind, ...args) { try { if (typeof S3 !== 'undefined' && S3[kind]) S3[kind](...args); } catch (e) {} }
 
         // [냐냐 PATCH-수준맞춤] 매번 전체 기록을 보내는 대신, 작은 누적 요약만 유지.
         // 문제 풀 때마다 살짝씩만 갱신되고 크기가 거의 고정이라 토큰/속도에 거의 영향 없음.
@@ -512,6 +517,8 @@ let vocabulary = [];
             // 첫 실행(Firebase가 비어있던 경우)이거나 로컬/예전 데이터로 복구한 경우,
             // 지금 상태를 다시 저장해서 다음부터는 모든 기기가 동기화되도록 함
             saveToStorage();
+            //   [냐냐 결정] 새 저장 자리(v3) — 켜진 뒤 정리들이 끝나고 처음 채우기 또는 크로스체크 (js/store3.js)
+            if (firebaseReachable && typeof S3 !== 'undefined') setTimeout(() => { S3.afterBoot(); }, 8000);
         }
 
         // payload 를 현재 상태로 펼친다. payload 가 없으면 초기 상태로 되돌린다.
@@ -1187,6 +1194,7 @@ let vocabulary = [];
 
         function touchDiarySnapshot() {
             const today = getLocalDateString();
+            s3('diary', today);   // 오늘 일지를 고치는 곳은 거의 다 여길 지난다 (logAction · 퀴즈 · 졸업 · 첨삭 문장 수)
             if (!nyanyaDiary[today]) {
                 nyanyaDiary[today] = { registeredTotal: 0, masteredTotal: 0, quizTotal: 0, quizCorrect: 0, writeTotal: 0, writeCorrect: 0, aiSessions: 0, newWordsCount: 0, newMasteredCount: 0, reviewCount: 0, gameCount: 0, newGrammarCount: 0, newGrammarMasteredCount: 0 };
             }
@@ -1270,6 +1278,7 @@ let vocabulary = [];
                 if (!by) return;
                 const left = by[0] + by[1] + by[2];
                 const clear = left === 0;
+                if (d.reviewDone !== clear || d.reviewLeft !== left || JSON.stringify(d.reviewLeftBy) !== JSON.stringify(by)) s3('diary');
                 const flip = !!d.reviewDone !== clear;
                 d.reviewDone = clear;
                 d.reviewLeft = left;   // 달력 상세의 복습 칸 '−N' (그날 남기고 끝낸 개수)
@@ -1403,8 +1412,10 @@ let vocabulary = [];
                 if (!n) return;
                 d.essayN = n;
                 d.essaySent = x.sent + missing;
+                s3('diary', ds);
             });
             eggState.essayMigrated = true;
+            s3('misc', 'eggState');
         }
         // 총 학습 활동 수 (누적) — 알 성장의 기준
         function totalLearningActivity() {
@@ -1434,6 +1445,7 @@ let vocabulary = [];
             }
             const delta = total - eggState.lastCountedTotal;
             if (delta > 0) {
+                s3('misc', 'eggState');
                 eggState.progress += delta;
                 eggState.lastCountedTotal = total;
                 // 부화 체크
@@ -1481,6 +1493,7 @@ let vocabulary = [];
                 return c ? { t: null, id, r: c.rarity, amt: REWARD_AMOUNT[c.rarity] || 0 } : null;
             }).filter(Boolean);
             eggState.reward = { earned, spent: (rw && Array.isArray(rw.spent)) ? rw.spent : [] };
+            s3('misc', 'eggState');
             return eggState.reward;
         }
         function rewardBalance() {
@@ -1554,6 +1567,7 @@ let vocabulary = [];
             //   적립금보다 많이는 못 쓴다 — 모은 만큼만 (소비를 줄이자고 만든 것)
             if (amt > rewardBalance()) { showToast(`적립금이 모자라요 (지금 ${fmtWon(rewardBalance())})`, 'error'); amtEl.focus(); return; }
             rw.spent.push({ t: Date.now(), what, amt, memo: memo || undefined });
+            s3('misc', 'eggState');
             whatEl.value = ''; amtEl.value = ''; memoEl.value = '';
             saveToStorage();
             renderRewardWallet(); renderEgg();
@@ -1565,6 +1579,7 @@ let vocabulary = [];
             if (!rw || !rw.spent[i]) return;
             if (rewardAskDel !== i) { rewardAskDel = i; renderRewardWallet(); return; }
             rw.spent.splice(i, 1);
+            s3('misc', 'eggState');
             rewardAskDel = null;
             saveToStorage();
             renderRewardWallet(); renderEgg();
@@ -1575,6 +1590,7 @@ let vocabulary = [];
             const pool = CREATURES.filter(c => c.rarity === rarity);
             const creature = pool[Math.floor(Math.random() * pool.length)];
             const rw = ensureRewardState();   // ⚠️ collection 에 넣기 전에 — 뒤에 부르면 방금 연 것까지 '예전 상자' 로 한 번 더 센다
+            s3('misc', 'eggState');
             eggState.collection.push(creature.id);
             eggState.totalHatched = (eggState.totalHatched || 0) + 1;
             if (rw) rw.earned.push({ t: Date.now(), id: creature.id, r: creature.rarity, amt: REWARD_AMOUNT[creature.rarity] || 0 });
@@ -3233,6 +3249,7 @@ let vocabulary = [];
                 if (!learnerProfile.bestStreak) learnerProfile.bestStreak = 0;
                 if (streak > learnerProfile.bestStreak) {
                     learnerProfile.bestStreak = streak;
+                    s3('misc', 'learnerProfile');
                     saveToStorage();
                 }
             }
@@ -3349,6 +3366,7 @@ let vocabulary = [];
         }
         function demoteReviewStage(w) {
             if (!w) return;
+            s3('word', w);
             const today = getLocalDateString();
             if (w.lastDemoteDate === today) return;
             w.lastDemoteDate = today;
@@ -3824,6 +3842,7 @@ let vocabulary = [];
                 const next = `${wid}::${hit.iid}`;
                 if (!idiomReview[next]) idiomReview[next] = idiomReview[key];
                 delete idiomReview[key];
+                s3('mapItem', 'idiomReview', next); s3('mapItem', 'idiomReview', key);
                 changed = true;
             });
             return changed;
@@ -3840,6 +3859,7 @@ let vocabulary = [];
         //     그게 없으면 오늘 줄에 남긴 표현이 복습에서 틀려도 계속 줄에 남아 하루 종일 돈다.
         function idiomReviewDemote(wordId, idiomText, fromReview) {
             const key = idiomKey(wordId, idiomText);
+            s3('idiom', key);
             const rec = getIdiomReviewRec(key);
             const today = getLocalDateString();
             delete rec.handCurveUndo;   // 진짜로 틀렸다 — 손으로 넣은 곡선을 되돌릴 일이 없다
@@ -3864,6 +3884,7 @@ let vocabulary = [];
         // 한 칸 앞으로 (곡선 안에 있을 때만)
         function idiomReviewAdvance(wordId, idiomText) {
             const key = idiomKey(wordId, idiomText);
+            s3('idiom', key);
             const rec = idiomReview[key];
             if (!rec || !rec.lastWrongDate) return;     // 곡선 밖이면 할 일 없음
             const before = rec.stage || 0;
@@ -3884,6 +3905,7 @@ let vocabulary = [];
         function markIdiomSeen(wordId, idiomText) {
             if (!wordId || !idiomText || typeof idiomKey !== 'function') return;
             const rec = getIdiomReviewRec(idiomKey(wordId, idiomText));
+            s3('idiom', idiomKey(wordId, idiomText));
             if (rec) rec.lastSeenDate = getLocalDateString();
         }
         function isUntouchedIdiom(wordId, idiomText) {
@@ -3983,6 +4005,7 @@ let vocabulary = [];
         //   fromReview = 문법 복습 줄에서 낸 문제인가 (관용구의 idiomReviewDemote 와 같은 인자)
         function grammarReviewDemote(id, fromReview) {
             if (!id) return;
+            s3('grammar', id);
             const rec = getGrammarReviewRec(id);
             const today = getLocalDateString();
             delete rec.handCurveUndo;   // 진짜로 틀렸다 — 손으로 넣은 곡선을 되돌릴 일이 없다
@@ -4010,6 +4033,7 @@ let vocabulary = [];
         // 한 칸 앞으로 (곡선 안에 있을 때만)
         function grammarReviewAdvance(id) {
             if (!id) return;
+            s3('grammar', id);
             const rec = grammarReview[id];
             if (!rec || !rec.lastWrongDate) return;     // 곡선 밖이면 할 일 없음
             const before = rec.stage || 0;
@@ -4265,6 +4289,7 @@ let vocabulary = [];
         function markWordReviewedToday(wordOrId, wasCorrect) {
             const w = (typeof wordOrId === 'string') ? vocabulary.find(v => v.id === wordOrId) : wordOrId;
             if (!w) return;
+            s3('word', w);
             w.lastReviewDate = getLocalDateString();
             if (wasCorrect) {
                 const before = w.reviewStage || 0;
@@ -4583,6 +4608,7 @@ let vocabulary = [];
         function addIdiomScore(wordId, idiomTextOrId, delta, opts = {}) {
             if (!wordId || !idiomTextOrId) return null;
             const r = getIdiomRec(wordId, idiomTextOrId);
+            s3('idiom', idiomKey(wordId, idiomTextOrId));
             const cCount = (typeof opts.correctCount === 'number') ? opts.correctCount : (opts.correct === true ? 1 : 0);
             const wCount = (typeof opts.wrongCount === 'number') ? opts.wrongCount : (opts.correct === false ? 1 : 0);
             if (cCount) r.correctTotal = (r.correctTotal || 0) + cCount;
@@ -4616,6 +4642,7 @@ let vocabulary = [];
                 ? vocabulary.find(v => v.id === wordOrId)
                 : wordOrId;
             if (!w) return null;
+            s3('word', w);
 
             if (typeof w.score !== 'number') w.score = 0;
 
@@ -4786,6 +4813,7 @@ let vocabulary = [];
 
         function addGrammarScore(id, delta, opts = {}) {
             if (!id) return 0;
+            s3('grammar', id);
             const before = getGrammarScore(id);
             let d = delta || 0;
             const got = getGrammarDayGain(id);
@@ -4802,6 +4830,7 @@ let vocabulary = [];
         // 수동으로 마스터 박기 (✅ 버튼) — 단어의 별표처럼 점수를 기준선으로 못박는다
         function setGrammarScore(id, value, opts = {}) {
             if (!id) return 0;
+            s3('grammar', id);
             const before = getGrammarScore(id);
             grammarScores[id] = clampScore(value);
             if (opts.transUsed) grammarTransUsed[id] = true;
@@ -4849,6 +4878,7 @@ let vocabulary = [];
                 ? vocabulary.find(v => v.id === wordOrId)
                 : wordOrId;
             if (!w) return null;
+            s3('word', w);
             w.score = clampScore(value);
             if (opts.subjectivePassed === true) w.subjectivePassed = true;
             if (opts.subjectivePassed === false) w.subjectivePassed = false;
@@ -8575,6 +8605,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   관용구 점수를 못박는다 (단어의 setWordScore 와 같은 자리)
         function setIdiomScore(wordId, idiomTextOrId, value, opts = {}) {
             const r = getIdiomRec(wordId, idiomTextOrId);
+            s3('idiom', idiomKey(wordId, idiomTextOrId));
             const before = getIdiomGrade(wordId, idiomTextOrId);
             r.score = clampScore(value);
             if (opts.subjectivePassed === true) r.subjectivePassed = true;
@@ -11758,6 +11789,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const isBrandNew = existingIdx < 0 && !isDefaultId; // 완전히 새로 만든 표
             if (existingIdx >= 0) customGrammarTables[existingIdx] = tableData;
             else customGrammarTables.push(tableData);
+            s3('table', tableData.id);
 
             closeGrammarEditor();
             renderGrammarTables();
@@ -11775,6 +11807,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 "삭제한 표는 다시 꺼낼 수 없어요.",
                 async () => {
                     customGrammarTables = customGrammarTables.filter(c => c.id !== id);
+                    s3('table', id); s3('grammar', id); s3('mapItem', 'pinnedGrammar', id); s3('mapItem', 'grammarCellWords', id); s3('misc', 'hiddenDefaultGrammar');
                     if (isDefault && !hiddenDefaultGrammar.includes(id)) hiddenDefaultGrammar.push(id); // [냐냐 PATCH] 기본 표는 숨김 목록에 추가
                     delete grammarOpenState[id];
                     delete pinnedGrammar[id];
