@@ -61,6 +61,74 @@ const S3 = (() => {
         return `${String(url).replace(/\/$/, '')}/vocab/${encodeURIComponent(pw)}${isDev() ? '__v3dev' : '__v3'}`;
     }
     const clone = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
+    //   SDK 쪽 자리 이름 (주소가 아니라 갈래 경로)
+    function rootPath() {
+        const pw = (typeof getSyncPassword === 'function') ? getSyncPassword() : '';
+        return pw ? `vocab/${pw}${isDev() ? '__v3dev' : '__v3'}` : null;
+    }
+
+    // ============================================================
+    // [냐냐 결정] 욱진보드처럼 Firebase SDK 로 (2026-10-16) — "왜 3단계에서 바꿔?" 지금 바꾼다.
+    //   SDK 가 끊김 감지·다시 잇기·끊긴 동안 쓰기 모아 두기·칸 단위 실시간을 해 준다.
+    //   왓치로그 사고는 다 이걸 직접 짠 코드(시각 비교·합치기)에서 났다.
+    //   크로스체크 며칠이 SDK 로 쓴 결과까지 같이 검증해 준다.
+    //   SDK 를 못 불러오면(망·CDN 문제) 예전처럼 REST PATCH 로 보낸다.
+    //   버전은 욱진보드와 같게.
+    // ============================================================
+    const FB_VER = '10.12.2';
+    let sdkPromise = null, sdkFailedAt = 0;
+    function loadSdk() {
+        if (sdkPromise) return sdkPromise;
+        if (Date.now() - sdkFailedAt < 60000) return Promise.resolve(null);
+        const url = (typeof getFirebaseDbUrl === 'function') ? getFirebaseDbUrl() : '';
+        if (!url) return Promise.resolve(null);
+        const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
+        sdkPromise = Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-database.js')])
+            .then(([appMod, rt]) => {
+                const name = 'nyanya-v3';
+                const app = (appMod.getApps().find(a => a.name === name)) || appMod.initializeApp({ databaseURL: url }, name);
+                const db = rt.getDatabase(app);
+                rt.onValue(rt.ref(db, '.info/connected'), (snap) => { api.connected = snap.val() === true; });
+                return { rt, db };
+            })
+            .catch(e => { console.warn('[v3] SDK 못 불러옴 — REST 로 보낸다', e); sdkPromise = null; sdkFailedAt = Date.now(); return null; });
+        return sdkPromise;
+    }
+    //   한 번에 여러 자리 — SDK update (끊겨 있으면 SDK 가 모아 뒀다가 붙으면 보낸다)
+    async function writeMany(body, leaving) {
+        const sdk = await loadSdk();
+        const path = rootPath();
+        if (sdk && path) {
+            //   ⚠️ 끊긴 동안 SDK 는 promise 를 안 끝내고 들고 있다 — 기다리지 않는다 (줄은 SDK 가 지킨다)
+            const p = sdk.rt.update(sdk.rt.ref(sdk.db, path), body);
+            if (api.connected === false) { p.catch(e => console.warn('[v3] 쓰기 실패', e)); return; }
+            await p;
+            return;
+        }
+        const root = rootUrl();
+        const json = JSON.stringify(body);
+        const res = await fetch(root + '.json', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: json,
+                                                    keepalive: !!leaving && json.length < 60000 });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+    }
+    async function readPath(sub) {
+        const sdk = await loadSdk();
+        const path = rootPath();
+        if (sdk && path) {
+            const snap = await sdk.rt.get(sdk.rt.ref(sdk.db, sub ? `${path}/${sub}` : path));
+            return snap.exists() ? snap.val() : null;
+        }
+        const r = await fetch(rootUrl() + (sub ? '/' + sub : '') + '.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }
+    async function writeAll(tree) {
+        const sdk = await loadSdk();
+        const path = rootPath();
+        if (sdk && path) return sdk.rt.set(sdk.rt.ref(sdk.db, path), tree);
+        const res = await fetch(rootUrl() + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tree) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+    }
 
     // ── 보낼 것 모으기 — 같은 자리는 마지막 값만. 0.4초 뒤 한 번에 PATCH ──
     const queue = new Map();
@@ -82,10 +150,7 @@ const S3 = (() => {
         queue.clear();
         const json = JSON.stringify(body);
         try {
-            //   닫히는 중이면 keepalive — 64KB 안쪽일 때만 브라우저가 끝까지 보내 준다
-            const res = await fetch(root + '.json', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: json,
-                                                        keepalive: !!leaving && json.length < 60000 });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await writeMany(body, leaving);
             S3.sentBytes += json.length; S3.sentCount++;
         } catch (e) {
             //   못 보낸 것은 다시 줄에 — 다음 쓰기 때 같이 간다 (그 사이 새 값이 들어왔으면 새 값이 이긴다)
@@ -215,9 +280,7 @@ const S3 = (() => {
         if (!root || (isDev() && !devOn())) return;
         await flush();
         try {
-            const r = await fetch(root + '/meta/seededAt.json', { cache: 'no-store' });
-            if (!r.ok) throw new Error('seededAt HTTP ' + r.status);   // 못 읽었으면 채우지도 견주지도 않는다
-            const seeded = await r.json();
+            const seeded = await readPath('meta/seededAt');   // 못 읽으면 던진다 — 채우지도 견주지도 않는다
             if (!seeded) return await seedAll();
             let last = 0;
             try { last = Number(localStorage.getItem('nyanya_v3_checkAt')) || 0; } catch (e) {}
@@ -227,11 +290,10 @@ const S3 = (() => {
         } catch (e) { console.warn('[v3] 켜진 뒤 확인 실패', e); }
     }
     async function seedAll() {
-        const root = rootUrl();
-        const tree = payloadToTree(buildDataPayload());
+        const tree = clone(payloadToTree(buildDataPayload()));
         tree.meta.seededAt = Date.now();
-        const res = await fetch(root + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tree) });
-        console.info('[v3] 처음 채우기', res.ok ? '끝' : '실패 ' + res.status);
+        await writeAll(tree);
+        console.info('[v3] 처음 채우기 끝');
     }
     //   항목 단위로 견준다 → [{ where: 'words/<id>' 같은 자리, label, fields: [다른 칸] }]
     function diffPayloads(local, remote) {
@@ -264,10 +326,7 @@ const S3 = (() => {
         return out;
     }
     async function crossCheck() {
-        const root = rootUrl();
-        const r = await fetch(root + '.json', { cache: 'no-store' });
-        if (!r.ok) return null;
-        const tree = await r.json();
+        const tree = await readPath('');
         const remote = treeToPayload(tree || {});
         const local = buildDataPayload();
         const diffs = diffPayloads(local, remote);
