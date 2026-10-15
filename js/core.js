@@ -1343,6 +1343,60 @@ let vocabulary = [];
             legendary: { label: '전설',   color: 'text-violet-700', bg: 'bg-gradient-to-br from-pink-100 via-cyan-50 to-violet-200', border: 'border-2 border-[#A78BFA]', star: '👑' },
         };
 
+        // ============================================================
+        // [냐냐 요청] 첨삭은 문장 하나에 4점 (2026-10-15) — 보물상자 점수와 달력 진하기.
+        //   복습 한 단어는 몇 초인데 첨삭은 문장을 직접 써야 해서 몇 분이 걸린다. 그런데 둘 다 1 이라
+        //   2주 동안 첨삭 몫이 전체의 2% 였다. 길게 쓴 날이 제대로 쳐지게 한 번이 아니라 **문장마다** 센다.
+        //   자유 작문 · 질문에 답하기 · 번역 미션 · 관용구 미션 · **문법 복습 미션**(일지엔 복습으로 들어가는 것) 다 같은 잣대.
+        //   일지에는 그날 첨삭 수(essayN)와 문장 수(essaySent)를 적는다. 개수 셈(aiSessions·reviewCount)이 이미 1 씩 쳤으니
+        //   덧붙는 몫은 문장×4 − 첨삭 수. '총 N개 활동'·'N개 학습' 같은 개수는 한 일의 개수라 그대로.
+        //   첨삭에서 오늘 차례를 맞게 써서 붙는 '🔁 오늘 복습' +1 은 따로 그대로 (쓰기 복습에서 했어도 받았을 몫).
+        //   냐냐님 결정: 지난 첨삭도 친다 — migrateEssaySentences 가 한 번 채우고, 기준점(lastCountedTotal)을 안 옮기니 한 번에 들어간다.
+        // ============================================================
+        const ESSAY_SENTENCE_POINTS = 4;
+        //   . ? ! 로 나눈다 (말줄임표는 안 나눔). 마침표를 빼먹어도 최소 1문장
+        function countEssaySentences(text) {
+            const t = String(text || '').replace(/<[^>]*>/g, ' ').replace(/\.{3}|…/g, ' ').replace(/\s+/g, ' ').trim();
+            if (!t) return 0;
+            return Math.max(1, t.split(/(?<=[.!?])\s+/).filter(p => /\p{L}/u.test(p)).length);
+        }
+        //   첨삭을 낼 때 부른다 (logAction 과 같은 자리)
+        function noteEssaySentences(text) {
+            const n = countEssaySentences(text);
+            if (!n || typeof nyanyaDiary === 'undefined') return;
+            if (typeof touchDiarySnapshot === 'function') touchDiarySnapshot();   // 그날 첫 활동이면 일지 칸부터 만든다
+            const d = nyanyaDiary[getLocalDateString()];
+            if (!d) return;
+            d.essayN = (d.essayN || 0) + 1;
+            d.essaySent = (d.essaySent || 0) + n;
+        }
+        function dayEssayBonus(d) {
+            return (d && d.essayN) ? Math.max(0, (d.essaySent || 0) * ESSAY_SENTENCE_POINTS - d.essayN) : 0;
+        }
+        //   지난 첨삭 채우기 (한 번만, eggState.essayMigrated) — 첨삭 노트(최근 300개, 9/1~)가 있는 날은 노트의 문장 수로,
+        //   노트에 없는 몫(그 전 · 노트에서 밀려난 것)은 1문장으로 친다.
+        function migrateEssaySentences() {
+            if (!eggState || eggState.essayMigrated || typeof nyanyaDiary === 'undefined') return;
+            const byDay = {};
+            (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes) ? aiNotes : []).forEach(n => {
+                if (!n || !n.t || !n.mine) return;
+                const ds = getLocalDateString(new Date(n.t));
+                const x = byDay[ds] || (byDay[ds] = { n: 0, sent: 0, plain: 0 });
+                x.n++; x.sent += countEssaySentences(n.mine);
+                if (!n.rv) x.plain++;
+            });
+            Object.keys(nyanyaDiary).forEach(ds => {
+                const d = nyanyaDiary[ds];
+                if (!d || d.essayN) return;
+                const x = byDay[ds] || { n: 0, sent: 0, plain: 0 };
+                const missing = Math.max(0, (d.aiSessions || 0) - x.plain);   // 노트가 안 남은 첨삭
+                const n = x.n + missing;
+                if (!n) return;
+                d.essayN = n;
+                d.essaySent = x.sent + missing;
+            });
+            eggState.essayMigrated = true;
+        }
         // 총 학습 활동 수 (누적) — 알 성장의 기준
         function totalLearningActivity() {
             let sum = 0;
@@ -1351,7 +1405,8 @@ let vocabulary = [];
                 sum += (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0) + (d.reviewCount || 0) + (d.gameCount || 0)
                      //   [냐냐 지적] 연습(9/18 에 복습에서 갈라짐)·숫자 쓰기·문법 등록이 빠져 있어서 쓰기 연습을 해도 알이 안 자랐다 (2026-10-10).
                      //   냐냐님 결정: 빠졌던 몫(361개)은 돌려받는다 — 기준점(lastCountedTotal)을 안 옮기니 다음 갱신 때 한 번에 들어간다.
-                     + dayPracticeCount(d) + (d.newGrammarCount || 0);
+                     + dayPracticeCount(d) + (d.newGrammarCount || 0)
+                     + dayEssayBonus(d);
             }
             return sum;
         }
@@ -1359,6 +1414,7 @@ let vocabulary = [];
         // 학습할 때마다 호출 — 델타만큼 알 성장, 목표 도달 시 부화
         function updateEggProgress() {
             if (!eggState) eggState = defaultEggState();
+            migrateEssaySentences();
             const total = totalLearningActivity();
             if (eggState.lastCountedTotal === null) {
                 // 첫 실행: 기준점만 잡고 성장은 다음부터 (기존 학습량으로 갑자기 부화 방지)
@@ -1418,7 +1474,20 @@ let vocabulary = [];
             showHatchCelebration(creature, color, newColor);
         }
 
-        async function showHatchCelebration(creature, color, newColor) {
+        //   [냐냐 요청] 상자가 한 번에 여럿 열리면 팝업이 서로 덮어써서 마지막 것만 보였다 (2026-10-15, 지난 첨삭 몫으로 3개가 한꺼번에).
+        //   줄을 세워 하나 닫으면 다음 것이 뜬다.
+        const hatchPopupQueue = [];
+        let hatchPopupShowing = false;
+        function showHatchCelebration(creature, color, newColor) {
+            hatchPopupQueue.push([creature, color, newColor]);
+            if (!hatchPopupShowing) nextHatchCelebration();
+        }
+        function nextHatchCelebration() {
+            const job = hatchPopupQueue.shift();
+            hatchPopupShowing = !!job;
+            if (job) showHatchCelebrationNow(job[0], job[1], job[2]);
+        }
+        async function showHatchCelebrationNow(creature, color, newColor) {
             const info = RARITY_INFO[creature.rarity];
             const isNew = eggState.collection.filter(id => id === creature.id).length === 1;
             //   전설이면 몇 번째 색인지도 알린다 — 처음 만난 전설 / 이미 있는 전설의 새 색 / 이미 있는 색
@@ -1439,14 +1508,14 @@ let vocabulary = [];
             showConfirm(
                 `🎉 상자를 열었어요!`,
                 `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}`,
-                () => { /* 닫기만 — 하던 화면 그대로 */ },
+                () => { setTimeout(nextHatchCelebration, 250); /* 닫기만 — 하던 화면 그대로 */ },
                 {
                     icon: 'happy',
                     okLabel: '계속하기',
                     okStyle: 'primary',
                     cancelLabel: '도감 보기',
                     noEnter: true,
-                    onCancel: openEggCollection,
+                    onCancel: () => { openEggCollection(); setTimeout(nextHatchCelebration, 250); },
                     artHtml: creatureMedalSvg(creature, 112, false, color)
                 }
             );
@@ -1909,6 +1978,10 @@ let vocabulary = [];
             return (d.quizTotal || 0) + (d.aiSessions || 0) + (d.newWordsCount || 0)
                  + (d.reviewCount || 0) + (d.gameCount || 0) + (d.newGrammarCount || 0)
                  + dayPracticeCount(d);
+        }
+        //   달력 진하기용 — 첨삭은 문장마다 4 (dayEssayBonus). 개수(dayActivity)는 연속·✗·'N개 학습' 이 그대로 쓴다
+        function dayEffort(dateStr) {
+            return dayActivity(dateStr) + dayEssayBonus(nyanyaDiary[dateStr]);
         }
         function fmtDate(dt) {
             return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
@@ -2843,7 +2916,7 @@ let vocabulary = [];
                 // 이달 최대 학습량 (상대평가 기준)
                 let maxVal = 0;
                 for (let d = 1; d <= daysInMonth; d++) {
-                    const v = dayActivity(fmtDate(new Date(calYear, calMonth, d)));
+                    const v = dayEffort(fmtDate(new Date(calYear, calMonth, d)));   // 진하기 기준은 첨삭 5배
                     if (v > maxVal) maxVal = v;
                 }
                 const todayStr = getLocalDateString();
@@ -2874,22 +2947,22 @@ let vocabulary = [];
                     const ringCls = isPicked ? 'ring-2 ring-violet-600' : (isToday ? 'ring-2 ring-violet-400' : '');
                     //   [냐냐 요청] 복습을 못 끝낸 날은 칸 안쪽 주황 테두리 (2026-10-09) — 보라 테두리(오늘·고른 날)는 바깥(ring)이라 같이 보인다.
                     const rv = calReviewBorder(ds, n, isPast);
-                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(n, maxVal)} ${rv.cls} ${ringCls}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${rv.title}${planTitle} (클릭하면 상세)">${inner}</div>`;
+                    cells += `<div onclick="showCalendarDayDetail('${ds}')" class="aspect-square rounded-md flex items-center justify-center text-[10px] font-bold cursor-pointer hover:ring-2 hover:ring-violet-300 transition-all ${calColor(dayEffort(ds), maxVal)} ${rv.cls} ${ringCls}" title="${fmtDateSlash(ds)} · ${showX ? '학습 없음' : n + '개 학습'}${rv.title}${planTitle} (클릭하면 상세)">${inner}</div>`;
                 }
                 container.innerHTML = `<div class="grid grid-cols-7 gap-1 mb-1">${dowHead}</div><div class="grid grid-cols-7 gap-1">${cells}</div>`;
             } else if (calView === 'year') {
                 titleEl.innerText = `${calYear}년`;
                 // 각 월의 총 학습량
-                const monthVals = [];
+                const monthVals = [], monthEff = [];
                 for (let m = 0; m < 12; m++) {
                     const dim = new Date(calYear, m + 1, 0).getDate();
-                    let sum = 0;
-                    for (let d = 1; d <= dim; d++) sum += dayActivity(fmtDate(new Date(calYear, m, d)));
-                    monthVals.push(sum);
+                    let sum = 0, eff = 0;
+                    for (let d = 1; d <= dim; d++) { const ds = fmtDate(new Date(calYear, m, d)); sum += dayActivity(ds); eff += dayEffort(ds); }
+                    monthVals.push(sum); monthEff.push(eff);
                 }
-                const maxVal = Math.max(...monthVals);
+                const maxVal = Math.max(...monthEff);
                 const cells = monthVals.map((v, m) =>
-                    `<button onclick="calPickMonth(${m})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(v, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${calYear}년 ${m+1}월 · ${v}개 학습">
+                    `<button onclick="calPickMonth(${m})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(monthEff[m], maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${calYear}년 ${m+1}월 · ${v}개 학습">
                         <span>${m + 1}월</span>
                         <span class="text-[9px] opacity-80">${v}</span>
                     </button>`).join('');
@@ -2899,15 +2972,15 @@ let vocabulary = [];
                 titleEl.innerText = `${startY} ~ ${startY + 9}`;
                 const yearVals = [];
                 for (let y = startY; y < startY + 10; y++) {
-                    let sum = 0;
+                    let sum = 0, eff = 0;
                     for (const ds in nyanyaDiary) {
-                        if (ds.startsWith(String(y))) sum += dayActivity(ds);
+                        if (ds.startsWith(String(y))) { sum += dayActivity(ds); eff += dayEffort(ds); }
                     }
-                    yearVals.push({ year: y, val: sum });
+                    yearVals.push({ year: y, val: sum, eff });
                 }
-                const maxVal = Math.max(...yearVals.map(x => x.val));
+                const maxVal = Math.max(...yearVals.map(x => x.eff));
                 const cells = yearVals.map(x =>
-                    `<button onclick="calPickYear(${x.year})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(x.val, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${x.year}년 · ${x.val}개 학습">
+                    `<button onclick="calPickYear(${x.year})" class="aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold ${calColor(x.eff, maxVal)} transition-all hover:ring-2 hover:ring-violet-300" title="${x.year}년 · ${x.val}개 학습">
                         <span>${x.year}</span>
                         <span class="text-[9px] opacity-80">${x.val}</span>
                     </button>`).join('');

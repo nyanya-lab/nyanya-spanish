@@ -1061,6 +1061,7 @@
                 renderChatThread();
 
                 recordAiNote('question', currentQuestionForAnswer.question, userAnswer, feedback);
+                if (typeof noteEssaySentences === 'function') noteEssaySentences(userAnswer);   // 보물상자: 문장마다 4점
                 logAction('ai');
                 saveToStorage();
                 updateStats();
@@ -1862,6 +1863,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
 
                 //   복습으로 센 번역은 노트에 표시해 둔다 — 일지에서 첨삭 목록이 아니라 복습 목록에 나오게
                 recordAiNote(isIdiom ? 'idiom' : 'ko-es', missionSentence, userText, feedback, undefined, countAsReview);
+                if (typeof noteEssaySentences === 'function') noteEssaySentences(userText);   // 보물상자: 문장마다 4점 (복습 미션도 같이)
                 logAction(countAsReview ? 'review' : 'ai');
                 if (countAsReview) judgeMissedReviewTarget(feedback, grammarReviewLastNoteId);   // 목표 문법을 채점이 빠뜨렸으면 따로 (기다리지 않음)
                 saveToStorage();
@@ -6167,6 +6169,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                 renderChatThread();
 
                 recordAiNote('es-ko', '', userEsText, feedback);
+                if (typeof noteEssaySentences === 'function') noteEssaySentences(userEsText);   // 보물상자: 문장마다 4점
                 logAction('ai');
                 saveToStorage();
                 updateStats();
