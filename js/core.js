@@ -1247,10 +1247,15 @@ let vocabulary = [];
         //   하루 안에서는 줄이 줄기만 한다(오늘 틀린 건 내일 차례) — 늘어나는 건 ↺ 로 복습을 무를 때뿐.
         //   남은 개수를 낸다 (못 재면 null)
         function todayReviewLeft() {
+            const by = todayReviewLeftBy();
+            return by ? by[0] + by[1] + by[2] : null;
+        }
+        //   [단어, 관용구, 문법] 따로 — 달력 상세의 복습 칸을 셋으로 나눠 보여준다 (2026-10-15)
+        function todayReviewLeftBy() {
             if (typeof getReviewDueWords !== 'function') return null;
-            return getReviewDueWords().length
-                + (typeof getIdiomDueList === 'function' ? getIdiomDueList().length : 0)
-                + (typeof getGrammarDueList === 'function' ? getGrammarDueList().length : 0);
+            return [getReviewDueWords().length,
+                    typeof getIdiomDueList === 'function' ? getIdiomDueList().length : 0,
+                    typeof getGrammarDueList === 'function' ? getGrammarDueList().length : 0];
         }
         function isTodayReviewClear() { return todayReviewLeft() === 0; }
 
@@ -1261,12 +1266,14 @@ let vocabulary = [];
             try {
                 const d = nyanyaDiary && nyanyaDiary[getLocalDateString()];
                 if (!d) return;
-                const left = todayReviewLeft();
-                if (left === null) return;
+                const by = todayReviewLeftBy();
+                if (!by) return;
+                const left = by[0] + by[1] + by[2];
                 const clear = left === 0;
                 const flip = !!d.reviewDone !== clear;
                 d.reviewDone = clear;
                 d.reviewLeft = left;   // 달력 상세의 복습 칸 '−N' (그날 남기고 끝낸 개수)
+                d.reviewLeftBy = by;   // 단어·관용구·문법 따로 (10/15 부터)
                 if (flip) {
                     if (typeof renderStreakBadge === 'function') renderStreakBadge();
                     if (typeof renderCalendar === 'function') renderCalendar();
@@ -1348,8 +1355,8 @@ let vocabulary = [];
         //   복습 한 단어는 몇 초인데 첨삭은 문장을 직접 써야 해서 몇 분이 걸린다. 그런데 둘 다 1 이라
         //   2주 동안 첨삭 몫이 전체의 2% 였다. 길게 쓴 날이 제대로 쳐지게 한 번이 아니라 **문장마다** 센다.
         //   자유 작문 · 질문에 답하기 · 번역 미션 · 관용구 미션 · **문법 복습 미션**(일지엔 복습으로 들어가는 것) 다 같은 잣대.
-        //   일지에는 그날 첨삭 수(essayN)와 문장 수(essaySent)를 적는다. 개수 셈(aiSessions·reviewCount)이 이미 1 씩 쳤으니
-        //   덧붙는 몫은 문장×4 − 첨삭 수. '총 N개 활동'·'N개 학습' 같은 개수는 한 일의 개수라 그대로.
+        //   일지에는 그날 첨삭 수(essayN)와 문장 수(essaySent)를 적는다. 개수 셈(aiSessions·reviewCount)이 이미 1 씩 치고
+        //   덧붙는 몫은 문장×4 (dayEssayBonus). '총 N개 활동'·'N개 학습' 같은 개수는 한 일의 개수라 그대로.
         //   첨삭에서 오늘 차례를 맞게 써서 붙는 '🔁 오늘 복습' +1 은 따로 그대로 (쓰기 복습에서 했어도 받았을 몫).
         //   냐냐님 결정: 지난 첨삭도 친다 — migrateEssaySentences 가 한 번 채우고, 기준점(lastCountedTotal)을 안 옮기니 한 번에 들어간다.
         // ============================================================
@@ -1370,8 +1377,10 @@ let vocabulary = [];
             d.essayN = (d.essayN || 0) + 1;
             d.essaySent = (d.essaySent || 0) + n;
         }
+        //   [냐냐 요청] 첫 문장은 5점, 그 뒤로 문장마다 4점 (2026-10-15) — 1문장 5 · 2문장 9 · 3문장 13.
+        //   = 첨삭 한 번 1점(개수 셈이 이미 친 몫) + 문장마다 4점. 그래서 덧붙는 몫은 문장 × 4.
         function dayEssayBonus(d) {
-            return (d && d.essayN) ? Math.max(0, (d.essaySent || 0) * ESSAY_SENTENCE_POINTS - d.essayN) : 0;
+            return (d && d.essayN) ? (d.essaySent || 0) * ESSAY_SENTENCE_POINTS : 0;
         }
         //   지난 첨삭 채우기 (한 번만, eggState.essayMigrated) — 첨삭 노트(최근 300개, 9/1~)가 있는 날은 노트의 문장 수로,
         //   노트에 없는 몫(그 전 · 노트에서 밀려난 것)은 1문장으로 친다.
@@ -2065,6 +2074,22 @@ let vocabulary = [];
             const COLS = ['단어', '관용구', '문법'];
             const ROWS = [['reg', '등록', 'text-slate-700'], ['master', '마스터', 'text-emerald-600'], ['weak', '약점', 'text-rose-500']];
             const VLINE = 'border-l border-slate-200';
+            // ============================================================
+            // [냐냐 요청] 복습 줄도 위 세 칸 선 그대로 단어 · 관용구 · 문법으로 (2026-10-15) — 한 칸이라 자리가 남았다.
+            //   단어·관용구는 일지에 적힌 번호(reviewIds)로 세고, 문법은 나머지다 — 문법 복습 미션은 번호 없이 적힌다.
+            //   번호가 없던 옛날은 나눌 수 없어 예전처럼 한 칸. 🎓 졸업·−남은 것도 그 갈래 것만.
+            //   남은 것을 갈래별로 적기 시작한 건 10/15 부터라, 그 전 날은 '복습' 이름 밑에 합친 −N 을 둔다.
+            // ============================================================
+            const rIds = Array.isArray(log.reviewIds) ? log.reviewIds : [];
+            let reviewSplit = null;
+            if (rIds.length) {
+                const gIds = new Set(((typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : []).map(t => t.id));
+                let w = 0, i = 0;
+                rIds.forEach(id => { if (String(id).includes('::')) i++; else if (!gIds.has(id)) w++; });
+                reviewSplit = [w, i, Math.max(0, reviewN - w - i)];
+            }
+            const reviewLeftBy = ds < STREAK_REVIEW_RULE_FROM ? null
+                : (ds === getLocalDateString() ? todayReviewLeftBy() : (Array.isArray(log.reviewLeftBy) ? log.reviewLeftBy : null));
             const aiN = log.aiSessions || 0;
             const practiceN = dayPracticeCount(log);   // 숫자 쓰기 포함
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
@@ -2098,8 +2123,14 @@ let vocabulary = [];
                              복습 = 오늘의 복습에서 푼 것 (문법 복습 번역 포함)
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
-                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습</td>
-                            ${(reviewLeftN > 0 || gradN > 0)
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습${reviewSplit && reviewLeftN > 0 && !reviewLeftBy ? `<span class="block text-[10px] text-rose-400" title="${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개">−${reviewLeftN}</span>` : ''}</td>
+                            ${reviewSplit ? reviewSplit.map((v, ci) => {
+                                const g = countGraduatedOn(ds, 'wig'[ci]), l = reviewLeftBy ? (reviewLeftBy[ci] || 0) : 0;
+                                const tip = [g ? `이 날 졸업 ${g}개` : '', l ? `${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${l}개` : ''].filter(Boolean).join(' · ');
+                                return `<td class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')"${tip ? ` title="${tip}"` : ''} class="w-full py-1.5 flex flex-wrap items-baseline justify-center gap-x-1 font-black hover:bg-white rounded transition-colors">
+                                    <span class="${v > 0 ? 'text-slate-700' : 'text-slate-300'}">${v}</span>${g ? `<span class="text-[10px] text-emerald-600">🎓${g}</span>` : ''}${l > 0 ? `<span class="text-[10px] text-rose-400">−${l}</span>` : ''}</button></td>`;
+                              }).join('')
+                            : (reviewLeftN > 0 || gradN > 0)
                                 ? `<td colspan="3" class="${VLINE} p-0"><button type="button" onclick="openDiaryDetail('${ds}', 'review')" class="w-full py-1.5 flex items-baseline justify-center gap-1.5 font-black hover:bg-white rounded transition-colors" title="${gradN ? `이 날 졸업 ${gradN}개` : ''}${gradN && reviewLeftN ? ' · ' : ''}${reviewLeftN ? `${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개` : ''}">
                                        <span class="${reviewN > 0 ? 'text-slate-700' : 'text-slate-300'}">${reviewN}</span>${gradN ? `<span class="text-[10px] text-emerald-600">🎓${gradN}</span>` : ''}${reviewLeftN > 0 ? `<span class="text-[10px] text-rose-400">−${reviewLeftN}</span>` : ''}</button></td>`
                                 : cellBtn(reviewN, 'review', 3)}
@@ -2229,11 +2260,13 @@ let vocabulary = [];
         //   지금도 졸업해 있거나, 그 뒤에 다시 틀려 돌아온 것(lastWrongDate 가 그날보다 뒤)은 센다.
         //   둘 다 아니면 첨삭 ↺ 처럼 졸업 자체가 무른 것이라 뺀다.
         //   목록이 없는 옛날(10/13 전)은 lastReviewDate 로 거꾸로 센다 — 다시 틀린 것은 빠진다.
-        function countGraduatedOn(ds) {
+        //   kind 'w'·'i'·'g' 를 주면 그 갈래만 센다 (달력 상세 복습 칸 셋)
+        function countGraduatedOn(ds, kind) {
             const last = REVIEW_INTERVALS.length;
             const d = nyanyaDiary && nyanyaDiary[ds];
             if (d && Array.isArray(d.graduated)) {
                 return d.graduated.filter(k => {
+                    if (kind && k[0] !== kind) return false;
                     const id = k.slice(2);
                     let rec = null, stage = 0;
                     if (k[0] === 'w') { rec = (vocabulary || []).find(w => String(w.id) === id); stage = rec ? (rec.reviewStage || 0) : 0; }
@@ -2246,10 +2279,12 @@ let vocabulary = [];
             const done = (rec, stage) => rec && rec.lastWrongDate && stage >= last && rec.lastReviewDate === ds;
             let n = 0;
             (vocabulary || []).forEach(w => {
-                if (done(w, w.reviewStage || 0)) n++;
+                if ((!kind || kind === 'w') && done(w, w.reviewStage || 0)) n++;
+                if (kind && kind !== 'i') return;
                 const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
                 list.forEach(it => { const r = (idiomReview || {})[idiomKey(w.id, it.idiom)]; if (done(r, (r && r.stage) || 0)) n++; });
             });
+            if (kind && kind !== 'g') return n;
             const tables = (typeof getAllGrammarTables === 'function') ? getAllGrammarTables() : [];
             tables.forEach(t => { const r = (grammarReview || {})[t.id]; if (done(r, (r && r.stage) || 0)) n++; });
             return n;
