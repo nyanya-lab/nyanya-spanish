@@ -4711,6 +4711,9 @@ let vocabulary = [];
             w.mastered = shouldMaster;
             w.weak = shouldWeak;
             w.perfect = isPerfect;
+            //   [v3] 점수·subjectivePassed 를 직접 고친 뒤 여길 부르는 곳(게임 빈칸·병합)까지 같이 실린다.
+            //   silent(불러올 때 한꺼번에 도는 것)는 바뀐 단어만 부르는 쪽(migrateWordScores)이 맡는다.
+            if (!silent) s3('word', w);
 
             if (!silent) {
                 if (!wasMastered && shouldMaster) logAction('new-mastered', null, w.id);
@@ -5217,6 +5220,8 @@ let vocabulary = [];
         function migrateWordScores() {
             if (!Array.isArray(vocabulary)) return;
             vocabulary.forEach(w => {
+                //   [v3] 새 단어는 점수 칸이 비어 있다가 여기서 채워진다 — 실제로 바뀐 단어만 새 저장소에 (전부 보내면 1,600개)
+                const before = [w.score, !!w.mastered, !!w.weak, !!w.perfect, !!w.subjectivePassed, '_firstFailScored' in w].join('|');
                 if (typeof w.score !== 'number') {
                     const oldMaster = (typeof w.masterScore === 'number') ? w.masterScore : 0;
                     const oldWeak = (typeof w.weakScore === 'number') ? w.weakScore : 0;
@@ -5232,6 +5237,7 @@ let vocabulary = [];
                 //   틀려도 점수·곡선·복습 표시가 다 건너뛰어졌다. 이제 세션이 들고 있는다.
                 if ('_firstFailScored' in w) delete w._firstFailScored;
                 syncWordFlags(w, { silent: true }); // 일지 카운트는 건드리지 않음
+                if (before !== [w.score, !!w.mastered, !!w.weak, !!w.perfect, !!w.subjectivePassed, '_firstFailScored' in w].join('|')) s3('word', w);
             });
         }
 
@@ -6073,6 +6079,7 @@ let vocabulary = [];
                 const lv = normDeleLevel((extractAndParseJson(res) || {}).level);
                 if (!lv) return;
                 w.deleLevel = lv;
+                s3('word', w);
                 if (typeof saveToStorage === 'function') saveToStorage();
                 document.querySelectorAll(`[data-dele="${w.id}"]`).forEach(el => { el.innerHTML = deleLevelBadgeHtml(lv); });
             } catch (e) { console.warn('DELE 레벨 물어보기 실패', e); }
@@ -6150,7 +6157,7 @@ let vocabulary = [];
                         `Here are ${chunk.length} Spanish words or phrases a Korean learner has in their vocabulary list.\n`
                         + `Classify EVERY one into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common and basic it is in Spanish.`,
                         chunk.map(w => bare(w.word)));
-                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].deleLevel) { chunk[j].deleLevel = lv; out.words++; } });
+                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].deleLevel) { chunk[j].deleLevel = lv; s3('word', chunk[j]); out.words++; } });
                 } catch (e) { console.warn('[DELE] 단어 레벨 묶음 실패', e); }
             }
 
@@ -6171,7 +6178,7 @@ let vocabulary = [];
 `
                         + `Classify EVERY one into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by how common and basic it is in Spanish.`,
                         chunk.map(x => String(x.it.idiom).replace(/\[[^\]]*\]/g, '...').trim()));
-                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].it.dele) { chunk[j].it.dele = lv; out.idioms++; } });
+                    got.forEach((lv, j) => { if (lv && chunk[j] && !chunk[j].it.dele) { chunk[j].it.dele = lv; s3('word', chunk[j].w); out.idioms++; } });
                 } catch (e) { console.warn('[DELE] 관용구 레벨 묶음 실패', e); }
             }
 
@@ -6184,7 +6191,7 @@ let vocabulary = [];
                         `Here are ${left.length} Spanish grammar note titles (Korean, sometimes with Spanish in parentheses) kept by a Korean learner.\n`
                         + `Classify EVERY note into exactly one CEFR level (A1, A2, B1, B2, C1, C2) by when that grammar point is normally taught.`,
                         left.map(t => String(t.title).replace(/\s+/g, ' ').trim()));
-                    got.forEach((lv, j) => { if (lv && left[j]) { grammarDeleLevels[left[j].id] = lv; out.notes++; } });
+                    got.forEach((lv, j) => { if (lv && left[j]) { grammarDeleLevels[left[j].id] = lv; s3('mapItem', 'grammarDeleLevels', left[j].id); out.notes++; } });
                 } catch (e) { console.warn('[DELE] 문법 레벨 묶음 실패', e); }
             }
 
@@ -6464,11 +6471,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             const title = String(raw).slice(0, at).replace(/\s+/g, ' ').trim().toLowerCase();
                             const lv = normDeleLevel(String(raw).slice(at + 1));
                             const id = byTitle.get(title);
-                            if (id && lv) { grammarDeleLevels[id] = lv; got++; }
+                            if (id && lv) { grammarDeleLevels[id] = lv; s3('mapItem', 'grammarDeleLevels', id); got++; }
                         });
                         if (got) console.log(`[DELE] 문법 노트 ${got}개에 레벨을 적었어요`);
                     }
-                    if (data.comment) deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) });
+                    if (data.comment) { deleResult = Object.assign(deleResult || {}, { comment: String(data.comment) }); s3('misc', 'deleResult'); }
                 } catch (e) {
                     console.warn('DELE 어휘 판정 실패', e);
                     if (manual) showToast(describeGeminiError(e), "error");
@@ -6485,6 +6492,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 tense, acc, vocab, gram,
                 overall: deleOverall([vocab, gram, tense, acc])
             });
+            s3('misc', 'deleResult');
             renderDeleCard();
             saveToStorage();
 
@@ -6991,6 +6999,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function toggleGrammarIndexGroup(key) {
             grammarIndexCollapsed[key] = !grammarIndexCollapsed[key];
             renderGrammarIndex();
+            saveGrammarFilterPrefs();   // 짐(grammarPrefs)에 들어 있는 값인데 저장을 안 불러서 다음 저장 때 딸려 갔다
         }
         //   [냐냐 요청] 주제 전체 접기 / 펼치기 (2026-09-16).
         //   하나라도 펼쳐져 있으면 '전부 접기', 다 접혀 있으면 '전부 펼치기' 로 움직인다.
@@ -7005,6 +7014,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             grammarIndexCollapsed = {};
             if (anyOpen) keys.forEach(k => { grammarIndexCollapsed[k] = true; });
             renderGrammarIndex();
+            saveGrammarFilterPrefs();
         }
         function syncGrammarIndexFoldBtn() {
             const btn = document.getElementById('grammar-index-fold-btn');
@@ -8799,6 +8809,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 grammarOpenState[id] = true; // 고정하면 열어둠
                 showToast("표를 위에 고정했어요 📌", "success");
             }
+            s3('mapItem', 'pinnedGrammar', id); s3('misc', 'grammarPrefs');
             renderGrammarTables();
             saveToStorage();
         }
@@ -9194,6 +9205,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function saveGrammarFilterPrefs() {
             _grammarPrefsAt = Date.now();
             try { localStorage.setItem('nyanya_grammar_filters', JSON.stringify(grammarPrefsSnapshot())); } catch (e) {}
+            s3('misc', 'grammarPrefs');
             //   딴 기기에도 넘어가게 짐에 실어 올린다 (1초 미룸이라 연달아 눌러도 한 번만 올라간다)
             if (typeof saveToStorage === 'function') saveToStorage();
         }

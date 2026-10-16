@@ -186,6 +186,7 @@
             if (typeof bests[size] === 'number' && bests[size] <= secs) return false;   // 0초도 값이다
             bests[size] = secs;
             try { localStorage.setItem(CW_BEST_KEY, JSON.stringify(bests)); } catch (e) {}
+            if (typeof s3 === 'function') s3('misc', 'gameHighScores');
             if (typeof saveToStorage === 'function') { try { saveToStorage(); } catch (e) {} }
             return true;
         }
@@ -223,6 +224,7 @@
             // [냐냐 요청] 기록이 바뀌면 여기서 바로 저장한다.
             //   호출부는 logAction('game')(=저장)을 이 함수보다 '먼저' 부르기 때문에,
             //   여기서 저장하지 않으면 새 기록이 다음 저장 때까지 서버에 안 올라간다.
+            if (changed && typeof s3 === 'function') s3('misc', 'gameHighScores');
             if (changed && typeof saveToStorage === 'function') saveToStorage();
             return isNewAllTime; // 역대 신기록 여부
         }
@@ -2774,7 +2776,7 @@ Return JSON only, no markdown.`;
             const ids = [...document.querySelectorAll('.fill-master-chk:checked')].map(c => c.dataset.id);
             if (ids.length === 0) { showToast("선택된 단어가 없어요", "error"); return; }
             let n = 0;
-            ids.forEach(id => { const w = vocabulary.find(v => v.id === id); if (w && !w.mastered) { w.mastered = true; if (typeof logAction === 'function') logAction('new-mastered'); n++; } });
+            ids.forEach(id => { const w = vocabulary.find(v => v.id === id); if (w && !w.mastered) { w.mastered = true; if (typeof s3 === 'function') s3('word', w); if (typeof logAction === 'function') logAction('new-mastered'); n++; } });
             saveToStorage();
             if (typeof updateStats === 'function') updateStats();
             if (typeof renderWordList === 'function') renderWordList();
