@@ -665,7 +665,9 @@ let quizSession = null;
 
         // 두 뜻 문자열이 겹치는지 (동의어 판정용) — 쉼표/슬래시로 나눠 하나라도 겹치면 true
         function meaningsOverlap(m1, m2) {
-            const split = (m) => m.toLowerCase().replace(/\(.*?\)/g,'').split(/[,;/·]/).map(s => s.trim()).filter(Boolean);
+            //   빈칸 표시와 뒤 조사는 빼고 견준다 ('[대상] 맞은편에' = '[장소]의 맞은편에') — stripMeaningSlots (core.js)
+            const slot = (m) => (typeof stripMeaningSlots === 'function') ? stripMeaningSlots(m) : String(m || '');
+            const split = (m) => slot(m).toLowerCase().replace(/\(.*?\)/g,'').split(/[,;/·]/).map(s => s.trim()).filter(Boolean);
             const a = split(m1), b = split(m2);
             return a.some(x => b.some(y => x === y || x.includes(y) || y.includes(x)));
         }

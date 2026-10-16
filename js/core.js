@@ -8337,8 +8337,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   AI 가 '틀림' 이라 해서 오답이 됐고 "de 는 ~로부터라는 뜻 · 뜻이 다르니 주의" 라는 모순된 안내가 떴다.
         //   meaningsOverlap 은 '왜' 한 글자도 겹친다고 봐서(porque ↔ para qué) AI 를 이기면 안 됐다.
         //   항목이 통째로 같을 때만 단어장을 믿는다. 괄호 설명·(역)·물결표·띄어쓰기는 무시한다.
+        //   [냐냐 지적] frente a [대상] '[대상] 맞은편에' ↔ enfrente de [장소] '[장소]의 맞은편에' 를 다른 뜻으로 봤다 (2026-10-16).
+        //   빈칸 표시([대상]·[장소])와 그 바로 뒤 조사는 빼고 견준다 — 남는 '맞은편에' 가 같으면 같은 뜻.
+        function stripMeaningSlots(m) {
+            return String(m || '').replace(/\[[^\]]*\]\s*(의|에게|에서|에|을|를|이|가|와|과|은|는|로|으로)?\s*/g, ' ');
+        }
         function meaningItemsExactMatch(m1, m2) {
-            const items = (m) => String(m || '').toLowerCase().replace(/\([^)]*\)/g, '')
+            const items = (m) => stripMeaningSlots(m).toLowerCase().replace(/\([^)]*\)/g, '')
                 .split(/[,;/·]/).map(s => s.replace(/[~\s.]/g, '')).filter(s => s.length >= 2);
             const b = new Set(items(m2));
             return items(m1).some(x => b.has(x));
