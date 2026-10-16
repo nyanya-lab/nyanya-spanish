@@ -328,7 +328,8 @@
         const GEMINI_MODEL_GRADE = 'gemini-3.5-flash-lite';
         const AI_GRADE_THINKING = 'medium';
         //   timeoutMs: 재시도까지 다 합친 기다림 상한 (0 = 제한 없음). 넘기면 err.timedOut 을 달아 던진다.
-        async function callGeminiRaw(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0) {
+        //   fastFail: 5xx 를 다시 시도하지 않고 바로 던진다 — 채점 3.5 가 과부하(503)일 때 3.1 로 곧장 넘기려고 (callGemini 가 켠다)
+        async function callGeminiRaw(promptText, systemInstruction = '', jsonSchema = null, thinkingLevel = 'low', model = GEMINI_MODEL_FLASH_LITE, timeoutMs = 0, fastFail = false) {
             const apiKey = getGeminiApiKey(); // [PATCH] 더 이상 빈 문자열이 아니라 사용자가 등록한 실제 키를 사용
             if (!apiKey) {
                 throw new Error("NO_API_KEY");
@@ -424,7 +425,8 @@
                     // 키 오류/요청형식 오류/한도초과는 재시도해도 소용없으므로 즉시 중단.
                     //   잘린 응답(MAX_TOKENS)도 다시 물어봐야 똑같이 잘리므로 바로 알린다.
                     const permanent = e.status === 400 || e.status === 401 || e.status === 403
-                        || e.status === 429 || e.finishReason === 'MAX_TOKENS' || e.timedOut;
+                        || e.status === 429 || e.finishReason === 'MAX_TOKENS' || e.timedOut
+                        || (fastFail && e.status >= 500);
                     if (i === MAX_ATTEMPTS - 1 || permanent) throw e;
                     if (deadline && Date.now() + delay >= deadline) throw timeoutError();
                     await new Promise(resolve => setTimeout(resolve, delay));
@@ -461,7 +463,10 @@
                 return callGeminiRaw(promptText, systemInstruction, jsonSchema, lvl, GEMINI_MODEL_FLASH_LITE, 0);   // 3.1 쪽엔 시간 제한을 안 건다 (callGeminiGrade 와 같은 까닭)
             }
             try {
-                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, thinkingLevel, model, timeoutMs);
+                //   [냐냐 지적] 쓰기 복습이 틀릴 때마다 너무 느렸다 (2026-10-16) — 3.5 가 503 을 내면 같은 3.5 로 0.5·1·2초 다시 시도하느라
+                //   제한 시간(8초)을 다 쓰고 나서야 3.1 로 넘어갔다. 채점 3.5 는 5xx 면 다시 시도하지 않고 바로 던져서
+                //   callGeminiGrade 가 곧장 3.1 로 받게 한다 (그리고 아래에서 10분 건너뛰기가 켜진다).
+                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, thinkingLevel, model, timeoutMs, isGrade);
             } catch (e) {
                 const down = e && (e.timedOut || [500, 502, 503, 504].includes(e.status));
                 if (isGrade && down) markGradeModelDown();
@@ -474,7 +479,7 @@
         //   키 오류·요청 형식 오류는 모델을 바꿔도 똑같으니 그대로 던진다.
         //   3.1 은 예전 채점 설정(low) 그대로 — 그 설정으로 뜻 틀림까지 잡던 것을 10/2 에 확인했다.
         //   [냐냐 요청] 시간 제한도 둔다 — 3.5 가 오류 없이 마냥 늦을 때가 있었다 (쓰기 복습 채점 9초, 한 번은 45초 넘게).
-        //     첨삭 채점은 평소 10~13초라 20초, 쓰기 복습·퀴즈 채점은 평소 1~2초라 8초. 넘기면 3.1 로 넘긴다.
+        //     첨삭 채점은 평소 10~13초라 20초, 쓰기 복습·퀴즈 채점은 평소 1~2초라 5초(10/16 에 8초 → 5초). 넘기면 3.1 로 넘긴다.
         //     3.1 쪽엔 제한을 안 건다 — 거기서 끊으면 채점을 못 받는다.
         async function callGeminiGrade(promptText, systemInstruction, jsonSchema, timeoutMs = 20000) {
             try {

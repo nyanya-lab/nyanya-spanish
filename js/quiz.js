@@ -1291,7 +1291,7 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     required: ["verdict"]
                 };
                 if (conjSlot) schema.properties.sameVerb = { type: "BOOLEAN", description: "학생 답이 바로 그 동사(원형·다른 시제/인칭·잘못 만든 꼴)인가. 다른 동사면 false" };
-                const resp = await callGeminiGrade(prompt, system, schema, 8000);
+                const resp = await callGeminiGrade(prompt, system, schema, 5000);   // 평소 1~2초 — 5초 넘게 걸리면 3.1 로 (10/16, 8초 → 5초)
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
             } catch (e) {
