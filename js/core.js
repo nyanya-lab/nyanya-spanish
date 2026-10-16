@@ -299,6 +299,7 @@ let vocabulary = [];
                 grammarCellWords: grammarCellWords,       // [냐냐 요청] 표 칸 ↔ 단어장 연결
                 grammarTopics: GRAMMAR_ICONS,
                 eggState: eggState,
+                writeSession: (typeof writeSession !== 'undefined' && writeSession) ? writeSession : undefined,   // [냐냐 요청] 쓰기 복습 이어하기
                 aiNotes: aiNotes,                         // [냐냐 요청] 첨삭 노트
                 idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
                 idiomScores: idiomScores,                 // [냐냐 요청] 관용구 점수
@@ -531,6 +532,7 @@ let vocabulary = [];
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
+                if (typeof writeSession !== 'undefined') writeSession = payload.writeSession || null;   // [냐냐 요청] 쓰기 복습 이어하기
                 idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
                 idiomScores = payload.idiomScores || {};                             // [냐냐 요청] 관용구 점수
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
@@ -2288,7 +2290,7 @@ let vocabulary = [];
             ((typeof ensureRewardState === 'function' && ensureRewardState()) || { earned: [] }).earned.forEach(x => {
                 if (!x || !x.id) return;
                 if (x.amt == null) spinBy[x.id] = (spinBy[x.id] || 0) + 1;   // 안 돌린 룰렛
-                else wonBy[x.id] = (wonBy[x.id] || 0) + (Number(x.amt) || 0);
+                else wonBy[x.id] = (wonBy[x.id] || 0) + (Number(x.amt) || 0);   // 꽝(0)도 '돌렸음' 으로 남긴다 — 아래에서 💣꽝
             });
 
             // 희귀도 순 정렬 (전설 → 에픽 → 레어 → 일반), 같은 등급이면 원래 순서 유지
@@ -2326,7 +2328,7 @@ let vocabulary = [];
                     const legend = c.rarity === 'legendary' ? creatureLegendColors(c.id) : null;
                     //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
                     return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} ${info.border || 'border border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
-                        <span class="absolute bottom-1 right-1.5 flex items-center gap-1 text-[10px]">${spinBy[c.id] ? `<button type="button" onclick="openCreatureRoulette('${c.id}', event)" title="안 돌린 룰렛 — 눌러서 돌리기" class="inline-flex items-center gap-0.5 font-black text-amber-600 hover:scale-110 transition-transform">${rouletteIconSvg(16)}${spinBy[c.id] > 1 ? `<span>×${spinBy[c.id]}</span>` : ''}</button>` : ''}${wonBy[c.id] ? `<span class="font-black text-amber-700">💰${fmtWon(wonBy[c.id])}</span>` : ''}<span class="${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span></span>
+                        <span class="absolute bottom-1 right-1.5 flex items-center gap-1 text-[10px]">${spinBy[c.id] ? `<button type="button" onclick="openCreatureRoulette('${c.id}', event)" title="안 돌린 룰렛 — 눌러서 돌리기" class="inline-flex items-center gap-0.5 font-black text-amber-600 hover:scale-110 transition-transform">${rouletteIconSvg(16)}${spinBy[c.id] > 1 ? `<span>×${spinBy[c.id]}</span>` : ''}</button>` : ''}${(c.id in wonBy) ? (wonBy[c.id] ? `<span class="font-black text-amber-700">💰${fmtWon(wonBy[c.id])}</span>` : `<span class="font-black text-slate-400" title="룰렛에서 꽝이 나왔어요">💣꽝</span>`) : ''}<span class="${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span></span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
                         <div class="min-w-0 flex-1 space-y-1">

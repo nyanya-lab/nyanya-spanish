@@ -5535,6 +5535,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
 
         function renderWriteMix() {
+            renderWriteResume();
             // 고른 갈래에 표시
             document.querySelectorAll('.write-mix-btn').forEach(b => {
                 const on = b.dataset.writeMix === writeMix.mode;
@@ -6432,6 +6433,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             };
 
             if (typeof _synonymAwarded !== 'undefined') _synonymAwarded = new Set();   // 판마다 덤 기록을 비운다
+            renderWriteResume();   // 새 판을 시작하면 '아까 하던' 줄은 숨긴다 (첫 채점 때 새 판으로 덮인다)
 
             const setup = document.getElementById('write-setup');
             const play = document.getElementById('write-play-area');
@@ -6441,6 +6443,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
 
         function closeWritePractice() {
+            //   [냐냐 요청] 이어하기 — 중간에 나가도 진행 상태를 남긴다 (다 끝났으면 snapshot 이 지운다)
+            if (writePracticeState) { writeSessionSnapshot(); try { saveToStorage(); } catch (e) {} }
             const cb = writePracticeState && writePracticeState.onClose;
             if (writePracticeState && writePracticeState.feedbackTimer) clearTimeout(writePracticeState.feedbackTimer);
             writePracticeState = null;
@@ -6453,6 +6457,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   (새로고침 버튼을 따로 두지 않아도 되도록)
             if (typeof renderWriteMix === 'function') renderWriteMix();
             if (typeof renderWriteTenses === 'function') renderWriteTenses();
+            renderWriteResume();
             if (typeof cb === 'function') { try { cb(); } catch (e) {} }
         }
 
@@ -6507,6 +6512,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     return;
                 }
                 // ── 끝 → 결과 ──
+                if (writeSession) { writeSessionClear(); try { saveToStorage(); } catch (e) {} }   // 다 끝났다 — 이을 게 없다
                 const total = s.totalCount || s.pool.length;
                 const nBy = (g) => (s.results || []).filter(r => r.gain === g).length;
                 // [냐냐 요청] 성공 개수는 채점 결과에서 센다.
@@ -6802,6 +6808,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (s.phase === 2 && typeof speakSpanishVoice === 'function') {
                 setTimeout(() => speakSpanishVoice(writeRoundTarget(w, 2)), 120);
             }
+            if (s.phase !== 1 && !s.examScope) writeSessionSnapshot();   // 2·3바퀴는 채점 저장이 드물어서 화면 그릴 때마다 메모리·새 저장소에만 싣는다
         }
 
         function skipWritePractice() {
@@ -7474,7 +7481,111 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
 
         // 저장 + 헤더(복습 배너·통계) 갱신
+        // ============================================================
+        // [냐냐 요청] 쓰기 복습 이어하기 (2026-10-16)
+        //   예전엔 1바퀴 도중에 그만두면 그때까지 틀린 것도 2바퀴로 못 가고 그냥 끝났고, 다른 기기에선 이을 수도 없었다.
+        //   한 문제 채점할 때마다(writePracticeSave) 진행 상태를 데이터에 같이 싣는다 — 바퀴 · 남은 문제 · 틀린 목록 · 결과.
+        //   다른 기기·나중에 쓰기 화면을 열면 '아까 하던 쓰기 복습' 줄이 뜨고, 남은 1바퀴를 마저 풀고 2·3바퀴로 간다 (냐냐님 결정).
+        //   ⚠️ 채점을 마친 문제(1바퀴 결과 화면·3바퀴 '한 번 더 쓰기')는 남은 문제에서 뺀다 — 다시 물으면 점수가 두 번 붙는다.
+        //   오늘 것만 잇는다. 쓰기 시험 회차는 따로 이어지므로(writeExams) 여기 안 싣는다. 다 끝나면 지운다.
+        // ============================================================
+        let writeSession = null;
+        function writeTaskDesc(w) {
+            if (!w) return null;
+            if (w._isIdiomTask && w._idiomOf) {
+                const it = (Array.isArray(w._idiomOf.idioms) ? w._idiomOf.idioms : []).find(x => x && String(x.idiom || '').trim() === w.word);
+                return { id: w._idiomOf.id, k: 'i', iid: (it && it.iid) || '', t: w.word };
+            }
+            if (w._isConjTask && w._conjOf) return { id: w._conjOf.id, k: 'c', slot: w._conjSlot };
+            return { id: w.id, k: 'w' };
+        }
+        function writeTaskFromDesc(d) {
+            if (!d || typeof vocabulary === 'undefined') return null;
+            const w = vocabulary.find(v => v.id === d.id);
+            if (!w) return null;
+            if (d.k === 'i') {
+                const it = (Array.isArray(w.idioms) ? w.idioms : []).find(x => x && ((d.iid && x.iid === d.iid) || String(x.idiom || '').trim() === d.t));
+                return it ? makeWriteIdiomTask(w, it) : null;
+            }
+            if (d.k === 'c') return (d.slot && d.slot.form) ? makeWriteConjTask(w, d.slot) : null;
+            return w;
+        }
+        function writeSessionSnapshot() {
+            const s = writePracticeState;
+            if (!s || s.examScope) return;
+            const graded = !!(s.feedback || s.retry);
+            let phase = s.phase, rest = s.pool.slice(s.index + (graded ? 1 : 0)), done = graded ? 0 : (s.done || 0);
+            //   이 바퀴를 다 풀었으면 다음 바퀴 모양으로 적는다 (renderWritePractice 의 바퀴 넘김과 같은 규칙)
+            if (!rest.length) {
+                if (phase === 1 && s.wrongPool.length) { phase = 2; rest = s.wrongPool.slice(); done = 0; }
+                else if (phase === 2) { phase = 3; rest = s.wrongPool.slice(); done = 0; }
+                else { writeSessionClear(); return; }
+            }
+            writeSession = {
+                d: getLocalDateString(), at: Date.now(), phase, done,
+                pool: rest.map(writeTaskDesc).filter(Boolean),
+                wrongPool: s.wrongPool.map(writeTaskDesc).filter(Boolean),
+                results: s.results || [], failedOnce: s.failedOnce || {}, gradeBeforeFail: s.gradeBeforeFail || {},
+                wrongCount: s.wrongCount || 0, totalCount: s.totalCount || 0, batchSize: s.batchSize || 0,
+                isTodayReview: !!s.isTodayReview, scopeContinue: !!s.scopeContinue, idiomReview: !!s.idiomReview
+            };
+            if (typeof s3 === 'function') s3('misc', 'writeSession');
+        }
+        function writeSessionClear() {
+            if (!writeSession) return;
+            writeSession = null;
+            if (typeof s3 === 'function') s3('misc', 'writeSession');
+        }
+        function writeSessionLive() {
+            return (writeSession && writeSession.d === getLocalDateString() && Array.isArray(writeSession.pool) && writeSession.pool.length) ? writeSession : null;
+        }
+        function resumeWriteSession() {
+            const ws = writeSessionLive();
+            if (!ws) { renderWriteResume(); return; }
+            const pool = ws.pool.map(writeTaskFromDesc).filter(Boolean);
+            const wrongPool = (ws.wrongPool || []).map(writeTaskFromDesc).filter(Boolean);
+            if (!pool.length) { writeSessionClear(); saveToStorage(); renderWriteResume(); return; }
+            beginWritePractice(pool, { batchSize: ws.batchSize, scopeContinue: ws.scopeContinue, isTodayReview: ws.isTodayReview, idiomReview: ws.idiomReview,
+                                       onClose: () => { const st = document.getElementById('write-setup'); if (st) st.classList.remove('hidden'); } });
+            const s = writePracticeState;
+            s.pool = pool;            // 섞지 않고 남은 차례 그대로
+            s.phase = ws.phase || 1;
+            s.done = ws.done || 0;
+            s.wrongPool = wrongPool;
+            s.results = Array.isArray(ws.results) ? ws.results : [];
+            s.failedOnce = ws.failedOnce || {};
+            s.gradeBeforeFail = ws.gradeBeforeFail || {};
+            s.wrongCount = ws.wrongCount || 0;
+            s.totalCount = ws.totalCount || pool.length;
+            renderWritePractice();
+        }
+        function discardWriteSession() {
+            writeSessionClear();
+            saveToStorage();
+            renderWriteResume();
+        }
+        //   쓰기 설정 화면 맨 위의 '아까 하던 쓰기 복습' 줄
+        function renderWriteResume() {
+            const box = document.getElementById('write-resume-banner');
+            if (!box) return;
+            const ws = writeSessionLive();
+            if (!ws || writePracticeState) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+            const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · ${ws.pool.length}개` : `3바퀴(다시 가리고) · ${ws.pool.length}개`);
+            const wrong = (ws.wrongPool || []).length;
+            box.classList.remove('hidden');
+            box.innerHTML = `<div class="flex items-center gap-3 text-left px-4 py-3 rounded-2xl bg-violet-50 border border-violet-200">
+                    <span class="text-2xl">✍️</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-black text-violet-800">아까 하던 쓰기 복습이 있어요</p>
+                        <p class="text-[11px] font-bold text-violet-500">${where}${wrong ? ` · 틀린 것 ${wrong}개` : ''}</p>
+                    </div>
+                    <button type="button" onclick="discardWriteSession()" class="shrink-0 px-2.5 py-2 rounded-xl bg-white border border-violet-200 text-violet-500 text-xs font-bold hover:bg-violet-100">새로 시작</button>
+                    <button type="button" onclick="resumeWriteSession()" class="shrink-0 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black">이어서 하기</button>
+                </div>`;
+        }
+
         function writePracticeSave() {
+            writeSessionSnapshot();   // [냐냐 요청] 이어하기 — 저장 전에 진행 상태를 싣는다
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
             if (typeof updateStats === 'function') updateStats();
             // [냐냐 요청] 헤더 '오늘의 복습' 배너도 실시간 갱신
