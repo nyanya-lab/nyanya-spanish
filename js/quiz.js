@@ -1249,6 +1249,23 @@ let quizSession = null;
             return String(q.answer || '').trim();
         }
 
+        //   두 모델 경주 — 먼저 온 쓸 만한 답(JSON 에 verdict)을 돌려준다. 둘 다 실패·제한 시간 넘김이면 던진다
+        function aiGradeRace(prompt, system, schema, capMs) {
+            const ok = (txt) => { const d = extractAndParseJson(txt); if (!d || !d.verdict) throw new Error('BAD_JSON'); return txt; };
+            const tries = [];
+            //   3.5 가 '10분 건너뛰기' 중이면 그 요청도 3.1 로 가서 같은 걸 두 번 묻게 된다 — 그땐 3.1 하나만
+            const gradeDown = (typeof isGradeModelDown === 'function') && isGradeModelDown();
+            if (typeof GEMINI_MODEL_GRADE !== 'undefined' && GEMINI_MODEL_GRADE !== GEMINI_MODEL_FLASH_LITE && !gradeDown) {
+                tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, capMs).then(ok));
+            }
+            tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, capMs).then(ok));
+            return new Promise((resolve, reject) => {
+                let left = tries.length, done = false;
+                const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('RACE_TIMEOUT')); } }, capMs + 200);
+                tries.forEach(p => p.then(v => { if (!done) { done = true; clearTimeout(timer); resolve(v); } },
+                    e => { if (--left === 0 && !done) { done = true; clearTimeout(timer); reject(e); } }));
+            });
+        }
         async function aiGradeSubjective(userAnswer, q) {
             if (typeof hasGeminiApiKey !== 'function' || !hasGeminiApiKey()) return null;
             try {
@@ -1291,7 +1308,10 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                     required: ["verdict"]
                 };
                 if (conjSlot) schema.properties.sameVerb = { type: "BOOLEAN", description: "학생 답이 바로 그 동사(원형·다른 시제/인칭·잘못 만든 꼴)인가. 다른 동사면 false" };
-                const resp = await callGeminiGrade(prompt, system, schema, 5000);   // 평소 1~2초 — 5초 넘게 걸리면 3.1 로 (10/16, 8초 → 5초)
+                //   [냐냐 지적] 쓰기 복습 채점이 너무 느리다 (2026-10-16, 두 번째) — 3.5·3.1 에 **동시에** 묻고 먼저 온 답을 쓴다.
+                //   차례대로(3.5 → 안 되면 3.1)면 한쪽이 붐빌 때 그만큼 기다렸다. 짧은 질문이라 한도(모델마다 1분 15번)는 넉넉하다.
+                //   둘 다 4초 안에 안 오면 null — 앱이 직접 채점한다(철자·단어장 유의어). AI 설명 한 줄만 빠진다.
+                const resp = await aiGradeRace(prompt, system, schema, 4000);
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
             } catch (e) {
