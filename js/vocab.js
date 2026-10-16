@@ -6679,6 +6679,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         ${badges && badges.trim() ? '<div class="border-t border-slate-200 my-2"></div>' + badges : ''}
                         <div id="write-conj-box" class="hidden"></div>
                         ${parts.length ? '<div class="border-t border-slate-100 my-3"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                        ${/* [냐냐 요청] 틀린 시제 말고 다른 시제들은 맨 밑으로 (2026-10-16) — 접힌 줄들이 위에 쌓여 관용구·노트가 안 보였다 */''}
+                        <div id="write-conj-rest" class="hidden pt-3"></div>
                     </div>`;
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = learnWord;
@@ -6781,9 +6783,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   [냐냐 지적] 틀린 시제는 맨 위에 펴 둔다 — 2바퀴는 퀴즈가 아니라 베껴 쓰는
             //   바퀴라, 불규칙 꼴이 화면에 있어야 외워진다. 이름만 적힌 배지로는 안 보인다.
             if (s.phase === 2 && typeof renderQuizConjugation === 'function') {
-                const askedTense = (w._isConjTask && w._conjSlot) ? { tenseKey: w._conjSlot.tense } : null;
+                //   [냐냐 요청] 틀린 시제뿐 아니라 그 인칭 칸까지 짚는다 (2026-10-16)
+                const askedTense = (w._isConjTask && w._conjSlot) ? { tenseKey: w._conjSlot.tense, person: w._conjSlot.person } : null;
                 renderQuizConjugation(w, askedTense, 'write-conj-box',
-                    { collapsed: true, openAsked: true, askedLabel: '틀린 꼴' });
+                    { collapsed: true, openAsked: true, askedLabel: '틀린 꼴', only: 'asked' });
+                renderQuizConjugation(w, askedTense, 'write-conj-rest',
+                    { collapsed: true, only: 'rest' });
             }
             setTimeout(() => {
                 const nextBtn = document.getElementById('write-next-btn');
@@ -6974,7 +6979,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!el) return;
             const w = s.pool[s.index];
             //   2바퀴에서 활용형 문제는 원형을 쓴다 (writeRoundTarget)
-            const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase));
+            //   [냐냐 요청] 2바퀴에서 물어본 그 꼴(틀린 꼴)로 써도 받아 준다 (2026-10-16) — 원형이든 그 꼴이든
+            const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase))
+                || (s.phase === 2 && w && w._isConjTask && writeAnswerMatches(el.value, w.word));
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {

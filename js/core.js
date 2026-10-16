@@ -1483,16 +1483,38 @@ let vocabulary = [];
         //   eggState.reward = { earned: [{ t, id, r, amt }], spent: [{ t, what, amt, memo }] } — 잔액은 늘 합으로 센다.
         //   냐냐님 결정: 이미 연 상자도 친다 — 처음 한 번 collection 으로 채운다 (t 없음 = 예전 상자).
         // ============================================================
-        const REWARD_AMOUNT = { legendary: 70000, epic: 30000, rare: 10000, common: 5000 };
+        // ============================================================
+        // [냐냐 요청] 고정 금액 대신 룰렛 (2026-10-16). 상자를 열면 등급의 룰렛을 한 번 돌려 나온 금액이 적립된다.
+        //   [냐냐님과 디자인 상의, 2026-10-16] 전부 7칸 · 칸마다 같은 확률. 금액은 작은 것부터 적고(ROULETTE_SLOTS),
+        //   판 위 순서는 큰 것·작은 것이 번갈아 오게 섞는다(ROULETTE_ORDER) — 점점 오르는 판은 스릴이 없다.
+        //   상자 하나 평균 ≈ 8,100원 (예전 고정 9,550원).
+        //   안 돌린 룰렛은 earned 의 amt 가 null — 도감 카드에 룰렛 아이콘, 도감 위에 '아직 안 돌린 룰렛' 줄, 지갑에도 [돌리기].
+        //   냐냐님 결정: 이미 받은 상자(고정 금액)도 다시 돌린다 — 한 번만 (rw.v2) 전부 '안 돌림' 으로 되돌린다.
+        // ============================================================
+        const ROULETTE_SLOTS = {
+            common:    [0, 1000, 2000, 2500, 3000, 4000, 5000],
+            rare:      [7000, 8000, 9000, 10000, 12000, 13000, 14000],
+            epic:      [20000, 25000, 28000, 30000, 33000, 36000, 40000],
+            legendary: [50000, 60000, 65000, 70000, 80000, 90000, 100000]
+        };
+        //   판 위 차례 (값 = 위 금액의 몇 번째인지) — 위에서 시계방향으로 제일 큰 것 · 제일 작은 것 · … 번갈아
+        const ROULETTE_ORDER = [6, 0, 4, 1, 5, 2, 3];
         function ensureRewardState() {
             if (!eggState) return null;
             const rw = eggState.reward;
-            if (rw && Array.isArray(rw.earned) && Array.isArray(rw.spent)) return rw;
+            if (rw && Array.isArray(rw.earned) && Array.isArray(rw.spent)) {
+                if (!rw.v2) {   // 고정 금액으로 받았던 것 → 다시 돌린다 (한 번만)
+                    rw.earned.forEach(x => { if (x) { x.amt = null; delete x.st; } });
+                    rw.v2 = true;
+                    s3('misc', 'eggState');
+                }
+                return rw;
+            }
             const earned = (Array.isArray(eggState.collection) ? eggState.collection : []).map(id => {
                 const c = CREATURES.find(x => x.id === id);
-                return c ? { t: null, id, r: c.rarity, amt: REWARD_AMOUNT[c.rarity] || 0 } : null;
+                return c ? { t: null, id, r: c.rarity, amt: null } : null;
             }).filter(Boolean);
-            eggState.reward = { earned, spent: (rw && Array.isArray(rw.spent)) ? rw.spent : [] };
+            eggState.reward = { earned, spent: (rw && Array.isArray(rw.spent)) ? rw.spent : [], v2: true };
             s3('misc', 'eggState');
             return eggState.reward;
         }
@@ -1501,6 +1523,165 @@ let vocabulary = [];
             if (!rw) return 0;
             const sum = (arr) => arr.reduce((s, x) => s + (Number(x && x.amt) || 0), 0);
             return sum(rw.earned) - sum(rw.spent);
+        }
+        //   안 돌린 룰렛 (earned 의 번호들, 오래된 것부터)
+        function pendingRoulettes() {
+            const rw = ensureRewardState();
+            return rw ? rw.earned.map((x, i) => (x && x.amt == null) ? i : -1).filter(i => i >= 0) : [];
+        }
+
+        // ── 룰렛 창 ──
+        let rouletteCur = null;   // { idx, onDone, spinning, done }
+        function openRoulette(idx, onDone) {
+            const rw = ensureRewardState();
+            const x = rw && rw.earned[idx];
+            if (!x || x.amt != null) { if (onDone) onDone(); return; }
+            rouletteCur = { idx, onDone: onDone || null, spinning: false, done: false };
+            document.getElementById('roulette-modal').classList.remove('hidden');
+            renderRoulette(0);
+        }
+        function openNextRoulette() {
+            const p = pendingRoulettes();
+            if (p.length) openRoulette(p[0]);
+        }
+        function openCreatureRoulette(id, ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            const rw = ensureRewardState();
+            const i = rw ? rw.earned.findIndex(x => x && x.id === id && x.amt == null) : -1;
+            if (i >= 0) openRoulette(i);
+        }
+        function closeRoulette() {
+            if (rouletteCur && rouletteCur.spinning) return;   // 도는 중엔 못 닫는다
+            const done = rouletteCur && rouletteCur.onDone;
+            rouletteCur = null;
+            document.getElementById('roulette-modal').classList.add('hidden');
+            renderEgg();
+            const wm = document.getElementById('reward-modal');
+            if (wm && !wm.classList.contains('hidden')) renderRewardWallet();
+            if (done) setTimeout(done, 200);
+        }
+        // ============================================================
+        // [냐냐님과 디자인 상의, 2026-10-16] 룰렛 그림
+        //   · 칸 색 = 당첨 금액마다 다른 캔디 색 — 작을수록 차분(회색·파랑), 클수록 따뜻하게(노랑·주황·장미). 냐냐님이 '캔디' 를 고름.
+        //   · 테두리·바늘 = 등급색 얇은 선 하나 ("확대했을 때 테두리가 너무 두꺼워").
+        //   · 가운데 동그라미 = 메달 색 (동 구리 · 은 은빛 · 금 금빛 · 전설 오로라 네 조각) — 냐냐님 생각.
+        //   · 전구·금줄·그러데이션은 다 뺐다 ("다 별로야").
+        // ============================================================
+        const ROULETTE_CANDY = {
+            seg: ['#E2E8F0', '#C7D2FE', '#BAE6FD', '#A7F3D0', '#FDE68A', '#FED7AA', '#FDA4AF'],
+            txt: ['#475569', '#3730A3', '#075985', '#065F46', '#92400E', '#9A3412', '#9F1239']
+        };
+        const ROULETTE_TIER = {
+            common:    { rim: '#8A4B1F', hub: ['#E2A36B', '#C9844A'] },
+            rare:      { rim: '#5F6673', hub: ['#E8EDF3', '#AEB7C3'] },
+            epic:      { rim: '#A9761A', hub: ['#FFE58A', '#E9BE4C'] },
+            legendary: { rim: '#7C3AED', hub: 'aurora' }
+        };
+        function rouletteLabel(v) { return v === 0 ? '꽝' : (v >= 10000 ? `${String(v / 10000)}만` : `${v / 1000}천`); }
+        //   win = 판 위 몇 번째 칸이 당첨인지 (반짝이게) — 없으면 -1
+        function rouletteWheelSvg(slots, rarity, win) {
+            const n = ROULETTE_ORDER.length, seg = 360 / n, R = 88;
+            const tier = ROULETTE_TIER[rarity] || ROULETTE_TIER.common;
+            const pt = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [100 + r * Math.cos(a), 100 + r * Math.sin(a)]; };
+            const paths = ROULETTE_ORDER.map((rank, i) => {
+                const [x1, y1] = pt(i * seg, R), [x2, y2] = pt((i + 1) * seg, R);
+                const mid = i * seg + seg / 2;
+                const [tx, ty] = pt(mid, R * 0.62);
+                return `<path d="M100 100 L${x1.toFixed(2)} ${y1.toFixed(2)} A${R} ${R} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${ROULETTE_CANDY.seg[rank]}" stroke="#fff" stroke-width="2"${win === i ? ' class="roulette-win"' : ''}/>
+                    <text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="800" fill="${ROULETTE_CANDY.txt[rank]}" transform="rotate(${mid.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)})">${rouletteLabel(slots[rank])}</text>`;
+            }).join('');
+            let hub;
+            if (tier.hub === 'aurora') {
+                const cols = ['#FBCFE8', '#A5F3FC', '#FDE68A', '#C4B5FD'];
+                hub = cols.map((c, i) => {
+                    const [x1, y1] = pt(i * 90, 16), [x2, y2] = pt((i + 1) * 90, 16);
+                    return `<path d="M100 100 L${x1.toFixed(2)} ${y1.toFixed(2)} A16 16 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${c}"/>`;
+                }).join('') + `<circle cx="100" cy="100" r="16" fill="none" stroke="${tier.rim}" stroke-width="2"/>`;
+            } else {
+                hub = `<circle cx="100" cy="100" r="16" fill="${tier.hub[1]}" stroke="${tier.rim}" stroke-width="2"/><circle cx="100" cy="100" r="10" fill="${tier.hub[0]}"/>`;
+            }
+            return `<svg viewBox="0 0 200 200" width="260" height="260" aria-hidden="true">${paths}
+                <circle cx="100" cy="100" r="${R + 1.5}" fill="none" stroke="${tier.rim}" stroke-width="3"/>${hub}</svg>`;
+        }
+        //   작은 룰렛 아이콘 — 도감 카드·도감 위 줄·지갑·버튼 (캔디 7칸, 얇은 테두리)
+        function rouletteIconSvg(size) {
+            const z = size || 16, n = 7, seg = 360 / n;
+            const pt = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [12 + r * Math.cos(a), 12 + r * Math.sin(a)]; };
+            const wedges = ROULETTE_ORDER.map((rank, i) => {
+                const [x1, y1] = pt(i * seg, 10), [x2, y2] = pt((i + 1) * seg, 10);
+                return `<path d="M12 12 L${x1.toFixed(2)} ${y1.toFixed(2)} A10 10 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${ROULETTE_CANDY.seg[rank]}" stroke="#fff" stroke-width=".6"/>`;
+            }).join('');
+            return `<svg viewBox="0 0 24 24" width="${z}" height="${z}" aria-hidden="true" style="display:inline-block;vertical-align:-0.15em">${wedges}<circle cx="12" cy="12" r="10.4" fill="none" stroke="#94A3B8" stroke-width="1.2"/><circle cx="12" cy="12" r="2.4" fill="#fff" stroke="#94A3B8" stroke-width="1"/></svg>`;
+        }
+        function renderRoulette(rot) {
+            const st = rouletteCur;
+            const rw = ensureRewardState();
+            const x = st && rw && rw.earned[st.idx];
+            if (!x) return;
+            const c = CREATURES.find(y => y.id === x.id);
+            const info = RARITY_INFO[x.r] || {};
+            const slots = ROULETTE_SLOTS[x.r] || ROULETTE_SLOTS.common;
+            const left = pendingRoulettes().length;
+            document.getElementById('roulette-head').innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="shrink-0">${c ? creatureMedalSvg(c, 52, false) : ''}</span>
+                    <div class="min-w-0 text-left">
+                        <p class="text-sm font-black text-slate-800">${escapeHtml(c ? creatureSpanish(c) : x.id)} <span class="text-xs font-bold text-slate-400">${escapeHtml(c ? creatureKorean(c) : '')}</span></p>
+                        <p class="text-[11px] font-bold ${info.color || 'text-slate-500'}">${escapeHtml(info.label || '')} ${info.star || ''} 룰렛 · ${fmtWon(slots[0])} ~ ${fmtWon(slots[slots.length - 1])}</p>
+                    </div>
+                </div>`;
+            const winIdx = st.done ? ROULETTE_ORDER.indexOf(slots.indexOf(x.amt)) : -1;
+            //   바늘도 등급색 (index.html 의 #roulette-pin)
+            const pin = document.getElementById('roulette-pin');
+            if (pin) pin.setAttribute('fill', (ROULETTE_TIER[x.r] || ROULETTE_TIER.common).rim);
+            document.getElementById('roulette-wheel').innerHTML = `<div id="roulette-rot" style="transition: transform 4.6s cubic-bezier(.1,.75,.1,1); transform: rotate(${rot}deg)">${rouletteWheelSvg(slots, x.r, winIdx)}</div>`;
+            document.getElementById('roulette-result').innerHTML = st.done
+                ? `<p class="roulette-pop text-3xl font-black ${x.amt === 0 ? 'text-slate-400' : 'text-amber-600'}">${x.amt === 0 ? '꽝! 😢' : `💰 ${fmtWon(x.amt)}!`}</p><p class="text-[11px] font-bold text-slate-400">잔액 ${fmtWon(rewardBalance())}</p>`
+                : '';
+            const btns = document.getElementById('roulette-btns');
+            if (st.done) {
+                btns.innerHTML = (left && !st.onDone
+                    ? `<button onclick="rouletteNext()" class="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm">다음 룰렛 (${left}개 남음)</button>` : '')
+                    + `<button onclick="closeRoulette()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm">닫기</button>`;
+            } else {
+                btns.innerHTML = `<button id="roulette-spin-btn" onclick="spinRoulette()" class="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white font-black rounded-xl text-sm inline-flex items-center justify-center gap-1.5">${rouletteIconSvg(18)} 돌리기</button>
+                    <button onclick="closeRoulette()" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm">나중에</button>`;
+            }
+        }
+        function spinRoulette() {
+            const st = rouletteCur;
+            const rw = ensureRewardState();
+            const x = st && rw && rw.earned[st.idx];
+            if (!x || st.spinning || st.done || x.amt != null) return;
+            const slots = ROULETTE_SLOTS[x.r] || ROULETTE_SLOTS.common;
+            const rank = Math.floor(Math.random() * slots.length);   // 몇 번째 금액 (칸마다 같은 확률)
+            const i = ROULETTE_ORDER.indexOf(rank);                     // 그 금액이 판 위 몇 번째 칸인지
+            //   결과는 돌리기 전에 정해 저장한다 — 도는 사이 창을 닫거나 새로고침해도 금액이 바뀌지 않게
+            s3('misc', 'eggState');
+            x.amt = slots[rank];
+            x.st = Date.now();
+            saveToStorage();
+            st.spinning = true;
+            const seg = 360 / ROULETTE_ORDER.length;
+            const jitter = (Math.random() - 0.5) * seg * 0.6;
+            const target = 360 * 6 + (360 - (i * seg + seg / 2)) + jitter;
+            const btn = document.getElementById('roulette-spin-btn');
+            if (btn) btn.disabled = true;
+            const el = document.getElementById('roulette-rot');
+            requestAnimationFrame(() => { if (el) el.style.transform = `rotate(${target}deg)`; });
+            setTimeout(() => {
+                if (rouletteCur !== st) return;
+                st.spinning = false; st.done = true;
+                if (typeof AudioFX !== 'undefined' && AudioFX.playSuccess) AudioFX.playSuccess();
+                renderRoulette(target);
+                renderEgg();
+            }, 4400);
+        }
+        function rouletteNext() {
+            const p = pendingRoulettes();
+            if (!p.length) return closeRoulette();
+            rouletteCur = { idx: p[0], onDone: null, spinning: false, done: false };
+            renderRoulette(0);
         }
         function fmtWon(n) { return `${(Number(n) || 0).toLocaleString('ko-KR')}원`; }
 
@@ -1521,15 +1702,15 @@ let vocabulary = [];
             document.getElementById('reward-balance').innerText = fmtWon(bal);
             //   이번 달 쌓인 것·쓴 것 — 소비를 돌아보는 한 줄
             const ym = getLocalDateString().slice(0, 7);
-            const inMonth = (x) => x.t && getLocalDateString(new Date(x.t)).slice(0, 7) === ym;
-            const mEarn = rw.earned.filter(inMonth).reduce((s, x) => s + x.amt, 0);
+            const inMonth = (x) => { const t = x.st || x.t; return t && getLocalDateString(new Date(t)).slice(0, 7) === ym; };
+            const mEarn = rw.earned.filter(x => x.amt != null && inMonth(x)).reduce((s, x) => s + x.amt, 0);
             const mSpend = rw.spent.filter(inMonth).reduce((s, x) => s + x.amt, 0);
             document.getElementById('reward-sub').innerText = `이번 달 +${fmtWon(mEarn)} · 쓴 것 −${fmtWon(mSpend)}`;
             const tabs = [['all', '전체'], ['earned', '쌓인 것'], ['spent', '쓴 것']];
             document.getElementById('reward-tabs').innerHTML = tabs.map(([k, label]) => `<button type="button" onclick="setRewardTab('${k}')"
                 class="flex-1 py-1.5 rounded-xl border text-xs font-black transition-colors ${rewardTab === k ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}">${label}</button>`).join('');
             const rows = [];
-            if (rewardTab !== 'spent') rw.earned.forEach((x, i) => rows.push({ kind: 'e', x, i, t: x.t || 0 }));
+            if (rewardTab !== 'spent') rw.earned.forEach((x, i) => rows.push({ kind: 'e', x, i, t: (x.amt == null ? 9e15 : (x.st || x.t || 0)) }));   // 안 돌린 것은 맨 위
             if (rewardTab !== 'earned') rw.spent.forEach((x, i) => rows.push({ kind: 's', x, i, t: x.t || 0 }));
             rows.sort((a, b) => b.t - a.t || b.i - a.i);
             const day = (t) => t ? getLocalDateString(new Date(t)).slice(5).replace('-', '/') : '예전';
@@ -1542,7 +1723,9 @@ let vocabulary = [];
                         <span class="text-sm">🗝️</span>
                         <span class="text-sm font-bold text-slate-700 truncate min-w-0">${escapeHtml(c ? creatureKorean(c) || creatureSpanish(c) : x.id)}</span>
                         <span class="text-[10px] font-bold ${info.color || 'text-slate-500'} shrink-0">${escapeHtml(info.label || '')}</span>
-                        <span class="ml-auto text-sm font-black text-emerald-600 shrink-0">+${fmtWon(x.amt)}</span>
+                        ${x.amt == null
+                            ? `<button type="button" onclick="closeRewardWallet(); openRoulette(${i}, () => openRewardWallet())" class="ml-auto shrink-0 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black inline-flex items-center gap-1">${rouletteIconSvg(13)} 돌리기</button>`
+                            : `<span class="ml-auto text-sm font-black ${x.amt ? 'text-emerald-600' : 'text-slate-400'} shrink-0">${x.amt ? '+' + fmtWon(x.amt) : '꽝'}</span>`}
                     </div>`;
                 }
                 const asking = rewardAskDel === i;
@@ -1593,7 +1776,7 @@ let vocabulary = [];
             s3('misc', 'eggState');
             eggState.collection.push(creature.id);
             eggState.totalHatched = (eggState.totalHatched || 0) + 1;
-            if (rw) rw.earned.push({ t: Date.now(), id: creature.id, r: creature.rarity, amt: REWARD_AMOUNT[creature.rarity] || 0 });
+            if (rw) rw.earned.push({ t: Date.now(), id: creature.id, r: creature.rarity, amt: null });   // 룰렛을 돌려야 금액이 정해진다
             //   [냐냐 요청] 전설은 오로라 5색 중 하나로 깬다 (2026-10-13, 가안). 도감 칸은 생물 하나에 한 칸이고
             //   모은 색은 legendColors 에 쌓는다. 같은 색이 또 나오면 맨 뒤로 옮겨 그 색을 보여준다.
             let color = null, newColor = false;
@@ -1638,18 +1821,22 @@ let vocabulary = [];
             //   확인 버튼이 '도감 보기'(=탭 이동)였던 데다 엔터로 자동 실행돼서, 쓰기 복습 중에
             //   부화하면 제출용 엔터가 그대로 눌려 팝업을 못 보고 탭만 넘어가 있었다.
             //   그래서 기본 동작을 '닫기'로 바꾸고 noEnter 로 엔터도 막는다.
-            const won = REWARD_AMOUNT[creature.rarity] || 0;
+            //   [냐냐 요청] 적립금은 룰렛으로 (2026-10-16) — [룰렛 돌리기] 면 이 상자의 룰렛, [나중에 돌리기] 면 도감에 룰렛 아이콘으로 남는다
+            const rwNow = ensureRewardState();
+            let myIdx = -1;
+            if (rwNow) for (let k = rwNow.earned.length - 1; k >= 0; k--) { const e = rwNow.earned[k]; if (e && e.id === creature.id && e.amt == null) { myIdx = k; break; } }
+            const slots = ROULETTE_SLOTS[creature.rarity] || ROULETTE_SLOTS.common;
             showConfirm(
                 `🎉 상자를 열었어요!`,
-                `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}${won ? `\n\n💰 ${fmtWon(won)} 적립! (잔액 ${fmtWon(rewardBalance())})` : ''}`,
-                () => { setTimeout(nextHatchCelebration, 250); /* 닫기만 — 하던 화면 그대로 */ },
+                `${creatureSpanish(creature)}\n${creatureKorean(creature)} · ${info.label} ${info.star}${colorTag}\n\n${creature.desc}${tail}${myIdx >= 0 ? `\n\n🎯 ${info.label} 룰렛 (${fmtWon(slots[0])} ~ ${fmtWon(slots[slots.length - 1])})을 돌려 적립금을 받아요!` : ''}`,
+                () => { if (myIdx >= 0) openRoulette(myIdx, () => nextHatchCelebration()); else setTimeout(nextHatchCelebration, 250); },
                 {
                     icon: 'happy',
-                    okLabel: '계속하기',
+                    okLabel: myIdx >= 0 ? '룰렛 돌리기' : '계속하기',
                     okStyle: 'primary',
-                    cancelLabel: '도감 보기',
+                    cancelLabel: myIdx >= 0 ? '나중에 돌리기' : '도감 보기',
                     noEnter: true,
-                    onCancel: () => { openEggCollection(); setTimeout(nextHatchCelebration, 250); },
+                    onCancel: () => { if (myIdx < 0) openEggCollection(); setTimeout(nextHatchCelebration, 250); },
                     artHtml: creatureMedalSvg(creature, 112, false, color)
                 }
             );
@@ -1807,7 +1994,14 @@ let vocabulary = [];
             if (!sec) return;
             if (!eggState) eggState = defaultEggState();
             if (!Array.isArray(eggState.collection)) eggState.collection = [];
-            sec.innerHTML = `<div id="egg-collection-body">${renderCollectionGrid()}</div>`;
+            //   [냐냐 요청] 안 돌린 룰렛이 있으면 도감 위에 한 줄 (2026-10-16)
+            const pend = (typeof pendingRoulettes === 'function') ? pendingRoulettes().length : 0;
+            const banner = pend ? `<div class="mb-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200">
+                    <span class="shrink-0">${rouletteIconSvg(26)}</span>
+                    <p class="flex-1 text-sm font-bold text-amber-800">아직 안 돌린 룰렛이 <b>${pend}개</b> 있어요</p>
+                    <button type="button" onclick="openNextRoulette()" class="shrink-0 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-black">돌리기</button>
+                </div>` : '';
+            sec.innerHTML = `${banner}<div id="egg-collection-body">${renderCollectionGrid()}</div>`;
         }
 
         //   [냐냐 요청] 부화 팝업의 '도감 보기' — 탭만 옮기면 도감이 맨 아래라 못 본 거나 같았다.
@@ -2042,8 +2236,12 @@ let vocabulary = [];
             const counts = {};
             eggState.collection.forEach(id => counts[id] = (counts[id] || 0) + 1);
             //   [냐냐 요청] 카드에 그 메달로 받은 적립금 (2026-10-16) — 여러 번 받았으면 합친 것
-            const wonBy = {};
-            ((typeof ensureRewardState === 'function' && ensureRewardState()) || { earned: [] }).earned.forEach(x => { if (x && x.id) wonBy[x.id] = (wonBy[x.id] || 0) + (Number(x.amt) || 0); });
+            const wonBy = {}, spinBy = {};
+            ((typeof ensureRewardState === 'function' && ensureRewardState()) || { earned: [] }).earned.forEach(x => {
+                if (!x || !x.id) return;
+                if (x.amt == null) spinBy[x.id] = (spinBy[x.id] || 0) + 1;   // 안 돌린 룰렛
+                else wonBy[x.id] = (wonBy[x.id] || 0) + (Number(x.amt) || 0);
+            });
 
             // 희귀도 순 정렬 (전설 → 에픽 → 레어 → 일반), 같은 등급이면 원래 순서 유지
             let list = CREATURES.map((c, i) => ({ ...c, _i: i }))
@@ -2080,7 +2278,7 @@ let vocabulary = [];
                     const legend = c.rarity === 'legendary' ? creatureLegendColors(c.id) : null;
                     //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
                     return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} ${info.border || 'border border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
-                        <span class="absolute bottom-1 right-1.5 flex items-center gap-1 text-[10px]">${wonBy[c.id] ? `<span class="font-black text-amber-700">💰${fmtWon(wonBy[c.id])}</span>` : ''}<span class="${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span></span>
+                        <span class="absolute bottom-1 right-1.5 flex items-center gap-1 text-[10px]">${spinBy[c.id] ? `<button type="button" onclick="openCreatureRoulette('${c.id}', event)" title="안 돌린 룰렛 — 눌러서 돌리기" class="inline-flex items-center gap-0.5 font-black text-amber-600 hover:scale-110 transition-transform">${rouletteIconSvg(16)}${spinBy[c.id] > 1 ? `<span>×${spinBy[c.id]}</span>` : ''}</button>` : ''}${wonBy[c.id] ? `<span class="font-black text-amber-700">💰${fmtWon(wonBy[c.id])}</span>` : ''}<span class="${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span></span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
                         <div class="min-w-0 flex-1 space-y-1">

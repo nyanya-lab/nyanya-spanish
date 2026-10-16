@@ -1072,6 +1072,9 @@ let quizSession = null;
             const irrByTense = word.irregularByTense || {};
             const vcByTense = word.verbClassByTense || {};
             const askedKey = (q && q.tenseKey) || null;
+            //   [냐냐 요청] 물어본(틀린) 인칭 칸 — 'yo'·'tu'·'el'·'nos'·'vos'·'ellos', 1칸 시제는 'form' (2026-10-16)
+            const askedPerson = (q && q.person) || null;
+            const askedCellCls = 'bg-violet-100 ring-2 ring-inset ring-violet-400';
 
             const hasValues = (c) => c && (c.yo || c.tu || c.el || c.nos || c.vos || c.ellos || c.form);
             const tenseOpts = (typeof TENSE_TYPE_OPTIONS !== 'undefined') ? TENSE_TYPE_OPTIONS : [{ key: 'presente', label: '직설법 현재' }];
@@ -1091,6 +1094,11 @@ let quizSession = null;
                 if (b === askedKey) return 1;
                 return orderOf(a) - orderOf(b);
             });
+
+            //   opts.only — 'asked' 면 그 시제만, 'rest' 면 그 시제 빼고 (쓰기 2바퀴: 틀린 시제는 위, 나머지는 카드 맨 밑)
+            if (opts.only === 'asked') keys = keys.filter(k => k === askedKey);
+            else if (opts.only === 'rest') keys = keys.filter(k => k !== askedKey);
+            if (keys.length === 0) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
             const blocks = keys.map(k => {
                 const c = conjOf(k);
@@ -1121,15 +1129,17 @@ let quizSession = null;
                 let cells;
                 if (c.form && !c.yo) {
                     // 1칸짜리 특수 시제 (현재분사·과거분사) — 그 한 칸이 곧 불규칙이라 통째로 파랗게
-                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5"><span class="text-sm font-black ${isIrr ? 'text-blue-600' : 'text-slate-800'}">${escapeHtml(c.form)}</span></div>`;
+                    const pick = isAsked && askedPerson === 'form';
+                    cells = `<div class="col-span-3 flex items-center justify-center py-2.5 ${pick ? askedCellCls : ''}"><span class="text-sm font-black ${pick ? 'text-violet-700' : (isIrr ? 'text-blue-600' : 'text-slate-800')}">${escapeHtml(c.form)}</span></div>`;
                 } else {
-                    const rows = [['yo', c.yo], ['tú', c.tu], ['él/ella', c.el], ['nosotros', c.nos], ['vosotros', c.vos], ['ellos/ellas', c.ellos]];
-                    cells = rows.map(([label, val]) => {
+                    const rows = [['yo', c.yo, 'yo'], ['tú', c.tu, 'tu'], ['él/ella', c.el, 'el'], ['nosotros', c.nos, 'nos'], ['vosotros', c.vos, 'vos'], ['ellos/ellas', c.ellos, 'ellos']];
+                    cells = rows.map(([label, val, key]) => {
                         const hl = val && isIrregularCell(label);
+                        const pick = isAsked && askedPerson === key;
                         return `
-                        <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5">
-                            <span class="text-[11px] text-slate-400 font-medium">${label}</span>
-                            <span class="text-sm ${hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold'}">${val ? escapeHtml(val) : '-'}</span>
+                        <div class="flex flex-col items-center justify-center px-2 py-2 border border-slate-100 text-center gap-0.5 ${pick ? askedCellCls : ''}">
+                            <span class="text-[11px] ${pick ? 'text-violet-600 font-black' : 'text-slate-400 font-medium'}">${label}</span>
+                            <span class="text-sm ${pick ? 'text-violet-700 font-black' : (hl ? 'text-blue-600 font-black' : 'text-slate-800 font-bold')}">${val ? escapeHtml(val) : '-'}</span>
                         </div>`;
                     }).join('');
                 }
