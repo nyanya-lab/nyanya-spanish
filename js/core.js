@@ -1641,7 +1641,7 @@ let vocabulary = [];
             const winIdx = st.done ? ROULETTE_ORDER.indexOf(slots.indexOf(x.amt)) : -1;
             //   바늘도 등급색 (index.html 의 #roulette-pin)
             const pin = document.getElementById('roulette-pin');
-            if (pin) pin.setAttribute('fill', (ROULETTE_TIER[x.r] || ROULETTE_TIER.common).rim);
+            if (pin) { pin.setAttribute('fill', (ROULETTE_TIER[x.r] || ROULETTE_TIER.common).rim); pin.parentNode.style.display = ''; }
             document.getElementById('roulette-wheel').innerHTML = `<div id="roulette-rot" style="transition: transform 4.6s cubic-bezier(.1,.75,.1,1); transform: rotate(${rot}deg)">${rouletteWheelSvg(slots, x.r, winIdx)}</div>`;
             document.getElementById('roulette-result').innerHTML = st.done
                 ? `<p class="roulette-pop text-3xl font-black ${x.amt === 0 ? 'text-slate-400' : 'text-amber-600'}">${x.amt === 0 ? '꽝! 😢' : `💰 ${fmtWon(x.amt)}!`}</p><p class="text-[11px] font-bold text-slate-400">잔액 ${fmtWon(rewardBalance())}</p>`
@@ -1684,6 +1684,45 @@ let vocabulary = [];
                 renderRoulette(target);
                 renderEgg();
             }, 4400);
+        }
+        // ============================================================
+        // [냐냐 요청] 한꺼번에 돌리기 (2026-10-16) — 지난 상자 18개를 하나씩 돌리기 귀찮다.
+        //   남은 룰렛을 한 번에 돌리고(칸마다 같은 확률, 하나씩 돌린 것과 같은 결과) 메달별 금액·합계를 보여준다.
+        // ============================================================
+        function spinAllRoulettes() {
+            const rw = ensureRewardState();
+            const idxs = pendingRoulettes();
+            if (!rw || !idxs.length) return;
+            s3('misc', 'eggState');
+            const now = Date.now();
+            const got = idxs.map(i => {
+                const x = rw.earned[i];
+                const slots = ROULETTE_SLOTS[x.r] || ROULETTE_SLOTS.common;
+                x.amt = slots[Math.floor(Math.random() * slots.length)];
+                x.st = now;
+                return x;
+            });
+            saveToStorage();
+            const total = got.reduce((a, x) => a + x.amt, 0);
+            const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+            got.sort((a, b) => (order[a.r] - order[b.r]) || (b.amt - a.amt));
+            const rows = got.map(x => {
+                const c = CREATURES.find(y => y.id === x.id);
+                const info = RARITY_INFO[x.r] || {};
+                return `<div class="flex items-center gap-2 px-2 py-1.5 rounded-lg ${info.bg || 'bg-slate-50'}">
+                    <span class="shrink-0">${c ? creatureMedalSvg(c, 28, false) : ''}</span>
+                    <span class="text-xs font-bold text-slate-700 truncate flex-1 text-left">${escapeHtml(c ? (creatureKorean(c) || creatureSpanish(c)) : x.id)}</span>
+                    <span class="text-xs font-black ${x.amt ? 'text-amber-700' : 'text-slate-400'} shrink-0">${x.amt ? fmtWon(x.amt) : '꽝'}</span>
+                </div>`;
+            }).join('');
+            rouletteCur = { idx: -1, onDone: null, spinning: false, done: true, all: true };
+            document.getElementById('roulette-modal').classList.remove('hidden');
+            const pinSvg = document.getElementById('roulette-pin'); if (pinSvg) pinSvg.parentNode.style.display = 'none';   // 목록엔 바늘이 필요 없다
+            document.getElementById('roulette-head').innerHTML = `<p class="text-base font-black text-slate-800">${rouletteIconSvg(20)} ${got.length}개를 한꺼번에 돌렸어요</p>`;
+            document.getElementById('roulette-wheel').innerHTML = `<div class="space-y-1 max-h-64 overflow-y-auto no-scrollbar" style="width:260px">${rows}</div>`;
+            document.getElementById('roulette-result').innerHTML = `<p class="roulette-pop text-3xl font-black text-amber-600">💰 ${fmtWon(total)}!</p><p class="text-[11px] font-bold text-slate-400">잔액 ${fmtWon(rewardBalance())}</p>`;
+            document.getElementById('roulette-btns').innerHTML = `<button onclick="closeRoulette()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm">닫기</button>`;
+            renderEgg();
         }
         function rouletteNext() {
             const p = pendingRoulettes();
@@ -2007,6 +2046,7 @@ let vocabulary = [];
             const banner = pend ? `<div class="mb-3 flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200">
                     <span class="shrink-0">${rouletteIconSvg(26)}</span>
                     <p class="flex-1 text-sm font-bold text-amber-800">아직 안 돌린 룰렛이 <b>${pend}개</b> 있어요</p>
+                    ${pend > 1 ? `<button type="button" onclick="spinAllRoulettes()" class="shrink-0 px-3 py-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-700 text-sm font-black">한꺼번에 돌리기</button>` : ''}
                     <button type="button" onclick="openNextRoulette()" class="shrink-0 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-black">돌리기</button>
                 </div>` : '';
             sec.innerHTML = `${banner}<div id="egg-collection-body">${renderCollectionGrid()}</div>`;
