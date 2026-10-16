@@ -1249,21 +1249,21 @@ let quizSession = null;
             return String(q.answer || '').trim();
         }
 
-        //   두 모델 경주 — 먼저 온 쓸 만한 답(JSON 에 verdict)을 돌려준다. 둘 다 실패·제한 시간 넘김이면 던진다
-        function aiGradeRace(prompt, system, schema, capMs) {
+        //   두 모델 경주 — 먼저 온 쓸 만한 답(JSON 에 verdict)을 돌려준다. 둘 다 실패하면 던진다 (전체 제한 시간 없음)
+        //   3.5 쪽만 20초 제한 — 마냥 멈춰 있으면 '10분 건너뛰기' 를 켜려고. 3.1 은 제한 없음.
+        function aiGradeRace(prompt, system, schema) {
             const ok = (txt) => { const d = extractAndParseJson(txt); if (!d || !d.verdict) throw new Error('BAD_JSON'); return txt; };
             const tries = [];
             //   3.5 가 '10분 건너뛰기' 중이면 그 요청도 3.1 로 가서 같은 걸 두 번 묻게 된다 — 그땐 3.1 하나만
             const gradeDown = (typeof isGradeModelDown === 'function') && isGradeModelDown();
             if (typeof GEMINI_MODEL_GRADE !== 'undefined' && GEMINI_MODEL_GRADE !== GEMINI_MODEL_FLASH_LITE && !gradeDown) {
-                tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, capMs).then(ok));
+                tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, 20000).then(ok));
             }
-            tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, capMs).then(ok));
+            tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, 0).then(ok));
             return new Promise((resolve, reject) => {
                 let left = tries.length, done = false;
-                const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('RACE_TIMEOUT')); } }, capMs + 200);
-                tries.forEach(p => p.then(v => { if (!done) { done = true; clearTimeout(timer); resolve(v); } },
-                    e => { if (--left === 0 && !done) { done = true; clearTimeout(timer); reject(e); } }));
+                tries.forEach(p => p.then(v => { if (!done) { done = true; resolve(v); } },
+                    e => { if (--left === 0 && !done) { done = true; reject(e); } }));
             });
         }
         async function aiGradeSubjective(userAnswer, q) {
@@ -1310,8 +1310,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 if (conjSlot) schema.properties.sameVerb = { type: "BOOLEAN", description: "학생 답이 바로 그 동사(원형·다른 시제/인칭·잘못 만든 꼴)인가. 다른 동사면 false" };
                 //   [냐냐 지적] 쓰기 복습 채점이 너무 느리다 (2026-10-16, 두 번째) — 3.5·3.1 에 **동시에** 묻고 먼저 온 답을 쓴다.
                 //   차례대로(3.5 → 안 되면 3.1)면 한쪽이 붐빌 때 그만큼 기다렸다. 짧은 질문이라 한도(모델마다 1분 15번)는 넉넉하다.
-                //   둘 다 4초 안에 안 오면 null — 앱이 직접 채점한다(철자·단어장 유의어). AI 설명 한 줄만 빠진다.
-                const resp = await aiGradeRace(prompt, system, schema, 4000);
+                //   [냐냐 요청] 끊지는 말 것 — 먼저 온 답을 끝까지 기다린다 (4초에 끊고 앱이 채점하던 것을 뺐다).
+                const resp = await aiGradeRace(prompt, system, schema);
                 const data = extractAndParseJson(resp);
                 if (data && data.verdict) return data;
             } catch (e) {
