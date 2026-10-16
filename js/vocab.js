@@ -7536,8 +7536,19 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             writeSession = null;
             if (typeof s3 === 'function') s3('misc', 'writeSession');
         }
+        //   [냐냐 지적] 날짜가 바뀌어도 틀린 단어는 2바퀴에서 익혀야 한다 (2026-10-16) —
+        //   남은 1바퀴 단어는 밀린 복습으로 다시 나오니 빼고, 지난 판에서 틀린 것만 2바퀴부터 잇는다 (3일 안의 것만).
         function writeSessionLive() {
-            return (writeSession && writeSession.d === getLocalDateString() && Array.isArray(writeSession.pool) && writeSession.pool.length) ? writeSession : null;
+            const ws = writeSession;
+            if (!ws || !Array.isArray(ws.pool)) return null;
+            const today = getLocalDateString();
+            if (ws.d === today) return ws.pool.length ? ws : null;
+            const wrong = Array.isArray(ws.wrongPool) ? ws.wrongPool : [];
+            const age = (typeof daysSince === 'function') ? daysSince(ws.d) : 1;
+            if (!wrong.length || age > 3) return null;
+            //   지난날 것 — 2바퀴부터 (3바퀴 중이었으면 남은 3바퀴 그대로)
+            const pool = ws.phase === 3 ? ws.pool : wrong;
+            return Object.assign({}, ws, { phase: ws.phase === 3 ? 3 : 2, pool, done: ws.phase === 3 ? ws.done : 0, stale: true });
         }
         function resumeWriteSession() {
             const ws = writeSessionLive();
@@ -7572,12 +7583,13 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!ws || writePracticeState) { box.innerHTML = ''; box.classList.add('hidden'); return; }
             const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · ${ws.pool.length}개` : `3바퀴(다시 가리고) · ${ws.pool.length}개`);
             const wrong = (ws.wrongPool || []).length;
+            const title = ws.stale ? `지난번 쓰기 복습에서 틀린 ${wrong}개가 남았어요` : '아까 하던 쓰기 복습이 있어요';
             box.classList.remove('hidden');
             box.innerHTML = `<div class="flex items-center gap-3 text-left px-4 py-3 rounded-2xl bg-violet-50 border border-violet-200">
                     <span class="text-2xl">✍️</span>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-black text-violet-800">아까 하던 쓰기 복습이 있어요</p>
-                        <p class="text-[11px] font-bold text-violet-500">${where}${wrong ? ` · 틀린 것 ${wrong}개` : ''}</p>
+                        <p class="text-sm font-black text-violet-800">${title}</p>
+                        <p class="text-[11px] font-bold text-violet-500">${ws.stale ? (ws.phase === 3 ? `3바퀴(다시 가리고 쓰기)부터 · ${ws.pool.length}개` : '2바퀴(보고 쓰기)부터 익혀요') : `${where}${wrong ? ` · 틀린 것 ${wrong}개` : ''}`}</p>
                     </div>
                     <button type="button" onclick="discardWriteSession()" class="shrink-0 px-2.5 py-2 rounded-xl bg-white border border-violet-200 text-violet-500 text-xs font-bold hover:bg-violet-100">새로 시작</button>
                     <button type="button" onclick="resumeWriteSession()" class="shrink-0 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black">이어서 하기</button>
