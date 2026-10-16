@@ -2239,15 +2239,18 @@ let vocabulary = [];
             //   [냐냐 지적] 10/12 문법이 10 으로 나왔다 (팝업은 3) — 번호 없이 적힌 복습(첨삭 덤 복습에 번호를 붙이기 전)까지
             //   '나머지 = 문법' 으로 몰았기 때문. 문법은 문법 번호 + 문법 복습 번역 기록으로 세고,
             //   그래도 어느 갈래인지 모르는 복습이 남는 날(10/12 이전 며칠)은 나누지 않고 예전처럼 한 칸.
-            const rIds = Array.isArray(log.reviewIds) ? log.reviewIds : [];
-            let reviewSplit = null;
-            if (rIds.length || !reviewN) {   // 복습이 0 이면 나눌 것도 없다 — 세 칸에 남은 것만
-                const p = diaryReviewParts(ds, log);
-                const split = [p.word.length, p.idiom.length, p.grammar.length + p.rv.length];
-                if (reviewN - split[0] - split[1] - split[2] <= 0) reviewSplit = split;
-            }
+            //   [냐냐 지적] 오늘 칸이 다시 한 칸으로 합쳐졌다 (2026-10-16) — 갈래 모르는 복습 1개 때문에.
+            //   남은 것을 갈래별로 아는 날(오늘·10/15 부터)은 늘 세 칸으로 나누고, 모르는 몫은 '복습' 밑에 +N 으로 따로.
             const reviewLeftBy = ds < STREAK_REVIEW_RULE_FROM ? null
                 : (ds === getLocalDateString() ? todayReviewLeftBy() : (Array.isArray(log.reviewLeftBy) ? log.reviewLeftBy : null));
+            const rIds = Array.isArray(log.reviewIds) ? log.reviewIds : [];
+            let reviewSplit = null, reviewUnknown = 0;
+            if (rIds.length || !reviewN || reviewLeftBy) {
+                const p = diaryReviewParts(ds, log);
+                const split = [p.word.length, p.idiom.length, p.grammar.length + p.rv.length];
+                const rest = Math.max(0, reviewN - split[0] - split[1] - split[2]);
+                if (!rest || reviewLeftBy) { reviewSplit = split; reviewUnknown = rest; }
+            }
             const aiN = log.aiSessions || 0;
             const practiceN = dayPracticeCount(log);   // 숫자 쓰기 포함
             //   [냐냐 요청] 전부 가운데 정렬 · '개' 없이 · 세 열 너비는 같게 (table-fixed + colgroup) (2026-09-17)
@@ -2281,7 +2284,7 @@ let vocabulary = [];
                              복습 = 오늘의 복습에서 푼 것 (문법 복습 번역 포함)
                              연습 = 스스로 돌린 쓰기·동사변형·빈칸 / 첨삭 = 번역·질문·작문 미션 */''}
                         <tr class="border-t border-slate-200">
-                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습${reviewSplit && reviewLeftN > 0 && !reviewLeftBy ? `<span class="block text-[10px] text-rose-400" title="${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개">−${reviewLeftN}</span>` : ''}</td>
+                            <td class="text-center py-1.5 text-[11px] font-bold text-slate-700">복습${reviewSplit && reviewLeftN > 0 && !reviewLeftBy ? `<span class="block text-[10px] text-rose-400" title="${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${reviewLeftN}개">−${reviewLeftN}</span>` : ''}${reviewUnknown ? `<span class="block text-[10px] text-slate-400" title="어느 갈래인지 기록이 없는 복습 ${reviewUnknown}개">+${reviewUnknown}</span>` : ''}</td>
                             ${reviewSplit ? reviewSplit.map((v, ci) => {
                                 const g = countGraduatedOn(ds, 'wig'[ci]), l = reviewLeftBy ? (reviewLeftBy[ci] || 0) : 0;
                                 const tip = [g ? `이 날 졸업 ${g}개` : '', l ? `${ds === getLocalDateString() ? '오늘 남은 복습' : '이 날 남기고 끝낸 복습'} ${l}개` : ''].filter(Boolean).join(' · ');
