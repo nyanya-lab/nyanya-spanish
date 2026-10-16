@@ -1502,6 +1502,14 @@ let vocabulary = [];
         function ensureRewardState() {
             if (!eggState) return null;
             const rw = eggState.reward;
+            //   [냐냐 지적] 회사에서 다 돌린 룰렛이 집에서 새로고침하니 처음으로 돌아가 있었다 (2026-10-16).
+            //   Firebase 는 빈 배열을 지워서 돌려준다 — 쓴 것이 없으면 spent 가 통째로 사라진다.
+            //   예전엔 spent 가 없으면 '기록이 없다' 로 보고 collection 으로 새로 만들어서 돌린 금액이 다 지워졌다.
+            //   이제 받은 것(earned)이 있으면 그대로 두고, 빠진 배열만 빈 배열로 채운다. (earned 가 빈 배열이어도 같은 일이라 함께)
+            if (rw && typeof rw === 'object' && (Array.isArray(rw.earned) || Array.isArray(rw.spent) || rw.v2)) {
+                if (!Array.isArray(rw.earned)) rw.earned = [];
+                if (!Array.isArray(rw.spent)) rw.spent = [];
+            }
             if (rw && Array.isArray(rw.earned) && Array.isArray(rw.spent)) {
                 if (!rw.v2) {   // 고정 금액으로 받았던 것 → 다시 돌린다 (한 번만)
                     rw.earned.forEach(x => { if (x) { x.amt = null; delete x.st; } });
