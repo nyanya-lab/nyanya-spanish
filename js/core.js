@@ -2041,6 +2041,9 @@ let vocabulary = [];
             const owned = new Set(eggState.collection);
             const counts = {};
             eggState.collection.forEach(id => counts[id] = (counts[id] || 0) + 1);
+            //   [냐냐 요청] 카드에 그 메달로 받은 적립금 (2026-10-16) — 여러 번 받았으면 합친 것
+            const wonBy = {};
+            ((typeof ensureRewardState === 'function' && ensureRewardState()) || { earned: [] }).earned.forEach(x => { if (x && x.id) wonBy[x.id] = (wonBy[x.id] || 0) + (Number(x.amt) || 0); });
 
             // 희귀도 순 정렬 (전설 → 에픽 → 레어 → 일반), 같은 등급이면 원래 순서 유지
             let list = CREATURES.map((c, i) => ({ ...c, _i: i }))
@@ -2077,7 +2080,7 @@ let vocabulary = [];
                     const legend = c.rarity === 'legendary' ? creatureLegendColors(c.id) : null;
                     //   [냐냐 요청] 가로 카드 — 메달 왼쪽 크게, 이름·설명 오른쪽 (2026-10-13). 세로 3칸일 땐 메달이 작아 보였다.
                     return `<div onclick="openCreatureWord('${c.id}')" title="${inVocab ? '단어장에서 보기' : '단어장에 등록하기'}" class="relative flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${info.bg} ${info.border || 'border border-slate-100'} ${c.rarity === 'legendary' ? 'legend-shine' : ''} cursor-pointer hover:brightness-95 transition-all">
-                        <span class="absolute bottom-1 right-1.5 text-[10px] ${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span>
+                        <span class="absolute bottom-1 right-1.5 flex items-center gap-1 text-[10px]">${wonBy[c.id] ? `<span class="font-black text-amber-700">💰${fmtWon(wonBy[c.id])}</span>` : ''}<span class="${inVocab ? '' : 'font-black text-violet-500'}">${inVocab ? '📖' : '＋'}</span></span>
                         ${counts[c.id] > 1 ? `<span class="absolute top-1 right-1.5 text-[10px] font-black ${info.color} bg-white/80 rounded-full px-1.5 py-0.5 shadow-sm">×${counts[c.id]}</span>` : ''}
                         <span class="shrink-0">${creatureMedalSvg(c, 88, false, legend ? legend[legend.length - 1] : null)}</span>
                         <div class="min-w-0 flex-1 space-y-1">
@@ -2238,7 +2241,7 @@ let vocabulary = [];
             //   그래도 어느 갈래인지 모르는 복습이 남는 날(10/12 이전 며칠)은 나누지 않고 예전처럼 한 칸.
             const rIds = Array.isArray(log.reviewIds) ? log.reviewIds : [];
             let reviewSplit = null;
-            if (rIds.length) {
+            if (rIds.length || !reviewN) {   // 복습이 0 이면 나눌 것도 없다 — 세 칸에 남은 것만
                 const p = diaryReviewParts(ds, log);
                 const split = [p.word.length, p.idiom.length, p.grammar.length + p.rv.length];
                 if (reviewN - split[0] - split[1] - split[2] <= 0) reviewSplit = split;
@@ -2374,7 +2377,8 @@ let vocabulary = [];
                     ${total > 0 ? `<span class="ml-auto text-[10px] font-black text-violet-600">총 ${total}개 활동</span>` : ''}
                 </div>
                 ${/* [냐냐 요청] 상자를 빼고 글씨를 키웠다 (2026-09-04) — 이제 이 카드의 본문이라 가둘 이유가 없다 */''}
-                ${total > 0
+                ${/* [냐냐 요청] 오늘은 아직 한 게 없어도 표를 그린다 (2026-10-16) — 복습 줄의 '−남은 것' 이 보여야 해서 */''}
+                ${(total > 0 || isToday)
                     ? `<div class="bg-slate-50 rounded-xl px-1.5 py-1.5">${grid}</div>`
                     : (ds > today
                         ? ''
