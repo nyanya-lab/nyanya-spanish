@@ -5105,6 +5105,15 @@ ${buildLearnerProfileSummary()}`;
         //   태그를 다 벗겨 맨 글자만 저장한다 (용량도 줄고, 나중에 검색하기도 쉽다).
         //   gramHits 를 안 주면 방금 채점이 남긴 aiLastEsKoGrammar 를 그대로 쓴다. AI 가 지어낸
         //   제목은 채점 단계에서 이미 걸러진 뒤라, 여기 오는 건 전부 실제로 있는 노트다.
+        //   [냐냐 요청] 결과 카드 머리에 '3.5 Flash · 6.1초' (2026-10-17)
+        function aiGradeModelText(g) { return (g && g.m) ? `${g.m}${typeof g.s === 'number' ? ` · ${g.s}초` : ''}` : ''; }
+        function renderAiGradeModel() {
+            const el = document.getElementById('ai-grade-model');
+            if (!el) return;
+            const txt = aiGradeModelText(typeof lastEssayGrade !== 'undefined' ? lastEssayGrade : null);
+            el.textContent = txt;
+            el.classList.toggle('hidden', !txt);
+        }
         let _lastAiNoteKey = null;   // 방금 남긴 노트 (점수를 해제하면 이 노트에서 빼야 한다)
 
         function recordAiNote(mode, ask, mine, feedback, gramHits, asReview) {
@@ -5130,9 +5139,11 @@ ${buildLearnerProfileSummary()}`;
                 posx: (aiLastPosStats && aiLastPosStats.n) ? aiLastPosStats : undefined,
                 rv: asReview ? 1 : undefined,                 // 문법 복습으로 푼 번역 (일지에선 복습)
                 sc: aiCountScoreItems(),                      // [냐냐 요청] 정답률용 + / − 항목 수 (아래 aiCountScoreItems)
-                ok: !!feedback.isCorrect
+                ok: !!feedback.isCorrect,
+                ai: (typeof lastEssayGrade !== 'undefined' && lastEssayGrade) ? lastEssayGrade : undefined   // [냐냐 요청] 채점한 모델 · 걸린 초
             });
             aiScoreNoteKey = stamp;
+            renderAiGradeModel();
             //   상한에 밀려 나가는 것은 새 자리에서도 지운다 (값을 못 찾으면 null 로 간다)
             if (aiNotes.length > AI_NOTE_LIMIT) { aiNotes.slice(AI_NOTE_LIMIT).forEach(x => { if (x) s3('note', x.t); }); aiNotes.length = AI_NOTE_LIMIT; }
             s3('note', stamp);
@@ -5389,7 +5400,7 @@ ${buildLearnerProfileSummary()}`;
                         <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${m.cls}">${m.label}</span>
                         ${n.issue ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-500 border border-rose-100">${escapeHtml(n.issue)}</span>` : ''}
                         ${n.ok ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100">정답</span>' : ''}
-                        <span class="text-[10px] text-slate-400 ml-auto">${aiNoteWhen(n.t)}</span>
+                        <span class="text-[10px] text-slate-400 ml-auto">${n.ai ? `<span class="text-slate-300 mr-1.5">${escapeHtml(aiGradeModelText(n.ai))}</span>` : ''}${aiNoteWhen(n.t)}</span>
                     </div>`;
 
                 const ask = n.ask ? `<p class="text-[11px] text-slate-400 mb-1">${escapeHtml(n.ask)}</p>` : '';

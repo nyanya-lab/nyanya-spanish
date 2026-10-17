@@ -525,13 +525,22 @@
             console.warn(`첨삭: ${model} 한도 — ${daily ? '오늘은' : '1분 동안'} 건너뜁니다`);
         }
         let lastEssayGradeModel = '';
+        //   [냐냐 요청] 어느 모델이 몇 초에 채점했는지 — 결과 카드와 첨삭 노트에 남긴다 (뭐가 맞는지 견주려고)
+        let lastEssayGrade = null;   // { m: '3.5 Flash', s: 6.1 }
+        function essayModelLabel(m) {
+            if (m === 'fallback') return (typeof isGradeModelDown === 'function' && isGradeModelDown()) ? '3.1 Lite' : 'Lite';
+            const x = String(m || '').match(/gemini-([\d.]+)-flash(-lite)?/);
+            return x ? `${x[1]} Flash${x[2] ? '-Lite' : ''}` : String(m || '');
+        }
         async function callGeminiEssay(promptText, systemInstruction, jsonSchema) {
+            lastEssayGrade = null;
+            const t0 = Date.now();
             const b = essayBlocks();
             const models = ESSAY_GRADE_MODELS.filter(m => !(b[m] > Date.now()));
             const okText = (t) => { try { return !!(t && (typeof extractAndParseJson !== 'function' || extractAndParseJson(t))); } catch (e) { return false; } };
             return new Promise((resolve, reject) => {
                 let done = false, left = 0, lastErr = null, fallbackOn = false, timer = null;
-                const win = (t, m) => { if (done) return; done = true; clearTimeout(timer); lastEssayGradeModel = m; console.log(`첨삭 채점: ${m}`); resolve(t); };
+                const win = (t, m) => { if (done) return; done = true; clearTimeout(timer); lastEssayGradeModel = m; lastEssayGrade = { m: essayModelLabel(m), s: Math.round((Date.now() - t0) / 100) / 10 }; console.log(`첨삭 채점: ${m} ${lastEssayGrade.s}초`); resolve(t); };
                 const lose = (e) => { lastErr = e; left--; if (!done && left <= 0) { if (!fallbackOn) startFallback(); else { done = true; clearTimeout(timer); reject(lastErr); } } };
                 const ask = (m) => {
                     left++;
