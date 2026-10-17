@@ -1025,7 +1025,7 @@
             };
 
             try {
-                const responseText = await callGeminiGrade(prompt, system, schema);
+                const responseText = await callGeminiEssay(prompt, system, schema);   // [냐냐 요청] 첨삭은 Flash 두 개 경주
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
 
@@ -1824,7 +1824,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
             };
 
             try {
-                const responseText = await callGeminiGrade(prompt, system, schema);
+                const responseText = await callGeminiEssay(prompt, system, schema);   // [냐냐 요청] 첨삭은 Flash 두 개 경주
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
@@ -6181,7 +6181,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
             };
 
             try {
-                const responseText = await callGeminiGrade(prompt, system, schema);
+                const responseText = await callGeminiEssay(prompt, system, schema);   // [냐냐 요청] 첨삭은 Flash 두 개 경주
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다

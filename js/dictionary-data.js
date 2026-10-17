@@ -399,6 +399,7 @@
                         const err = new Error(`API response status ${response.status}: ${apiMessage || errBody}`);
                         err.status = response.status;
                         err.apiStatus = apiStatus;
+                        err.body = errBody;   // 429 가 하루 한도인지(PerDay) 분당인지는 본문 details 에만 있다
                         throw err;
                     }
                     const result = await response.json();
@@ -491,6 +492,67 @@
                 console.warn(`채점: ${GEMINI_MODEL_GRADE} 실패 → ${GEMINI_MODEL_FLASH_LITE} 로 다시`, e);
                 return await callGemini(promptText, systemInstruction, jsonSchema, 'low', GEMINI_MODEL_FLASH_LITE);
             }
+        }
+
+        // ============================================================
+        // [냐냐 요청] 첨삭 채점은 Flash 두 개에 같이 묻고 먼저 온 답을 쓴다 (2026-10-17)
+        //   '너희들, 어제 내가 빌린…' 미션에서 3.5 Flash-Lite 가 앞의 Vosotros 를 주어로 보고 pedié → pedisteis,
+        //   맞게 쓴 dároslas → 틀린 'voy a os las dar' 로 고쳤다. 같은 프롬프트로 재보니(10/17, 8번):
+        //     3.5 Flash-Lite medium 9.7초 · 3.5 Flash low 6.1/5.8초 · 3.6 5.6/13.9초 · 3.7 8.4초 · 3.8 8.3/11.0초 — Flash 는 다 맞혔다
+        //     ('요즘 스페인어 실력 어때?' 에 '¿Estos días hablas español?' 뜻 틀림도). 3.8 은 학생 낱말을 가장 잘 살린다.
+        //   냐냐님 결정: 3.5 Flash 와 3.8 Flash 를 동시에 — 한도(무료 하루 ~20번)는 모델마다 따로라 첨삭 횟수는 그대로이고,
+        //   한쪽이 느리거나 막혀도 다른 쪽이 받는다. 둘 다 못 쓰면 예전 채점(callGeminiGrade: 3.5 Lite → 3.1)으로.
+        //   하루 한도(429 PerDay)에 걸린 모델은 한도가 다시 차는 미국 서부 자정(한국 오후 4~5시)까지 건너뛴다. 분당 한도면 1분만.
+        //   끊지 않는다 — 25초 지나도 Flash 답이 없으면 예전 채점도 같이 걸어서 먼저 온 것을 쓴다.
+        //   쓰기 복습·퀴즈 주관식(하루 수십 번)은 여기 안 탄다 — 그대로 aiGradeRace.
+        // ============================================================
+        const ESSAY_GRADE_MODELS = ['gemini-3.5-flash', 'gemini-3.8-flash'];
+        const ESSAY_GRADE_THINKING = 'low';
+        const ESSAY_BLOCK_KEY = 'nyanya_essay_model_block';
+        function essayBlocks() { try { return JSON.parse(localStorage.getItem(ESSAY_BLOCK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+        function nextPacificMidnight() {
+            //   지금 미국 서부 시각을 읽어서 그날 자정까지 남은 시간을 더한다 (서머타임은 Intl 이 맞춰 준다)
+            const now = new Date();
+            const pt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+            const left = (24 * 3600 - (pt.getHours() * 3600 + pt.getMinutes() * 60 + pt.getSeconds())) * 1000;
+            return now.getTime() + left + 60 * 1000;
+        }
+        function blockEssayModel(model, e) {
+            const daily = /per.?day|daily/i.test(String(e && e.body || '') + String(e && e.message || ''));
+            const b = essayBlocks();
+            b[model] = daily ? nextPacificMidnight() : Date.now() + 60 * 1000;
+            try { localStorage.setItem(ESSAY_BLOCK_KEY, JSON.stringify(b)); } catch (err) {}
+            console.warn(`첨삭: ${model} 한도 — ${daily ? '오늘은' : '1분 동안'} 건너뜁니다`);
+        }
+        let lastEssayGradeModel = '';
+        async function callGeminiEssay(promptText, systemInstruction, jsonSchema) {
+            const b = essayBlocks();
+            const models = ESSAY_GRADE_MODELS.filter(m => !(b[m] > Date.now()));
+            const okText = (t) => { try { return !!(t && (typeof extractAndParseJson !== 'function' || extractAndParseJson(t))); } catch (e) { return false; } };
+            return new Promise((resolve, reject) => {
+                let done = false, left = 0, lastErr = null, fallbackOn = false, timer = null;
+                const win = (t, m) => { if (done) return; done = true; clearTimeout(timer); lastEssayGradeModel = m; console.log(`첨삭 채점: ${m}`); resolve(t); };
+                const lose = (e) => { lastErr = e; left--; if (!done && left <= 0) { if (!fallbackOn) startFallback(); else { done = true; clearTimeout(timer); reject(lastErr); } } };
+                const ask = (m) => {
+                    left++;
+                    callGeminiRaw(promptText, systemInstruction, jsonSchema, ESSAY_GRADE_THINKING, m)
+                        .then(t => okText(t) ? win(t, m) : lose(new Error('빈 답')))
+                        .catch(e => {
+                            const msg = String(e && e.message || '');
+                            if (msg.includes('NO_API_KEY') || e.status === 401 || e.status === 403) { if (!done) { done = true; clearTimeout(timer); reject(e); } return; }
+                            if (e.status === 429) blockEssayModel(m, e);
+                            lose(e);
+                        });
+                };
+                const startFallback = () => {
+                    if (fallbackOn || done) return;
+                    fallbackOn = true; left++;
+                    callGeminiGrade(promptText, systemInstruction, jsonSchema, 0).then(t => win(t, 'fallback')).catch(lose);
+                };
+                if (!models.length) { startFallback(); return; }
+                models.forEach(ask);
+                timer = setTimeout(startFallback, 25000);
+            });
         }
 
         // [PATCH-에러분류] callGemini가 던진 에러를 사용자에게 보여줄 정확한 한국어 메시지로 변환
