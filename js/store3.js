@@ -138,8 +138,19 @@ const S3 = (() => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(flush, 400);
     }
-    async function flush(leaving) {
+    //   [냐냐 결정] 주 저장소가 된 뒤(3단계, 2026-10-17): 보낼 때마다 저장 번호(meta/rev)를 같이 적고,
+    //   보내기 직전에 서버 번호만 읽어서 이 창이 아는 번호와 다르면 = 다른 곳이 그 사이 저장한 것 → 보내지 않고 묻는다.
+    //   (예전 통째 저장의 savedRev 와 같은 장치 — 옛 데이터를 든 창이 새 공부를 덮지 않게.) 번호를 못 읽으면 그냥 보낸다.
+    //   보내기는 한 줄로 세운다 — 둘이 겹치면 서버 번호와 내 번호가 엇갈려 헛 경고가 뜬다.
+    const newRev = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    let chain = Promise.resolve();
+    function flush(leaving) {
         if (timer) { clearTimeout(timer); timer = null; }
+        const p = chain.then(() => flushNow(leaving));
+        chain = p.catch(() => {});
+        return p;
+    }
+    async function flushNow(leaving) {
         if (!queue.size) return;
         const root = rootUrl();
         if (!root) { queue.clear(); return; }
@@ -148,14 +159,33 @@ const S3 = (() => {
         const body = {};
         queue.forEach((v, p) => { body[p] = (typeof v === 'function') ? clone(v()) : clone(v); });
         queue.clear();
+        const requeue = () => Object.keys(body).forEach(p => { if (p !== 'meta/rev' && !queue.has(p)) queue.set(p, body[p]); });
+        if (api.primary && !api.force) {
+            let srv;
+            try {
+                const r = await fetch(root + '/meta/rev.json', { cache: 'no-store' });
+                if (r.ok) srv = await r.json();
+            } catch (e) { srv = undefined; }
+            if (srv && srv !== api.knownRev) {
+                requeue();
+                console.warn('[v3 보류] 서버 번호', srv, '≠ 이 창', api.knownRev);
+                if (typeof api.onConflict === 'function') api.onConflict();
+                return;
+            }
+        }
+        const rev = api.primary ? newRev() : null;
+        if (rev) { body['meta/rev'] = rev; api.sendingRev = rev; }
         const json = JSON.stringify(body);
         try {
             await writeMany(body, leaving);
+            if (rev) api.knownRev = rev;
             S3.sentBytes += json.length; S3.sentCount++;
         } catch (e) {
             //   못 보낸 것은 다시 줄에 — 다음 쓰기 때 같이 간다 (그 사이 새 값이 들어왔으면 새 값이 이긴다)
-            Object.keys(body).forEach(p => { if (!queue.has(p)) queue.set(p, body[p]); });
+            requeue();
             console.warn('[v3] 보내기 실패, 다음에 다시', e);
+        } finally {
+            if (rev) api.sendingRev = null;
         }
     }
     window.addEventListener('pagehide', () => { try { flush(true); } catch (e) {} });
@@ -166,6 +196,11 @@ const S3 = (() => {
         : (typeof vocabulary !== 'undefined' ? vocabulary.find(v => String(v.id) === String(wOrId)) : null);
     const api = {
         sentBytes: 0, sentCount: 0,
+        primary: false,      // 불러올 때 v3 에서 읽었으면 core 가 켠다
+        knownRev: null,      // 이 창이 마지막으로 서버와 맞춘 meta/rev
+        sendingRev: null,
+        force: false,        // '이 창 것으로 덮어쓰기'
+        onConflict: null,
         flush,
         //   단어 하나 — 값은 보낼 때 읽는다 (같은 틱에 여러 번 고쳐도 한 번)
         word(wOrId) {
@@ -279,6 +314,7 @@ const S3 = (() => {
         const root = rootUrl();
         if (!root || (isDev() && !devOn())) return;
         await flush();
+        if (api.primary) return;   // 주 저장소가 된 뒤엔 견주기를 불러올 때 백업과 한다 (backupCheck)
         try {
             const seeded = await readPath('meta/seededAt');   // 못 읽으면 던진다 — 채우지도 견주지도 않는다
             if (!seeded) return await seedAll();
@@ -352,6 +388,42 @@ const S3 = (() => {
         }
         return report;
     }
+    // ── 3단계: 매일 한 번, 백업(통째)과 v3 를 견준다 (2026-10-17 냐냐님 "크로스체크를 매일 하자") ──
+    //   불러올 때 둘을 같이 받아서, 이 창이 백업을 새로 덮기 **전의** 백업으로 견준다.
+    //   백업에만 있는 것 = 어디선가 S3 한 줄을 빠뜨린 곳 (백업은 저장할 때마다 통째로 올라가니 다 들어 있다).
+    //   어느 쪽이 맞는지 여기선 알 수 없어서 고치지 않고 적기만 한다 — Claude 가 meta/checks 를 읽고 고친다.
+    //   ⚠️ 마지막 백업이 창을 닫느라 못 올라갔으면 v3 가 더 새것이라 차이로 보일 수 있다 (그건 빠뜨린 곳이 아님).
+    function backupCheck(oldPayload, tree) {
+        try {
+            const old = Object.assign({}, oldPayload); delete old.savedRev;
+            const diffs = diffPayloads(old, treeToPayload(tree || {}));
+            const t = Date.now();
+            const report = { t, n: diffs.length, items: diffs.slice(0, 60) };
+            try { localStorage.setItem('nyanya_v3_check', JSON.stringify(report)); } catch (e) {}
+            api.lastCheck = report;
+            if (diffs.length) {
+                console.warn(`[v3 백업 견주기] 다른 항목 ${diffs.length}개`, diffs.slice(0, 20));
+                put('meta/checks/' + t, { kind: 'backup', n: report.n, items: report.items.map(d => `${d.where}${d.label ? ' «' + String(d.label).slice(0, 30) + '»' : ''}${d.fields.length ? ' [' + d.fields.join(',') + ']' : ''}${d.missing ? ' (' + (d.missing === 'remote' ? 'v3' : '백업') + '에 없음)' : ''}`) });
+            } else {
+                console.info('[v3 백업 견주기] 다른 항목 없음 ✨');
+                put('meta/lastCleanCheck', t);
+            }
+        } catch (e) { console.warn('[v3] 백업 견주기 실패', e); }
+    }
+    //   백업 파일 가져오기처럼 통째로 바꿀 때 — v3 도 통째로 다시 채운다 (seededAt 은 남긴다)
+    async function replaceAll() {
+        const root = rootUrl();
+        if (!root || (isDev() && !devOn())) return;
+        await flush();
+        const tree = clone(payloadToTree(buildDataPayload()));
+        tree.meta.seededAt = Date.now();
+        tree.meta.rev = newRev();
+        await writeAll(tree);
+        api.knownRev = tree.meta.rev;
+        console.info('[v3] 통째로 다시 채움');
+    }
+    api.backupCheck = backupCheck;
+    api.replaceAll = replaceAll;
     api.afterBoot = afterBoot;
     api.crossCheck = crossCheck;
     api.diffPayloads = diffPayloads;

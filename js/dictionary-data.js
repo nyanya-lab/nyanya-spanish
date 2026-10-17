@@ -288,6 +288,7 @@
                     // (예전 4개짜리 백업도 그대로 들어온다 — 없는 값은 초기값이 된다)
                     applyDataPayload(parsed);
                     saveToStorage();
+                    if (typeof S3 !== 'undefined' && S3.primary) S3.replaceAll();   // [냐냐 결정] 새 저장소도 통째로 바꾼다
                     renderWordList();
                     updateStats();
                     renderDiary();

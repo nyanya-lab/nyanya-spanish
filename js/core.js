@@ -205,9 +205,28 @@ let vocabulary = [];
         //   페이지 여는 시간(약 1초)과 받는 시간(0.4~1.4초)이 줄줄이 이어졌다.
         //   이 파일이 읽히는 순간 미리 받기 시작하고, loadFromStorage 가 그걸 이어받는다 (겹쳐서 기다림이 준다).
         //   주소가 그새 바뀌었으면(설정에서 비밀번호를 바꾼 직후 등) 안 쓰고 새로 받는다.
+        // ============================================================
+        // [냐냐 결정] 새 저장소(v3)가 주 저장소 (2026-10-17) — "그냥 일단 지금 넘기자, 바꾸고 크로스체크를 매일 하자"
+        //   읽기: <비밀번호>__v3 를 받아 펼친다 (S3.treeToPayload). 쓰기: 고치는 곳마다 S3 한 줄 (그 항목 자리만).
+        //   옛 통째 저장(<비밀번호>)은 백업으로 계속 올린다 — 저장 번호 확인 없이. 다른 창 감지는 v3 의 meta/rev 로.
+        //   매일 기기마다 한 번, 불러올 때 백업과 v3 를 견줘 meta/checks 에 적는다 (S3.backupCheck) — 고치진 않는다.
+        //   ⚠️ 되돌리기: 아래 한 줄을 false 로. 그러면 예전처럼 통째를 읽고 v3 는 같이 쓰기 + 크로스체크로 돌아간다.
+        //      (되돌릴 땐 그 사이 v3 에만 들어간 공부를 백업으로 옮겨야 한다 — 백업도 같이 올라가니 대개 같다)
+        //   v3 가 아직 안 채워졌거나 못 읽으면 예전 길(통째)로 연다.
+        // ============================================================
+        const V3_PRIMARY = true;
+        function getV3DataUrl() {
+            const pw = getSyncPassword();
+            const url = getFirebaseDbUrl();
+            if (!pw || !url) return null;
+            return `${url}/vocab/${encodeURIComponent(pw)}__v3.json`;   // 로컬 시험도 읽기는 진짜 자리 (쓰기는 store3 가 막는다)
+        }
+        const V3_CHECK_DAY_KEY = 'nyanya_v3_backupCheckDay';
+        const v3BackupCheckDue = () => { try { return localStorage.getItem(V3_CHECK_DAY_KEY) !== getLocalDateString(); } catch (e) { return false; } };
+
         let _earlyDataFetch = null;
         try {
-            const p = getFirebaseDataPath();
+            const p = V3_PRIMARY ? getV3DataUrl() : getFirebaseDataPath();
             if (p) _earlyDataFetch = { path: p, promise: fetch(p).catch(() => null) };
         } catch (e) {}
         function takeEarlyDataFetch(path) {
@@ -362,10 +381,17 @@ let vocabulary = [];
                 { okLabel: '새로고침', cancelLabel: '이 창 것으로 덮어쓰기', okStyle: 'primary', icon: 'info', noEnter: true,
                   onCancel: () => {
                       _saveConflictShown = false;
+                      if (typeof S3 !== 'undefined' && S3.primary) {
+                          S3.force = true;
+                          S3.flush().finally(() => { S3.force = false; });
+                          return;
+                      }
                       _forceOverwrite = true;
                       flushSaveToStorage().finally(() => { _forceOverwrite = false; });
                   } });
         }
+        //   새 저장소가 보내기 직전에 다른 곳의 저장을 보면 같은 창을 띄운다 (store3.js 는 이 파일 뒤에 읽혀서 켜질 때 잇는다)
+        window.addEventListener('DOMContentLoaded', () => { if (typeof S3 !== 'undefined') S3.onConflict = showSaveConflict; });
 
         async function saveToStorage(immediate) {
             stampTodayReviewDone();   // [냐냐 요청] 연속 복습일 — 오늘 줄이 비었나를 일지에 (2026-10-09)
@@ -392,7 +418,8 @@ let vocabulary = [];
             const firebasePath = getFirebaseDataPath();
             if (firebasePath) {
                 //   올리기 전에 서버의 저장 번호만 본다 — 내가 아는 번호와 다르면 다른 곳이 그 사이 저장한 것
-                if (!_forceOverwrite) {
+                //   [냐냐 결정] 새 저장소가 주인이면 여긴 백업이다 — 번호 확인 없이 올린다 (다른 창 감지는 S3 가 v3 meta/rev 로)
+                if (!_forceOverwrite && !(typeof S3 !== 'undefined' && S3.primary)) {
                     let serverRev;
                     try {
                         const r = await fetch(revPathOf(firebasePath), { cache: 'no-store' });
@@ -451,7 +478,33 @@ let vocabulary = [];
 
             // 1순위: Firebase에서 불러오기 — 비밀번호를 설정해야 사용 가능
             const firebasePath = getFirebaseDataPath();
-            if (firebasePath) {
+            //   [냐냐 결정] 새 저장소부터 (위 V3_PRIMARY). 매일 한 번은 백업도 같이 받아 견준다 — 이 창이 백업을 덮기 전에.
+            let v3Loaded = false;
+            if (firebasePath && V3_PRIMARY && typeof S3 !== 'undefined' && getV3DataUrl()) {
+                const checkDue = v3BackupCheckDue();
+                const backupP = checkDue ? fetch(firebasePath, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null) : null;
+                try {
+                    const res = await takeEarlyDataFetch(getV3DataUrl());
+                    if (res.ok) {
+                        const tree = await res.json();
+                        if (tree && tree.meta && tree.meta.seededAt) {
+                            firebaseReachable = true;
+                            v3Loaded = true;
+                            payload = S3.treeToPayload(tree);
+                            S3.primary = true;
+                            S3.knownRev = tree.meta.rev || null;
+                            if (backupP) backupP.then(old => {
+                                if (!old) return;
+                                try { localStorage.setItem(V3_CHECK_DAY_KEY, getLocalDateString()); } catch (e) {}
+                                S3.backupCheck(old, tree);
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[v3] 새 저장소를 못 읽음 — 통째 저장으로", e);
+                }
+            }
+            if (firebasePath && !v3Loaded) {
                 try {
                     const res = await takeEarlyDataFetch(firebasePath);   // 미리 받기 시작한 것이 있으면 그걸 쓴다
                     if (res.ok) {
@@ -3581,7 +3634,7 @@ let vocabulary = [];
             const now = currentStatsPeriod();
             if (saved && saved !== now) {
                 // 기간이 바뀌었으면 모든 단어의 정답/오답 카운터 초기화
-                vocabulary.forEach(w => { w.correctTotal = 0; w.wrongTotal = 0; });
+                vocabulary.forEach(w => { if (w.correctTotal || w.wrongTotal) s3('word', w); w.correctTotal = 0; w.wrongTotal = 0; });
                 try { saveToStorage(); } catch (e) {}
             }
             try { localStorage.setItem('nyanya_stats_period', now); } catch (e) {}
@@ -12607,14 +12660,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         let _revCheckedAt = 0;
         async function checkServerRev() {
             const path = getFirebaseDataPath();
-            if (!path || !_knownRev || _otherSaveSeen || document.visibilityState !== 'visible') return;
+            const primary = typeof S3 !== 'undefined' && S3.primary;   // [냐냐 결정] 새 저장소면 v3 의 meta/rev 를 본다
+            if (!path || (!primary && !_knownRev) || _otherSaveSeen || document.visibilityState !== 'visible') return;
             if (Date.now() - _revCheckedAt < 20 * 1000) return;
             _revCheckedAt = Date.now();
             try {
-                const r = await fetch(revPathOf(path), { cache: 'no-store' });
+                const r = await fetch(primary ? getV3DataUrl().replace(/\.json$/, '/meta/rev.json') : revPathOf(path), { cache: 'no-store' });
                 if (!r.ok) return;
                 const serverRev = await r.json();
-                if (serverRev && serverRev !== _knownRev && serverRev !== _sendingRev) _otherSaveSeen = true;
+                const known = primary ? S3.knownRev : _knownRev, sending = primary ? S3.sendingRev : _sendingRev;
+                if (serverRev && serverRev !== known && serverRev !== sending) _otherSaveSeen = true;
             } catch (e) {}
         }
 
