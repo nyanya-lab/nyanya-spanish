@@ -1373,10 +1373,15 @@ let vocabulary = [];
         // ============================================================
         const ESSAY_SENTENCE_POINTS = 4;
         //   . ? ! 로 나눈다 (말줄임표는 안 나눔). 마침표를 빼먹어도 최소 1문장
+        //   [냐냐 요청] 스페인어는 쉼표로 잇는 문장이 많다 (2026-10-18) — 쉼표로 나눈 조각도 **세 낱말 이상**이면 한 문장으로 친다.
+        //     'Si llueve, no salgo' · 'Hola, me llamo Ana' 처럼 짧은 조각(두 낱말까지)은 따로 안 친다. 마침표 규칙은 그대로.
+        //     지난 첨삭은 다시 세지 않는다 (migrateEssaySentences 는 한 번만 돈다 — 이미 연 상자·룰렛이 흔들리지 않게).
         function countEssaySentences(text) {
             const t = String(text || '').replace(/<[^>]*>/g, ' ').replace(/\.{3}|…/g, ' ').replace(/\s+/g, ' ').trim();
             if (!t) return 0;
-            return Math.max(1, t.split(/(?<=[.!?])\s+/).filter(p => /\p{L}/u.test(p)).length);
+            const words = (part) => part.split(/\s+/).filter(x => /\p{L}/u.test(x)).length;
+            return Math.max(1, t.split(/(?<=[.!?])\s+/).filter(p => /\p{L}/u.test(p))
+                .reduce((sum, sen) => sum + Math.max(1, sen.split(',').filter(seg => words(seg) >= 3).length), 0));
         }
         //   첨삭을 낼 때 부른다 (logAction 과 같은 자리)
         function noteEssaySentences(text) {
