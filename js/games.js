@@ -158,6 +158,8 @@
         }
         function mergeGameHighScores(remote) {
             if (!remote || typeof remote !== 'object') return;
+            //   [v3] 합친 뒤 이 기기 기록이 서버보다 크면 짐이 달라진다 — 새 저장소에도 싣는다 (10/19 크로스체크 'falling')
+            setTimeout(() => { try { if (JSON.stringify(collectGameHighScores()) !== JSON.stringify(remote) && typeof s3 === 'function') s3('misc', 'gameHighScores'); } catch (e) {} }, 0);
             mergeCrosswordBests(remote.crossword);
             GAME_TYPES.forEach(g => {
                 const r = remote[g];

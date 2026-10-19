@@ -9225,6 +9225,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const both = [local, _syncedGrammarPrefs].filter(Boolean).sort((a, b) => atOf(a) - atOf(b));
             both.forEach(applyGrammarPrefs);
             _grammarPrefsAt = both.length ? atOf(both[both.length - 1]) : 0;
+            //   [v3] 이 기기 것이 더 새것이면 짐(grammarPrefs)이 서버 것과 달라진다 — 새 저장소에도 싣는다 (10/19 크로스체크)
+            if (local && atOf(local) > atOf(_syncedGrammarPrefs)) s3('misc', 'grammarPrefs');
         }
 
         // ---- 문법 표 편집기 ----

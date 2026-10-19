@@ -4642,6 +4642,7 @@ ${buildLearnerProfileSummary()}`;
         }
 
         function restoreWordScoreState(w, snap) {
+            s3('word', w);   // [v3] ↺·전부 0점으로 0 이 되면 addWordScore 를 안 지나서 새 저장소에 안 실렸다 (10/17 백업 견주기에서 'dar')
             Object.keys(snap).forEach(k => {
                 if (snap[k] === undefined) delete w[k];
                 else w[k] = snap[k];
