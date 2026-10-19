@@ -314,7 +314,7 @@ const S3 = (() => {
         const root = rootUrl();
         if (!root || (isDev() && !devOn())) return;
         await flush();
-        if (api.primary) return;   // 주 저장소가 된 뒤엔 견주기를 불러올 때 백업과 한다 (backupCheck)
+        if (api.primary) return dailyBackup();   // 주 저장소가 된 뒤엔 견주기를 불러올 때 백업과 한다 (backupCheck)
         try {
             const seeded = await readPath('meta/seededAt');   // 못 읽으면 던진다 — 채우지도 견주지도 않는다
             if (!seeded) return await seedAll();
@@ -422,6 +422,39 @@ const S3 = (() => {
         api.knownRev = tree.meta.rev;
         console.info('[v3] 통째로 다시 채움');
     }
+    // ── 날짜별 백업 (2026-10-19 냐냐님 "혹시 모르니까 하루씩 자동 백업") ──
+    //   그날 처음 켠 기기가 v3 전체를 <주소>/vocab/<비밀번호>_bak_YYYYMMDD 에 통째로 복사한다 (약 2MB).
+    //   최근 7일 치만 남긴다 — 무엇을 만들었는지 meta/backups 에 적어 두고 그보다 오래된 것을 지운다.
+    //   두 기기가 같은 아침에 겹쳐 켜면 둘 다 복사할 수 있다 — 같은 자리라 해가 없다.
+    const BACKUP_KEEP_DAYS = 7;
+    async function dailyBackup() {
+        try {
+            const pw = (typeof getSyncPassword === 'function') ? getSyncPassword() : '';
+            const url = (typeof getFirebaseDbUrl === 'function') ? getFirebaseDbUrl() : '';
+            if (!pw || !url || isDev()) return;
+            const day = (typeof getLocalDateString === 'function' ? getLocalDateString() : '').replace(/-/g, '');
+            if (!day) return;
+            const done = await readPath('meta/backups');
+            if (done && done[day]) return;
+            const tree = await readPath('');
+            if (!tree || !tree.meta || !tree.meta.seededAt) return;
+            const bak = `${String(url).replace(/\/$/, '')}/vocab/${encodeURIComponent(pw)}_bak_${day}.json`;
+            const res = await fetch(bak, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tree) });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            put('meta/backups/' + day, Date.now());
+            //   7일보다 오래된 것 지우기
+            const cut = new Date(); cut.setDate(cut.getDate() - BACKUP_KEEP_DAYS);
+            const cutKey = `${cut.getFullYear()}${String(cut.getMonth() + 1).padStart(2, '0')}${String(cut.getDate()).padStart(2, '0')}`;
+            for (const d of Object.keys(done || {})) {
+                if (d <= cutKey) {
+                    await fetch(`${String(url).replace(/\/$/, '')}/vocab/${encodeURIComponent(pw)}_bak_${d}.json`, { method: 'DELETE' }).catch(() => {});
+                    put('meta/backups/' + d, null);
+                }
+            }
+            console.info('[v3] 오늘 백업 끝', day);
+        } catch (e) { console.warn('[v3] 날짜별 백업 실패', e); }
+    }
+    api.dailyBackup = dailyBackup;
     api.backupCheck = backupCheck;
     api.replaceAll = replaceAll;
     api.afterBoot = afterBoot;
