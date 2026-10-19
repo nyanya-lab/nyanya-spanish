@@ -3475,10 +3475,22 @@ ${buildLearnerProfileSummary()}`;
                 }
                 return w;
             };
+            //   [냐냐 지적] 'Al [동사원형]' 이 a+el 의 al 마다 잡혀서 마스터가 됐다 (2026-10-19).
+            //   자리표시자를 떼면 'al' 한 낱말만 남아 아무 al 에나 닿았다. 낱말 하나 + 동사 자리([동사원형]·[현재분사])인 항목은
+            //   바로 뒤 낱말이 그 꼴일 때만 친다. '[명사/동사원형]' 처럼 섞인 자리는 꼴로 가릴 수 없어 그대로 둔다.
+            const ENCL = '(?:me|te|se|nos|os|lo|la|los|las|le|les)*';
+            const SLOT_FORM = { '동사원형': new RegExp('(?:ar|er|ir|ír)' + ENCL + '$'), '현재분사': new RegExp('(?:ando|iendo|yendo)' + ENCL + '$') };
+            const slotFits = (w, i) => {
+                const m = /^\s*[^\s\[]+\s*\[([^\]]+)\]\s*$/.exec(String(w && w.word || ''));
+                const re = m && SLOT_FORM[m[1].trim()];
+                if (!re) return true;
+                return re.test(String(mineToks[i + 1] || '').toLowerCase());
+            };
             mineToks.forEach((tok, i) => {
                 if (usedTok[i]) return;
                 const survived = fixedSet.has(norm(tok));
                 const w = preferReflexive(resolveHere(tok, i), i);
+                if (w && !slotFits(w, i)) return;
                 push(w, survived, !survived && accentOnlyMiss(tok, w));
             });
             // ②-b [냐냐 지적] 철자를 흘려 쓰면 단어장에 아예 안 닿아서 −2 가 조용히 빠진다 (2026-09-04).
