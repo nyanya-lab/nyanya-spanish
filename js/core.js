@@ -9276,6 +9276,10 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   더 나중에 바꾼 쪽이 이긴다 — 옛 것을 먼저 깔고 새 것을 덮는다 (시각이 없는 옛 기록은 0)
             const atOf = (f) => (f && typeof f.at === 'number') ? f.at : 0;
             const both = [local, _syncedGrammarPrefs].filter(Boolean).sort((a, b) => atOf(a) - atOf(b));
+            //   [냐냐 확인] 서버는 빈 객체를 지운다 — 다 펼친 상태(groups = {})가 '칸 없음' 으로 와서, 이긴 쪽인데도
+            //   옛 기기의 접힘이 그대로 남았다 (10/19 크로스체크 groups·indexGroups). 이긴 쪽에 없는 칸은 빈 것으로 본다.
+            const win = both[both.length - 1];
+            if (win && win.at) ['groups', 'open', 'indexHidden', 'indexGroups'].forEach(k => { if (!win[k] || typeof win[k] !== 'object') win[k] = {}; });
             both.forEach(applyGrammarPrefs);
             _grammarPrefsAt = both.length ? atOf(both[both.length - 1]) : 0;
             //   [v3] 이 기기 것이 더 새것이면 짐(grammarPrefs)이 서버 것과 달라진다 — 새 저장소에도 싣는다 (10/19 크로스체크)
