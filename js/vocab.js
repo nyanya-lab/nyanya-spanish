@@ -6706,13 +6706,23 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const mineHtml = mine
                     ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, w.word), 'user') : escapeHtml(mine)}</p>`
                     : `<p class="text-xs font-bold text-slate-300">(빈칸으로 제출했어요)</p>`;
+                //   [냐냐 요청] 정답 쪽에도 표시 (2026-10-19) — 내 답 쪽 빨강은 '잘못·더 쓴 글자' 만 보여서,
+                //   빠뜨린 글자(homre → hombre 의 b)는 어디에도 안 보였다. 정답에서 내가 안 쓴 글자를 초록 밑줄로.
+                //   관사를 안 썼으면 관사는 표시하지 않는다 (관사는 안 써도 되는 자리라 '빠뜨림' 이 아니다)
+                const artRe = /^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/i;
+                const artM = artRe.exec(w.word);
+                const ansHead = (artM && !artRe.test(mine)) ? artM[0] : '';
+                const ansHtml = (mine && typeof charDiffOps === 'function')
+                    ? escapeHtml(ansHead) + charDiffOps(mine, w.word.slice(ansHead.length)).filter(([t]) => t === 'same' || t === 'ins')
+                        .map(([t, ch]) => t === 'same' ? escapeHtml(ch) : `<span class="text-emerald-600 underline decoration-[3px] underline-offset-4">${escapeHtml(ch)}</span>`).join('')
+                    : escapeHtml(w.word);
                 cardHtml = `
                     <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
                         ${posHtml}
-                        <p class="text-2xl font-extrabold text-rose-600 break-words">${escapeHtml(w.word)}</p>
+                        <p class="text-2xl font-extrabold text-rose-600 break-words">${ansHtml}</p>
                         ${writeMeaningHtml(w.meaning, 'text-sm font-bold text-slate-500')}
                         <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
-                            <p class="text-[10px] font-bold text-slate-400">내가 쓴 답</p>
+                            <p class="text-[10px] font-bold text-slate-400">내가 쓴 답 <span class="font-normal">(빨강 = 잘못 쓴 글자 · 위 초록 밑줄 = 빠뜨렸거나 다르게 쓴 글자)</span></p>
                             ${mineHtml}
                         </div>
                         <p class="text-[10px] font-bold text-rose-400 pt-1">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
