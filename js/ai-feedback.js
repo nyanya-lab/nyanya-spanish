@@ -2825,7 +2825,8 @@ ${buildLearnerProfileSummary()}`;
             return aiCurveShift(p && { inCurve: !!p.lastWrongDate, stage: p.stage }, now && { inCurve: !!now.lastWrongDate, stage: now.stage });
         }
         function aiIdiomAlsoReviewed(e) {
-            return !!e && e.delta !== 0 && ((e.delta > 0 && e.due) || e.missionReview);
+            //   [냐냐 요청] 틀려도 오늘 차례였으면 복습 실패로 친다 (2026-10-20, 단어·문법과 같은 잣대)
+            return !!e && e.delta !== 0 && (e.due || e.missionReview);
         }
         function applyIdiomDelta(e, delta) {
             if (delta) {
@@ -2834,7 +2835,7 @@ ${buildLearnerProfileSummary()}`;
                 if (ok) {
                     if (e.due && typeof idiomReviewAdvance === 'function') idiomReviewAdvance(e.w.id, e.it.idiom);
                 } else if (typeof idiomReviewDemote === 'function') {
-                    idiomReviewDemote(e.w.id, e.it.idiom, !!e.missionReview);
+                    idiomReviewDemote(e.w.id, e.it.idiom, !!e.missionReview || !!e.due);   // 오늘 차례면 복습 실패 — 오늘 몫 끝
                 }
             }
             syncAiBonusReview(e, aiIdiomAlsoReviewed(e));
@@ -4618,9 +4619,11 @@ ${buildLearnerProfileSummary()}`;
                 //   ⚠️ **제대로 썼을 때만** 이다. 틀리게 쓴 건 지금처럼 칸만 뒤로 간다.
                 //   ⚠️ 안 쓰는 문법은 어차피 여기 안 걸린다 — 그건 복습 미션으로만 풀린다.
                 // ============================================================
-                const dueToday = item.ok && (typeof isGrammarDueToday === 'function')
-                    && isGrammarDueToday(note.id);
-                const canMove = (note.id === reviewId) || inQueue || dueToday;
+                //   [냐냐 요청] 틀리게 써도 오늘 차례였으면 **복습 실패** (2026-10-20) — 단어(10/6)와 같은 잣대.
+                //     한 칸 뒤 + 오늘 몫 끝(줄에서 빠짐) + 🔁 복습 실패. 예전엔 오늘 줄에 남겨서(9/14 규칙) 단어와 어긋났다.
+                const dueBefore = (typeof isGrammarDueToday === 'function') && isGrammarDueToday(note.id);
+                const dueToday = item.ok && dueBefore;
+                const canMove = (note.id === reviewId) || inQueue || dueBefore;
                 applyGrammarCurve(note.id, item.ok, canMove);
                 if (inQueue) {
                     grammarReviewQueue.splice(grammarReviewQueue.indexOf(note.id), 1);
@@ -4628,7 +4631,7 @@ ${buildLearnerProfileSummary()}`;
                 }
                 //   '🔁 오늘 복습' 표는 배너 줄에서 뺀 것과 오늘 차례를 채운 것 둘 다에 붙인다
                 const ge = { note, usage, delta, baseDelta: delta, prev, canMove,
-                    alsoReviewed: inQueue || (dueToday && note.id !== reviewId), isReviewTarget: !!reviewId && note.id === reviewId,
+                    alsoReviewed: inQueue || (dueBefore && note.id !== reviewId), isReviewTarget: !!reviewId && note.id === reviewId,
                     ev: item.ev, state: 'normal', undone: false, reviewLogged: 0 };
                 aiLastEsKoGrammar.push(ge);
                 //   [냐냐 요청] 덤으로 채운 오늘 몫은 일지 복습 +1 (2026-10-02). 복습 미션이 지목한 노트는
@@ -5988,7 +5991,9 @@ Give the fragment in "ev".`;
                     ${/* [냐냐 요청] 지금 복습하는 그 문법에도 같은 딱지를 단다 (2026-10-05) — 예전엔 '덤으로 쳐준 다른 문법' 에만 붙어서
                          정작 복습 대상이 안 보였다. 일지 복습 +1 은 미션 자체가 세므로 여기선 화면 딱지만 단다(alsoReviewed 는 그대로). */''}
                     ${(g.alsoReviewed || g.isReviewTarget) && g.delta !== 0
-                        ? `<span title="${g.isReviewTarget ? '지금 복습하는 문법이에요' : '이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다'}" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
+                        ? (g.delta > 0
+                            ? `<span title="${g.isReviewTarget ? '지금 복습하는 문법이에요' : '이 문법도 오늘 복습으로 쳤어요 — 복습 줄에서 뺐습니다'}" class="shrink-0 text-[10px] font-black text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">🔁 오늘 복습</span>`
+                            : `<span title="오늘 차례였던 문법 — 틀리게 써서 복습 실패로 쳤어요 (한 칸 뒤로, 오늘 몫은 끝)" class="shrink-0 text-[10px] font-black text-rose-600 bg-rose-100 rounded-full px-2 py-0.5">🔁 복습 실패</span>`)
                         : ''}
                     ${aiCurveChip(aiGrammarCurveShift(g))}
                     ${g.locked ? lockMark : cycleBtn('cycleGrammarEntry', i)}
@@ -6048,7 +6053,9 @@ Give the fragment in "ev".`;
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(e.it.idiom)}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${e.delta > 0 ? 'text-emerald-600' : (e.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(e.delta)}</span>` : ''}
-                                ${aiIdiomAlsoReviewed(e) ? `<span title="이 관용구는 오늘 복습으로 쳤어요" class="shrink-0 text-[9px] font-black text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">🔁 오늘 복습</span>` : ''}
+                                ${aiIdiomAlsoReviewed(e) ? (e.delta > 0
+                                    ? `<span title="이 관용구는 오늘 복습으로 쳤어요" class="shrink-0 text-[9px] font-black text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">🔁 오늘 복습</span>`
+                                    : `<span title="오늘 차례였던 관용구 — 틀리게 써서 복습 실패로 쳤어요 (한 칸 뒤로, 오늘 몫은 끝)" class="shrink-0 text-[9px] font-black text-rose-600 bg-rose-100 rounded-full px-1.5 py-0.5">🔁 복습 실패</span>`) : ''}
                                 ${aiCurveChip(aiIdiomCurveShift(e), true)}
                                 ${e.locked ? lockMark : `<button type="button" onclick="cycleIdiomEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
                             </span>`;
