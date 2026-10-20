@@ -2636,11 +2636,15 @@ let vocabulary = [];
             //   [냐냐 요청] 그날 맞히면 졸업하는 수 (2026-10-11) — 숫자만. 목록엔 따로 표시하지 않는다(힌트가 된다).
             //   30일 칸에 있고 약점이 아닌 것만 (약점은 맞혀도 30일 칸에 머문다 — holdWeakAtLastStage).
             const lastStage = REVIEW_INTERVALS.length - 1;
-            const planGrad = plan3 ? (
-                (plan3.word || []).filter(w => (w.reviewStage || 0) === lastStage && !isWeakGrade(getWordGrade(w))).length
-                + (plan3.idiom || []).filter(e => e.stage === lastStage && !isWeakGrade(getIdiomGrade(e.word.id, e.idiom.iid || e.idiom.idiom))).length
-                + (plan3.grammar || []).filter(t => ((grammarReview[t.id] || {}).stage || 0) === lastStage && !isWeakGrade(getGrammarGrade(t.id))).length
+            const gradCount = (p) => p ? (
+                (p.word || []).filter(w => (w.reviewStage || 0) === lastStage && !isWeakGrade(getWordGrade(w))).length
+                + (p.idiom || []).filter(e => e.stage === lastStage && !isWeakGrade(getIdiomGrade(e.word.id, e.idiom.iid || e.idiom.idiom))).length
+                + (p.grammar || []).filter(t => ((grammarReview[t.id] || {}).stage || 0) === lastStage && !isWeakGrade(getGrammarGrade(t.id))).length
             ) : 0;
+            const planGrad = gradCount(plan3);
+            //   [냐냐 요청] 오늘 맞히면 졸업하는 수도 '총 N개 활동' 옆에 숫자만 (2026-10-20) — 오늘 칸엔 복습 예정 줄이 없어서 안 보였다.
+            //   목록은 여전히 안 보인다(힌트가 된다). 오늘 이미 푼 것은 오늘 줄에서 빠지니 남은 것만 센다.
+            const todayGrad = (ds === today && typeof getAllScheduledOn === 'function') ? gradCount(getAllScheduledOn(ds)) : 0;
             // ============================================================
             // [냐냐 요청] '오늘 틀린 것' 버튼 자리에 정답률을 (2026-09-24).
             //   셈은 15일 정답률과 같다 — 퀴즈 한 문제·쓰기 한 낱말·첨삭 한 문장이 저마다 한 번.
@@ -2683,7 +2687,7 @@ let vocabulary = [];
                 <div class="flex items-baseline gap-1.5 mb-1.5 px-0.5">
                     <span class="font-black text-slate-700">${isToday ? '오늘' : fmtDateSlash(ds)}</span>
                     ${isToday ? `<span class="text-[10px] font-bold text-slate-400">${fmtDateSlash(ds)}</span>` : ''}
-                    ${total > 0 ? `<span class="ml-auto text-[10px] font-black text-violet-600">총 ${total}개 활동</span>` : ''}
+                    ${(total > 0 || todayGrad) ? `<span class="ml-auto text-[10px] font-black text-violet-600">${total > 0 ? `총 ${total}개 활동` : ''}${todayGrad ? `<span class="text-emerald-600" title="오늘 맞히면 졸업하는 것 ${todayGrad}개">${total > 0 ? ' · ' : ''}🎓 ${todayGrad}</span>` : ''}</span>` : ''}
                 </div>
                 ${/* [냐냐 요청] 상자를 빼고 글씨를 키웠다 (2026-09-04) — 이제 이 카드의 본문이라 가둘 이유가 없다 */''}
                 ${/* [냐냐 요청] 오늘은 아직 한 게 없어도 표를 그린다 (2026-10-16) — 복습 줄의 '−남은 것' 이 보여야 해서 */''}
