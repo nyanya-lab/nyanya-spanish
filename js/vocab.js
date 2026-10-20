@@ -6559,7 +6559,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     ['한 번에',      nBy(2),   '+2',   'text-emerald-600'],
                     ['오타 고쳐서',  nBy(1),   '+1',   'text-emerald-600'],
                     ['익혀서',       nBy(-1.5), '−1.5', 'text-amber-600'],
-                    ['끝내',         nBy(-2),  '−2',   'text-rose-500']
+                    ['3바퀴 오타 고쳐서', nBy(-2), '−2', 'text-amber-600'],   // [냐냐 요청] 2026-10-21
+                    ['끝내',         nBy(-2.5), '−2.5', 'text-rose-500']   // 9/21 부터 −2.5 인데 여기만 −2 로 세고 있었다
                 ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
                 const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
                 //   익혀서 맞힌 것은 초록도 빨강도 아니다 — 노랑으로 따로 둔다 (점수도 −1 이다)
@@ -6905,8 +6906,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   내가 쓴 답이 단어장에서 '어떤 낱말' 로 알아들어지면 그건 오타가 아닐 수 있다.
             //   (esperando 를 물었는데 esperado — 같은 동사 다른 활용, 또는 아예 다른 낱말)
             //   그런 건 판정이 갈리는 자리라 그대로 AI 에게 맡긴다.
-            if (typeof findVocabWordByForm === 'function' && findVocabWordByForm(userRaw)) return false;
+            //   [냐냐 요청] 단, **한 글자** 차이면 다른 낱말이 돼도 오타로 본다 (2026-10-21) — perro 를 쓰려다 pero 가 된 건 대개 손 미끄러짐.
+            //   고쳐 맞혀도 오타 대접(+1)이라 공짜는 아니다. 두 글자부터는 진짜로 헷갈렸을 수 있어 AI 에게 맡긴다.
             const d = levenshtein(u, c);
+            if (d > 1 && typeof findVocabWordByForm === 'function' && findVocabWordByForm(userRaw)) return false;
             return d > 0 && d <= 2;
         }
 
@@ -7066,6 +7069,19 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             // [냐냐 지적] 1바퀴에서 틀린 순간 −2 와 곡선을 이미 적었다. 여기서는 차액만 반영한다:
             //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
             const already = !!s.failedOnce[writeFailKey(w)];
+            // [냐냐 요청] 3바퀴에도 오타 기회 한 번 (2026-10-21). 힌트 없이 되묻기만 — 고쳐 맞히면 합 −2
+            //   (맞힘 −1.5 와 끝내 틀림 −2.5 사이). 1바퀴와 같은 잣대(writeLooksLikeTypo)로 본다.
+            s.r3Typo = s.r3Typo || {};
+            const r3Key = writeFailKey(w);
+            if (!isMatch && !s.r3Typo[r3Key] && writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase))) {
+                s.r3Typo[r3Key] = 'asked';
+                s.hint = '✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?';
+                s.hintMine = el.value.trim();
+                el.value = '';
+                renderWritePractice();
+                return;
+            }
+            const r3TypoFixed = isMatch && s.r3Typo[r3Key] === 'asked';
             if (isMatch) {
                 const shift = withTaskGradeShift(w, () => {
                     if (typeof addWordScore !== 'function') return;
@@ -7073,13 +7089,16 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
                     const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
                     //   [냐냐 요청] 익혀서 맞히면 합이 −1.5 (2026-09-17, 예전 −1): 1바퀴 −2 에 +0.5 를 돌려준다
-                    if (already) addWordScore(w.id, 0.5, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
-                    else addWordScore(w.id, -1.5, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
+                    //   3바퀴 오타를 고쳐 맞히면 합 −2: 1바퀴 −2 에 더할 것 없음
+                    const back = r3TypoFixed ? 0 : 0.5;
+                    if (already) { if (back) addWordScore(w.id, back, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf }); }
+                    else addWordScore(w.id, -2 + back, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: -1.5, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: r3TypoFixed ? -2 : -1.5, ...shift });
+                s.hint = ''; s.hintMine = '';
                 s.index++;
                 s.done = 0;
             } else {
@@ -7317,7 +7336,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     || stripAccentMarks(normalizeWriteAnswer(userAnswer)) === stripAccentMarks(normalizeWriteAnswer(w.word));
                 if (restOk) {
                     if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
-                    writeAskRetry('typo', `✏️ 관사까지 한 덩어리로 외우는 표현이에요! ${hintStartHtml(art.split('/')[0])}`, userAnswer);
+                    writeAskRetry('typo', `✏️ 관사까지 한 덩어리로 외우는 표현이에요! 다시 한 번 써볼까요?`, userAnswer);   // [냐냐 요청] 힌트는 유의어만 (2026-10-21)
                     return;
                 }
             }
@@ -7373,7 +7392,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     //      철자로 이미 한 번 봐줬으면(used.typo) 그때는 그대로 오답이다.
                     if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                     const p = writePrefixHint(userAnswer, w.word);
-                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?`, userAnswer);
+                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요. 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
@@ -7433,7 +7452,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     writeAskRetry('synonym', writeSynonymHint(userAnswer, w, a.hint) + synonymAwardNote(got), userAnswer);
                     return;
                 }
-                if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`, userAnswer); return; }
+                if (a.isTypo && !used.typo) { writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?`, userAnswer); return; }
                 writeFirstRoundFail(w, userAnswer, aiInfo());
                 return;
             }
@@ -7471,7 +7490,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
                     ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
                 if (dist <= 3) {
-                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 — ${hintStartHtml(writePrefixHint(userAnswer, w.word))}`, userAnswer);
+                    writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
@@ -7483,7 +7502,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const other = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
                 if (!other || other.id === baseW.id) {
                     const p = writePrefixHint(userAnswer, w.word);
-                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?`, userAnswer);
+                    writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요. 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
             }
