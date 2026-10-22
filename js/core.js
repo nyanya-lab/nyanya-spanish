@@ -408,8 +408,10 @@ let vocabulary = [];
             _saveTimer = setTimeout(() => { _saveTimer = null; flushSaveToStorage(); }, SAVE_DEBOUNCE_MS);
         }
 
+        let _backupHold = false;   // 매일 견주기가 옛 백업을 받기 전까지 백업 저장을 붙잡는다 (loadFromStorage)
         async function flushSaveToStorage() {
             if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+            if (_backupHold) return;   // 미룬 것(_savePending)은 그대로 — 견주기가 끝나면 올린다
             const json = _savePending;
             const rev = _savePendingRev;
             if (!json) return;
@@ -479,10 +481,8 @@ let vocabulary = [];
             // 1순위: Firebase에서 불러오기 — 비밀번호를 설정해야 사용 가능
             const firebasePath = getFirebaseDataPath();
             //   [냐냐 결정] 새 저장소부터 (위 V3_PRIMARY). 매일 한 번은 백업도 같이 받아 견준다 — 이 창이 백업을 덮기 전에.
-            let v3Loaded = false;
+            let v3Loaded = false, v3Tree = null;
             if (firebasePath && V3_PRIMARY && typeof S3 !== 'undefined' && getV3DataUrl()) {
-                const checkDue = v3BackupCheckDue();
-                const backupP = checkDue ? fetch(firebasePath, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null) : null;
                 try {
                     const res = await takeEarlyDataFetch(getV3DataUrl());
                     if (res.ok) {
@@ -493,11 +493,9 @@ let vocabulary = [];
                             payload = S3.treeToPayload(tree);
                             S3.primary = true;
                             S3.knownRev = tree.meta.rev || null;
-                            if (backupP) backupP.then(old => {
-                                if (!old) return;
-                                try { localStorage.setItem(V3_CHECK_DAY_KEY, getLocalDateString()); } catch (e) {}
-                                S3.backupCheck(old, tree);
-                            });
+                            //   [냐냐 요청] 매일 견주기용 백업(2MB)은 화면이 다 뜬 뒤에 받는다 (2026-10-22) — 예전엔 같이 받아서 하루 첫 로딩이 길었다.
+                            //   대신 그때까지 이 창의 백업 저장을 붙잡아 둔다(_backupHold) — 먼저 올라가면 견줄 옛 백업이 덮인다.
+                            if (v3BackupCheckDue()) { v3Tree = tree; _backupHold = true; }
                         }
                     }
                 } catch (e) {
@@ -573,6 +571,17 @@ let vocabulary = [];
             saveToStorage();
             //   [냐냐 결정] 새 저장 자리(v3) — 켜진 뒤 정리들이 끝나고 처음 채우기 또는 크로스체크 (js/store3.js)
             if (firebaseReachable && typeof S3 !== 'undefined') setTimeout(() => { S3.afterBoot(); }, 8000);
+            if (v3Tree) setTimeout(async () => {
+                try {
+                    const r = await fetch(firebasePath, { cache: 'no-store' });
+                    const old = r.ok ? await r.json() : null;
+                    if (old) {
+                        try { localStorage.setItem(V3_CHECK_DAY_KEY, getLocalDateString()); } catch (e) {}
+                        S3.backupCheck(old, v3Tree);
+                    }
+                } catch (e) { console.warn('[v3] 백업 견주기용 받기 실패', e); }
+                finally { _backupHold = false; v3Tree = null; flushSaveToStorage(); }
+            }, 3000);
         }
 
         // payload 를 현재 상태로 펼친다. payload 가 없으면 초기 상태로 되돌린다.
