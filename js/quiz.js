@@ -1144,7 +1144,7 @@ let quizSession = null;
                     }).join('');
                 }
 
-                const head = `<span>🔀</span> ${escapeHtml(labelOf(k))}
+                const head = `${escapeHtml(labelOf(k))}
                         ${isAsked ? `<span class="text-violet-500">· ${escapeHtml(opts.askedLabel || '이번 문제')}</span>` : ''}
                         ${isIrr ? `<span class="text-rose-500">· 불규칙${irrType === '불규칙' ? '' : ` <span class="text-blue-600">(${escapeHtml(irrType)})</span>`}</span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}`;
                 const headCls = `${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap`;

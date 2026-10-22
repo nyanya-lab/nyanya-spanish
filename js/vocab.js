@@ -1811,6 +1811,22 @@ Output one item per line, same id, no line skipped.`;
         }
 
         async function startBulkConj() {
+            const st0 = bulkConjState;
+            //   [냐냐 요청] 불완료과거는 AI 없이 코드로 바로 (2026-10-22) — 불규칙이 ser · ir · ver 뿐이라 틀릴 일이 없다
+            if (st0 && !st0.running && st0.tense === 'imperfecto' && st0.targets.length) {
+                st0.rows = []; st0.failed = [];
+                st0.targets.forEach(v => {
+                    const imp = imperfectoFormsOf(v.word);
+                    if (!imp) { st0.failed.push(v.word); return; }
+                    const row = { id: v.id, word: v.word, meaning: v.meaning, irregular: imp.irregular ? '불규칙' : 'none', unverified: false, on: true };
+                    CONJ_PERSON_KEYS.forEach(p => { row[p] = imp.forms[p]; });
+                    row.text = conjOneLine('imperfecto', row);
+                    row.alt = '';
+                    st0.rows.push(row);
+                });
+                renderBulkConjResult();
+                return;
+            }
             if (!(typeof hasGeminiApiKey === 'function' && hasGeminiApiKey())) { openApiKeyModal(); return; }
             const st = bulkConjState;
             if (!st || st.running || st.targets.length === 0) return;
@@ -1936,6 +1952,7 @@ Output one item per line, same id, no line skipped.`;
             picked.forEach(r => {
                 const v = vocabulary.find(x => x.id === r.id);
                 if (!v) return;
+                s3('word', v);   // [v3] 일괄 추가가 새 저장소에 안 실리고 있었다 (2026-10-22) — 새로고침하면 사라졌을 것
                 const data = {};
                 if (isSingleTense(tense)) data.form = r.form;
                 else CONJ_PERSON_KEYS.forEach(p => { data[p] = r[p] || ''; });
