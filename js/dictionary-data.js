@@ -565,6 +565,49 @@
             });
         }
 
+        // ============================================================
+        // [냐냐 지적] AI 질문하기가 느리다 (2026-10-22) — 답이 다 만들어질 때까지 '생각하는 중...' 만 보였다.
+        //   흘려 받기(streamGenerateContent, SSE)로 바꿔 글자가 만들어지는 대로 보여준다. 모델·생각 수준은 그대로.
+        //   onText(지금까지 받은 글 전부) 를 받을 때마다 부른다. 실패하면 던진다 — 부르는 쪽이 예전 방식으로 다시 묻는다.
+        // ============================================================
+        async function streamGemini(promptText, systemInstruction, thinkingLevel, onText, model) {
+            const apiKey = getGeminiApiKey();
+            if (!apiKey) throw new Error('NO_API_KEY');
+            const m = model || GEMINI_MODEL_FLASH_LITE;
+            const payload = { contents: [{ parts: [{ text: promptText }] }],
+                generationConfig: { thinkingConfig: { thinkingLevel: String(thinkingLevel || 'low').toUpperCase() }, maxOutputTokens: 4096 } };
+            if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse&key=${apiKey}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!res.ok || !res.body) {
+                const err = new Error(`API response status ${res.status}`);
+                err.status = res.status;
+                try { err.body = await res.text(); } catch (e) {}
+                throw err;
+            }
+            const reader = res.body.getReader();
+            const dec = new TextDecoder();
+            let buf = '', text = '';
+            for (;;) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, { stream: true });
+                let i;
+                while ((i = buf.indexOf('\n')) >= 0) {
+                    const line = buf.slice(0, i).trim();
+                    buf = buf.slice(i + 1);
+                    if (!line.startsWith('data:')) continue;
+                    try {
+                        const j = JSON.parse(line.slice(5).trim());
+                        const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+                        const add = parts.filter(p => p && !p.thought && typeof p.text === 'string').map(p => p.text).join('');
+                        if (add) { text += add; if (typeof onText === 'function') onText(text); }
+                    } catch (e) { /* 덜 온 줄 — 다음 조각과 이어진다 */ }
+                }
+            }
+            return text;
+        }
+
         // [PATCH-에러분류] callGemini가 던진 에러를 사용자에게 보여줄 정확한 한국어 메시지로 변환
         function describeGeminiError(e) {
             const msg = String(e && e.message || '');

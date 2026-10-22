@@ -1145,6 +1145,8 @@ let vocabulary = [];
                     return `<div class="flex justify-end"><div class="bg-violet-600 text-white rounded-2xl rounded-br-md px-3 py-2 max-w-[85%] text-xs font-semibold whitespace-pre-wrap break-words">${escapeHtml(m.text)}</div></div>`;
                 }
                 if (m.role === 'pending') {
+                    //   흘려 받는 중이면 받은 만큼 보여준다
+                    if (m.text) return `<div class="flex justify-start"><div class="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md px-3 py-2 max-w-[90%] text-xs font-semibold leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(m.text)}<span class="inline-block w-1.5 h-3 ml-0.5 bg-slate-400 align-middle animate-pulse"></span></div></div>`;
                     return `<div class="flex justify-start"><div class="bg-slate-100 text-slate-400 rounded-2xl rounded-bl-md px-3 py-2 text-xs font-bold">생각하는 중...</div></div>`;
                 }
                 const cls = m.error ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-100 text-slate-800';
@@ -1188,7 +1190,18 @@ let vocabulary = [];
                     .map(m => (m.role === 'user' ? '학생: ' : '선생님: ') + m.text)
                     .join('\n');
                 const prompt = history ? `${history}\n학생: ${q}` : q;
-                const answer = await callGemini(prompt, sys, null, 'low');
+                //   [냐냐 지적] 느리다 → 흘려 받아서 만들어지는 대로 보여준다 (2026-10-22). 흘려 받기가 안 되면 예전처럼 한 번에.
+                let answer = '';
+                const pend = askAiMessages.find(m => m.role === 'pending');
+                try {
+                    answer = await streamGemini(prompt, sys, 'low', (t) => {
+                        if (pend) { pend.text = t; renderAskAiThread(); }
+                    });
+                } catch (se) {
+                    if (String(se && se.message || '').includes('NO_API_KEY') || se.status === 401 || se.status === 403 || se.status === 429) throw se;
+                    console.warn('AI 질문하기: 흘려 받기 실패 → 한 번에 받기', se);
+                    answer = await callGemini(prompt, sys, null, 'low');
+                }
                 askAiMessages = askAiMessages.filter(m => m.role !== 'pending');
                 askAiMessages.push({ role: 'ai', text: (answer || '').toString().trim() || '답을 받지 못했어요.' });
             } catch (e) {
