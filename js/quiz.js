@@ -1252,19 +1252,28 @@ let quizSession = null;
 
         //   두 모델 경주 — 먼저 온 쓸 만한 답(JSON 에 verdict)을 돌려준다. 둘 다 실패하면 던진다 (전체 제한 시간 없음)
         //   3.5 쪽만 20초 제한 — 마냥 멈춰 있으면 '10분 건너뛰기' 를 켜려고. 3.1 은 제한 없음.
+        //   [냐냐 지적] 쓰기 복습 채점이 느리다 (2026-10-22) — 어느 모델이 몇 초에 답했는지, 누가 못 했는지 남긴다 (화면 작은 글씨)
+        let lastAiGradeInfo = null;   // { m: '3.1', s: 1.2, miss: ['3.5 503'] }
         function aiGradeRace(prompt, system, schema) {
+            const t0 = Date.now();
+            const miss = [];
+            const lab = (m) => /3\.5/.test(m) ? '3.5' : '3.1';
             const ok = (txt) => { const d = extractAndParseJson(txt); if (!d || !d.verdict) throw new Error('BAD_JSON'); return txt; };
             const tries = [];
             //   3.5 가 '10분 건너뛰기' 중이면 그 요청도 3.1 로 가서 같은 걸 두 번 묻게 된다 — 그땐 3.1 하나만
             const gradeDown = (typeof isGradeModelDown === 'function') && isGradeModelDown();
             if (typeof GEMINI_MODEL_GRADE !== 'undefined' && GEMINI_MODEL_GRADE !== GEMINI_MODEL_FLASH_LITE && !gradeDown) {
-                tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, 20000).then(ok));
+                tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, 20000).then(ok).then(v => [v, GEMINI_MODEL_GRADE], e => { throw Object.assign(e || {}, { _m: GEMINI_MODEL_GRADE }); }));
             }
-            tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, 0).then(ok));
+            tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, 0).then(ok).then(v => [v, GEMINI_MODEL_FLASH_LITE], e => { throw Object.assign(e || {}, { _m: GEMINI_MODEL_FLASH_LITE }); }));
             return new Promise((resolve, reject) => {
                 let left = tries.length, done = false;
-                tries.forEach(p => p.then(v => { if (!done) { done = true; resolve(v); } },
-                    e => { if (--left === 0 && !done) { done = true; reject(e); } }));
+                tries.forEach(p => p.then(([v, m]) => {
+                    if (!done) { done = true; lastAiGradeInfo = { m: lab(m), s: Math.round((Date.now() - t0) / 100) / 10, miss: miss.slice() }; resolve(v); }
+                }, e => {
+                    miss.push(lab(e && e._m || '') + ' ' + (e && (e.status || (e.timedOut ? '시간초과' : '')) || '실패'));
+                    if (--left === 0 && !done) { done = true; lastAiGradeInfo = { m: '', s: Math.round((Date.now() - t0) / 100) / 10, miss: miss.slice() }; reject(e); }
+                }));
             });
         }
         async function aiGradeSubjective(userAnswer, q) {

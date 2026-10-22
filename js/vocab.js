@@ -6839,6 +6839,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             <p class="text-xs font-bold text-rose-400 line-through break-words">${escapeHtml(mine)}</p>
                         </div>` : '')}
                         ${fb.correct ? '' : '<p class="text-[10px] font-bold text-rose-400 pt-1">2바퀴에서 다시 익혀요</p>'}
+                        ${s.gradeStamp ? `<p class="text-[10px] font-semibold text-slate-300 pt-1">${escapeHtml(s.gradeStamp)}</p>` : ''}
                     </div>`;
             }
 
@@ -6873,7 +6874,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             onkeydown="writePracticeKeydown(event)" ${s.grading ? 'disabled' : ''}
                             class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2 disabled:opacity-50"
                             placeholder="${escapeHtml(placeholder)}">
-                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">${s.phase === 1 ? '유의어나 오타는 한 번 더 기회를 줘요' : '악센트까지 정확히 써야 넘어가요'}</p>
+                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">${s.phase === 1 ? '유의어나 오타는 한 번 더 기회를 줘요' : '악센트까지 정확히 써야 넘어가요'}${s.gradeStamp ? `<span class="ml-2 font-semibold text-slate-300">${escapeHtml(s.gradeStamp)}</span>` : ''}</p>
                     </div>`}
 
                     <div class="flex gap-2">
@@ -7396,6 +7397,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         async function gradeWriteFirstRound(userRaw) {
             const s = writePracticeState;
             if (!s) return;
+            s.gradeStamp = '';   // AI 를 안 부르고 코드로 채점하면 표시하지 않는다
             const w = s.pool[s.index];
             const userAnswer = String(userRaw || '').trim();
 
@@ -7527,6 +7529,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 renderWritePractice();
                 try { ai = await aiGradeSubjective(userAnswer, q); } catch (err) { console.warn(err); }
                 s.grading = false;
+                //   [냐냐 지적] 채점이 느리다 → 누가 몇 초에 답했는지 작게 (2026-10-22)
+                const gi = (typeof lastAiGradeInfo !== 'undefined') ? lastAiGradeInfo : null;
+                s.gradeStamp = gi ? `채점 ${gi.m ? gi.m + ' · ' : '실패 · '}${gi.s}초${gi.miss.length ? ' (' + gi.miss.join(', ') + ')' : ''}` : '';
                 if (writePracticeState !== s) return;   // 채점 중에 나갔으면 아무것도 하지 않음
             }
 
