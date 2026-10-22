@@ -1024,7 +1024,7 @@ let quizSession = null;
                 sections.push(`
                     <div>
                         <span class="block text-xs font-black text-amber-600 mb-1.5">📝 노트</span>
-                        <span class="block text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(word.notes)}</span>
+                        <span class="ny-vlink-scan block text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(word.notes)}</span>
                     </div>`);
             }
             // [냐냐 PATCH-5배치] 유의어 / 반의어 (퀴즈 결과·복습 화면에도 표시)

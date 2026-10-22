@@ -8227,6 +8227,108 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             );
         }
 
+        // ============================================================
+        // [냐냐 요청] 메모·문법 노트 속 동사·관용구를 눌러 단어 조회 창 (2026-10-08 요청 — 그때 기억에만 적고 코드는 없었다.
+        //   2026-10-22 "안 돼..!" 로 알고 실제로 만듦). 범위는 **동사 + 관용구만** (냐냐님 결정 — 다 이으면 밑줄투성이).
+        //   어디: 문법 노트 보기 화면의 글·표 칸, 단어 조회 창 메모. 편집창은 안 건드린다.
+        //   동사는 활용형도 찾는다(findVocabWordByForm). 두 글자 이하(es·ha·va)는 너무 흔해 잇지 않는다.
+        //   관용구는 빈칸([사람] 등)을 뺀 고정 낱말이 두 개 이상인 것만, 글에 그대로 나올 때.
+        // ============================================================
+        let _vlinkIdx = null, _vlinkIdxKey = '';
+        function vlinkIndex() {
+            const key = (vocabulary || []).length + ':' + (typeof S3 !== 'undefined' ? S3.sentCount : 0);
+            if (_vlinkIdx && _vlinkIdxKey === key) return _vlinkIdx;
+            const idioms = [];
+            (vocabulary || []).forEach(w => (Array.isArray(w.idioms) ? w.idioms : []).forEach(it => {
+                if (!it || !it.idiom) return;
+                const fixed = String(it.idiom).replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/[¿?¡!.,;:]/g, ' ').replace(/\s+/g, ' ').trim();
+                if (fixed.split(' ').length < 2 || /\//.test(fixed)) return;
+                const esc = fixed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                idioms.push({ re: new RegExp('(?<![\\p{L}])' + esc + '(?![\\p{L}])', 'iu'), len: fixed.length, wid: w.id, iid: it.iid || '' });
+            }));
+            idioms.sort((a, b) => b.len - a.len);
+            _vlinkIdx = { idioms, verbs: new Map() };
+            _vlinkIdxKey = key;
+            return _vlinkIdx;
+        }
+        function vlinkVerbOf(tok, idx) {
+            const k = tok.toLowerCase();
+            if (idx.verbs.has(k)) return idx.verbs.get(k);
+            let w = null;
+            if (k.length >= 3) {
+                const norm = (x) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(x, true) : String(x).toLowerCase();
+                const n = norm(k);
+                w = (vocabulary || []).find(v => v.pos === 'verb' && norm(v.word) === n) || null;
+                if (!w && typeof findVocabWordByForm === 'function') {
+                    const f = findVocabWordByForm(k);
+                    if (f && f.pos === 'verb') w = f;
+                }
+            }
+            idx.verbs.set(k, w);
+            return w;
+        }
+        function vlinkSpan(text, attrs) {
+            const sp = document.createElement('span');
+            sp.className = 'ny-vlink';
+            Object.keys(attrs).forEach(a => { if (attrs[a]) sp.setAttribute(a, attrs[a]); });
+            sp.textContent = text;
+            return sp;
+        }
+        //   글 한 조각을 [글 | 링크] 조각들로 — 관용구 먼저, 남은 글에서 동사
+        function vlinkSplit(text, idx, depth) {
+            const d = depth || 0;
+            if (d < 6) {
+                for (const id of idx.idioms) {
+                    const m = id.re.exec(text);
+                    if (!m) continue;
+                    return vlinkSplit(text.slice(0, m.index), idx, d + 1)
+                        .concat([vlinkSpan(m[0], { 'data-vlink-w': id.wid, 'data-vlink-i': id.iid })])
+                        .concat(vlinkSplit(text.slice(m.index + m[0].length), idx, d + 1));
+                }
+            }
+            const out = [];
+            let last = 0, m;
+            const re = /[A-Za-zÀ-ÖØ-öø-ÿñÑ]+/g;
+            while ((m = re.exec(text))) {
+                const w = vlinkVerbOf(m[0], idx);
+                if (!w) continue;
+                if (m.index > last) out.push(document.createTextNode(text.slice(last, m.index)));
+                out.push(vlinkSpan(m[0], { 'data-vlink-w': w.id }));
+                last = m.index + m[0].length;
+            }
+            if (last < text.length) out.push(document.createTextNode(text.slice(last)));
+            return out;
+        }
+        function linkVocabIn(root, selector) {
+            if (!root || typeof vocabulary === 'undefined') return;
+            const idx = vlinkIndex();
+            const scopes = selector ? root.querySelectorAll(selector) : [root];
+            scopes.forEach(scope => {
+                const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+                    acceptNode: (n) => (!/[A-Za-zÀ-ÿñÑ]{3}/.test(n.nodeValue) || n.parentElement.closest('.ny-vlink, a, button, input, textarea, [contenteditable="true"]'))
+                        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+                });
+                const nodes = [];
+                while (walker.nextNode()) nodes.push(walker.currentNode);
+                nodes.forEach(n => {
+                    const parts = vlinkSplit(n.nodeValue, idx);
+                    if (!parts.some(p => p.nodeType === 1)) return;
+                    const frag = document.createDocumentFragment();
+                    parts.forEach(p => frag.appendChild(p));
+                    n.parentNode.replaceChild(frag, n);
+                });
+            });
+        }
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.closest && e.target.closest('.ny-vlink');
+            if (!el) return;
+            e.preventDefault(); e.stopPropagation();
+            const wid = el.getAttribute('data-vlink-w'), iid = el.getAttribute('data-vlink-i');
+            if (iid && typeof openIdiomFromAi === 'function') openIdiomFromAi(wid, iid);
+            else if (wid && typeof openWordView === 'function') openWordView(wid);
+        }, true);
+        const GRAMMAR_VLINK_SEL = '.ny-gtable td, .nyanya-rt';
+
         function renderGrammarTables() {
             const container = document.getElementById('grammar-tables-container');
             if (!container) return;
@@ -8240,6 +8342,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (only.length) {
                     document.getElementById('grammar-empty-msg')?.classList.add('hidden');
                     container.innerHTML = only.map(t => renderGrammarNoteCard(t, '', true)).join('');
+                    setTimeout(() => linkVocabIn(container, GRAMMAR_VLINK_SEL), 0);
                     if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
                     if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
                     if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
@@ -8292,6 +8395,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             container.innerHTML = useGroups
                 ? renderGrammarGrouped(tables)
                 : tables.map(t => renderGrammarNoteCard(t, query, true)).join('');
+            setTimeout(() => linkVocabIn(container, GRAMMAR_VLINK_SEL), 0);   // [냐냐 요청] 동사·관용구 누르기
 
             // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
             if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();

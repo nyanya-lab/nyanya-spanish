@@ -280,3 +280,7 @@ html {
         body:has(#word-modal:not(.hidden)) #fab-wrap,
         body:has(#word-modal:not(.hidden)) #ask-ai-panel { z-index: 55; }
         body:has(#word-modal:not(.hidden)) #quick-word-fab { display: none; }
+
+/* [냐냐 요청] 메모·문법 노트 속 동사·관용구 누르기 — 옅은 점선 밑줄 */
+.ny-vlink { text-decoration: underline dotted; text-decoration-color: rgba(100, 116, 139, .55); text-underline-offset: 3px; cursor: pointer; }
+.ny-vlink:hover { color: #6d28d9; text-decoration-color: #6d28d9; }
