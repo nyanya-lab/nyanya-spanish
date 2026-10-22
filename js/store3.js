@@ -396,17 +396,27 @@ const S3 = (() => {
     function backupCheck(oldPayload, tree) {
         try {
             const old = Object.assign({}, oldPayload); delete old.savedRev;
-            const diffs = diffPayloads(old, treeToPayload(tree || {}));
+            const cur = treeToPayload(tree || {});
+            //   [냐냐 요청] 문법 보기 설정은 '바꾼 시각(at)' 이 있으니 더 나중 것으로 저절로 맞춘다 (2026-10-22).
+            //   화면 모습뿐이라 매일 기록에 떠서 진짜 차이를 가렸다. 백업이 더 새것이면 v3 에 옮기고 견주기에서는 같은 것으로 본다.
+            const autoFixed = [];
+            const op = old.grammarPrefs, cp = cur.grammarPrefs;
+            if (op && JSON.stringify(s3Canon(op)) !== JSON.stringify(s3Canon(cp))) {
+                if ((op.at || 0) > ((cp && cp.at) || 0)) { put('misc/grammarPrefs', clone(op)); autoFixed.push('misc/grammarPrefs'); }
+                cur.grammarPrefs = op;   // v3 가 더 새것이면 백업이 다음 저장 때 따라온다 — 어느 쪽이든 차이로 적지 않는다
+            }
+            const diffs = diffPayloads(old, cur);
             const t = Date.now();
-            const report = { t, n: diffs.length, items: diffs.slice(0, 60) };
+            const report = { t, n: diffs.length, items: diffs.slice(0, 60), autoFixed };
             try { localStorage.setItem('nyanya_v3_check', JSON.stringify(report)); } catch (e) {}
             api.lastCheck = report;
             if (diffs.length) {
                 console.warn(`[v3 백업 견주기] 다른 항목 ${diffs.length}개`, diffs.slice(0, 20));
-                put('meta/checks/' + t, { kind: 'backup', n: report.n, items: report.items.map(d => `${d.where}${d.label ? ' «' + String(d.label).slice(0, 30) + '»' : ''}${d.fields.length ? ' [' + d.fields.join(',') + ']' : ''}${d.missing ? ' (' + (d.missing === 'remote' ? 'v3' : '백업') + '에 없음)' : ''}`) });
+                put('meta/checks/' + t, { kind: 'backup', n: report.n, autoFixed, items: report.items.map(d => `${d.where}${d.label ? ' «' + String(d.label).slice(0, 30) + '»' : ''}${d.fields.length ? ' [' + d.fields.join(',') + ']' : ''}${d.missing ? ' (' + (d.missing === 'remote' ? 'v3' : '백업') + '에 없음)' : ''}`) });
             } else {
-                console.info('[v3 백업 견주기] 다른 항목 없음 ✨');
+                console.info('[v3 백업 견주기] 다른 항목 없음 ✨' + (autoFixed.length ? ` (저절로 맞춤: ${autoFixed.join(', ')})` : ''));
                 put('meta/lastCleanCheck', t);
+                if (autoFixed.length) put('meta/autoFixed/' + t, autoFixed);
             }
         } catch (e) { console.warn('[v3] 백업 견주기 실패', e); }
     }
