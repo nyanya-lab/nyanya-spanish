@@ -12309,7 +12309,24 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   순간 브라우저가 스크롤을 0으로 깎아버려서, 돌아와도 맨 위였다.
         //   문법 탭이 제일 길어서(2,200px+, 표를 펼치면 더) 여기서 제일 크게 티가 났다.
         const tabScrollTop = {};
+        // ============================================================
+        // [냐냐 지적] 첨삭에서 점수를 바꿀 때 버벅였다 (2026-10-22) — 특히 문법.
+        //   점수 한 번에 안 보이는 문법 탭 노트 34개를 통째로 다시 그리고(+동사 밑줄 훑기) 단어장 1,600개도 다시 그렸다.
+        //   보이는 탭만 바로 그리고, 나머지는 '다시 그릴 것' 표시만 해 두었다가 그 탭을 열 때 그린다. 머리 줄 숫자는 0.25초 모아서 한 번.
+        // ============================================================
+        const _viewsDirty = { grammar: false, list: false };
+        let _statsSoonTimer = null;
+        function refreshViewsSoon(kinds) {
+            kinds = kinds || {};
+            if (kinds.grammar) { if (activeTab === 'grammar' && typeof renderGrammarTables === 'function') renderGrammarTables(); else _viewsDirty.grammar = true; }
+            if (kinds.list) { if (activeTab === 'list' && typeof renderWordList === 'function') renderWordList(); else _viewsDirty.list = true; }
+            if (_statsSoonTimer) clearTimeout(_statsSoonTimer);
+            _statsSoonTimer = setTimeout(() => { _statsSoonTimer = null; if (typeof updateStats === 'function') updateStats(); }, 250);
+        }
         function changeTab(tabId) {
+            //   미뤄 둔 다시 그리기 (refreshViewsSoon) — 문법 탭은 아래에서 늘 다시 그린다
+            if (tabId === 'list' && _viewsDirty.list) { _viewsDirty.list = false; if (typeof renderWordList === 'function') setTimeout(renderWordList, 0); }
+            if (tabId === 'grammar') _viewsDirty.grammar = false;
             // 떠나기 전에 지금 보던 자리를 적어둔다 (깎이기 전에)
             if (activeTab && activeTab !== tabId) tabScrollTop[activeTab] = window.scrollY;
             activeTab = tabId;

@@ -2989,8 +2989,7 @@ ${buildLearnerProfileSummary()}`;
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
-            if (typeof renderWordList === 'function') renderWordList();
-            if (typeof updateStats === 'function') updateStats();
+            refreshViewsSoon({ list: true });
         }
         function cycleIdiomEntry(i) {
             const e = aiLastEsKoIdioms[i];
@@ -5608,7 +5607,7 @@ ${buildLearnerProfileSummary()}`;
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshViewsSoon({ grammar: true });   // [냐냐 지적] 점수 바꿀 때 버벅임 — 안 보이는 탭은 열 때 그린다
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
         }
 
@@ -5655,8 +5654,7 @@ ${buildLearnerProfileSummary()}`;
             if (quiet) return;
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
-            if (typeof renderWordList === 'function') renderWordList();
-            if (typeof updateStats === 'function') updateStats();
+            refreshViewsSoon({ list: true });
         }
 
         // ============================================================
@@ -5703,10 +5701,8 @@ ${buildLearnerProfileSummary()}`;
             //   한 번에 몰아서 저장하고 다시 그린다 (항목마다 하면 화면이 멎는다)
             if (typeof saveToStorage === 'function') saveToStorage();
             renderEsKoGrammarRefs();
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshViewsSoon({ grammar: true, list: true });   // [냐냐 지적] 점수 바꿀 때 버벅임 — 안 보이는 탭은 열 때 그린다
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
-            if (typeof renderWordList === 'function') renderWordList();
-            if (typeof updateStats === 'function') updateStats();
         }
 
         function cycleWordEntry(i) {
@@ -5799,7 +5795,7 @@ Give the fragment in "ev".`;
                 setAiNoteGramOk(noteKey, noteId, ok, note.title);
                 if (typeof saveToStorage === 'function') saveToStorage();
                 renderEsKoGrammarRefs();
-                if (typeof renderGrammarTables === 'function') renderGrammarTables();
+                refreshViewsSoon({ grammar: true });   // [냐냐 지적] 점수 바꿀 때 버벅임 — 안 보이는 탭은 열 때 그린다
                 if (typeof renderTodayReview === 'function') { try { renderTodayReview(); } catch (e) {} }
             } catch (e) { console.warn('복습 목표 문법 따로 판정 실패', e); }
         }
@@ -5854,7 +5850,7 @@ Give the fragment in "ev".`;
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddGrammarPicker();
             renderEsKoGrammarRefs();
-            if (typeof renderGrammarTables === 'function') renderGrammarTables();
+            refreshViewsSoon({ grammar: true });   // [냐냐 지적] 점수 바꿀 때 버벅임 — 안 보이는 탭은 열 때 그린다
             if (typeof renderAiNoteList === 'function') renderAiNoteList();
             showToast(`"${note.title}" ${fmtDelta(delta)}`, delta > 0 ? "success" : "info");
         }
@@ -5940,8 +5936,7 @@ Give the fragment in "ev".`;
             if (typeof saveToStorage === 'function') saveToStorage();
             closeAddWordPicker();
             renderEsKoGrammarRefs();
-            if (typeof renderWordList === 'function') renderWordList();
-            if (typeof updateStats === 'function') updateStats();
+            refreshViewsSoon({ list: true });
             showToast(`"${w.word}" 0점으로 넣었어요 — ↺ 로 바꿀 수 있어요`, "info");
         }
 
