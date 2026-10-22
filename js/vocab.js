@@ -2124,7 +2124,8 @@ Output one item per line, same id, no line skipped.`;
             const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { idiomExamples: true }) : '';
             document.getElementById('word-view-body').innerHTML = (notes && notes.trim())
                 ? notes : '<p class="text-xs text-slate-400 font-semibold">적어둔 정보가 없어요.</p>';
-            if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'word-view-conj-box');
+            //   [냐냐 요청] 규칙인 시제는 접어 둔다 — 외울 건 불규칙 꼴이라 그것만 펼친다 (2026-10-22)
+            if (typeof renderQuizConjugation === 'function') renderQuizConjugation(w, null, 'word-view-conj-box', { collapseRegular: true });
             if (typeof linkVocabIn === 'function') linkVocabIn(document.getElementById('word-view-body'), '.ny-vlink-scan');   // [냐냐 요청] 메모 속 동사·관용구 누르기
 
             modal.classList.remove('hidden');

@@ -1060,6 +1060,7 @@ let quizSession = null;
         }
 
         //   opts.collapsed  = 시제 이름·규칙만 남기고 표는 접어둔다 (쓰기 2바퀴)
+        //   opts.collapseRegular = 규칙인 시제만 접는다 — 단어 조회 창 (2026-10-22, 시제가 늘어 창이 너무 길었다)
         //   opts.openAsked  = 접어두더라도 '그 시제' 하나는 펴 둔다. 맨 위로 오는 건 원래 정렬이 한다.
         //   opts.askedLabel = '· 이번 문제' 대신 쓸 말 (쓰기 2바퀴에서는 '틀린 꼴')
         function renderQuizConjugation(word, q, boxId, opts) {
@@ -1148,7 +1149,7 @@ let quizSession = null;
                         ${isAsked ? `<span class="text-violet-500">· ${escapeHtml(opts.askedLabel || '이번 문제')}</span>` : ''}
                         ${isIrr ? `<span class="text-rose-500">· 불규칙${irrType === '불규칙' ? '' : ` <span class="text-blue-600">(${escapeHtml(irrType)})</span>`}</span>` : '<span class="text-slate-400 font-bold">· 규칙</span>'}`;
                 const headCls = `${isAsked ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-black flex items-center justify-center gap-1.5 flex-wrap`;
-                if (opts.collapsed) {
+                if (opts.collapsed || (opts.collapseRegular && !isIrr && !isAsked)) {
                     // 접힌 상태 — 이름과 규칙/불규칙만 보이고, 누르면 표가 펴진다.
                     //   [냐냐 지적] 그 시제만은 펴 둔다 — 원형으로 익히는 바퀴라 불규칙 꼴이
                     //   화면에 없으면 외울 수가 없다. 정렬이 이미 맨 위로 올려놨다.
