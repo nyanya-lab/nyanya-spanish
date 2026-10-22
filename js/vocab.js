@@ -173,12 +173,31 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
                 return !!v && v.split(/\s+/).length <= 3 && /^[a-záéíóúüñ ]+$/i.test(v);
             });
         }
+        //   먼저 온 멀쩡한 답 (JSON 으로 읽히는 것). 둘 다 실패하면 마지막 오류를 던진다.
+        function wordSuggestRace(prompt, system, schema) {
+            const tries = [];
+            if (!(typeof isGradeModelDown === 'function' && isGradeModelDown())) tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 30000));
+            tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE));
+            return new Promise((resolve, reject) => {
+                let left = tries.length, done = false, lastErr = null;
+                tries.forEach(p => p.then(t => {
+                    if (done) return;
+                    if (extractAndParseJson(t)) { done = true; resolve(t); }
+                    else if (--left <= 0) reject(lastErr || new Error('빈 답'));
+                }).catch(e => { lastErr = e; if (!done && --left <= 0) reject(e); }));
+            });
+        }
+        //   [냐냐 지적] 따로 묻는 활용표에 시간 제한이 없어서, 3.5 가 늘어지면 본 답이 와도 그걸 끝없이 기다렸다 (2026-10-22, 1분).
+        //   본 답이 온 뒤로는 최대 FOCUS_WAIT_MS 만 더 기다리고, 그때까지 안 오면 본 답의 표를 쓴다.
+        const FOCUS_WAIT_MS = 2500;
         async function mergeFocusedConj(result, raw, asks) {
+            const cap = new Promise(r => setTimeout(() => r(null), FOCUS_WAIT_MS));   // 두 시제가 같은 2.5초를 나눠 쓴다
             for (const t of FOCUS_CONJ_TENSES) {
-                let got = asks ? await asks[t] : null;
+                let got = asks ? await Promise.race([asks[t], cap]) : null;
                 const mainTable = t === 'presente' ? result.conjugations : result.indefinido;
                 if (!conjTableOk(got) && !conjTableOk(mainTable)) {
-                    try { got = await focusedConjAsk(String(raw).trim(), t, GEMINI_MODEL_FLASH_LITE); } catch (e) { got = null; }
+                    //   둘 다 깨졌을 때만 3.1 로 한 번 더 — 이것도 10초를 넘기면 그 시제는 비워 둔다
+                    try { got = await Promise.race([focusedConjAsk(String(raw).trim(), t, GEMINI_MODEL_FLASH_LITE), new Promise(r => setTimeout(() => r(null), 10000))]); } catch (e) { got = null; }
                 }
                 if (!conjTableOk(got)) continue;   // 따로 받은 게 없으면 통째 답 그대로
                 const table = {};
@@ -3538,12 +3557,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   3.5 통째는 활용을 틀린다(8개 중 3개). 같은 3.5 도 시제 하나만 따로 물으면 12/12 — 표는 따로 받은 쪽을 쓴다.
                 //   3.5 가 실패하면 예전처럼 3.1 로.
                 const conjAsks = startFocusedConjAsks(rawWord, pickedPos);
-                let responseText;
-                try { responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 15000); }
-                catch (e35) {
-                    console.warn('단어 추천: 3.5 실패 → 3.1 로 다시', e35);
-                    responseText = await callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE);
-                }
+                //   [냐냐 지적] "거의 1분 걸렸어" (2026-10-22) — 3.5 가 늘어지면 15초를 다 기다린 뒤에야 3.1 로 갔다.
+                //   이제 3.5 와 3.1 에 **동시에** 묻고 먼저 온 멀쩡한 답을 쓴다 (첨삭·쓰기 복습 채점과 같은 방식). 끊지는 않는다.
+                const responseText = await wordSuggestRace(prompt, system, schema);
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
                 if (result && result.pos === 'verb') await mergeFocusedConj(result, rawWord, conjAsks);
