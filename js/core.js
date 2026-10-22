@@ -11537,6 +11537,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return out;
         }
         function setNoteCellMarks(tableId, blockId, map) {
+            s3('mapItem', 'grammarCellMarks', tableId);   // [v3] 10/22 크로스체크 — 칸 형광펜이 새 저장소에 안 실렸다
             const all = grammarCellMarks[tableId] || {};
             Object.keys(all).forEach(k => { if (k.indexOf(blockId + ':') === 0) delete all[k]; });
             Object.keys(map || {}).forEach(k => {
@@ -11649,6 +11650,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         function setNoteCellHighlights(tableId, blockId, map) {
+            s3('mapItem', 'grammarCellHighlights', tableId);   // [v3] 10/22 크로스체크 — 칸 강조가 새 저장소에 안 실렸다
             migrateCellHighlightKeys(tableId);
             const all = grammarCellHighlights[tableId] || {};
             Object.keys(all).forEach(k => { if (k.indexOf(blockId + ':') === 0) delete all[k]; });
