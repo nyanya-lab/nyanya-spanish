@@ -80,6 +80,8 @@
         const IRREGULAR_TYPES_BY_TENSE = {
             gerundio: ['none', 'e ➡️ i', 'o ➡️ u', '-yendo', '기타 변형'],
             participio: ['none', '불규칙', '두 꼴 다 씀'],
+            //   [냐냐 요청] 불완료과거는 갈래가 없다 — 불규칙은 ser · ir · ver 셋뿐 (2026-10-22). 규칙 / 불규칙만.
+            imperfecto: ['none', '불규칙'],
             indefinido: ['none', '1인칭 -car ➡️ -qué', '1인칭 -zar ➡️ -cé', '1인칭 -gar ➡️ -gué',
                          '3인칭 e ➡️ i', '3인칭 o ➡️ u', '3인칭 i ➡️ y', '-ducir ➡️ -uj-', '완전 불규칙'],
         };
@@ -310,6 +312,35 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
             return out;
         }
+        // [냐냐 요청] 불완료과거 (2026-10-22) — 불규칙이 ser · ir · ver 셋뿐이라 AI 없이 코드로 다 만든다.
+        //   -ar → -aba… / -er·-ir → -ía… (reír → reía · oír → oía 도 그대로 맞다). 재귀는 대명사를 앞에 (me levantaba).
+        //   돌려주는 것: { forms: {yo…ellos}, irregular } · 못 만들면 null.
+        const IMPERF_IRREGULAR = {
+            ser: ['era', 'eras', 'era', 'éramos', 'erais', 'eran'],
+            ir:  ['iba', 'ibas', 'iba', 'íbamos', 'ibais', 'iban'],
+            ver: ['veía', 'veías', 'veía', 'veíamos', 'veíais', 'veían'],
+        };
+        const IMPERF_ENDINGS = { ar: ['aba', 'abas', 'aba', 'ábamos', 'abais', 'aban'], er: ['ía', 'ías', 'ía', 'íamos', 'íais', 'ían'], ir: ['ía', 'ías', 'ía', 'íamos', 'íais', 'ían'] };
+        function imperfectoFormsOf(infinitive) {
+            let w = conjNorm(infinitive);
+            const reflexive = /(ar|er|ir|ír)se$/.test(w);
+            if (reflexive) w = w.slice(0, -2);
+            const bare = w.replace(/[áéíóú]/g, ch => 'aeiou'['áéíóú'.indexOf(ch)]);
+            let list, irregular = false;
+            //   ver 의 겹낱말(prever · rever · entrever)만 ver 를 따른다 — volver · mover · llover 는 규칙
+            const verPre = /^(pre|re|entre)ver$/.test(bare) ? bare.slice(0, -3) : null;
+            if (IMPERF_IRREGULAR[bare]) { list = IMPERF_IRREGULAR[bare]; irregular = true; }
+            else if (verPre !== null) { list = IMPERF_IRREGULAR.ver.map(x => verPre + x); irregular = true; }
+            else {
+                const ending = IMPERF_ENDINGS[bare.slice(-2)];
+                const stem = bare.slice(0, -2);
+                if (!ending || !stem || /\s/.test(bare)) return null;
+                list = ending.map(e => stem + e);
+            }
+            const forms = {};
+            REG_PERSON_KEYS.forEach((k, i) => { forms[k] = (reflexive ? REG_REFLEXIVE_PRONOUNS[i] + ' ' : '') + list[i]; });
+            return { forms, irregular };
+        }
         function regularGerundioForm(infinitive) {
             const w = conjNorm(infinitive);
             // 재귀는 대명사가 뒤에 붙고 악센트까지 생겨서(secándose) 계산이 복잡하다 — 건드리지 않는다
@@ -470,13 +501,20 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             let cells = 0;
             const verbs = (vocabulary || []).filter(v => v.pos === 'verb');
             verbs.forEach(v => {
-                ['presente', 'indefinido', 'gerundio', 'participio'].forEach(t => {
+                ['presente', 'indefinido', 'imperfecto', 'gerundio', 'participio'].forEach(t => {
                     const c = getTenseConj(v, t);
                     if (!hasConjValues(c)) return;
                     cells++;
                     const saved = conjLabelOf(v, t);
                     let fix = null, note = '';
-                    if (t === 'presente' || t === 'indefinido') {
+                    if (t === 'imperfecto') {
+                        //   불완료과거는 갈래가 규칙/불규칙 둘뿐 — ser · ir · ver 면 불규칙
+                        const calc = imperfectoFormsOf(v.word);
+                        if (!calc) return;
+                        const got = calc.irregular ? '불규칙' : 'none';
+                        if (got === saved) return;
+                        fix = got;
+                    } else if (t === 'presente' || t === 'indefinido') {
                         const m = t === 'presente' ? classifyPresentIrregular(v.word, c) : classifyIndefinidoIrregular(v.word, c);
                         const got = m && typeof m === 'object' ? m.irregularType : m;
                         if (!got || got === saved) return;
@@ -515,7 +553,7 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             modal.classList.remove('hidden');
             const sel = document.getElementById('conj-check-tense');
             if (sel) {
-                const tenses = ['presente', 'indefinido', 'gerundio', 'participio'];
+                const tenses = ['presente', 'indefinido', 'imperfecto', 'gerundio', 'participio'];
                 sel.innerHTML = tenses.map(t => `<option value="${t}">${escapeHtml(bulkTenseLabel(t))} (${verbsWithTense(t).length})</option>`).join('');
                 sel.disabled = false;
             }
@@ -3829,6 +3867,20 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             if (cell && (forceOverwrite || !cell.value.trim())) cell.value = String(ind[k] || '').trim();
                         });
                         applySingleTenseIrregular(indBlock, 'indefinido', indIrr);   // 이름은 '1칸' 이지만 갈래만 고치는 거라 여섯 칸 블록에도 맞다
+                    }
+                }
+                // [냐냐 요청] 직설법 불완료과거도 같이 (2026-10-22) — AI 가 아니라 코드로 만든다 (불규칙이 ser · ir · ver 뿐)
+                const rawInf = document.getElementById('input-word') ? document.getElementById('input-word').value : '';
+                const imp = imperfectoFormsOf(rawInf);
+                if (box && imp) {
+                    const impBlock = [...box.querySelectorAll('.conj-tense-block')].find(b => b.querySelector('.conj-block-tense').value === 'imperfecto');
+                    if (!impBlock) addTenseBlock('imperfecto', imp.forms, imp.irregular ? 'irregular' : 'regular', imp.irregular ? '불규칙' : 'none');
+                    else {
+                        CONJ_PERSON_KEYS.forEach(k => {
+                            const cell = impBlock.querySelector(`[data-person="${k}"]`);
+                            if (cell && (forceOverwrite || !cell.value.trim())) cell.value = imp.forms[k] || '';
+                        });
+                        applySingleTenseIrregular(impBlock, 'imperfecto', imp.irregular ? '불규칙' : 'none');
                     }
                 }
             }
