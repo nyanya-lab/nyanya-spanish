@@ -8313,39 +8313,58 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   동사는 활용형도 찾는다(findVocabWordByForm). 두 글자 이하(es·ha·va)는 너무 흔해 잇지 않는다.
         //   관용구는 빈칸([사람] 등)을 뺀 고정 낱말이 두 개 이상인 것만, 글에 그대로 나올 때.
         // ============================================================
+        //   [냐냐 지적] 문법 탭이 엄청 버벅인다 (2026-10-26) — 색인 열쇠에 저장 횟수(S3.sentCount)를 넣어서 저장할 때마다 색인이 버려졌고,
+        //   다시 만들 땐 낱말마다 findVocabWordByForm 을 돌려 10초 넘게 멈췄다. 데워진 때도 0.5초.
+        //   이제 색인은 단어장이 바뀔 때만(단어 수 · 동사 활용 칸 수 · 관용구 수) 다시 만들고,
+        //   동사는 '활용형 → 단어' 표를 한 번에 만들어 낱말마다 표를 한 번 찾는다. 관용구는 첫 낱말로 후보만 추린다.
         let _vlinkIdx = null, _vlinkIdxKey = '';
+        const vlinkNorm = (x) => String(x || '').toLowerCase().normalize('NFC').trim();
+        function vlinkIndexKey() {
+            let conj = 0, idi = 0;
+            (vocabulary || []).forEach(w => {
+                if (w.pos === 'verb') { const c = w.conjugationsByTense || {}; Object.keys(c).forEach(t => { conj += Object.keys(c[t] || {}).length; }); }
+                if (Array.isArray(w.idioms)) idi += w.idioms.length;
+            });
+            return (vocabulary || []).length + ':' + conj + ':' + idi;
+        }
         function vlinkIndex() {
-            const key = (vocabulary || []).length + ':' + (typeof S3 !== 'undefined' ? S3.sentCount : 0);
+            const key = vlinkIndexKey();
             if (_vlinkIdx && _vlinkIdxKey === key) return _vlinkIdx;
-            const idioms = [];
+            //   동사: 원형과 모든 활용형 → 단어 (재귀형 'me levanto' 는 뒤 낱말 'levanto' 로도)
+            const verbs = new Map();
+            const putForm = (f, w) => {
+                const k = vlinkNorm(f);
+                if (!k || k.length < 3) return;
+                if (!verbs.has(k)) verbs.set(k, w);
+                const last = k.split(/\s+/).pop();
+                if (last !== k && last.length >= 3 && !verbs.has(last)) verbs.set(last, w);
+            };
+            (vocabulary || []).forEach(w => {
+                if (w.pos !== 'verb') return;
+                putForm(w.word, w);
+                putForm(String(w.word || '').replace(/se$/i, ''), w);
+                const c = w.conjugationsByTense || {};
+                Object.keys(c).forEach(t => Object.keys(c[t] || {}).forEach(pk => putForm(c[t][pk], w)));
+                if (w.conjugations) Object.keys(w.conjugations).forEach(pk => putForm(w.conjugations[pk], w));
+            });
+            //   관용구: 고정 낱말 둘 이상. 첫 낱말로 묶어 둔다
+            const byFirst = new Map();
             (vocabulary || []).forEach(w => (Array.isArray(w.idioms) ? w.idioms : []).forEach(it => {
                 if (!it || !it.idiom) return;
                 const fixed = String(it.idiom).replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/[¿?¡!.,;:]/g, ' ').replace(/\s+/g, ' ').trim();
                 if (fixed.split(' ').length < 2 || /\//.test(fixed)) return;
+                const first = vlinkNorm(fixed.split(' ')[0]);
                 const esc = fixed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                idioms.push({ re: new RegExp('(?<![\\p{L}])' + esc + '(?![\\p{L}])', 'iu'), len: fixed.length, wid: w.id, iid: it.iid || '' });
+                const entry = { re: new RegExp('(?<![\\p{L}])' + esc + '(?![\\p{L}])', 'iu'), len: fixed.length, wid: w.id, iid: it.iid || '' };
+                if (!byFirst.has(first)) byFirst.set(first, []);
+                byFirst.get(first).push(entry);
             }));
-            idioms.sort((a, b) => b.len - a.len);
-            _vlinkIdx = { idioms, verbs: new Map() };
+            byFirst.forEach(list => list.sort((a, b) => b.len - a.len));
+            _vlinkIdx = { verbs, byFirst };
             _vlinkIdxKey = key;
             return _vlinkIdx;
         }
-        function vlinkVerbOf(tok, idx) {
-            const k = tok.toLowerCase();
-            if (idx.verbs.has(k)) return idx.verbs.get(k);
-            let w = null;
-            if (k.length >= 3) {
-                const norm = (x) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(x, true) : String(x).toLowerCase();
-                const n = norm(k);
-                w = (vocabulary || []).find(v => v.pos === 'verb' && norm(v.word) === n) || null;
-                if (!w && typeof findVocabWordByForm === 'function') {
-                    const f = findVocabWordByForm(k);
-                    if (f && f.pos === 'verb') w = f;
-                }
-            }
-            idx.verbs.set(k, w);
-            return w;
-        }
+        function vlinkVerbOf(tok, idx) { return idx.verbs.get(vlinkNorm(tok)) || null; }
         function vlinkSpan(text, attrs) {
             const sp = document.createElement('span');
             sp.className = 'ny-vlink';
@@ -8356,8 +8375,11 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         //   글 한 조각을 [글 | 링크] 조각들로 — 관용구 먼저, 남은 글에서 동사
         function vlinkSplit(text, idx, depth) {
             const d = depth || 0;
-            if (d < 6) {
-                for (const id of idx.idioms) {
+            if (d < 6 && idx.byFirst.size) {
+                const cands = [];
+                (text.match(/[A-Za-zÀ-ÖØ-öø-ÿñÑ]+/g) || []).forEach(t => { const l = idx.byFirst.get(vlinkNorm(t)); if (l) cands.push(...l); });
+                cands.sort((a, b) => b.len - a.len);
+                for (const id of cands) {
                     const m = id.re.exec(text);
                     if (!m) continue;
                     return vlinkSplit(text.slice(0, m.index), idx, d + 1)
@@ -8421,7 +8443,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 if (only.length) {
                     document.getElementById('grammar-empty-msg')?.classList.add('hidden');
                     container.innerHTML = only.map(t => renderGrammarNoteCard(t, '', true)).join('');
-                    setTimeout(() => linkVocabIn(container, GRAMMAR_VLINK_SEL), 0);
+                    setTimeout(() => requestAnimationFrame(() => linkVocabIn(container, GRAMMAR_VLINK_SEL)), 30);
                     if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
                     if (typeof renderGrammarFilterSummary === 'function') renderGrammarFilterSummary();
                     if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
@@ -8474,7 +8496,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             container.innerHTML = useGroups
                 ? renderGrammarGrouped(tables)
                 : tables.map(t => renderGrammarNoteCard(t, query, true)).join('');
-            setTimeout(() => linkVocabIn(container, GRAMMAR_VLINK_SEL), 0);   // [냐냐 요청] 동사·관용구 누르기
+            setTimeout(() => requestAnimationFrame(() => linkVocabIn(container, GRAMMAR_VLINK_SEL)), 30);   // [냐냐 요청] 동사·관용구 누르기
 
             // [냐냐 PATCH] 필터 뱃지 + 요약 줄 갱신
             if (typeof updateGrammarFilterBadge === 'function') updateGrammarFilterBadge();
@@ -8528,10 +8550,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
 
         function renderGrammarNoteCard(t, query, showTopicBadge) {
                 // [냐냐 요청] 노트 = 블록 목록 — 글 블록과 표 블록을 저장된 순서 그대로 그린다
-                const blocksHtml = getNoteBlocks(t)
-                    .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
-                    .filter(Boolean)
-                    .join('');
+                //   [냐냐 지적] 문법 탭 버벅임 (2026-10-26) — 접힌 노트의 본문까지 다 그려서 요소가 4,400 개였다(배치만 0.1초).
+                //   본문은 펼친 노트만 그리고, 접힌 노트는 빈 칸으로 두었다가 펼칠 때 채운다 (toggleGrammarTable → fillGrammarNoteBody).
+                const blocksHtml = '';
                 // 펼침 상태 유지 (검색 중이면 다 펼침, 아니면 기존 상태/첫번째만)
                 const isOpen = query ? true : (pinnedGrammar[t.id] ? true : (grammarOpenState[t.id] !== undefined ? grammarOpenState[t.id] : false));
                 const editBtns = `
@@ -8562,7 +8583,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     : grade === 'weak'     ? 'border-2 border-amber-300 bg-amber-50/50 shadow-xs'
                     :                        'border border-slate-200 shadow-sm bg-white';
                 return `
-                    <div class="rounded-2xl overflow-hidden ${cardStyle}">
+                    <div class="ny-gcard rounded-2xl overflow-hidden ${cardStyle}">
                         <div class="w-full flex items-center justify-between gap-2 px-5 py-2.5">
                             <button type="button" onclick="toggleGrammarTable('${t.id}')" class="flex items-center gap-2.5 min-w-0 text-left flex-1">
                                 <!-- [냐냐 요청] 노트 아이콘은 주제 아이콘과 같아서 뺐다 (그룹 헤더에 이미 있음).
@@ -8580,8 +8601,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                             ${editBtns}
                             <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform shrink-0 cursor-pointer" data-grammar-chevron="${t.id}" onclick="toggleGrammarTable('${t.id}')" style="${isOpen ? 'transform:rotate(180deg);' : ''}"></i>
                         </div>
-                        <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}">
-                            ${blocksHtml}
+                        <div class="${isOpen ? '' : 'hidden'} px-5 pb-5 space-y-3" data-grammar-body="${t.id}"${isOpen ? '' : ' data-lazy="1"'}>
+                            ${isOpen ? grammarNoteBlocksHtml(t) : ''}
                             <!-- [냐냐 요청] 읽다가 바로 연습으로 이어가기 (헤더 아이콘이 많아서 여기에 둠) -->
                             <div class="flex items-center gap-2 pt-1">
                                 <button type="button" onclick="startTranslationWithGrammar('${t.id}')" class="flex-1 py-2 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-all active:scale-95">
@@ -8599,6 +8620,23 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         </div>
                     </div>
                 `;
+        }
+
+        function grammarNoteBlocksHtml(t) {
+            return getNoteBlocks(t)
+                .map(b => b.type === 'text' ? renderNoteTextBlock(b) : renderNoteTableBlock(t, b))
+                .filter(Boolean)
+                .join('');
+        }
+        //   접힌 채로 그렸던 노트를 펼칠 때 본문을 채운다 (버튼 줄 앞에 끼운다)
+        function fillGrammarNoteBody(id) {
+            const body = document.querySelector(`[data-grammar-body="${id}"]`);
+            if (!body || !body.hasAttribute('data-lazy')) return;
+            const t = (getAllGrammarTables() || []).find(x => x.id === id);
+            if (!t) return;
+            body.removeAttribute('data-lazy');
+            body.insertAdjacentHTML('afterbegin', grammarNoteBlocksHtml(t));
+            if (typeof linkVocabIn === 'function') setTimeout(() => linkVocabIn(body, GRAMMAR_VLINK_SEL), 30);
         }
 
         // [냐냐 요청] 조회 화면 — 글 블록
@@ -8970,6 +9008,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const body = document.querySelector(`[data-grammar-body="${id}"]`);
             const chevron = document.querySelector(`[data-grammar-chevron="${id}"]`);
             if (!body) return;
+            if (body.classList.contains('hidden')) fillGrammarNoteBody(id);   // 접힌 채로 그렸으면 지금 채운다
             const nowHidden = body.classList.toggle('hidden');
             grammarOpenState[id] = !nowHidden;
             if (chevron) chevron.style.transform = nowHidden ? 'rotate(0deg)' : 'rotate(180deg)';
