@@ -321,7 +321,7 @@
             input.value = '';
             // 새로 만든 주제가 숨김 목록에 있었으면 다시 보이게
             const hi = hiddenQuestionTopics.indexOf(topic);
-            if (hi >= 0) hiddenQuestionTopics.splice(hi, 1);
+            if (hi >= 0) { hiddenQuestionTopics.splice(hi, 1); s3('misc', 'hiddenQuestionTopics'); }
             saveToStorage();
             renderCustomQuestionsList();
             refreshTopicsDatalist();
@@ -365,6 +365,7 @@
             const i = hiddenQuestionTopics.indexOf(topic);
             if (i >= 0) hiddenQuestionTopics.splice(i, 1);
             else hiddenQuestionTopics.push(topic);
+            s3('misc', 'hiddenQuestionTopics');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             await saveToStorage();
             renderTopicManageList();
             refreshTopicsDatalist();
@@ -593,6 +594,7 @@
             }
             // 전부 선택이면 빈 배열로 저장(= 전체)해서 새 주제가 생겨도 자동 포함되게 함
             selectedQuestionTopics = (checkedTopics.length === all.length) ? [] : checkedTopics;
+            s3('misc', 'selectedQuestionTopics');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             saveToStorage();
             closeTopicPickerModal();
             const label = selectedQuestionTopics.length === 0 ? '전체 주제' : selectedQuestionTopics.join(', ');
@@ -642,7 +644,7 @@
             s3('question', customQuestions[customQuestions.length - 1].id);
             q._saved = true;
             const hi = hiddenQuestionTopics.indexOf(topic);
-            if (hi >= 0) hiddenQuestionTopics.splice(hi, 1);
+            if (hi >= 0) { hiddenQuestionTopics.splice(hi, 1); s3('misc', 'hiddenQuestionTopics'); }
             saveToStorage();
             if (typeof renderCustomQuestionsList === 'function') renderCustomQuestionsList();
             if (typeof refreshTopicsDatalist === 'function') refreshTopicsDatalist();
@@ -1949,6 +1951,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
         function idiomDueFirstOn() { return idiomMissionDueFirst !== false; }
         function setIdiomDueFirst(on) {
             idiomMissionDueFirst = !!on;
+            s3('misc', 'idiomMissionDueFirst');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             syncIdiomScopeBadge();
             if (typeof saveToStorage === 'function') saveToStorage();
         }
@@ -2038,6 +2041,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
             if (!picked.length) { showToast("하나는 골라주세요!", "error"); return; }
             if (!idiomMissionPool(picked).length) { showToast("그 범위엔 관용구가 아직 없어요. 다른 칸도 골라주세요!", "info"); return; }
             idiomMissionScope = picked;
+            s3('misc', 'idiomMissionScope');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             syncIdiomScopeBadge();
             closeIdiomScope();
             if (typeof saveToStorage === 'function') saveToStorage();

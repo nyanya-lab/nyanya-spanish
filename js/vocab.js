@@ -4816,6 +4816,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             } else {
                 wordObj.createdAt = Date.now(); // [냐냐 PATCH] 등록 시각 기록
                 stampIdiomDates(wordObj.idioms, null);
+                //   [v3] 점수 칸·관용구 번호를 등록할 때 바로 채운다 — 예전엔 다음에 열 때 채워져서 매일 견주기에 차이로 떴다
+                if (typeof wordObj.score !== 'number') wordObj.score = 0;
+                if (typeof syncWordFlags === 'function') syncWordFlags(wordObj, { silent: true });
+                if (typeof ensureIdiomIds === 'function') ensureIdiomIds(wordObj);
                 vocabulary.unshift(wordObj);
                 s3('word', wordObj); s3('wordOrder');
                 //   [냐냐 요청] 등록하는 그 순간 DELE 레벨을 물어서 채운다 (2026-09-15).
@@ -5867,6 +5871,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return writeTenses;
         }
         function saveWriteTenses() {
+            if (typeof s3 === 'function') s3('misc', 'writeTenses');   // [v3] 고른 시제가 새 저장소에 안 실려서 다시 열면 부정과거만 남았다 (10/26)
             if (typeof saveToStorage === 'function') { try { saveToStorage(); } catch (e) {} }
         }
 
@@ -6188,6 +6193,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const k = String(writeTaskKey(w));
             if (!cur.keys.includes(k) || (k in cur.seen)) return;
             cur.seen[k] = ok ? 1 : 0;
+            s3('misc', 'writeExams');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             if (cur.keys.every(x => x in cur.seen)) s.examFinished = finishWriteExam(s.examScope);
         }
         //   틀린 것은 이름을 적어둔다 — 나중에 단어장에서 지우거나 고쳐도 기록은 그대로 남게
@@ -6212,6 +6218,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             ex.history.unshift(rec);
             if (ex.history.length > WRITE_EXAM_HISTORY_MAX) ex.history.length = WRITE_EXAM_HISTORY_MAX;
             ex.cur = null;
+            s3('misc', 'writeExams');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             return rec;
         }
         function writeExamPct(rec) { return rec && rec.total ? Math.round(rec.ok / rec.total * 100) : 0; }
@@ -6238,6 +6245,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const keys = r.words.concat(r.idioms);
                 if (!keys.length) { showToast(`${WRITE_EXAM_LABELS[sc]} 명단이 비어 있어요`, 'error'); return; }
                 ex.cur = { start: getLocalDateString(), keys, seen: {} };
+                s3('misc', 'writeExams');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             }
             const pending = writeExamPending(sc);
             if (!pending.length) {

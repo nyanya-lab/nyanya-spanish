@@ -2190,6 +2190,7 @@
             const raw = parseInt(n, 10);
             if (!Number.isFinite(raw)) return;
             todayReviewBatch = Math.max(TODAY_REVIEW_BATCH_MIN, Math.min(TODAY_REVIEW_BATCH_MAX, raw));
+            if (typeof s3 === 'function') s3('misc', 'todayReviewBatch');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             if (opts && opts.silent) return;
             //   숫자를 바꾸면 '몇 번' 도 그 자리에서 다시 잡아준다 (창을 닫았다 열 필요 없이)
             const due = getTodayReviewTasks();
@@ -2242,6 +2243,7 @@
         }
         function setTodayReviewPick(kind, on) {
             todayReviewPick = Object.assign({ words: true, idioms: true }, todayReviewPick, { [kind]: !!on });
+            if (typeof s3 === 'function') s3('misc', 'todayReviewPick');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             const due = getTodayReviewTasks();
             todayReviewParts = Math.min(5, Math.max(1, Math.ceil(Math.max(1, due.length) / todayReviewBatch)));
             renderReviewSplitModal();

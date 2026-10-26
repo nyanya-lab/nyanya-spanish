@@ -4154,6 +4154,9 @@ let vocabulary = [];
             w.idioms.forEach(it => {
                 if (it && String(it.idiom || '').trim() && !it.iid) { it.iid = newIdiomId(); changed = true; }
             });
+            //   [v3] 10/23 견주기 — 새 관용구 번호를 처음 볼 때 붙이는데 새 저장소엔 안 실렸다. 기기마다 다른 번호가 생기면
+            //   관용구 점수(번호로 적는다)가 따로 논다. 붙였으면 그 단어를 바로 싣는다.
+            if (changed) s3('word', w);
             return changed;
         }
         // ============================================================
@@ -9692,6 +9695,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 .map(t => ({ icon: t.icon, label: t.label || t.icon }));
             if (cleaned.length === 0) { showToast("주제를 하나 이상 남겨 주세요!", "error"); return; }
             GRAMMAR_ICONS = cleaned;
+            s3('misc', 'grammarTopics');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             closeTopicManager();
             saveToStorage();
             renderGrammarTables();          // 조회 화면 주제 칩 갱신
