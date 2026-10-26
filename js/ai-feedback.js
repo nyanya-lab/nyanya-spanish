@@ -1611,6 +1611,22 @@ ${recentAsks.map(a => '· ' + a).join('\n')}
 비슷한 짜임이 나오는 것은 맞습니다 — 그때도 소재만은 매번 달라야 합니다.
 (예: 수동태를 또 연습하더라도 '작가가 쓴 책' 다음엔 '요리사가 만든 요리' 말고 아예 다른 소재로)
 ` : '';
+            // [냐냐 요청] 복습 문장은 중간 길이로 (2026-10-26) — "문장이 길고 어려워서 실력은 느는데 부담스러워".
+            //   최근 25개 중 절반 넘게가 '~해서/~는데, ~했어' 두 마디(평균 40자, 길면 59자)였다.
+            //   복습은 매일 하는 몫이라 25~35자 한 이야기로, 랜덤 문장 생성(자유 연습)은 지금처럼 길게 둔다.
+            //   '내 사전? 지금 줄게.' 같은 10자짜리는 너무 짧다고 하셨다 — 아래로도 막는다.
+            const reviewShort = !!(forced && fromReview);
+            const reviewLengthBlock = reviewShort ? `
+[복습 문장 길이 — 꼭 지키세요]
+· 한글 25~35자 (띄어쓰기 포함). 10자 남짓으로 너무 짧게도 만들지 마세요.
+· 이야기는 하나만 — '~해서, ~했어 · ~는데, ~야' 처럼 두 이야기를 이어 붙이지 마세요.
+· 꾸밈말(어디서 · 언제 · 누구랑)은 한두 개까지.
+· 앞에서 꺼낸 것을 뒤에서 받는 문법이면 대상을 짧게 먼저 꺼내세요 — 꺼낼 때 '아까 빌려준 · 어제 산' 같은 꾸밈말을 붙이지 마세요.
+좋은 예: '내 남동생? 지금 역 앞에서 걔 기다리고 있어.' · '우리 반에서 누가 제일 키가 커?' · '나는 주말마다 집 근처 공원에서 강아지랑 산책해.'
+너무 긴 예: '외출 전에 항상 화장하는 시간이 너무 오래 걸려서, 나는 이제 거실 소파에 앉아서 화장하는 버릇을 들였어.' (두 이야기, 59자)
+너무 짧은 예: '내 사전? 지금 줄게.'
+` : '';
+            const REVIEW_MAX_LEN = 45;   // 이보다 길면 한 번 다시 뽑는다 (두 번째는 그대로 쓴다)
 
             const prompt = `짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
             매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 스페인어 철자를 한국어 문장 안에 노출하면 절대 안 됩니다.
@@ -1653,7 +1669,7 @@ ${missionTenseRuleText(!!grammarContext)}
 - 서로 관계없는 소재를 한 문장에 억지로 몰아넣기
 주어·소유자·시점·인과관계가 앞뒤로 맞아떨어지는지 확인하고, 조금이라도 어색하면 상황 자체를 다시 잡으세요.
 문법을 넣으려다 어색해질 바에는, 그 문법이 자연스럽게 쓰이는 다른 상황을 고르는 게 낫습니다.
-
+${reviewLengthBlock}
 문장은 짧고 자연스러운 게 최우선입니다.
             ${buildLearnerProfileSummary()}`;
             const system = "You are a creative Spanish-learning content writer. Output strictly valid JSON matching the schema, in natural conversational Korean. The sentence must be written ENTIRELY in Korean script (Hangul) — never include Spanish words or Latin alphabet characters anywhere in the sentence, since the student must translate it themselves. No explanations, no markdown fences, no preamble.";
@@ -1666,9 +1682,15 @@ ${missionTenseRuleText(!!grammarContext)}
             };
 
             try {
-                const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
-                const result = extractAndParseJson(responseText);
-                const candidateSentence = (result.sentence || '').trim();
+                const askOnce = async () => {
+                    const result = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                    return (result.sentence || '').trim();
+                };
+                let candidateSentence = await askOnce();
+                if (reviewShort && candidateSentence.length > REVIEW_MAX_LEN) {
+                    console.info('[복습 문장] 길어서 다시 뽑음', candidateSentence.length, candidateSentence);
+                    try { candidateSentence = (await askOnce()) || candidateSentence; } catch (e) { /* 첫 문장을 쓴다 */ }
+                }
 
                 // [PATCH-안전장치] 그래도 스페인어/알파벳이 섞여 나오면(정답 노출) 실패로 처리
                 if (/[a-zA-Z]/.test(candidateSentence)) {
