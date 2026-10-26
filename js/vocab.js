@@ -7720,7 +7720,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function writePracticeSave() {
             writeSessionSnapshot();   // [냐냐 요청] 이어하기 — 저장 전에 진행 상태를 싣는다
             try { if (typeof saveToStorage === 'function') saveToStorage(); } catch (err) {}
-            if (typeof updateStats === 'function') updateStats();
+            if (typeof updateStatsSoon === 'function') updateStatsSoon(); else if (typeof updateStats === 'function') updateStats();
             // [냐냐 요청] 헤더 '오늘의 복습' 배너도 실시간 갱신
             if (typeof renderTodayReview === 'function') { try { renderTodayReview(); } catch (err) {} }
         }

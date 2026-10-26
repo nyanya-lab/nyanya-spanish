@@ -1290,6 +1290,15 @@ let vocabulary = [];
             if (d.newMasteredCount === undefined) d.newMasteredCount = 0;
             if (d.newPerfectCount === undefined) d.newPerfectCount = 0; // [냐냐 PATCH-0배치]
 
+            //   [냐냐 지적] 사이트가 버벅인다 (2026-10-26) — 아래 총계(단어 1,600 · 관용구 1,300 등급 세기)가 한 번에 30ms 쯤인데
+            //   쓰기 복습 한 문제에 두세 번씩 돌았다. 총계는 0.15초 모았다가 한 번만 센다 (scheduleDiaryWork).
+            _diaryTotalsDirty = true;
+            scheduleDiaryWork();
+        }
+        function diarySnapshotTotals() {
+            const d = nyanyaDiary[getLocalDateString()];
+            if (!d) return;
+            s3('diary');
             d.registeredTotal = vocabulary.length;
             d.masteredTotal = vocabulary.filter(w => w.mastered).length;
             // [냐냐 PATCH-0배치] 등급별 총계 스냅샷 (단어장 성장 그래프의 비율용) — 오늘부터 쌓임
@@ -4147,10 +4156,35 @@ let vocabulary = [];
             });
             return changed;
         }
+        // ============================================================
+        // [냐냐 지적] 사이트 버벅임 (2026-10-26) — 관용구 하나의 등급을 볼 때마다 단어장 1,600개를 처음부터 두 번씩 훑었다.
+        //   관용구 1,300개 등급을 세는 곳(일지 총계·달력 상세·머리 줄 숫자)마다 70ms 씩 걸렸다.
+        //   id → 자리 표를 두고, 그 자리에 정말 그 단어가 있는지 확인해서 쓴다 (단어를 갈아끼우거나 지우면 저절로 다시 만든다).
+        // ============================================================
+        let _wordIdx = null, _wordIdxRef = null, _wordIdxLen = -1, _wordIdxMiss = new Set();
+        function _rebuildWordIdx() {
+            _wordIdx = new Map();
+            _wordIdxMiss = new Set();
+            (vocabulary || []).forEach((v, i) => { if (v && v.id != null) _wordIdx.set(String(v.id), i); });
+            _wordIdxRef = vocabulary; _wordIdxLen = (vocabulary || []).length;
+        }
+        function wordById(id) {
+            if (typeof vocabulary === 'undefined' || !vocabulary || id == null) return null;
+            const k = String(id);
+            if (!_wordIdx || _wordIdxRef !== vocabulary || _wordIdxLen !== vocabulary.length) _rebuildWordIdx();
+            let i = _wordIdx.get(k);
+            if (i === undefined && _wordIdxMiss.has(k)) return null;   // 방금 다시 만들어 봐도 없던 id (지워진 단어) — 또 훑지 않는다
+            if (i === undefined || !vocabulary[i] || String(vocabulary[i].id) !== k) {
+                _rebuildWordIdx();
+                i = _wordIdx.get(k);
+                if (i === undefined) _wordIdxMiss.add(k);
+            }
+            return (i !== undefined && vocabulary[i] && String(vocabulary[i].id) === k) ? vocabulary[i] : null;
+        }
         // 표현 글자로 불러도, id 로 불러도 같은 키가 나오게 한다
         function idiomIdOf(wordId, idiomTextOrId) {
             const key = String(idiomTextOrId || '').trim();
-            const w = (typeof vocabulary !== 'undefined') ? vocabulary.find(v => String(v.id) === String(wordId)) : null;
+            const w = wordById(wordId);
             if (!w) return key;
             ensureIdiomIds(w);
             const list = (typeof wordIdiomList === 'function') ? wordIdiomList(w) : [];
@@ -4935,8 +4969,8 @@ let vocabulary = [];
             return (r && typeof r.score === 'number') ? r.score : 0;
         }
         function getIdiomGrade(wordId, idiomTextOrId) {
-            const s = getIdiomScore(wordId, idiomTextOrId);
-            const rec = idiomScores[idiomKey(wordId, idiomTextOrId)] || {};
+            const rec = idiomScores[idiomKey(wordId, idiomTextOrId)] || {};   // 키는 한 번만 만든다
+            const s = (typeof rec.score === 'number') ? rec.score : 0;
             if (s >= SCORE_PERFECT && rec.subjectivePassed) return 'perfect';
             if (s >= SCORE_MASTER && rec.subjectivePassed) return 'mastered';
             if (s <= SCORE_CRITICAL) return 'critical';
@@ -5965,6 +5999,30 @@ let vocabulary = [];
             'newGrammarMasteredCount', 'newGrammarWeakCount'
         ]);
 
+        // ============================================================
+        // [냐냐 지적] 사이트 버벅임 (2026-10-26) — 쓰기 복습 한 문제에 일지 총계 세기와 달력·일지 다시 그리기가
+        //   두세 번씩 바로바로 돌아서 한 번에 0.2초 가까이 멈췄다(노트북에선 더). 0.15초 모았다가 한 번만 한다.
+        //   머리 줄 숫자(updateStats)도 0.25초 모아 한 번 (updateStatsSoon).
+        // ============================================================
+        var _diaryTotalsDirty = false, _diaryWorkTimer = null, _diaryRenderWanted = false;   // var: touchDiarySnapshot 가 이 줄보다 앞에 있다
+        function scheduleDiaryWork(render) {
+            if (render) _diaryRenderWanted = true;
+            if (_diaryWorkTimer) return;
+            _diaryWorkTimer = setTimeout(() => {
+                _diaryWorkTimer = null;
+                if (_diaryTotalsDirty) { _diaryTotalsDirty = false; try { diarySnapshotTotals(); } catch (e) { console.warn(e); } }
+                if (_diaryRenderWanted) {
+                    _diaryRenderWanted = false;
+                    try { renderDiary(); } catch (e) { console.warn(e); }
+                    if (typeof updateEggProgress === 'function') { try { updateEggProgress(); } catch (e) {} }
+                }
+            }, 150);
+        }
+        let _statsSoonTimer2 = null;
+        function updateStatsSoon() {
+            if (_statsSoonTimer2) clearTimeout(_statsSoonTimer2);
+            _statsSoonTimer2 = setTimeout(() => { _statsSoonTimer2 = null; if (typeof updateStats === 'function') updateStats(); }, 250);
+        }
         function logAction(type, extra, id) {
             touchDiarySnapshot();
             const today = getLocalDateString();
@@ -6041,8 +6099,7 @@ let vocabulary = [];
             // 'snapshot' 타입은 touchDiarySnapshot()의 총합 갱신만으로 충분함
 
             saveToStorage();
-            renderDiary();
-            if (typeof updateEggProgress === 'function') updateEggProgress(); // [냐냐 PATCH] 알 성장
+            scheduleDiaryWork(true);   // 달력·일지·알은 0.15초 모아 한 번 (위 [냐냐 지적] 참고)
         }
 
         // 학습 일지 렌더링
