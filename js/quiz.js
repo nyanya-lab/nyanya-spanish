@@ -1122,7 +1122,7 @@ let quizSession = null;
                     if (irrType.startsWith('3인칭')) return ['él', 'ellos'].includes(p);
                     if (irrType.includes('-ducir')) return true;
                     if (irrType.includes('1인칭') && p === 'yo') return true;
-                    const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i') || irrType.includes('u ➡️ ue');
+                    const stemChange = irrType.includes('e ➡️ ie') || irrType.includes('o ➡️ ue') || irrType.includes('e ➡️ i') || irrType.includes('u ➡️ ue') || irrType.includes('악센트 변형');
                     if (stemChange && ['yo', 'tú', 'él', 'ellos'].includes(p)) return true;
                     return false;
                 };
