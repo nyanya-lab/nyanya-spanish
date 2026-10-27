@@ -4975,8 +4975,13 @@ let vocabulary = [];
             //   'aburrirse de' 처럼 제대로 쓴 다른 표현이 늘 오답이었다 (estar aburrido de ~).
             //   단어장에 없어도 AI 가 말한 뜻이 관용구 뜻과 겹치면 유의어다. 덤은 awardSynonymScore 가
             //   단어장 낱말에만 주므로 여기서 통과해도 점수는 안 붙는다.
+            //   [냐냐 지적] 그래도 aburrirse de 가 또 오답이었다 (2026-10-27) — AI 는 유의어라 했는데 뜻을 '~에 싫증 나다' 로 적어
+            //   '~에 지루해하다/질리다' 와 글자가 안 겹쳤다. 표현의 뜻은 말을 바꿔 적기 쉬워서 글자 맞추기로는 못 잰다.
+            //   관용구 문제는 AI 가 실제 표현이라며 뜻을 적어 줬으면(answerMeaning) 유의어 판정을 믿는다.
+            //   이 관문은 pesado ↔ pasado 같은 낱말 문제용이고, 관용구는 덤도 없다 (되묻기만).
             if (askedWord && askedWord._isIdiomTask) {
                 const im = String(askedWord.meaning || '');
+                if (String(aiMeaning || '').trim()) return true;
                 if (overlap(String(aiMeaning || ''), im)) return true;
                 if (hit && hit.id !== asked.id && overlap(String(hit.meaning || ''), im)) return true;
             }

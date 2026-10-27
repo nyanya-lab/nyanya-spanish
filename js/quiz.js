@@ -1302,9 +1302,14 @@ This is a CONJUGATION question: the student saw only the Korean meaning plus "${
 - "wrong" = the RIGHT verb in the WRONG form (target "alternáis", answer "alterno" or "alternado"). That is a conjugation mistake, never "synonym" and never "typo".
 - "typo" still means a misspelling of the TARGET FORM itself — a one- or two-letter slip inside it counts (target "esperando", answer "esperendo" or "esperandó"), and so does a missing accent. Judge that before you reach for "wrong".
 Also report "sameVerb": true when the answer is an attempt at the TARGET verb itself — its infinitive, another tense or person of it, or a misconjugated form of it (target "tenemos", answer "tener", "tuvimos" or "tienemos"). false for a different verb or anything else.` : '';
+                //   [냐냐 지적] 관용구 문제에 같은 뜻의 다른 표현(estar aburrido de → aburrirse de)을 쓰면
+                //   네 번 중 한 번은 'estar 형태로 써야 해요' 하며 wrong 을 줬다 (2026-10-27). 다른 표현은 synonym 이라고 못박는다.
+                const idiomNote = (q.word && q.word._isIdiomTask) ? `
+This is an EXPRESSION question: the student saw only the Korean meaning and had to produce this exact expression.
+A DIFFERENT real Spanish expression or verb with the same or nearly the same meaning is "synonym", even if its structure differs (target "estar aburrido de", answer "aburrirse de"). Use "wrong" only when the meaning really differs or the combination is not real Spanish.` : '';
                 //   [냐냐 요청] 쓰기 복습에서 활용만 틀렸으면 한 번 더 (2026-10-09) — 단어장에 없는 꼴(안 채운 시제·잘못 만든 꼴)은
                 //   코드가 같은 동사인지 못 알아보니 AI 에게 묻는다. verdict 는 그대로 'wrong' 이라 퀴즈 쪽은 달라지지 않는다.
-                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}
+                const prompt = `Target word: "${q.word.word}" (meaning in Korean: "${q.word.meaning}", part of speech: ${q.word.pos}).${conjNote}${idiomNote}
 Student answered: "${userAnswer}".
 Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은 한국어 설명 (한 문장, 40자 이내) — 무엇이 틀렸고 그 말은 어떻게 쓰는지", "answerIsRealWord": true/false, "answerMeaning": "학생이 쓴 답(쓴 그대로 통째로)이 실제 스페인어 단어·표현이라면 그 한글 뜻(짧게, 설명 없이), 아니면 빈 문자열"${conjSlot ? ', "sameVerb": true/false' : ''} }`;
                 const schema = {
