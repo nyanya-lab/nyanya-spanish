@@ -2995,7 +2995,11 @@ let vocabulary = [];
             const L = REVIEW_INTERVALS.length;
             const label = stage >= L ? '🎓 졸업' : stage < 0 ? '곡선 기록 없음' : `${REVIEW_INTERVALS[stage]}일`;
             const tone = stage >= L ? 'text-emerald-700 bg-emerald-50' : stage < 0 ? 'text-slate-500 bg-slate-50' : 'text-amber-700 bg-amber-50';
-            return `<div class="px-3 py-1.5 border-b border-slate-100 text-[11px] font-black ${tone}">${label} <span class="font-bold opacity-60">${n}</span></div>`;
+            //   [냐냐 요청] 소제목에 아까 그 다섯 점을 칸 이름 옆에 · 개수는 오른쪽 끝에 (2026-10-27)
+            const dots = stage < 0 ? '' : `<span class="flex items-center gap-0.5">${REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full w-1.5 h-1.5 ${
+                stage >= L ? 'bg-emerald-400' : i === stage ? 'bg-amber-500 ring-2 ring-amber-200' : i < stage ? 'bg-amber-300' : 'bg-slate-200'}"></span>`).join('')}</span>`;
+            return `<div class="px-3 py-1.5 border-b border-slate-100 flex items-center gap-2 text-[11px] font-black ${tone}">
+                    <span>${label}</span>${dots}<span class="ml-auto font-bold opacity-60">${n}</span></div>`;
         }
         //   줄에는 ▼(그 날 미끄러짐)만 — 칸은 소제목이 말한다
         function diaryCurveDownHtml(key, ds) {
@@ -3277,7 +3281,7 @@ let vocabulary = [];
                 //   문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것) — 문법 탭에도
                 if (k === 'all' || k === 'grammar') {
                     count += parts.rv.length;
-                    if (parts.rv.length) rows += `<div class="px-3 py-1.5 border-b border-slate-100 text-[11px] font-black text-indigo-500 bg-indigo-50">문법 복습 번역 <span class="font-bold opacity-60">${parts.rv.length}</span></div>`;
+                    if (parts.rv.length) rows += `<div class="px-3 py-1.5 border-b border-slate-100 flex items-center text-[11px] font-black text-indigo-500 bg-indigo-50">문법 복습 번역<span class="ml-auto font-bold opacity-60">${parts.rv.length}</span></div>`;
                     rows += parts.rv.map(n => diaryAiNoteRowHtml(n, ds)).join('');
                 }
             } else {
