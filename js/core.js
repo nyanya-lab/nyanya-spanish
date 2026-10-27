@@ -2971,22 +2971,42 @@ let vocabulary = [];
                 </span>`;
         }
         //   [냐냐 요청] 복습 목록은 곡선 칸 순서로 (2026-10-27) — 졸업 → 30일 → … → 1일, 같은 칸이면 ▲ · (그 뒤 움직임) · ▼.
-        //   묶음 제목 없이 정렬만 한다. 곡선 밖(기록 없음)은 맨 뒤, 나머지는 원래 순서대로.
-        function diarySortByCurve(ids, ds) {
+        //   [냐냐 요청] 같은 날 — 칸마다 소제목('30일 · 12개')을 달아 묶고, 줄의 점·N일은 뺀다 (뜻 자리가 모자랐다). ▼ 만 줄에 남긴다.
+        //   곡선 밖(기록 없음)은 맨 뒤 '곡선 기록 없음', 나머지는 원래 순서대로.
+        function diaryCurveGroups(ids, ds) {
+            const L = REVIEW_INTERVALS.length;
             const rank = (key) => {
                 const r = diaryCurveRecOf(key);
                 if (!r || !r.wrong) return [-1, 0];
                 const later = [r.wrong, r.review, r.demote].some(d => d && d > ds);
                 const mv = later ? 1 : (r.demote === ds ? 0 : 2);   // ▲ 2 · 그 뒤 움직임 1 · ▼ 0
-                return [Math.min(r.stage, REVIEW_INTERVALS.length), mv];
+                return [Math.min(r.stage, L), mv];
             };
-            return ids.map((id, i) => ({ id, i, k: rank(id) }))
-                .sort((a, b) => (b.k[0] - a.k[0]) || (b.k[1] - a.k[1]) || (a.i - b.i))
-                .map(x => x.id);
+            const sorted = ids.map((id, i) => ({ id, i, k: rank(id) }))
+                .sort((a, b) => (b.k[0] - a.k[0]) || (b.k[1] - a.k[1]) || (a.i - b.i));
+            const groups = [];
+            sorted.forEach(x => {
+                const g = groups[groups.length - 1];
+                if (g && g.stage === x.k[0]) g.ids.push(x.id); else groups.push({ stage: x.k[0], ids: [x.id] });
+            });
+            return groups;
+        }
+        function diaryCurveGroupHeadHtml(stage, n) {
+            const L = REVIEW_INTERVALS.length;
+            const label = stage >= L ? '🎓 졸업' : stage < 0 ? '곡선 기록 없음' : `${REVIEW_INTERVALS[stage]}일`;
+            const tone = stage >= L ? 'text-emerald-700 bg-emerald-50' : stage < 0 ? 'text-slate-500 bg-slate-50' : 'text-amber-700 bg-amber-50';
+            return `<div class="px-3 py-1.5 border-b border-slate-100 text-[11px] font-black ${tone}">${label} <span class="font-bold opacity-60">${n}</span></div>`;
+        }
+        //   줄에는 ▼(그 날 미끄러짐)만 — 칸은 소제목이 말한다
+        function diaryCurveDownHtml(key, ds) {
+            const r = diaryCurveRecOf(key);
+            if (!r || !r.wrong || r.demote !== ds || [r.wrong, r.review, r.demote].some(d => d && d > ds)) return '';
+            return `<span title="이 날 한 칸 미끄러짐" class="shrink-0 text-[10px] font-black text-rose-400">▼</span>`;
         }
         function diaryRowHtml(key, curveDs) {
-            //   curveDs 를 주면 (복습 목록) 점수 앞에 곡선 자리를 단다
-            const curve = typeof curveDs === 'string' ? diaryCurveChipHtml(key, curveDs) : '';   // map 이 넘기는 번호는 무시
+            //   curveDs 를 주면 (복습 목록) 점수 앞에 ▼ 를 달고 점수 칸 폭을 맞춘다
+            const inCurveList = typeof curveDs === 'string';   // map 이 넘기는 번호는 무시
+            const curve = inCurveList ? diaryCurveDownHtml(key, curveDs) : '';
             const sep = String(key).indexOf('::');
             if (sep > 0) {
                 const wid = String(key).slice(0, sep), part = String(key).slice(sep + 2);
@@ -3000,7 +3020,7 @@ let vocabulary = [];
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(text)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(mean)}</span>
                     ${curve}
-                    ${gi && w ? `<span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
+                    ${gi && w ? `<span class="shrink-0 ${inCurveList ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
                 </div>`;
             }
             const w = (vocabulary || []).find(v => String(v.id) === String(key));
@@ -3018,7 +3038,7 @@ let vocabulary = [];
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
                     ${curve}
-                    <span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
+                    <span class="shrink-0 ${inCurveList ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
             }
             const t = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === key);
@@ -3029,7 +3049,7 @@ let vocabulary = [];
                     <span class="text-[10px] font-black text-[#5896cb] shrink-0">문법</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate flex-1">${escapeHtml(t.title || '(제목 없음)')}</span>
                     ${curve}
-                    <span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
+                    <span class="shrink-0 ${inCurveList ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
                 </button>`;
             }
             return `<div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-100 last:border-0">지워진 항목이에요</div>`;
@@ -3252,10 +3272,12 @@ let vocabulary = [];
                 const parts = diaryReviewParts(ds, log);
                 const k = diaryReviewKind;
                 const ids = k === 'all' ? parts.all : parts[k];
-                count = ids.length; rows = diarySortByCurve(ids, ds).map(id => diaryRowHtml(id, ds)).join('');
+                count = ids.length;
+                rows = diaryCurveGroups(ids, ds).map(g => diaryCurveGroupHeadHtml(g.stage, g.ids.length) + g.ids.map(id => diaryRowHtml(id, ds)).join('')).join('');
                 //   문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것) — 문법 탭에도
                 if (k === 'all' || k === 'grammar') {
                     count += parts.rv.length;
+                    if (parts.rv.length) rows += `<div class="px-3 py-1.5 border-b border-slate-100 text-[11px] font-black text-indigo-500 bg-indigo-50">문법 복습 번역 <span class="font-bold opacity-60">${parts.rv.length}</span></div>`;
                     rows += parts.rv.map(n => diaryAiNoteRowHtml(n, ds)).join('');
                 }
             } else {
