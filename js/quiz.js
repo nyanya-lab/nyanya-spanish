@@ -770,6 +770,28 @@ let quizSession = null;
         }
 
         //   내가 쓴 답이 그 꼴들 중 하나인가
+        // ============================================================
+        // [냐냐 지적] 'dente de mí ti' 가 오타 기회 없이 오답이었다 (2026-10-27).
+        //   정답이 끝 낱말만 다른 둘 이상('delante de mí / delante de ti')이면 끝 낱말만 이어 쓴 답
+        //   ('… mí ti' · '… mí/ti')은 **첫째 것 하나를 쓴 것**으로 줄여서 채점한다 → 'delante de mí/ti' 는 정답,
+        //   'dente de mí ti' 는 'dente de mí' 의 오타. 끝 낱말들이 정답 차례 그대로 다 있을 때만 줄인다.
+        // ============================================================
+        function collapseAltShorthand(userRaw, correctRaw) {
+            const raw = String(userRaw || '').trim();
+            const alts = String(correctRaw || '').split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
+            if (alts.length < 2) return raw;
+            const words = alts.map(a => a.split(/\s+/));
+            const n = words[0].length;
+            if (n < 2 || words.some(ws => ws.length !== n)) return raw;
+            const key = (x) => normalizeSpanishAnswer(x);
+            const head = (ws) => ws.slice(0, -1).map(key).join(' ');
+            if (words.some(ws => head(ws) !== head(words[0]))) return raw;
+            const tails = words.map(ws => key(ws[ws.length - 1]));
+            const uw = raw.replace(/\s*\/\s*/g, ' ').split(/\s+/).filter(Boolean);
+            if (uw.length < tails.length + 1) return raw;
+            if (uw.slice(-tails.length).map(key).join(' ') !== tails.join(' ')) return raw;
+            return uw.slice(0, uw.length - tails.length + 1).join(' ');
+        }
         function spanishAnswerMatches(userRaw, correctRaw, keepAccents) {
             const u = normalizeSpanishAnswer(userRaw, keepAccents);
             if (!u) return false;
@@ -1357,7 +1379,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
             const inputEl = document.getElementById('quiz-subjective-input');
             const submitBtn = document.getElementById('quiz-subjective-submit-btn');
             if (!inputEl || inputEl.disabled) return;
-            const userAnswer = inputEl.value.trim();
+            //   끝 낱말만 이어 쓴 'mí/ti' 는 첫째 것으로 (collapseAltShorthand) — 활용형·관용구 뜻풀이는 정답이 갈래가 아니라 그대로 지나간다
+            const userAnswer = collapseAltShorthand(inputEl.value.trim(), q.word && q.word.word);
 
             // 활용형 문제는 정답(활용형)과 직접 비교
             //   [냐냐 요청] 주관식과 같은 대접 — 악센트까지 맞아야 정답이고,

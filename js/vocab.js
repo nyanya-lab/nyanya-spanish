@@ -7409,7 +7409,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!s) return;
             s.gradeStamp = '';   // AI 를 안 부르고 코드로 채점하면 표시하지 않는다
             const w = s.pool[s.index];
-            const userAnswer = String(userRaw || '').trim();
+            //   끝 낱말만 이어 쓴 'mí ti'·'mí/ti' 는 첫째 것 하나로 줄여 채점 (collapseAltShorthand)
+            const userAnswer = (typeof collapseAltShorthand === 'function') ? collapseAltShorthand(String(userRaw || '').trim(), w.word) : String(userRaw || '').trim();
 
             // 1) 맞음 — 다시 쓰기였다면 왜 다시 썼는지에 따라 점수가 갈린다
             if (writeAnswerMatches(userAnswer, w.word)) {
@@ -7589,8 +7590,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (verdict === 'typo' && typeof isOtherWholeAnswer === 'function' && isOtherWholeAnswer(userAnswer, w.word)) verdict = 'wrong';
             if (verdict === 'typo' && !used.typo) {
                 // 오타가 3글자를 넘으면 봐주지 않는다 (퀴즈와 같은 기준 — 악센트를 뗀 문자열로 잰다)
+                //   정답이 갈래('delante de mí / delante de ti')면 가장 가까운 갈래와 잰다 — 통째와 재면 'dente de mí' 도 3글자를 넘었다
                 const dist = (typeof levenshtein === 'function' && typeof normalizeSpanishAnswer === 'function')
-                    ? levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)) : 99;
+                    ? Math.min(levenshtein(normalizeSpanishAnswer(userAnswer), normalizeSpanishAnswer(w.word)),
+                        ...((typeof spanishAnswerVariants === 'function') ? spanishAnswerVariants(w.word) : [])
+                            .map(v => levenshtein(normalizeSpanishAnswer(userAnswer), v))) : 99;
                 if (dist <= 3) {
                     writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?`, userAnswer);
                     return;
@@ -7602,7 +7606,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (w._isConjTask && ai.sameVerb === true && !used.typo) {
                 const baseW = w._conjOf || w;
                 const other = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
-                if (!other || other.id === baseW.id) {
+                //   [냐냐 지적] 'se pareciendo'(pareciéndose) 가 기회 없이 오답이었다 (2026-10-27) — 대명사 자리만 틀렸는데
+                //   pareciendo 가 단어장의 parecer 로 읽혀 '다른 낱말' 로 막혔다. 재귀동사와 se 뗀 짝(parecerse ↔ parecer)은 같은 동사로 본다.
+                //   대명사를 따로 써 넣은 답만 — 대명사를 아예 뺀 답(pareciendo)은 10/2 규칙(reflexivePronounMissing)대로 간다.
+                const twin = other && /(^|\s)(me|te|se|nos|os)\s/i.test(userAnswer)
+                    && String(other.word || '').trim() + 'se' === String(baseW.word || '').trim();
+                if (!other || other.id === baseW.id || twin) {
                     const p = writePrefixHint(userAnswer, w.word);
                     writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요. 다시 한 번 써볼까요?`, userAnswer);
                     return;
