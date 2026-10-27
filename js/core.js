@@ -2926,7 +2926,8 @@ let vocabulary = [];
         //   열쇠 하나를 보여줄 줄로 (단어 id · 표현 열쇠 둘 다 받는다)
         // ============================================================
         // [냐냐 요청] 일지 복습 목록에 곡선 어디쯤인지 (2026-10-27).
-        //   다섯 칸 점(1·3·7·14·30일차) 중 지금 칸을 진하게, 옆에 'N일차'. 다 넘었으면 🎓 졸업.
+        //   다섯 칸 점(1·3·7·14·30일차) 중 지금 칸을 진하게, 옆에 'N일'. 다 넘었으면 🎓 졸업.
+        //   [냐냐 결정] 이 목록만 '3일차' 에서 '차' 를 뺀다 (2026-10-27) — 폰에서 뜻 자리가 모자라다. 학습기록 곡선 막대는 'N일차' 그대로.
         //   그 날 올라갔으면 ▲, 미끄러졌으면 ▼ — 그 뒤에 또 움직였으면 화살표 없이 지금 자리만 (기록이 지금 칸 하나뿐이다).
         // ============================================================
         function diaryCurveRecOf(key) {
@@ -2957,14 +2958,14 @@ let vocabulary = [];
                 const done = REVIEW_INTERVALS.map(() => '<span class="rounded-full w-1.5 h-1.5 bg-emerald-400"></span>').join('');
                 return `<span title="망각곡선 졸업${move === 'up' ? ' — 이 날 졸업' : ''}${when}" class="shrink-0 flex items-center gap-1">
                     <span class="flex items-center gap-0.5">${done}</span>
-                    <span class="min-w-[42px] flex items-center justify-end gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓졸업</span>
+                    <span class="min-w-[36px] flex items-center justify-end gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓졸업</span>
                 </span>`;
             }
             const dots = REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full ${i === r.stage ? 'w-2 h-2 bg-amber-500' : i < r.stage ? 'w-1.5 h-1.5 bg-amber-300' : 'w-1.5 h-1.5 bg-slate-200'}"></span>`).join('');
             const tip = `망각곡선 ${REVIEW_INTERVALS[r.stage]}일차 칸${move === 'up' ? ' — 이 날 한 칸 올라감' : move === 'down' ? ' — 이 날 미끄러짐' : ''}${when}`;
             return `<span title="${tip}" class="shrink-0 flex items-center gap-1">
                     <span class="flex items-center gap-0.5">${dots}</span>
-                    <span class="w-[42px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일차</span>
+                    <span class="w-[36px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일</span>
                 </span>`;
         }
         function diaryRowHtml(key, curveDs) {
