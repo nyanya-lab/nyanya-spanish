@@ -2924,7 +2924,47 @@ let vocabulary = [];
         }
 
         //   열쇠 하나를 보여줄 줄로 (단어 id · 표현 열쇠 둘 다 받는다)
-        function diaryRowHtml(key) {
+        // ============================================================
+        // [냐냐 요청] 일지 복습 목록에 곡선 어디쯤인지 (2026-10-27).
+        //   다섯 칸 점(1·3·7·14·30일차) 중 지금 칸을 진하게, 옆에 'N일차'. 다 넘었으면 🎓 졸업.
+        //   그 날 올라갔으면 ▲, 미끄러졌으면 ▼ — 그 뒤에 또 움직였으면 화살표 없이 지금 자리만 (기록이 지금 칸 하나뿐이다).
+        // ============================================================
+        function diaryCurveRecOf(key) {
+            const sep = String(key).indexOf('::');
+            if (sep > 0) {
+                const wid = String(key).slice(0, sep), part = String(key).slice(sep + 2);
+                const w = (vocabulary || []).find(v => String(v.id) === wid);
+                const it = w ? findIdiomByKeyPart(w, part) : null;
+                const r = (idiomReview || {})[it ? idiomKey(w.id, it.iid || it.idiom) : key];
+                return r ? { wrong: r.lastWrongDate, review: r.lastReviewDate, demote: r.lastDemoteDate, stage: r.stage || 0 } : null;
+            }
+            const w = (vocabulary || []).find(v => String(v.id) === String(key));
+            if (w) return { wrong: w.lastWrongDate, review: w.lastReviewDate, demote: w.lastDemoteDate, stage: w.reviewStage || 0 };
+            const g = (typeof grammarReview !== 'undefined' && grammarReview) ? grammarReview[key] : null;
+            return g ? { wrong: g.lastWrongDate, review: g.lastReviewDate, demote: g.lastDemoteDate, stage: g.stage || 0 } : null;
+        }
+        function diaryCurveChipHtml(key, ds) {
+            const r = diaryCurveRecOf(key);
+            if (!r || !r.wrong) return '';
+            const L = REVIEW_INTERVALS.length;
+            const later = [r.wrong, r.review, r.demote].some(d => d && d > ds);
+            const move = later ? '' : (r.demote === ds ? 'down' : (r.review === ds ? 'up' : ''));
+            const arrow = move === 'up' ? '<span class="text-emerald-500">▲</span>'
+                : move === 'down' ? '<span class="text-rose-400">▼</span>' : '';
+            const when = later ? ' (그 뒤에 또 움직인 지금 자리)' : '';
+            if (r.stage >= L) {
+                return `<span title="망각곡선 졸업${when}" class="shrink-0 flex items-center gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓</span>`;
+            }
+            const dots = REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full ${i === r.stage ? 'w-2 h-2 bg-amber-500' : i < r.stage ? 'w-1.5 h-1.5 bg-amber-300' : 'w-1.5 h-1.5 bg-slate-200'}"></span>`).join('');
+            const tip = `망각곡선 ${REVIEW_INTERVALS[r.stage]}일차 칸${move === 'up' ? ' — 이 날 한 칸 올라감' : move === 'down' ? ' — 이 날 미끄러짐' : ''}${when}`;
+            return `<span title="${tip}" class="shrink-0 flex items-center gap-1">
+                    <span class="flex items-center gap-0.5">${dots}</span>
+                    <span class="w-[42px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일차</span>
+                </span>`;
+        }
+        function diaryRowHtml(key, curveDs) {
+            //   curveDs 를 주면 (복습 목록) 점수 앞에 곡선 자리를 단다
+            const curve = typeof curveDs === 'string' ? diaryCurveChipHtml(key, curveDs) : '';   // map 이 넘기는 번호는 무시
             const sep = String(key).indexOf('::');
             if (sep > 0) {
                 const wid = String(key).slice(0, sep), part = String(key).slice(sep + 2);
@@ -2937,6 +2977,7 @@ let vocabulary = [];
                     <span class="text-[10px] font-black text-violet-500 shrink-0">관용구</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(text)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(mean)}</span>
+                    ${curve}
                     ${gi && w ? `<span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
                 </div>`;
             }
@@ -2954,6 +2995,7 @@ let vocabulary = [];
                     <span class="shrink-0 w-11 flex justify-center">${wordPosChipHtml(w)}</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
+                    ${curve}
                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
             }
@@ -2964,6 +3006,7 @@ let vocabulary = [];
                     class="w-full flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-left hover:bg-slate-50 transition-colors">
                     <span class="text-[10px] font-black text-[#5896cb] shrink-0">문법</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate flex-1">${escapeHtml(t.title || '(제목 없음)')}</span>
+                    ${curve}
                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
                 </button>`;
             }
@@ -3114,12 +3157,24 @@ let vocabulary = [];
             return (typeof aiNotes !== 'undefined' && Array.isArray(aiNotes))
                 ? aiNotes.filter(n => n && n.t && getLocalDateString(new Date(n.t)) === ds) : [];
         }
-        function diaryAiNoteRowHtml(n) {
+        function diaryAiNoteRowHtml(n, curveDs) {
             const label = n.rv ? '문법 복습 번역' : ((((typeof AI_NOTE_MODES !== 'undefined' && AI_NOTE_MODES[n.mode]) || {}).label) || n.mode || '');
+            //   문법 복습 번역이면 그 날 복습으로 움직인 문법 노트의 곡선 자리도 (diaryCurveChipHtml) —
+            //   어느 노트로 낸 문제인지는 안 적혀 있어서, 걸린 노트 중 그 날 움직인 것만 고른다 —
+            //   이 문장에서 맞힌 노트는 그 날 올라간 것, 틀린 노트는 그 날 미끄러진 것만 (다른 문장에서 움직인 걸 여기 붙이지 않게).
+            const moved = (n.rv && typeof curveDs === 'string' && Array.isArray(n.gram))
+                ? n.gram.filter(g => { const r = (typeof grammarReview !== 'undefined' && grammarReview) ? grammarReview[g.id] : null;
+                                       if (!r || !r.lastWrongDate) return false;
+                                       return g.ok ? (r.lastReviewDate === curveDs && r.lastDemoteDate !== curveDs) : r.lastDemoteDate === curveDs; })
+                : [];
             return `<div class="px-3 py-2 border-b border-slate-100 last:border-0 space-y-0.5">
                         <p class="text-[10px] font-black text-indigo-500">${escapeHtml(label)}</p>
                         <p class="text-sm font-bold text-slate-700 break-words">${escapeHtml(n.mine || '')}</p>
                         ${n.fixed ? `<p class="text-xs text-emerald-600 break-words">→ ${escapeHtml(n.fixed)}</p>` : ''}
+                        ${moved.map(g => `<p class="flex items-center gap-2 pt-0.5">
+                            <span class="text-[10px] font-black text-[#5896cb] shrink-0">문법</span>
+                            <span class="text-xs font-bold text-slate-600 min-w-0 truncate flex-1">${escapeHtml(g.n || '')}</span>
+                            ${diaryCurveChipHtml(g.id, curveDs)}</p>`).join('')}
                     </div>`;
         }
         let diaryReviewKind = 'all';
@@ -3175,11 +3230,11 @@ let vocabulary = [];
                 const parts = diaryReviewParts(ds, log);
                 const k = diaryReviewKind;
                 const ids = k === 'all' ? parts.all : parts[k];
-                count = ids.length; rows = ids.map(diaryRowHtml).join('');
+                count = ids.length; rows = ids.map(id => diaryRowHtml(id, ds)).join('');
                 //   문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것) — 문법 탭에도
                 if (k === 'all' || k === 'grammar') {
                     count += parts.rv.length;
-                    rows += parts.rv.map(diaryAiNoteRowHtml).join('');
+                    rows += parts.rv.map(n => diaryAiNoteRowHtml(n, ds)).join('');
                 }
             } else {
                 const ids = log[meta.field] || [];
