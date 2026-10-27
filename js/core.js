@@ -2952,8 +2952,13 @@ let vocabulary = [];
             const arrow = move === 'up' ? '<span class="text-emerald-500">▲</span>'
                 : move === 'down' ? '<span class="text-rose-400">▼</span>' : '';
             const when = later ? ' (그 뒤에 또 움직인 지금 자리)' : '';
+            //   [냐냐 지적] 졸업이 🎓 하나만 있어서 안 보였다 (2026-10-27) — 다섯 점을 다 초록으로 채우고 '🎓졸업' 을 단다.
             if (r.stage >= L) {
-                return `<span title="망각곡선 졸업${when}" class="shrink-0 flex items-center gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓</span>`;
+                const done = REVIEW_INTERVALS.map(() => '<span class="rounded-full w-1.5 h-1.5 bg-emerald-400"></span>').join('');
+                return `<span title="망각곡선 졸업${move === 'up' ? ' — 이 날 졸업' : ''}${when}" class="shrink-0 flex items-center gap-1">
+                    <span class="flex items-center gap-0.5">${done}</span>
+                    <span class="min-w-[42px] flex items-center justify-end gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓졸업</span>
+                </span>`;
             }
             const dots = REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full ${i === r.stage ? 'w-2 h-2 bg-amber-500' : i < r.stage ? 'w-1.5 h-1.5 bg-amber-300' : 'w-1.5 h-1.5 bg-slate-200'}"></span>`).join('');
             const tip = `망각곡선 ${REVIEW_INTERVALS[r.stage]}일차 칸${move === 'up' ? ' — 이 날 한 칸 올라감' : move === 'down' ? ' — 이 날 미끄러짐' : ''}${when}`;
