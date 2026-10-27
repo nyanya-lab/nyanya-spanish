@@ -2958,14 +2958,16 @@ let vocabulary = [];
                 const done = REVIEW_INTERVALS.map(() => '<span class="rounded-full w-1.5 h-1.5 bg-emerald-400"></span>').join('');
                 return `<span title="망각곡선 졸업${move === 'up' ? ' — 이 날 졸업' : ''}${when}" class="shrink-0 flex items-center gap-1">
                     <span class="flex items-center gap-0.5">${done}</span>
-                    <span class="min-w-[36px] flex items-center justify-end gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓졸업</span>
+                    <span class="w-[50px] flex items-center justify-end gap-0.5 text-[10px] font-black text-emerald-600">${arrow}🎓졸업</span>
                 </span>`;
             }
-            const dots = REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full ${i === r.stage ? 'w-2 h-2 bg-amber-500' : i < r.stage ? 'w-1.5 h-1.5 bg-amber-300' : 'w-1.5 h-1.5 bg-slate-200'}"></span>`).join('');
+            //   [냐냐 지적] 줄마다 들쭉날쭉했다 (2026-10-27) — 지금 칸 점만 커서 폭이 달랐고, 글자 칸·점수 칸 폭도 제각각이었다.
+            //   점은 다 같은 크기로 두고 지금 칸은 테두리로, 글자 칸은 50px · 점수 칸은 w-12 로 못박는다.
+            const dots = REVIEW_INTERVALS.map((d, i) => `<span class="rounded-full w-1.5 h-1.5 ${i === r.stage ? 'bg-amber-500 ring-2 ring-amber-200' : i < r.stage ? 'bg-amber-300' : 'bg-slate-200'}"></span>`).join('');
             const tip = `망각곡선 ${REVIEW_INTERVALS[r.stage]}일차 칸${move === 'up' ? ' — 이 날 한 칸 올라감' : move === 'down' ? ' — 이 날 미끄러짐' : ''}${when}`;
             return `<span title="${tip}" class="shrink-0 flex items-center gap-1">
                     <span class="flex items-center gap-0.5">${dots}</span>
-                    <span class="w-[36px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일</span>
+                    <span class="w-[50px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일</span>
                 </span>`;
         }
         //   [냐냐 요청] 복습 목록은 곡선 칸 순서로 (2026-10-27) — 졸업 → 30일 → … → 1일, 같은 칸이면 ▲ · (그 뒤 움직임) · ▼.
@@ -2998,7 +3000,7 @@ let vocabulary = [];
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(text)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(mean)}</span>
                     ${curve}
-                    ${gi && w ? `<span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
+                    ${gi && w ? `<span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatIdiomScore(w.id, text)}</span>` : ''}
                 </div>`;
             }
             const w = (vocabulary || []).find(v => String(v.id) === String(key));
@@ -3016,7 +3018,7 @@ let vocabulary = [];
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate">${escapeHtml(w.word)}</span>
                     <span class="text-xs text-slate-400 min-w-0 truncate flex-1">${escapeHtml(w.meaning || '')}</span>
                     ${curve}
-                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
+                    <span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatScore(w)}</span>
                 </button>`;
             }
             const t = (typeof getAllGrammarTables === 'function' ? getAllGrammarTables() : []).find(x => x.id === key);
@@ -3027,7 +3029,7 @@ let vocabulary = [];
                     <span class="text-[10px] font-black text-[#5896cb] shrink-0">문법</span>
                     <span class="text-sm font-bold text-slate-700 min-w-0 truncate flex-1">${escapeHtml(t.title || '(제목 없음)')}</span>
                     ${curve}
-                    <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
+                    <span class="shrink-0 ${curve ? 'w-12 text-center' : ''} px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}">${formatGrammarScore(t.id)}</span>
                 </button>`;
             }
             return `<div class="px-3 py-2 text-xs text-slate-400 border-b border-slate-100 last:border-0">지워진 항목이에요</div>`;
