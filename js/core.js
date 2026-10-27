@@ -2968,6 +2968,20 @@ let vocabulary = [];
                     <span class="w-[36px] flex items-center justify-end gap-0.5 text-[10px] font-black text-amber-700">${arrow}${REVIEW_INTERVALS[r.stage]}일</span>
                 </span>`;
         }
+        //   [냐냐 요청] 복습 목록은 곡선 칸 순서로 (2026-10-27) — 졸업 → 30일 → … → 1일, 같은 칸이면 ▲ · (그 뒤 움직임) · ▼.
+        //   묶음 제목 없이 정렬만 한다. 곡선 밖(기록 없음)은 맨 뒤, 나머지는 원래 순서대로.
+        function diarySortByCurve(ids, ds) {
+            const rank = (key) => {
+                const r = diaryCurveRecOf(key);
+                if (!r || !r.wrong) return [-1, 0];
+                const later = [r.wrong, r.review, r.demote].some(d => d && d > ds);
+                const mv = later ? 1 : (r.demote === ds ? 0 : 2);   // ▲ 2 · 그 뒤 움직임 1 · ▼ 0
+                return [Math.min(r.stage, REVIEW_INTERVALS.length), mv];
+            };
+            return ids.map((id, i) => ({ id, i, k: rank(id) }))
+                .sort((a, b) => (b.k[0] - a.k[0]) || (b.k[1] - a.k[1]) || (a.i - b.i))
+                .map(x => x.id);
+        }
         function diaryRowHtml(key, curveDs) {
             //   curveDs 를 주면 (복습 목록) 점수 앞에 곡선 자리를 단다
             const curve = typeof curveDs === 'string' ? diaryCurveChipHtml(key, curveDs) : '';   // map 이 넘기는 번호는 무시
@@ -3236,7 +3250,7 @@ let vocabulary = [];
                 const parts = diaryReviewParts(ds, log);
                 const k = diaryReviewKind;
                 const ids = k === 'all' ? parts.all : parts[k];
-                count = ids.length; rows = ids.map(id => diaryRowHtml(id, ds)).join('');
+                count = ids.length; rows = diarySortByCurve(ids, ds).map(id => diaryRowHtml(id, ds)).join('');
                 //   문법 복습으로 푼 번역도 같이 (그 날 첨삭 기록 중 복습 표시가 붙은 것) — 문법 탭에도
                 if (k === 'all' || k === 'grammar') {
                     count += parts.rv.length;
