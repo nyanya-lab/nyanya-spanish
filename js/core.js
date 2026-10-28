@@ -8521,6 +8521,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                         if (b.length < 3) return;
                         _unregHave.add(b);
                         if (typeof spanishFormVariants === 'function') spanishFormVariants(b).forEach(v => _unregHave.add(v));
+                        //   [냐냐 요청] 명사는 -or 만 여성형(-ora)도 '있음' — el profesor 면 profesora 도 (2026-10-29).
+                        //   -o ↔ -a 는 다른 낱말이 되는 게 많아서(pesa/peso · punto/punta) 안 한다. 채점(findVocabWordByForm)은 그대로.
+                        if (w.pos === 'noun' && /or$/.test(b)) { _unregHave.add(b + 'a'); _unregHave.add(b + 'as'); }
                     });
                 });
             }
