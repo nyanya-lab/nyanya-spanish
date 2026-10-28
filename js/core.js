@@ -8495,9 +8495,13 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             syncGrammarUnregBtn();
             renderGrammarTables();
         }
+        //   맨 윗줄 버튼 — 켜지면 초록 (🔍 단어 찾기 버튼과 같은 꼴)
         function syncGrammarUnregBtn() {
             const b = document.getElementById('grammar-unreg-btn');
-            if (b) styleFilterPill(b, grammarMarkUnreg);
+            if (!b) return;
+            b.className = `w-10 h-10 rounded-xl border text-sm transition-all flex items-center justify-center ${
+                grammarMarkUnreg ? 'bg-emerald-50 border-emerald-300 text-emerald-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'}`;
+            b.title = grammarMarkUnreg ? '단어장에 없는 낱말 표시 끄기' : '단어장에 없는 낱말 표시 (초록 밑줄)';
         }
         const VLINK_UNREG_SKIP = /^(ej|inf|adj|adv|ud|uds|vd|vds|etc|pl|sg|masc|fem|pres|pret|imp|fut|cond|subj|ind)$/;
         let _unregHave = null, _unregCache = new Map(), _unregKey = '';
@@ -8700,6 +8704,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             if (typeof syncGrammarExpandBtn === 'function') syncGrammarExpandBtn();
             if (typeof syncGrammarViewBtn === 'function') syncGrammarViewBtn();
             if (typeof syncGrammarLookupBtn === 'function') syncGrammarLookupBtn();
+            syncGrammarUnregBtn();
             if (typeof renderGrammarHintBar === 'function') renderGrammarHintBar();
             //   [냐냐 요청] 색인이 열려 있으면 같이 새로 그린다 (점수·제목이 바뀌었을 수 있다)
             if (typeof grammarIndexIsOpen === 'function' && grammarIndexIsOpen()) renderGrammarIndex();
@@ -9230,12 +9235,16 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });   // 노트 상세는 접힘
         }
         function toggleExpandAllGrammar() {
-            if (grammarViewMode === 'default') {
+            setGrammarExpandMode({ 'default': 'topics-open', 'topics-open': 'all-open' }[grammarViewMode] || 'default');
+        }
+        //   [냐냐 요청] 맨 윗줄 버튼을 필터 패널 '펼치기' 알약 셋으로 옮기면서 단계를 바로 고르게 했다 (2026-10-28)
+        function setGrammarExpandMode(mode) {
+            if (mode === 'topics-open') {
                 // → 주제 펼치기 (노트 제목까지)
                 getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = false; });
                 grammarGroupCollapsed = {};
                 grammarViewMode = 'topics-open';
-            } else if (grammarViewMode === 'topics-open') {
+            } else if (mode === 'all-open') {
                 // → 노트 상세까지 전부 펼치기
                 getAllGrammarTables().forEach(t => { grammarOpenState[t.id] = true; });
                 grammarGroupCollapsed = {};
@@ -9253,16 +9262,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             renderGrammarTables();
         }
         function syncGrammarExpandBtn() {
-            const btn = document.getElementById('grammar-expand-all-btn');
-            if (!btn) return;
-            const info = {
-                'default':     { tip: '주제 펼치기 (노트 제목 보기)', icon: 'fa-solid fa-list' },
-                'topics-open': { tip: '노트 내용까지 전부 펼치기',    icon: 'fa-solid fa-up-right-and-down-left-from-center' },
-                'all-open':    { tip: '전부 접기 (주제만 보기)',      icon: 'fa-solid fa-down-left-and-up-right-to-center' }
-            }[grammarViewMode] || {};
-            btn.title = info.tip || '전체 펼치기';
-            const icon = btn.querySelector('i');
-            if (icon && info.icon) icon.className = info.icon;
+            document.querySelectorAll('.grammar-expand-btn').forEach(b => styleFilterPill(b, b.dataset.gexpand === grammarViewMode));
         }
 
         // [냐냐 요청] 문법 목록 새로고침 (점수·약점 변동 반영) — 단어장 새로고침과 같은 역할
@@ -9570,7 +9570,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             pendingGrammarTopics = grammarFilterTopics.length === 0 ? allGrammarTopicKeys() : [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
             document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b.dataset.gview === grammarGroupView));
-            syncGrammarUnregBtn();
+            syncGrammarExpandBtn();
             pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             renderDeleMissingNote('grammar-dele-note', 'grammar');
@@ -9587,6 +9587,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const willOpen = panel.classList.contains('hidden');
             panel.classList.toggle('hidden');
             if (willOpen) syncGrammarFilterPanelUI();
+            //   폰에선 버튼 오른쪽 끝에 맞춘 패널(288px)이 왼쪽 화면 밖으로 120px 나갔다 — 화면 안으로 민다 (2026-10-28)
+            if (willOpen) {
+                panel.style.right = '';
+                const left = panel.getBoundingClientRect().left;
+                if (left < 12) panel.style.right = (parseFloat(getComputedStyle(panel).right) - (12 - left)) + 'px';
+            }
         }
         function closeGrammarFilterPanel() {
             document.getElementById('grammar-filter-panel')?.classList.add('hidden');
