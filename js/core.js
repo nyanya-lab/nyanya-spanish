@@ -8478,6 +8478,55 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return _vlinkIdx;
         }
         function vlinkVerbOf(tok, idx) { return idx.verbs.get(vlinkNorm(tok)) || null; }
+
+        // ============================================================
+        // [냐냐 요청] 문법 노트에서 '단어장에 아직 없는 낱말' 을 초록 밑줄로 (2026-10-28)
+        //   다 이으면 밑줄투성이(낱말의 69%)라, 거꾸로 안 등록된 것만 — 껐다 켤 수 있게. 필터 패널 '보기' 에 버튼.
+        //   켠 상태는 이 기기에만 기억한다. 누르면 '등록할까요?' (예전 🔍 단어 찾기의 lookupGrammarWord 그대로).
+        //   빼는 것: 기능어·대명사·소유사·지시사·숫자(첨삭 '단어장에 없어요' 추천과 같은 목록) · 두 글자 이하 ·
+        //   ej·inf 같은 약어 · 어미 조각(-aste) · 문장 가운데 대문자(이름).
+        //   등록됐는데 그 시제 칸을 안 채운 동사(llueve·olvidó)는 초록으로 뜬다 — 채울 차례라는 신호로 둔다.
+        // ============================================================
+        let grammarMarkUnreg = false;
+        try { grammarMarkUnreg = localStorage.getItem('nyanya_grammar_unreg') === '1'; } catch (e) {}
+        function toggleGrammarMarkUnreg() {
+            grammarMarkUnreg = !grammarMarkUnreg;
+            try { localStorage.setItem('nyanya_grammar_unreg', grammarMarkUnreg ? '1' : '0'); } catch (e) {}
+            syncGrammarUnregBtn();
+            renderGrammarTables();
+        }
+        function syncGrammarUnregBtn() {
+            const b = document.getElementById('grammar-unreg-btn');
+            if (b) styleFilterPill(b, grammarMarkUnreg);
+        }
+        const VLINK_UNREG_SKIP = /^(ej|inf|adj|adv|ud|uds|vd|vds|etc|pl|sg|masc|fem|pres|pret|imp|fut|cond|subj|ind)$/;
+        let _unregHave = null, _unregCache = new Map(), _unregKey = '';
+        const vlinkBare = (x) => vlinkNorm(x).normalize('NFD').replace(/[̀-ͯ]/g, '');
+        function vlinkIsUnregistered(tok) {
+            const k = vlinkNorm(tok), bare = vlinkBare(tok);
+            if (bare.length < 3 || VLINK_UNREG_SKIP.test(bare)) return false;
+            if (typeof AI_FUNCTION_WORDS !== 'undefined' && (AI_FUNCTION_WORDS.has(k) || AI_FUNCTION_WORDS.has(bare))) return false;
+            if (typeof AI_NUMBER_WORDS !== 'undefined' && AI_NUMBER_WORDS.has(bare)) return false;
+            //   단어장이 바뀌면 다시 — 열쇠는 동사·관용구 색인과 같다
+            if (_unregKey !== _vlinkIdxKey || !_unregHave) {
+                _unregKey = _vlinkIdxKey; _unregCache = new Map(); _unregHave = new Set();
+                (vocabulary || []).forEach(w => {
+                    //   'el/la estudiante' · 'debajo de [장소]' 처럼 여러 낱말로 된 항목은 낱말마다 '있음' 으로 친다
+                    String(w.word || '').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').split(/[^A-Za-zÀ-ÖØ-öø-ÿñÑ]+/).forEach(p => {
+                        const b = vlinkBare(p);
+                        if (b.length < 3) return;
+                        _unregHave.add(b);
+                        if (typeof spanishFormVariants === 'function') spanishFormVariants(b).forEach(v => _unregHave.add(v));
+                    });
+                });
+            }
+            if (_unregHave.has(bare)) return false;
+            //   표에 없는 것만 활용형까지 찾는다 (낱말마다 돌리면 느려서 — 같은 낱말은 한 번만)
+            if (_unregCache.has(bare)) return _unregCache.get(bare);
+            const miss = !(typeof findVocabWordByForm === 'function' && findVocabWordByForm(tok));
+            _unregCache.set(bare, miss);
+            return miss;
+        }
         function vlinkSpan(text, attrs) {
             const sp = document.createElement('span');
             sp.className = 'ny-vlink';
@@ -8486,7 +8535,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             return sp;
         }
         //   글 한 조각을 [글 | 링크] 조각들로 — 관용구 먼저, 남은 글에서 동사
-        function vlinkSplit(text, idx, depth) {
+        function vlinkSplit(text, idx, depth, unreg) {
             const d = depth || 0;
             if (d < 6 && idx.byFirst.size) {
                 const cands = [];
@@ -8495,9 +8544,9 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 for (const id of cands) {
                     const m = id.re.exec(text);
                     if (!m) continue;
-                    return vlinkSplit(text.slice(0, m.index), idx, d + 1)
+                    return vlinkSplit(text.slice(0, m.index), idx, d + 1, unreg && { ...unreg, tail: false })
                         .concat([vlinkSpan(m[0], { 'data-vlink-w': id.wid, 'data-vlink-i': id.iid })])
-                        .concat(vlinkSplit(text.slice(m.index + m[0].length), idx, d + 1));
+                        .concat(vlinkSplit(text.slice(m.index + m[0].length), idx, d + 1, unreg && { ...unreg, head: false }));
                 }
             }
             const out = [];
@@ -8505,9 +8554,24 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const re = /[A-Za-zÀ-ÖØ-öø-ÿñÑ]+/g;
             while ((m = re.exec(text))) {
                 const w = vlinkVerbOf(m[0], idx);
-                if (!w) continue;
+                let sp = w ? vlinkSpan(m[0], { 'data-vlink-w': w.id }) : null;
+                if (!sp && unreg) {
+                    const before = text.slice(0, m.index), after = text.charAt(m.index + m[0].length);
+                    const piece = /-$/.test(before) || after === '-'                                          // 어미 조각 -aste
+                        || (unreg.head && m.index === 0) || (unreg.tail && m.index + m[0].length === text.length);   // habl<b>é</b>
+                    const name = /^[A-ZÁÉÍÓÚÑ]/.test(m[0]) && (/[\p{L},]\s*$/u.test(before)                   // 문장 가운데 대문자
+                        || (unreg.lower && !unreg.lower.has(m[0].toLowerCase())));                          // 소문자로는 안 나옴
+                    if (!piece && !name && vlinkIsUnregistered(m[0])) {
+                        sp = document.createElement('span');
+                        sp.className = 'ny-unreg';
+                        sp.setAttribute('data-unreg', m[0]);
+                        sp.title = '단어장에 없어요 — 눌러서 등록';
+                        sp.textContent = m[0];
+                    }
+                }
+                if (!sp) continue;
                 if (m.index > last) out.push(document.createTextNode(text.slice(last, m.index)));
-                out.push(vlinkSpan(m[0], { 'data-vlink-w': w.id }));
+                out.push(sp);
                 last = m.index + m[0].length;
             }
             if (last < text.length) out.push(document.createTextNode(text.slice(last)));
@@ -8516,16 +8580,33 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         function linkVocabIn(root, selector) {
             if (!root || typeof vocabulary === 'undefined') return;
             const idx = vlinkIndex();
+            const unreg = grammarMarkUnreg && selector === GRAMMAR_VLINK_SEL;
+            //   [안 등록 표시] 이름(Juan·Nancy)은 문장 첫머리에 와서 '문장 가운데 대문자' 로는 못 거른다.
+            //   이 화면 어디에서도 소문자로 안 나오는 낱말은 이름으로 보고 뺀다
+            const lower = new Set();
+            if (unreg) (root.textContent.match(/[a-zà-öø-ÿñ][A-Za-zÀ-ÖØ-öø-ÿñÑ]*/g) || []).forEach(x => lower.add(x.toLowerCase()));
             const scopes = selector ? root.querySelectorAll(selector) : [root];
             scopes.forEach(scope => {
                 const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
-                    acceptNode: (n) => (!/[A-Za-zÀ-ÿñÑ]{3}/.test(n.nodeValue) || n.parentElement.closest('.ny-vlink, a, button, input, textarea, [contenteditable="true"]'))
+                    acceptNode: (n) => (!/[A-Za-zÀ-ÿñÑ]{3}/.test(n.nodeValue) || n.parentElement.closest('.ny-vlink, .ny-unreg, a, button, input, textarea, [contenteditable="true"]'))
                         ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
                 });
                 const nodes = [];
                 while (walker.nextNode()) nodes.push(walker.currentNode);
-                nodes.forEach(n => {
-                    const parts = vlinkSplit(n.nodeValue, idx);
+                //   [안 등록 표시] 활용표는 어미만 굵게 쓴다(habl<b>é</b>) — 글 조각이 갈려서 'habl' 이 따로 잡혔다.
+                //   같은 칸 안에서 앞뒤 조각에 글자가 붙어 있으면 그 끝의 낱말은 건너뛴다.
+                const LET = /[A-Za-zÀ-ÖØ-öø-ÿñÑ]/;
+                const blockOf = (x) => x.parentElement && x.parentElement.closest('div, p, li, td, th, h1, h2, h3, h4');
+                const glued = (x, dir) => {
+                    const gw = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+                    gw.currentNode = x;
+                    const o = dir < 0 ? gw.previousNode() : gw.nextNode();
+                    if (!o || blockOf(o) !== blockOf(x)) return false;
+                    return LET.test(dir < 0 ? o.nodeValue.slice(-1) : o.nodeValue.charAt(0));
+                };
+                const glue = unreg ? nodes.map(x => ({ head: glued(x, -1), tail: glued(x, 1), lower })) : [];
+                nodes.forEach((n, ni) => {
+                    const parts = vlinkSplit(n.nodeValue, idx, 0, unreg && glue[ni]);
                     if (!parts.some(p => p.nodeType === 1)) return;
                     const frag = document.createDocumentFragment();
                     parts.forEach(p => frag.appendChild(p));
@@ -8534,6 +8615,8 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             });
         }
         document.addEventListener('click', (e) => {
+            const un = e.target && e.target.closest && e.target.closest('.ny-unreg[data-unreg]');
+            if (un) { e.preventDefault(); e.stopPropagation(); lookupGrammarWord(un.getAttribute('data-unreg')); return; }
             const el = e.target && e.target.closest && e.target.closest('.ny-vlink');
             if (!el) return;
             e.preventDefault(); e.stopPropagation();
@@ -9487,6 +9570,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             pendingGrammarTopics = grammarFilterTopics.length === 0 ? allGrammarTopicKeys() : [...grammarFilterTopics];
             pendingGrammarMastery = grammarFilterMastery;
             document.querySelectorAll('.grammar-view-btn').forEach(b => styleFilterPill(b, b.dataset.gview === grammarGroupView));
+            syncGrammarUnregBtn();
             pendingGrammarDele = grammarFilterDele.length === 0 ? [...ALL_GDELE_LIST] : [...grammarFilterDele];
             document.querySelectorAll('.grammar-dele-btn').forEach(b => styleFilterPill(b, pendingGrammarDele.includes(b.dataset.gdele)));
             renderDeleMissingNote('grammar-dele-note', 'grammar');
