@@ -8503,6 +8503,23 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 grammarMarkUnreg ? 'bg-emerald-50 border-emerald-300 text-emerald-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'}`;
             b.title = grammarMarkUnreg ? '단어장에 없는 낱말 표시 끄기' : '단어장에 없는 낱말 표시 (초록 밑줄)';
         }
+        //   [냐냐 지적] 등록해도 초록 밑줄이 안 사라져서 버튼을 껐다 켜야 했다 (2026-10-29).
+        //   단어 저장 뒤 화면의 초록 낱말만 다시 본다 — 등록된 것은 밑줄을 풀고 동사·관용구 잇기를 다시 돌린다.
+        //   노트를 다시 그리지 않으니 스크롤·펼침은 그대로다.
+        function refreshGrammarUnregMarks() {
+            const box = document.getElementById('grammar-tables-container');
+            const marks = box ? box.querySelectorAll('.ny-unreg[data-unreg]') : [];
+            if (!marks.length) return;
+            vlinkIndex();                    // 단어장이 바뀌었으면 색인·표를 새로 (열쇠가 바뀐다)
+            _unregHave = null;               // 이름만 고친 저장은 열쇠가 그대로라 표를 직접 버린다
+            let undone = 0;
+            marks.forEach(sp => {
+                if (vlinkIsUnregistered(sp.getAttribute('data-unreg'))) return;
+                sp.replaceWith(document.createTextNode(sp.textContent));
+                undone++;
+            });
+            if (undone) { box.normalize(); linkVocabIn(box, GRAMMAR_VLINK_SEL); }
+        }
         const VLINK_UNREG_SKIP = /^(ej|inf|adj|adv|ud|uds|vd|vds|etc|pl|sg|masc|fem|pres|pret|imp|fut|cond|subj|ind)$/;
         let _unregHave = null, _unregCache = new Map(), _unregKey = '';
         const vlinkBare = (x) => vlinkNorm(x).normalize('NFD').replace(/[̀-ͯ]/g, '');

@@ -4860,6 +4860,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             updateStats();
             // [냐냐 요청] 첨삭 결과의 '단어장에 없던 낱말' 칩이 바로 체크로 바뀌게 다시 그린다
             if (typeof renderEsKoGrammarRefs === 'function') { try { renderEsKoGrammarRefs(); } catch (err) {} }
+            //   [냐냐 지적] 문법 노트의 초록 밑줄(단어장에 없는 낱말)도 등록하면 바로 빠지게 (2026-10-29)
+            if (typeof refreshGrammarUnregMarks === 'function') { try { refreshGrammarUnregMarks(); } catch (err) {} }
 
             // [냐냐 PATCH] 지금 저장한 게 '유의어 자동채우기 큐'로 열린 단어라면
             //   → 팝업 없이 조용히 다음 큐로 넘어감 (또는 큐 끝이면 마무리)
