@@ -6593,7 +6593,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     s.phase = 2;
                     s.pool = s.wrongPool.slice();
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
-                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
                     gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
                         `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
@@ -6604,7 +6604,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     s.phase = 3;
                     s.pool = shuffleArray(s.wrongPool.slice());
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
-                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
+                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
                     gate('🙈', '이제 가리고 써볼 차례!',
                         '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
                         '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
@@ -6762,11 +6762,17 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const parts = [notes, example].filter(x => x && x.trim());
                 //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
                 const learnWord = writeRoundTarget(w, 2);
-                const learnMean = (w._isConjTask && w._conjOf) ? (w._conjOf.meaning || '') : (w.meaning || '');
+                const slotCue = (w._isConjTask && w._conjSlot)
+                    ? (w._conjSlot.personLabel ? `${w._conjSlot.tenseLabel} · ${w._conjSlot.personLabel}` : (w._conjSlot.tenseLabel || '')) : '';
+                const learnMean = (w._isConjTask && w._conjOf)
+                    ? (w._conjOf.meaning || '') + (w._knewVerb && slotCue ? ` · ${slotCue}` : '')
+                    : (w.meaning || '');
                 //   [냐냐 지적] 원형 옆에 달았던 시제 배지는 뺐다 — 활용표를 위로 올린 뒤로는
                 //   바로 밑 표 머리말('직설법 현재 · 틀린 꼴')이 같은 말을 하고 있다.
                 const conjBack = (w._isConjTask && w._conjSlot)
-                    ? `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`
+                    ? (w._knewVerb
+                        ? `<p class="text-[11px] font-bold text-indigo-500">동사(<b>${escapeHtml((w._conjOf && w._conjOf.word) || '')}</b>)는 알고 있어요 — 이 꼴을 익혀요</p>`
+                        : `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`)
                     : '';
                 //   [냐냐 요청] 관용구는 어느 낱말에서 나온 표현인지 밑에 같이 보여준다 (2026-09-11).
                 //   표현만 덩그러니 있으면 뿌리가 안 보인다. 활용형 과제에 원형을 보여주는 것과 같은 결이다.
@@ -6930,7 +6936,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.retry = false;
             s.lastWrong = '';
             s.retryReason = null;   // [냐냐 요청] 봐준 이유는 단어마다 초기화
-            s.usedRetries = {}; s.synonymTried = [];
+            s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false;
             s.hint = '';
             s.hintMine = '';
             s.feedback = null;
@@ -7084,8 +7090,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return String((w && w.id) || '') + '::' + String((w && w.word) || '');
         }
 
+        //   [냐냐 요청] 동사는 알고 꼴만 틀렸으면(_knewVerb) 2바퀴도 그 활용형으로 익힌다 (2026-10-29).
+        //   동사 자체를 못 떠올렸을 때만 원형으로 — 뿌리부터 잡아야 하는 건 그때뿐이다.
         function writeRoundTarget(w, phase) {
-            if (phase === 2 && w && w._isConjTask && w._conjOf && w._conjOf.word) return w._conjOf.word;
+            if (phase === 2 && w && w._isConjTask && !w._knewVerb && w._conjOf && w._conjOf.word) return w._conjOf.word;
             return (w && w.word) || '';
         }
 
@@ -7101,7 +7109,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   2바퀴에서 활용형 문제는 원형을 쓴다 (writeRoundTarget)
             //   [냐냐 요청] 2바퀴에서 물어본 그 꼴(틀린 꼴)로 써도 받아 준다 (2026-10-16) — 원형이든 그 꼴이든
             const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase))
-                || (s.phase === 2 && w && w._isConjTask && writeAnswerMatches(el.value, w.word));
+                || (s.phase === 2 && w && w._isConjTask && (writeAnswerMatches(el.value, w.word)
+                    || (w._conjOf && w._conjOf.word && writeAnswerMatches(el.value, w._conjOf.word))));
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
@@ -7314,6 +7323,13 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', false); }
             }
             writeExamMark(s, w, false);
+            //   [냐냐 요청] 활용형 문제 — 동사는 알았나? (2026-10-29)
+            //   '낱말은 맞아요 · 재귀대명사 · 악센트 · 철자' 로 한 번 되물었거나(꼴 가까이 왔다),
+            //   끝내 쓴 답이 같은 동사의 다른 꼴이면 알았다고 본다. 과제는 복제본이라 표시해도 단어장엔 안 남는다.
+            if (w._isConjTask && w._conjOf) {
+                const hit = (mine && typeof findVocabWordByForm === 'function') ? findVocabWordByForm(mine) : null;
+                if ((s.usedRetries && s.usedRetries.typo) || s.knewVerbHint || (hit && hit.id === w._conjOf.id)) w._knewVerb = true;
+            }
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
@@ -7335,7 +7351,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (s.feedbackTimer) { clearTimeout(s.feedbackTimer); s.feedbackTimer = null; }
             s.feedback = null;
             s.retryReason = null;
-            s.usedRetries = {}; s.synonymTried = [];
+            s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false;
             s.hint = '';
             s.hintMine = '';
             s.lastWrong = '';
@@ -7605,6 +7621,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   [냐냐 요청] 활용형 문제에서 동사는 맞고 꼴만 틀렸으면 한 번 더 (2026-10-09) — 3-0 과 같은 대접(+1, 오타로 이미 봐줬으면 오답).
             //   3-0 은 단어장에 채운 꼴만 알아본다. 안 채운 시제(부정과거 등)나 잘못 만든 꼴(tienemos)은 AI 의 sameVerb 로 본다.
             //   ⚠️ 단어장의 다른 낱말로 읽히면 봐주지 않는다 — AI 가 헛짚었을 수 있다.
+            if (w._isConjTask && ai.sameVerb === true && used.typo) {
+                //   되물을 기회는 썼지만 같은 동사라는 건 2바퀴에 쓴다 (활용형으로 익히기)
+                const other = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+                if (!other || other.id === (w._conjOf || w).id) s.knewVerbHint = true;
+            }
             if (w._isConjTask && ai.sameVerb === true && !used.typo) {
                 const baseW = w._conjOf || w;
                 const other = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
@@ -7638,7 +7659,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const it = (Array.isArray(w._idiomOf.idioms) ? w._idiomOf.idioms : []).find(x => x && String(x.idiom || '').trim() === w.word);
                 return { id: w._idiomOf.id, k: 'i', iid: (it && it.iid) || '', t: w.word };
             }
-            if (w._isConjTask && w._conjOf) return { id: w._conjOf.id, k: 'c', slot: w._conjSlot };
+            if (w._isConjTask && w._conjOf) return Object.assign({ id: w._conjOf.id, k: 'c', slot: w._conjSlot }, w._knewVerb ? { kv: 1 } : {});
             return { id: w.id, k: 'w' };
         }
         function writeTaskFromDesc(d) {
@@ -7649,7 +7670,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const it = (Array.isArray(w.idioms) ? w.idioms : []).find(x => x && ((d.iid && x.iid === d.iid) || String(x.idiom || '').trim() === d.t));
                 return it ? makeWriteIdiomTask(w, it) : null;
             }
-            if (d.k === 'c') return (d.slot && d.slot.form) ? makeWriteConjTask(w, d.slot) : null;
+            if (d.k === 'c') {
+                if (!d.slot || !d.slot.form) return null;
+                const t = makeWriteConjTask(w, d.slot);
+                if (d.kv) t._knewVerb = true;   // 동사는 알았던 것 — 2바퀴를 활용형으로
+                return t;
+            }
             return w;
         }
         function writeSessionSnapshot() {
