@@ -6972,41 +6972,62 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
         }
 
         // ============================================================
-        // [냐냐 요청] 학습 정리 — 이번 달 · 지난달 · 올해를 말로 (2026-10-29)
+        // [냐냐 요청] 학습 정리 — 한 기간의 공부를 말로 (2026-10-29)
         //   숫자 칩은 늘 그 자리에서 센다(AI 없이). 글은 버튼을 눌렀을 때만 AI 가 한 번 쓰고 저장한다.
-        //   글에 들어가는 것: 한 일(지난 기간과 견줌) · 내 수준(DELE 가늠) · 첨삭 평가(실제 문장을 읽고)
-        //   · 자주 틀린 것(실제 문장 예) · 다음에 집중할 것.
+        //   [냐냐 지적] 처음 판은 칸마다 예문 하나씩만 들고 같은 말을 되풀이했다 (내 수준·첨삭 평가·자주 틀린 것).
+        //   예문은 필요 없고 '실제로 어디가 약한지' 만 요약해 달라 하셔서 — 문법 노트별 틀림/맞음 횟수와
+        //   실수 유형 횟수를 숫자로 넘기고, 칸마다 맡은 말이 겹치지 않게 못박는다. 예문 인용은 금지.
+        //   기간: 월간(기본 이번 달) · 연간 · 기간(날짜 둘) — ‹ › 로 넘긴다.
         //   다시 쓰기: 진행 중인 기간은 하루 한 번, 끝난 기간은 끝나기 전에 쓴 것만 한 번 더(그 뒤엔 확정).
         //   첨삭 노트는 9월부터라 그 전 기간은 공부한 양만 들어간다.
         // ============================================================
-        let studyReports = {};          // { 'm:2026-10': { date, at, r: {...AI 글} }, 'y:2026': {...} }
-        let studyReportTab = 'm0';      // 'm0' 이번 달 · 'm1' 지난달 · 'y0' 올해
+        let studyReports = {};          // { 'm:2026-10' | 'y:2026' | 'r:2026-10-01~2026-10-15': { date, at, upto, r: {...AI 글} } }
+        let studyReportMode = 'month';  // 'month' · 'year' · 'range'
+        let studyReportOff = 0;         // 0 = 이번 달/올해, 1 = 그 전 …
+        let studyReportRange = null;    // { from, to } — '기간' 고를 때
         let studyReportBusy = '';       // 쓰는 중인 기간 키
+        //   글 짜임을 바꾸면 올린다 — 옛 판으로 쓴 정리는 하루·확정 제한 없이 다시 쓸 수 있다 (10/29 1판 → 2판)
+        const STUDY_REPORT_V = 2;
 
-        function studyReportPeriod(tab) {
+        function studyReportPeriod() {
             const now = new Date();
             const pad = (n) => String(n).padStart(2, '0');
             const today = getLocalDateString();
-            if (tab === 'y0') {
-                const y = now.getFullYear();
-                return { key: `y:${y}`, label: `${y}년`, from: `${y}-01-01`, end: `${y}-12-31`, to: today,
+            if (studyReportMode === 'range') {
+                const r = studyReportRange || { from: getLocalDateString(new Date(Date.now() - 29 * 86400000)), to: today };
+                const from = r.from <= r.to ? r.from : r.to, end = r.from <= r.to ? r.to : r.from;
+                const days = Math.round((new Date(end) - new Date(from)) / 86400000) + 1;
+                const pTo = getLocalDateString(new Date(new Date(from).getTime() - 86400000));
+                const pFrom = getLocalDateString(new Date(new Date(from).getTime() - days * 86400000));
+                return { key: `r:${from}~${end}`, label: `${fmtDateSlash(from).slice(5)} ~ ${fmtDateSlash(end).slice(5)}`, title: `${fmtDateSlash(from)} ~ ${fmtDateSlash(end)}`,
+                    from, end, to: end < today ? end : today, prev: { from: pFrom, to: pTo, label: `그 앞 ${days}일` }, unit: '기간' };
+            }
+            if (studyReportMode === 'year') {
+                const y = now.getFullYear() - studyReportOff;
+                const end = `${y}-12-31`;
+                return { key: `y:${y}`, label: `${y}년`, title: `${y}년`, from: `${y}-01-01`, end, to: end < today ? end : today,
                     prev: { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: `${y - 1}년` }, unit: '해' };
             }
-            const back = tab === 'm1' ? 1 : 0;
-            const first = new Date(now.getFullYear(), now.getMonth() - back, 1);
+            const first = new Date(now.getFullYear(), now.getMonth() - studyReportOff, 1);
             const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
             const pFirst = new Date(first.getFullYear(), first.getMonth() - 1, 1);
             const pLast = new Date(first.getFullYear(), first.getMonth(), 0);
             const ym = `${first.getFullYear()}-${pad(first.getMonth() + 1)}`;
             const end = getLocalDateString(last);
-            return { key: `m:${ym}`, label: `${first.getMonth() + 1}월`, from: `${ym}-01`, end, to: end < today ? end : today,
+            return { key: `m:${ym}`, label: `${first.getMonth() + 1}월`, title: `${first.getFullYear()}년 ${first.getMonth() + 1}월`,
+                from: `${ym}-01`, end, to: end < today ? end : today,
                 prev: { from: getLocalDateString(pFirst), to: getLocalDateString(pLast), label: `${pFirst.getMonth() + 1}월` }, unit: '달' };
+        }
+        //   기록이 시작된 날 — 그보다 앞으로는 못 넘긴다
+        function studyFirstDay() {
+            const ks = Object.keys(nyanyaDiary || {}).sort();
+            return ks[0] || getLocalDateString();
         }
 
         //   한 기간의 숫자 — 일지와 첨삭 노트에서 센다
         function studyPeriodStats(from, to) {
             const s = { days: 0, reviewDoneDays: 0, newWords: 0, newMastered: 0, newGrammar: 0, newGrammarMastered: 0,
-                reviews: 0, quiz: 0, write: 0, games: 0, essays: 0, essayPerfect: 0, issues: {}, modes: {}, avgLen: 0, acc: null, totals: null };
+                reviews: 0, quiz: 0, write: 0, games: 0, essays: 0, essayPerfect: 0, issues: {}, notes: {}, avgLen: 0, acc: null, totals: null };
             const active = new Set();
             Object.keys(nyanyaDiary || {}).sort().forEach(ds => {
                 if (ds < from || ds > to) return;
@@ -7035,7 +7056,12 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 s.essays++;
                 if (n.ok) s.essayPerfect++;
                 if (n.issue && n.issue !== '없음') s.issues[n.issue] = (s.issues[n.issue] || 0) + 1;
-                s.modes[n.mode || '?'] = (s.modes[n.mode || '?'] || 0) + 1;
+                //   [냐냐 지적] 어디가 약한지 — 첨삭이 짚은 문법 노트마다 맞음/틀림을 센다
+                (Array.isArray(n.gram) ? n.gram : []).forEach(g => {
+                    if (!g || !g.n) return;
+                    const x = s.notes[g.n] || (s.notes[g.n] = { ok: 0, bad: 0 });
+                    if (g.ok) x.ok++; else x.bad++;
+                });
                 lenSum += String(n.mine).trim().split(/\s+/).length;
             });
             s.days = active.size;
@@ -7049,64 +7075,95 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             const issues = Object.entries(s.issues).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '없음';
             return `공부한 날 ${s.days}일 (그중 복습을 다 끝낸 날 ${s.reviewDoneDays}일) · 새 단어 ${s.newWords} · 새로 마스터한 단어 ${s.newMastered} · 새 문법 노트 ${s.newGrammar} · 문법 마스터 ${s.newGrammarMastered}
 복습 ${s.reviews} · 퀴즈 ${s.quiz}문제 · 쓰기 복습 ${s.write}문제 · 미니 게임 ${s.games}판
-첨삭 ${s.essays}문장 (완벽 ${s.essayPerfect}) · 첨삭 문장 평균 ${s.avgLen}낱말 · 첨삭에서 틀린 유형: ${issues}
+첨삭 ${s.essays}문장 (완벽 ${s.essayPerfect}) · 첨삭 문장 평균 ${s.avgLen}낱말 · 첨삭이 고른 주된 실수 유형: ${issues}
 정답률: ${s.acc ? `전체 ${s.acc.pct}%${s.acc.wordPct != null ? ` · 단어 ${s.acc.wordPct}%` : ''}${s.acc.essayPct != null ? ` · 첨삭 ${s.acc.essayPct}%` : ''}` : '자료 없음'}${s.totals ? `
 기간 끝 누계: 단어장 ${s.totals.words}개 (마스터 ${s.totals.mastered}) · 문법 노트 ${s.totals.grammar} · 관용구 ${s.totals.idioms} (마스터 ${s.totals.idiomMastered})` : ''}`;
         }
+        //   문법 노트별 — 틀림이 많은 것 / 잘 쓰는 것
+        function studyNotesText(s) {
+            const rows = Object.entries(s.notes || {});
+            if (!rows.length) return '';
+            const weak = rows.filter(([, x]) => x.bad > 0)
+                .sort((a, b) => (b[1].bad - a[1].bad) || (a[1].ok - b[1].ok)).slice(0, 8)
+                .map(([t, x]) => `· ${t}: 틀림 ${x.bad} · 맞음 ${x.ok}`);
+            const strong = rows.filter(([, x]) => x.ok >= 3 && x.ok >= x.bad * 3)
+                .sort((a, b) => b[1].ok - a[1].ok).slice(0, 6)
+                .map(([t, x]) => `· ${t}: 맞음 ${x.ok} · 틀림 ${x.bad}`);
+            return `${weak.length ? `틀림이 많은 노트\n${weak.join('\n')}` : ''}${strong.length ? `\n잘 쓰는 노트\n${strong.join('\n')}` : ''}`;
+        }
 
-        async function writeStudyReport(tab) {
-            const p = studyReportPeriod(tab || studyReportTab);
+        async function writeStudyReport() {
+            const p = studyReportPeriod();
             if (studyReportBusy) return;
             if (!(typeof getGeminiApiKey === 'function' && getGeminiApiKey())) { showToast("학습 정리는 AI 키가 있어야 써요", "info"); return; }
             const cur = studyPeriodStats(p.from, p.to);
-            if (!cur.days) { showToast(`${p.label}에는 공부한 기록이 없어요`, "info"); return; }
+            if (!cur.days) { showToast(`${p.title}에는 공부한 기록이 없어요`, "info"); return; }
             const prev = studyPeriodStats(p.prev.from, p.prev.to);
             const sent = deleWritingSample(p.from, p.to, 40);
-            const prevSent = deleWritingSample(p.prev.from, p.prev.to, 12);
             const d = deleResult;
             const deleText = d && d.overall
-                ? `전체 ${d.overall}${d.write && d.write.level ? ` (작문 직접 가늠 ${d.write.level}: ${d.write.why || ''})` : ''} · 어휘 ${(d.vocab && d.vocab.level) || '—'} · 문법 ${(d.gram && d.gram.level) || '—'} · 시제 ${(d.tense && d.tense.level) || '—'}${d.tense && d.tense.detail ? ` (${d.tense.detail})` : ''}`
+                ? `전체 ${d.overall}${d.write && d.write.level ? ` (작문 직접 가늠 ${d.write.level})` : ''} · 어휘 ${(d.vocab && d.vocab.level) || '—'} · 문법 ${(d.gram && d.gram.level) || '—'} · 시제 ${(d.tense && d.tense.level) || '—'}${d.tense && d.tense.detail ? ` (${d.tense.detail})` : ''}`
                 : '아직 없음';
             const ongoing = p.to < p.end;
-            const prompt = `냐냐님의 스페인어 공부를 ${p.label} 단위로 정리해 주세요. ${ongoing ? `${p.label}은 아직 진행 중이에요 (${fmtDateSlash(p.to)}까지).` : ''}
+            const notesCur = studyNotesText(cur), notesPrev = studyNotesText(prev);
+            //   [냐냐 지적] '전치사에서 흔들렸어요' 로는 어디가 약한지 모른다 — 많이 틀린 노트마다
+            //   그 노트를 틀린 문장 짝을 보여주고, 무엇을 무엇과 헷갈리는지 찾게 한다 (글에는 옮기지 않는다)
+            const weakTitles = Object.entries(cur.notes || {}).filter(([, x]) => x.bad > 0)
+                .sort((a, b) => b[1].bad - a[1].bad).slice(0, 5).map(([t]) => t);
+            const cutS = (x, n) => { x = String(x || '').replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n) + '…' : x; };
+            const weakPairs = weakTitles.map(title => {
+                const pairs = (typeof aiNotes !== 'undefined' ? (aiNotes || []) : []).filter(n => {
+                    if (!n || !n.t || !n.mine || !Array.isArray(n.gram)) return false;
+                    const ds = getLocalDateString(new Date(n.t));
+                    return ds >= p.from && ds <= p.to && n.gram.some(g => g && g.n === title && !g.ok);
+                }).slice(0, 5).map(n => `   학생: "${cutS(n.mine, 160)}" → 교정: "${cutS(n.fixed, 160)}"`);
+                return pairs.length ? `· ${title}\n${pairs.join('\n')}` : '';
+            }).filter(Boolean).join('\n');
+            const prompt = `냐냐님의 스페인어 공부를 '${p.title}' 단위로 정리해 주세요.${ongoing ? ` 아직 진행 중인 기간이에요 (${fmtDateSlash(p.to)}까지).` : ''}
 
-[${p.label} 숫자]
+[${p.title} 숫자]
 ${studyStatsText(cur)}
-
+${notesCur ? `\n[${p.title} 첨삭에서 문법 노트별로 맞음/틀림]\n${notesCur}\n` : ''}
 [견줄 기간: ${p.prev.label}]
-${prev.days ? studyStatsText(prev) : '기록 없음 — 견주지 마세요.'}
+${prev.days ? studyStatsText(prev) + (notesPrev ? `\n${notesPrev}` : '') : '기록 없음 — 견주지 마세요.'}
 
-[지금 DELE 가늠]
+[지금 DELE 가늠 — 화면 위 카드에 이미 나와 있어요]
 ${deleText}
-
-[${p.label}에 냐냐님이 쓴 첨삭 문장 — 옛것부터, 고르게 뽑음]
-${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 없어요 — 첨삭 평가는 빈칸으로)'}
-${prevSent.lines.length ? `
-[견줄 기간(${p.prev.label})의 첨삭 문장 몇 개]
-${prevSent.lines.join('\n')}` : ''}
+${weakPairs ? `
+[많이 틀린 노트마다, 그 노트를 틀린 문장 — 무엇을 무엇과 헷갈리는지 찾는 데만 쓰세요]
+${weakPairs}
+` : ''}
+[${p.title}에 냐냐님이 쓴 첨삭 문장 — 읽고 판단하는 데만 쓰세요, 글에 옮기지 마세요]
+${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 없어요)'}
 
 쓰는 법:
-- 냐냐님께 말하듯 따뜻한 존댓말로, 그러나 솔직하게. 칭찬만 늘어놓지 말고 실제로 나아질 점을 짚으세요.
+- 냐냐님께 말하듯 존댓말로, 솔직하게. 듣기 좋은 말이나 누구에게나 할 수 있는 말("꾸준히 하면 좋아져요")은 쓰지 마세요.
+- 예문·스페인어 문장을 인용하지 마세요. 어디가 약하고 어디가 강한지를 위 숫자와 노트 이름으로 요약하세요.
 - 숫자는 위에 있는 것만 쓰세요. 없는 숫자를 지어내지 마세요.
-- 문장 예를 들 때는 위 첨삭 문장에서 그대로 옮기세요 (스페인어 철자 그대로).
-- 각 칸은 짧게: 문단은 2~4문장.`;
+- 칸마다 맡은 말이 다릅니다. 한 칸에서 한 말을 다른 칸에서 되풀이하지 마세요:
+  · did = 양과 꾸준함 (날 수·새 단어·마스터·복습·정답률, 견줄 기간과 늘고 준 것). 실수 이야기 금지.
+  · level = DELE 등급 글자를 되풀이하지 마세요(위 카드에 있어요). 이 기간 문장으로 볼 때 이제 '할 수 있는 것'(쓰는 시제·짜임)과 '아직 못 하는 것'을 구체적으로. 실수 목록 금지.
+  · writing = 문장 자체가 어떻게 달라졌나 (길이·짜임·완벽 비율·첨삭 정답률을 견줄 기간과). 실수 목록 금지.
+  · weak = 실제로 약한 곳만, 횟수 근거와 함께 — 위 '틀림이 많은 노트' 와 실수 유형에서. how 에는 그 노트를 틀린 문장들을 읽고 찾은 '되풀이되는 헷갈림' 을 구체적으로 쓰세요 — 예: "사람 목적어 앞 a 를 빠뜨림 · le 자리에 lo", "en 자리에 a". 짧은 낱말(a, en, lo, le, por, para …)은 써도 되지만 문장은 옮기지 마세요. "실수가 잦았다 · 흔들렸다" 같은 뭉뚱그린 말은 금지.
+  · strong = 이제 안정적으로 쓰는 것 (맞음이 많은 노트).
+  · focus = 다음 ${p.unit}에 할 일 1~2개, weak 에서 골라 구체적으로.`;
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    headline: { type: "STRING", description: `${p.label}을 한 줄로 (30자 안팎)` },
-                    did: { type: "STRING", description: `한 일 — 위 숫자로 ${p.label}에 무엇을 얼마나 했는지, 견줄 기간이 있으면 늘고 준 것` },
-                    level: { type: "STRING", description: "내 수준 — DELE 가늠과 첨삭 문장을 아울러 지금 어디쯤인지, 다음 단계로 가려면 무엇이 필요한지" },
-                    writing: { type: "STRING", description: "첨삭 평가 — 문장을 직접 읽고: 길이·짜임·시제·낱말이 어떤지, 견줄 기간보다 나아진 점. 첨삭 문장이 없으면 빈 문자열" },
-                    mistakes: { type: "ARRAY", items: { type: "OBJECT", properties: {
-                        what: { type: "STRING", description: "자주 틀린 것 이름 (한국어, 짧게)" },
-                        example: { type: "STRING", description: "위 문장에서 그대로 옮긴 예 — '틀린 조각 → 고친 조각'" },
-                        tip: { type: "STRING", description: "기억할 규칙 한 문장" }
-                    }, required: ["what", "example", "tip"] }, description: "자주 틀린 것 0~3개 (실제로 되풀이된 것만)" },
-                    focus: { type: "ARRAY", items: { type: "STRING" }, description: `다음 ${p.unit}에 집중할 것 1~2개 — 짧고 구체적으로` }
+                    headline: { type: "STRING", description: `${p.title}을 한 줄로 (30자 안팎)` },
+                    did: { type: "STRING", description: "한 일 — 양과 꾸준함, 견줄 기간과 견줌. 2~3문장" },
+                    level: { type: "STRING", description: "내 수준 — 지금 단계와 다음 단계까지 빈 것. 2~3문장" },
+                    writing: { type: "STRING", description: "첨삭 평가 — 문장이 어떻게 달라졌나. 2~3문장. 첨삭이 없으면 빈 문자열" },
+                    weak: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        what: { type: "STRING", description: "약한 곳 이름 (노트 이름이나 실수 유형, 짧게)" },
+                        how: { type: "STRING", description: "횟수 근거 + 되풀이되는 헷갈림을 구체적으로 한 줄 (문장 인용 없이, 짧은 낱말은 가능)" }
+                    }, required: ["what", "how"] }, description: "약한 곳 2~5개, 많이 틀린 순" },
+                    strong: { type: "ARRAY", items: { type: "STRING" }, description: "이제 안정적인 것 0~3개, 짧게" },
+                    focus: { type: "ARRAY", items: { type: "STRING" }, description: `다음 ${p.unit}에 할 일 1~2개` }
                 },
-                required: ["headline", "did", "level", "writing", "mistakes", "focus"]
+                required: ["headline", "did", "level", "writing", "weak", "strong", "focus"]
             };
-            const system = "당신은 냐냐님의 스페인어 선생님입니다. 기록을 읽고 한 기간의 공부를 한국어로 정리합니다. 한국어로만 답하고, 스페인어는 예문에만 씁니다.";
+            const system = "당신은 냐냐님의 스페인어 선생님입니다. 기록을 읽고 한 기간의 공부를 한국어로 짧고 구체적으로 정리합니다. 한국어로만 답합니다.";
             studyReportBusy = p.key;
             renderStudyReport();
             const t0 = Date.now();
@@ -7121,7 +7178,7 @@ ${prevSent.lines.join('\n')}` : ''}
                 }
                 const r = extractAndParseJson(raw);
                 if (!r || !r.did) throw new Error('BAD_JSON');
-                studyReports[p.key] = { date: getLocalDateString(), at: new Date().toISOString(), upto: p.to, sec: Math.round((Date.now() - t0) / 100) / 10, r };
+                studyReports[p.key] = { v: STUDY_REPORT_V, date: getLocalDateString(), at: new Date().toISOString(), upto: p.to, sec: Math.round((Date.now() - t0) / 100) / 10, r };
                 s3('misc', 'studyReports');
                 saveToStorage();
             } catch (e) {
@@ -7133,22 +7190,63 @@ ${prevSent.lines.join('\n')}` : ''}
             }
         }
 
-        function setStudyReportTab(tab) { studyReportTab = tab; renderStudyReport(); }
+        function setStudyReportMode(mode) {
+            studyReportMode = mode;
+            studyReportOff = 0;
+            if (mode === 'range' && !studyReportRange) {
+                const today = getLocalDateString();
+                studyReportRange = { from: getLocalDateString(new Date(Date.now() - 29 * 86400000)), to: today };
+            }
+            renderStudyReport();
+        }
+        function moveStudyReport(step) {
+            //   step: -1 = 앞(옛날)으로, +1 = 뒤(요즘)로
+            const next = studyReportOff - step;
+            if (next < 0) return;
+            const keep = studyReportOff;
+            studyReportOff = next;
+            if (studyReportPeriod().end < studyFirstDay()) studyReportOff = keep;   // 기록 시작 전으로는 안 간다
+            renderStudyReport();
+        }
+        function setStudyReportRange() {
+            const a = document.getElementById('study-range-from'), b = document.getElementById('study-range-to');
+            if (!a || !b || !a.value || !b.value) return;
+            studyReportRange = { from: a.value, to: b.value };
+            renderStudyReport();
+        }
 
         function renderStudyReport() {
             const box = document.getElementById('study-report-box');
             if (!box) return;
-            const p = studyReportPeriod(studyReportTab);
+            const p = studyReportPeriod();
             const s = studyPeriodStats(p.from, p.to);
             const rep = studyReports[p.key];
             const today = getLocalDateString();
             const ongoing = p.to < p.end;
             //   진행 중이면 하루 한 번, 끝났으면 끝나기 전에 쓴 것만 한 번 더
-            const canWrite = !rep || (ongoing ? rep.date !== today : (rep.upto || rep.date) < p.end);
+            const canWrite = !rep || (rep.v || 1) < STUDY_REPORT_V || (ongoing ? rep.date !== today : (rep.upto || rep.date) < p.end);
             const busy = studyReportBusy === p.key;
 
-            const tabs = [['m0', '이번 달'], ['m1', '지난달'], ['y0', '올해']].map(([k, lb]) =>
-                `<button type="button" onclick="setStudyReportTab('${k}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${k === studyReportTab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">${lb}</button>`).join('');
+            //   머리줄: ‹ 2026년 10월 › · 오른쪽에 월간 / 연간 / 기간
+            const modes = [['month', '월간'], ['year', '연간'], ['range', '기간']].map(([k, lb]) =>
+                `<button type="button" onclick="setStudyReportMode('${k}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${k === studyReportMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">${lb}</button>`).join('');
+            const arrow = (dir, ok) => `<button type="button" ${ok ? `onclick="moveStudyReport(${dir})"` : 'disabled'} class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${ok ? 'text-slate-500 hover:bg-white' : 'text-slate-200'}"><i class="fa-solid fa-chevron-${dir < 0 ? 'left' : 'right'} text-xs"></i></button>`;
+            let nav;
+            if (studyReportMode === 'range') {
+                nav = `<div class="flex items-center gap-1 flex-wrap">
+                    <input id="study-range-from" type="date" value="${p.from}" max="${today}" onchange="setStudyReportRange()" class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-1.5 py-1">
+                    <span class="text-slate-400 text-xs">~</span>
+                    <input id="study-range-to" type="date" value="${p.end}" max="${today}" onchange="setStudyReportRange()" class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-1.5 py-1">
+                </div>`;
+            } else {
+                //   한 칸 앞 기간이 기록 시작보다 뒤에 끝나야 ‹ 를 켠다
+                const k = studyReportOff;
+                studyReportOff = k + 1;
+                const canBack = studyReportPeriod().end >= studyFirstDay();
+                studyReportOff = k;
+                nav = `<div class="flex items-center gap-0.5">${arrow(-1, canBack)}<span class="text-sm font-black text-slate-800 px-1 min-w-[96px] text-center">${p.title}</span>${arrow(1, studyReportOff > 0)}</div>`;
+            }
+
             const chip = (label, val) => `<div class="bg-white/80 rounded-xl px-2.5 py-1.5 text-center min-w-[64px]"><div class="text-sm font-black text-slate-700">${val}</div><div class="text-[10px] text-slate-400 font-bold">${label}</div></div>`;
             const chips = `<div class="flex flex-wrap gap-1.5 mb-3">
                 ${chip('공부한 날', s.days + '일')}${chip('새 단어', s.newWords)}${chip('마스터', s.newMastered)}${chip('첨삭', s.essays + '문장')}${chip('정답률', s.acc && s.acc.pct != null ? s.acc.pct + '%' : '—')}
@@ -7156,36 +7254,39 @@ ${prevSent.lines.join('\n')}` : ''}
             const btn = busy
                 ? `<button disabled class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400"><i class="fa-solid fa-spinner animate-spin mr-1"></i>쓰는 중…</button>`
                 : (canWrite
-                    ? `<button type="button" onclick="writeStudyReport('${studyReportTab}')" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-colors"><i class="fa-solid fa-pen-nib mr-1"></i>${rep ? '다시 쓰기' : '정리 쓰기'}</button>`
+                    ? `<button type="button" onclick="writeStudyReport()" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-colors"><i class="fa-solid fa-pen-nib mr-1"></i>${rep ? '다시 쓰기' : '정리 쓰기'}</button>`
                     : `<span class="text-[10px] text-slate-400">${ongoing ? '오늘 이미 썼어요 · 내일 다시 쓸 수 있어요' : '확정된 정리예요'}</span>`);
 
             let body;
             if (busy) {
-                body = `<p class="text-[11px] text-slate-400 py-3"><i class="fa-solid fa-spinner animate-spin mr-1"></i>${p.label} 기록과 첨삭 문장을 읽고 있어요… (10~30초)</p>`;
+                body = `<p class="text-[11px] text-slate-400 py-3"><i class="fa-solid fa-spinner animate-spin mr-1"></i>${p.title} 기록과 첨삭 문장을 읽고 있어요… (10~30초)</p>`;
             } else if (rep && rep.r) {
                 const r = rep.r;
                 const para = (icon, title, text) => text ? `<div class="mt-3">
                     <p class="text-[11px] font-bold text-slate-500 mb-1">${icon} ${title}</p>
                     <p class="text-[12px] text-slate-700 leading-relaxed whitespace-pre-line">${escapeHtml(text)}</p></div>` : '';
-                const mistakes = (r.mistakes || []).filter(m => m && m.what).map(m => `<li class="bg-white/80 rounded-xl px-3 py-2">
-                    <p class="text-[12px] font-bold text-rose-600">${escapeHtml(m.what)}</p>
-                    ${m.example ? `<p class="text-[11px] text-slate-600 mt-0.5">${escapeHtml(m.example)}</p>` : ''}
-                    ${m.tip ? `<p class="text-[11px] text-slate-500 mt-0.5">💡 ${escapeHtml(m.tip)}</p>` : ''}</li>`).join('');
+                //   첫 판(10/29 오전)은 mistakes 칸이었다 — 그 글도 읽히게 둔다
+                const weakRows = (Array.isArray(r.weak) ? r.weak : (r.mistakes || []).map(m => ({ what: m && m.what, how: m && m.tip })))
+                    .filter(x => x && x.what).map(x => `<li class="flex gap-2"><span class="shrink-0 text-rose-500 font-black">·</span><span><b class="text-rose-600">${escapeHtml(x.what)}</b>${x.how ? ` <span class="text-slate-600">— ${escapeHtml(x.how)}</span>` : ''}</span></li>`).join('');
+                const strong = (r.strong || []).filter(Boolean).map(x => `<span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-0.5">${escapeHtml(x)}</span>`).join('');
                 const focus = (r.focus || []).filter(Boolean).map(f => `<li>${escapeHtml(f)}</li>`).join('');
                 body = `${r.headline ? `<p class="text-sm font-black text-slate-800">${escapeHtml(r.headline)}</p>` : ''}
                     ${para('📅', '한 일', r.did)}
                     ${para('🎯', '내 수준', r.level)}
                     ${para('✍️', '첨삭 평가', r.writing)}
-                    ${mistakes ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">🔁 자주 틀린 것</p><ul class="space-y-1.5">${mistakes}</ul></div>` : ''}
-                    ${focus ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">👉 다음 ${p.unit}에 집중할 것</p><ul class="list-disc pl-5 text-[12px] text-slate-700 space-y-0.5">${focus}</ul></div>` : ''}
+                    ${weakRows ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">🔁 약한 곳</p><ul class="space-y-1 text-[12px] leading-relaxed">${weakRows}</ul></div>` : ''}
+                    ${strong ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">💪 이제 안정적인 것</p><div class="flex flex-wrap gap-1">${strong}</div></div>` : ''}
+                    ${focus ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">👉 다음 ${p.unit}에 할 것</p><ul class="list-disc pl-5 text-[12px] text-slate-700 space-y-0.5">${focus}</ul></div>` : ''}
                     <p class="text-[10px] text-slate-300 mt-3">${fmtDateSlash(rep.date)}에 썼어요${rep.upto && rep.upto !== rep.date ? ` (${fmtDateSlash(rep.upto)}까지 기록)` : ''}</p>`;
             } else {
-                body = `<p class="text-[11px] text-slate-400 py-2">${s.days ? `'정리 쓰기' 를 누르면 AI가 ${p.label} 기록과 첨삭 문장을 읽고 말로 정리해 드려요.` : `${p.label}에는 공부한 기록이 없어요.`}</p>`;
+                body = `<p class="text-[11px] text-slate-400 py-2">${s.days ? `'정리 쓰기' 를 누르면 AI가 ${p.title} 기록과 첨삭 문장을 읽고 말로 정리해 드려요.` : `${p.title}에는 공부한 기록이 없어요.`}</p>`;
             }
 
-            box.innerHTML = `<div class="flex items-center justify-between gap-2 mb-3">
-                    <div class="flex bg-slate-100/80 rounded-xl p-0.5">${tabs}</div>${s.days ? btn : ''}
-                </div>${chips}<div class="bg-white/70 rounded-2xl p-4">${body}</div>`;
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    ${nav}<div class="flex bg-slate-100/80 rounded-xl p-0.5">${modes}</div>
+                </div>
+                <div class="flex items-center justify-end mb-2">${s.days ? btn : ''}</div>
+                ${chips}<div class="bg-white/70 rounded-2xl p-4">${body}</div>`;
         }
 
         function toggleChartCard(bodyId, btnEl) {
