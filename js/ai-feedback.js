@@ -2618,7 +2618,14 @@ ${buildLearnerProfileSummary()}`;
 
         function aiSuggestHtml() {
             const s = aiLastSuggest || { idioms: [], newWords: [] };
-            if (!s.newWords.length) return '';
+            //   [냐냐 요청] 추천이 못 잡은 낱말도 여기서 바로 등록하게 '직접 추가' 버튼 (2026-10-29).
+            //   추천이 하나도 없어도 줄은 남긴다 — 그때가 오히려 이 버튼이 필요한 때다.
+            const addBtn = `<button type="button" onclick="openQuickWordRegister('')" title="단어 등록 창 열기" class="shrink-0 px-2 py-0.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-600 text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-0.5"></i> 단어장에 등록</button>`;
+            if (!s.newWords.length) {
+                return `<div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                    <p class="text-[11px] font-bold text-slate-400">추천할 새 낱말은 없어요</p>${addBtn}
+                </div>`;
+            }
             // [냐냐 요청] 등록하고 나면 체크 표시 (2026-09-07). 목록은 채점할 때 정해둔 그대로 두고,
             //   '지금 단어장에 있나' 만 그릴 때마다 다시 본다 — 따로 기억해 둘 게 없다.
             //   (단어를 저장하면 saveWord 가 이 카드를 다시 그린다)
@@ -2638,7 +2645,9 @@ ${buildLearnerProfileSummary()}`;
             const left = s.newWords.filter(x => !(typeof findVocabWordByForm === 'function' && findVocabWordByForm(x.word))).length;
             const wordPart = `
                 <div>
-                    <p class="text-[11px] font-bold text-slate-500 mb-1">${left ? '➕ 아직 단어장에 없어요' : '✅ 추천한 낱말을 다 등록했어요'}</p>
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <p class="text-[11px] font-bold text-slate-500">${left ? '➕ 아직 단어장에 없어요' : '✅ 추천한 낱말을 다 등록했어요'}</p>${addBtn}
+                    </div>
                     <div class="flex flex-wrap gap-1.5">${s.newWords.map(chip).join('')}</div>
                 </div>`;
             return `<div class="mt-3 pt-3 border-t border-slate-200">${wordPart}</div>`;
