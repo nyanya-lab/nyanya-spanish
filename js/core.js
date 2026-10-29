@@ -323,6 +323,7 @@ let vocabulary = [];
                 idiomReview: idiomReview,                 // [냐냐 요청] 관용구 망각곡선
                 idiomScores: idiomScores,                 // [냐냐 요청] 관용구 점수
                 deleResult: deleResult,                   // [냐냐 요청] DELE 가늠 (하루 한 번 산출)
+                studyReports: studyReports,               // [냐냐 요청] 학습 정리 (이번 달·올해, 2026-10-29)
                 grammarDeleLevels: grammarDeleLevels,     // [냐냐 요청] 문법 노트별 DELE 레벨
                 //   [냐냐 요청] 쓰기 복습에서 고른 동사 시제 — 폰에서도 같은 설정이 따라오게 같이 보낸다.
                 //   아직 안 정한 상태(null)면 안 보낸다 — 딴 기기에서 골라둔 걸 덮으면 안 된다.
@@ -598,6 +599,7 @@ let vocabulary = [];
                 idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
                 idiomScores = payload.idiomScores || {};                             // [냐냐 요청] 관용구 점수
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠
+                studyReports = payload.studyReports || {};                          // [냐냐 요청] 학습 정리
                 grammarDeleLevels = payload.grammarDeleLevels || {};                 // [냐냐 요청] 문법 노트별 DELE 레벨
                 customQuestions = payload.customQuestions || [];
                 selectedQuestionTopics = payload.selectedQuestionTopics || [];
@@ -661,6 +663,7 @@ let vocabulary = [];
                 idiomReview = {};
                 idiomScores = {};
                 deleResult = null;
+                studyReports = {};
                 grammarDeleLevels = {};
                 customQuestions = [];
                 selectedQuestionTopics = [];
@@ -6574,7 +6577,8 @@ let vocabulary = [];
             if (w.t) bits.push(`단어 ${Math.round(w.c / w.t * 100)}%`);
             if (r.parts.ai.t) bits.push(`첨삭 ${r.parts.ai.pct}%`);
             const split = bits.length > 1 ? ` (${bits.join(' · ')})` : '';
-            return { level: null, detail: `최근 ${r.days}일 ${r.correct}/${r.total}문제${split}`, pct: r.pct, total: r.total };
+            //   첨삭은 문장 하나를 0.8문제처럼 쪼개 세서 맞힌 수가 소수가 된다 — 보일 땐 반올림
+            return { level: null, detail: `최근 ${r.days}일 ${Math.round(r.correct)}/${r.total}문제${split}`, pct: r.pct, total: r.total };
         }
 
         // ── 축 ① 어휘: AI 에게 보낼 표본 ──
@@ -6627,6 +6631,72 @@ let vocabulary = [];
             return have.reduce((lo, a) => deleIndex(a.level) < deleIndex(lo.level) ? a : lo, have[0]).level;
         }
 
+        // ── 축 ⑤ 작문: AI 가 첨삭 문장을 직접 읽는다 ──
+        //   [냐냐 요청] "DELE 가늠을 직접 해주면 좋겠어 — 지금은 그냥 통계야?" (2026-10-29)
+        //   위 넷은 단어장·문법표에 '쌓아둔 것' 을 잰다. 시험은 내가 '써내는 것' 을 본다 — 그래서
+        //   최근 첨삭에서 내가 쓴 문장과 고친 문장을 짝으로 보여주고 작문 수준을 묻는다.
+        //   번역 미션은 뜻이 주어지니 내용이 아니라 스페인어 자체를 본다.
+        const DELE_WRITE_DAYS = 45, DELE_WRITE_MAX = 30, DELE_WRITE_MIN = 8;
+        function deleWritingSample(from, to, max = DELE_WRITE_MAX) {
+            const today = getLocalDateString();
+            const start = from || getLocalDateString(new Date(Date.now() - DELE_WRITE_DAYS * 86400000));
+            const end = to || today;
+            const seen = new Set();
+            const pick = (typeof aiNotes !== 'undefined' ? (aiNotes || []) : []).filter(n => {
+                if (!n || !n.t || !n.mine || n.mode === 'example') return false;
+                const ds = getLocalDateString(new Date(n.t));
+                if (ds < start || ds > end) return false;
+                const k = String(n.mine).trim().toLowerCase();
+                if (!k || seen.has(k)) return false;   // 같은 답을 두 번 낸 것
+                seen.add(k);
+                return true;
+            });
+            //   기간 전체에서 고르게 뽑는다 (앞뒤를 견줄 수 있게) — 그리고 옛것부터 차례로
+            let picked = pick;
+            if (pick.length > max) {
+                const step = pick.length / max;
+                picked = Array.from({ length: max }, (_, i) => pick[Math.floor(i * step)]);
+            }
+            picked = picked.slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
+            const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
+            const lines = picked.map((n, i) => {
+                const ds = getLocalDateString(new Date(n.t)).slice(5);
+                const task = n.ask ? ` [과제: ${cut(n.ask, 80)}]` : '';
+                const fixed = n.fixed && cut(n.fixed, 220) !== cut(n.mine, 220) ? ` → 교정: "${cut(n.fixed, 220)}"` : ' → 고칠 것 없음';
+                return `${i + 1}. (${ds})${task} 학생: "${cut(n.mine, 220)}"${fixed}`;
+            });
+            return { lines, total: pick.length };
+        }
+        async function deleWritingAxis() {
+            const s = deleWritingSample();
+            if (s.lines.length < DELE_WRITE_MIN) {
+                return { level: null, detail: `최근 ${DELE_WRITE_DAYS}일 첨삭 문장이 ${s.lines.length}개라 아직 못 재요 (${DELE_WRITE_MIN}문장부터)` };
+            }
+            const prompt = `Below are ${s.lines.length} Spanish sentences a Korean learner (냐냐) wrote in the last ${DELE_WRITE_DAYS} days, oldest first, each followed by the teacher's correction. Translation tasks show the Korean they translated in [과제: …].
+
+${s.lines.join('\n')}
+
+Judge the CEFR level (A1, A2, B1, B2, C1, C2) of this learner's WRITTEN PRODUCTION, the way a DELE examiner scores the writing task:
+- range of structures and tenses they actually produce (subordinate clauses, relatives, connectors, past tenses, subjunctive…)
+- vocabulary range and precision
+- accuracy: how many corrections each sentence needed, and how serious (a slipped accent is minor; a wrong tense or broken structure is not)
+For translation tasks the meaning was given, so judge the Spanish they produced, not the content.
+Pick the level they reach CONSISTENTLY across these sentences, not their single best sentence. If they sit between two levels, give the lower one.
+"why": two short sentences IN KOREAN to 냐냐님 (존댓말) — what places them at this level, and the one thing missing for the next level, quoting one short Spanish fragment from the sentences above as evidence. Never answer in English.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    level: { type: "STRING", enum: DELE_LEVELS },
+                    why: { type: "STRING", description: "한국어 두 문장 — 이 수준인 까닭 · 다음 수준에 모자란 것 (근거 조각 하나)" }
+                },
+                required: ["level", "why"]
+            };
+            const data = extractAndParseJson(await callGeminiGrade(prompt, "당신은 DELE 작문 채점관입니다. 학습자의 실제 문장으로 CEFR 수준을 가늠합니다.", schema, 30000));
+            const lv = normDeleLevel(data && data.level);
+            if (!lv) throw new Error('BAD_LEVEL');
+            return { level: lv, why: String(data.why || '').trim(), detail: `최근 ${DELE_WRITE_DAYS}일 첨삭 ${s.lines.length}문장을 AI가 직접 읽었어요` };
+        }
+
         async function refreshDeleLevel(manual) {
             if (deleBusy) return;
             const tense = deleTenseAxis();
@@ -6638,6 +6708,10 @@ let vocabulary = [];
             let gram = deleResult && deleResult.gram ? deleResult.gram : null;
             const canAsk = (typeof getGeminiApiKey === 'function') && !!getGeminiApiKey();
             const enough = sample.words.length >= 20;
+            //   [냐냐 요청] 작문은 AI 가 첨삭 문장을 직접 읽고 가늠한다 — 어휘·문법 분류와 따로, 동시에 묻는다
+            let write = deleResult && deleResult.write ? deleResult.write : null;
+            const writeP = canAsk ? deleWritingAxis().catch(e => { console.warn('DELE 작문 가늠 실패', e); return null; }) : null;
+            if (writeP) { deleBusy = true; renderDeleCard(); }
 
             if (canAsk && enough) {
                 deleBusy = true;
@@ -6743,10 +6817,20 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                 else if (!enough) showToast("마스터한 단어가 20개는 있어야 어휘를 재요", "info");
             }
 
+            if (writeP) {
+                deleBusy = true;
+                const w = await writeP;
+                deleBusy = false;
+                if (w) write = w;
+            }
+
+            //   [냐냐 요청] 전체 수준은 작문을 직접 읽은 값이 있으면 그것을 따른다 (2026-10-29).
+            //   나머지 축은 '쌓아둔 것' 이라 근거로 아래에 남기고, 그 가운데 가장 낮은 축은 statOverall 로 따로 둔다.
+            const statOverall = deleOverall([vocab, gram, tense, acc]);
             deleResult = Object.assign(deleResult || {}, {
                 date: getLocalDateString(),
-                tense, acc, vocab, gram,
-                overall: deleOverall([vocab, gram, tense, acc])
+                tense, acc, vocab, gram, write, statOverall,
+                overall: (write && write.level) ? write.level : statOverall
             });
             s3('misc', 'deleResult');
             renderDeleCard();
@@ -6830,6 +6914,7 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             };
 
             const neck = deleBottleneck(r);
+            const writeLed = !!(r.write && r.write.level);   // 전체 수준이 작문 직접 가늠을 따랐나
 
             box.innerHTML = `
                 <div class="flex items-center justify-between gap-2 mb-2">
@@ -6839,18 +6924,23 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
                     </div>
                     ${btn}
                 </div>
+                ${axis('작문', r.write)}
+                ${(r.write && r.write.why) ? `<p class="text-[11px] text-violet-700 bg-violet-50 border border-violet-100 rounded-xl px-2.5 py-1.5 mb-1.5 leading-relaxed">✍️ ${escapeHtml(r.write.why)}</p>` : ''}
                 ${axis('어휘', r.vocab)}${deleDistBar(r.vocab)}
                 ${axis('문법', r.gram)}${deleDistBar(r.gram)}
                 ${axis('시제', r.tense)}
                 ${axis('정답률', r.acc)}
-                ${neck ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-2.5 py-1.5 mt-2">👉 지금 발목을 잡는 건 <b>${neck}</b> — 전체 수준은 가장 낮은 축을 따라가요</p>` : ''}
+                ${neck ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-2.5 py-1.5 mt-2">👉 ${writeLed ? `쌓아둔 것 가운데 낮은 축은 <b>${neck}</b>` : `지금 발목을 잡는 건 <b>${neck}</b> — 전체 수준은 가장 낮은 축을 따라가요`}</p>` : ''}
                 ${r.comment ? `<p class="text-[11px] text-slate-500 leading-relaxed mt-2">${escapeHtml(r.comment)}</p>` : ''}
-                <p class="text-[10px] text-slate-300 mt-2">${r.date ? fmtDateSlash(r.date) + ' 기준 · ' : ''}시험 결과가 아니라 단어장·문법표에 쌓인 걸로 가늠한 값이에요</p>`;
+                <p class="text-[10px] text-slate-300 mt-2">${r.date ? fmtDateSlash(r.date) + ' 기준 · ' : ''}${writeLed
+                    ? `전체 수준은 AI가 내 첨삭 문장을 직접 읽고 가늠한 값이에요${r.statOverall && r.statOverall !== r.overall ? ` (단어장·문법표로만 보면 ${r.statOverall})` : ''} · 시험 결과는 아니에요`
+                    : '시험 결과가 아니라 단어장·문법표에 쌓인 걸로 가늠한 값이에요'}</p>`;
         }
 
         // [냐냐 PATCH] 학습 수준 데이터를 사용자가 직접 볼 수 있게 보기 좋게 렌더링
         function renderLearnerProfileDisplay() {
             renderDeleCard();
+            renderStudyReport();
             // 하루에 한 번만 자동으로. 나머지는 '다시 재기' 버튼으로 돌린다 (AI 를 부르니까)
             if (!deleAutoTried && (!deleResult || deleResult.date !== getLocalDateString())) {
                 deleAutoTried = true;
@@ -6879,6 +6969,223 @@ Words: ${sample.words.join(', ')}${gramBlock}`;
             //   (2026-09-08). 제목을 눌러야 펴지는 자리라 정작 보고 싶은 숫자가 거기 숨어 있었고,
             //   DELE 상자가 같은 이야기를 더 잘한다. 정답률은 그 안 '정답률' 줄로 옮겼다.
             //   ⚠️ learnerProfile 자체는 그대로 쌓는다 — buildLearnerProfileSummary 가 AI 에게 넘긴다.
+        }
+
+        // ============================================================
+        // [냐냐 요청] 학습 정리 — 이번 달 · 지난달 · 올해를 말로 (2026-10-29)
+        //   숫자 칩은 늘 그 자리에서 센다(AI 없이). 글은 버튼을 눌렀을 때만 AI 가 한 번 쓰고 저장한다.
+        //   글에 들어가는 것: 한 일(지난 기간과 견줌) · 내 수준(DELE 가늠) · 첨삭 평가(실제 문장을 읽고)
+        //   · 자주 틀린 것(실제 문장 예) · 다음에 집중할 것.
+        //   다시 쓰기: 진행 중인 기간은 하루 한 번, 끝난 기간은 끝나기 전에 쓴 것만 한 번 더(그 뒤엔 확정).
+        //   첨삭 노트는 9월부터라 그 전 기간은 공부한 양만 들어간다.
+        // ============================================================
+        let studyReports = {};          // { 'm:2026-10': { date, at, r: {...AI 글} }, 'y:2026': {...} }
+        let studyReportTab = 'm0';      // 'm0' 이번 달 · 'm1' 지난달 · 'y0' 올해
+        let studyReportBusy = '';       // 쓰는 중인 기간 키
+
+        function studyReportPeriod(tab) {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const today = getLocalDateString();
+            if (tab === 'y0') {
+                const y = now.getFullYear();
+                return { key: `y:${y}`, label: `${y}년`, from: `${y}-01-01`, end: `${y}-12-31`, to: today,
+                    prev: { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: `${y - 1}년` }, unit: '해' };
+            }
+            const back = tab === 'm1' ? 1 : 0;
+            const first = new Date(now.getFullYear(), now.getMonth() - back, 1);
+            const last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+            const pFirst = new Date(first.getFullYear(), first.getMonth() - 1, 1);
+            const pLast = new Date(first.getFullYear(), first.getMonth(), 0);
+            const ym = `${first.getFullYear()}-${pad(first.getMonth() + 1)}`;
+            const end = getLocalDateString(last);
+            return { key: `m:${ym}`, label: `${first.getMonth() + 1}월`, from: `${ym}-01`, end, to: end < today ? end : today,
+                prev: { from: getLocalDateString(pFirst), to: getLocalDateString(pLast), label: `${pFirst.getMonth() + 1}월` }, unit: '달' };
+        }
+
+        //   한 기간의 숫자 — 일지와 첨삭 노트에서 센다
+        function studyPeriodStats(from, to) {
+            const s = { days: 0, reviewDoneDays: 0, newWords: 0, newMastered: 0, newGrammar: 0, newGrammarMastered: 0,
+                reviews: 0, quiz: 0, write: 0, games: 0, essays: 0, essayPerfect: 0, issues: {}, modes: {}, avgLen: 0, acc: null, totals: null };
+            const active = new Set();
+            Object.keys(nyanyaDiary || {}).sort().forEach(ds => {
+                if (ds < from || ds > to) return;
+                const d = nyanyaDiary[ds] || {};
+                const did = (d.quizTotal || 0) + (d.writeTotal || 0) + (d.reviewCount || 0) + (d.newWordsCount || 0)
+                    + (d.gameCount || 0) + (d.numTotal || 0) + (d.aiSessions || 0) + (d.practiceCount || 0);
+                if (did > 0) active.add(ds);
+                if (d.reviewDone) s.reviewDoneDays++;
+                s.newWords += Math.max(0, d.newWordsCount || 0);
+                s.newMastered += Math.max(0, d.newMasteredCount || 0);
+                s.newGrammar += Math.max(0, d.newGrammarCount || 0);
+                s.newGrammarMastered += Math.max(0, d.newGrammarMasteredCount || 0);
+                s.reviews += (d.reviewCount || 0);
+                s.quiz += (d.quizTotal || 0);
+                s.write += (d.writeTotal || 0);
+                s.games += (d.gameCount || 0);
+                if (d.registeredTotal) s.totals = { words: d.registeredTotal, mastered: d.masteredTotal || 0,
+                    grammar: d.grammarTotal || 0, idioms: d.idiomTotal || 0, idiomMastered: d.idiomMasteredTotal || 0 };
+            });
+            let lenSum = 0;
+            (typeof aiNotes !== 'undefined' ? (aiNotes || []) : []).forEach(n => {
+                if (!n || !n.t || !n.mine) return;
+                const ds = getLocalDateString(new Date(n.t));
+                if (ds < from || ds > to) return;
+                active.add(ds);
+                s.essays++;
+                if (n.ok) s.essayPerfect++;
+                if (n.issue && n.issue !== '없음') s.issues[n.issue] = (s.issues[n.issue] || 0) + 1;
+                s.modes[n.mode || '?'] = (s.modes[n.mode || '?'] || 0) + 1;
+                lenSum += String(n.mine).trim().split(/\s+/).length;
+            });
+            s.days = active.size;
+            s.avgLen = s.essays ? Math.round(lenSum / s.essays * 10) / 10 : 0;
+            const a = (typeof accuracyBetween === 'function') ? accuracyBetween(from, to) : null;
+            if (a && a.total) s.acc = { pct: a.pct, essayPct: a.parts.ai.pct, wordPct: (a.parts.quiz.t + a.parts.write.t) ? Math.round((a.parts.quiz.c + a.parts.write.c) / (a.parts.quiz.t + a.parts.write.t) * 100) : null };
+            return s;
+        }
+
+        function studyStatsText(s) {
+            const issues = Object.entries(s.issues).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '없음';
+            return `공부한 날 ${s.days}일 (그중 복습을 다 끝낸 날 ${s.reviewDoneDays}일) · 새 단어 ${s.newWords} · 새로 마스터한 단어 ${s.newMastered} · 새 문법 노트 ${s.newGrammar} · 문법 마스터 ${s.newGrammarMastered}
+복습 ${s.reviews} · 퀴즈 ${s.quiz}문제 · 쓰기 복습 ${s.write}문제 · 미니 게임 ${s.games}판
+첨삭 ${s.essays}문장 (완벽 ${s.essayPerfect}) · 첨삭 문장 평균 ${s.avgLen}낱말 · 첨삭에서 틀린 유형: ${issues}
+정답률: ${s.acc ? `전체 ${s.acc.pct}%${s.acc.wordPct != null ? ` · 단어 ${s.acc.wordPct}%` : ''}${s.acc.essayPct != null ? ` · 첨삭 ${s.acc.essayPct}%` : ''}` : '자료 없음'}${s.totals ? `
+기간 끝 누계: 단어장 ${s.totals.words}개 (마스터 ${s.totals.mastered}) · 문법 노트 ${s.totals.grammar} · 관용구 ${s.totals.idioms} (마스터 ${s.totals.idiomMastered})` : ''}`;
+        }
+
+        async function writeStudyReport(tab) {
+            const p = studyReportPeriod(tab || studyReportTab);
+            if (studyReportBusy) return;
+            if (!(typeof getGeminiApiKey === 'function' && getGeminiApiKey())) { showToast("학습 정리는 AI 키가 있어야 써요", "info"); return; }
+            const cur = studyPeriodStats(p.from, p.to);
+            if (!cur.days) { showToast(`${p.label}에는 공부한 기록이 없어요`, "info"); return; }
+            const prev = studyPeriodStats(p.prev.from, p.prev.to);
+            const sent = deleWritingSample(p.from, p.to, 40);
+            const prevSent = deleWritingSample(p.prev.from, p.prev.to, 12);
+            const d = deleResult;
+            const deleText = d && d.overall
+                ? `전체 ${d.overall}${d.write && d.write.level ? ` (작문 직접 가늠 ${d.write.level}: ${d.write.why || ''})` : ''} · 어휘 ${(d.vocab && d.vocab.level) || '—'} · 문법 ${(d.gram && d.gram.level) || '—'} · 시제 ${(d.tense && d.tense.level) || '—'}${d.tense && d.tense.detail ? ` (${d.tense.detail})` : ''}`
+                : '아직 없음';
+            const ongoing = p.to < p.end;
+            const prompt = `냐냐님의 스페인어 공부를 ${p.label} 단위로 정리해 주세요. ${ongoing ? `${p.label}은 아직 진행 중이에요 (${fmtDateSlash(p.to)}까지).` : ''}
+
+[${p.label} 숫자]
+${studyStatsText(cur)}
+
+[견줄 기간: ${p.prev.label}]
+${prev.days ? studyStatsText(prev) : '기록 없음 — 견주지 마세요.'}
+
+[지금 DELE 가늠]
+${deleText}
+
+[${p.label}에 냐냐님이 쓴 첨삭 문장 — 옛것부터, 고르게 뽑음]
+${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 없어요 — 첨삭 평가는 빈칸으로)'}
+${prevSent.lines.length ? `
+[견줄 기간(${p.prev.label})의 첨삭 문장 몇 개]
+${prevSent.lines.join('\n')}` : ''}
+
+쓰는 법:
+- 냐냐님께 말하듯 따뜻한 존댓말로, 그러나 솔직하게. 칭찬만 늘어놓지 말고 실제로 나아질 점을 짚으세요.
+- 숫자는 위에 있는 것만 쓰세요. 없는 숫자를 지어내지 마세요.
+- 문장 예를 들 때는 위 첨삭 문장에서 그대로 옮기세요 (스페인어 철자 그대로).
+- 각 칸은 짧게: 문단은 2~4문장.`;
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    headline: { type: "STRING", description: `${p.label}을 한 줄로 (30자 안팎)` },
+                    did: { type: "STRING", description: `한 일 — 위 숫자로 ${p.label}에 무엇을 얼마나 했는지, 견줄 기간이 있으면 늘고 준 것` },
+                    level: { type: "STRING", description: "내 수준 — DELE 가늠과 첨삭 문장을 아울러 지금 어디쯤인지, 다음 단계로 가려면 무엇이 필요한지" },
+                    writing: { type: "STRING", description: "첨삭 평가 — 문장을 직접 읽고: 길이·짜임·시제·낱말이 어떤지, 견줄 기간보다 나아진 점. 첨삭 문장이 없으면 빈 문자열" },
+                    mistakes: { type: "ARRAY", items: { type: "OBJECT", properties: {
+                        what: { type: "STRING", description: "자주 틀린 것 이름 (한국어, 짧게)" },
+                        example: { type: "STRING", description: "위 문장에서 그대로 옮긴 예 — '틀린 조각 → 고친 조각'" },
+                        tip: { type: "STRING", description: "기억할 규칙 한 문장" }
+                    }, required: ["what", "example", "tip"] }, description: "자주 틀린 것 0~3개 (실제로 되풀이된 것만)" },
+                    focus: { type: "ARRAY", items: { type: "STRING" }, description: `다음 ${p.unit}에 집중할 것 1~2개 — 짧고 구체적으로` }
+                },
+                required: ["headline", "did", "level", "writing", "mistakes", "focus"]
+            };
+            const system = "당신은 냐냐님의 스페인어 선생님입니다. 기록을 읽고 한 기간의 공부를 한국어로 정리합니다. 한국어로만 답하고, 스페인어는 예문에만 씁니다.";
+            studyReportBusy = p.key;
+            renderStudyReport();
+            const t0 = Date.now();
+            try {
+                //   글이라 Flash 로 쓴다 — 막히면 채점 길(3.5 Flash-Lite → 3.1)로
+                let raw;
+                try { raw = await callGeminiRaw(prompt, system, schema, 'low', 'gemini-3.5-flash', 40000, true); }
+                catch (e) {
+                    if (String(e && e.message || '').includes('NO_API_KEY')) throw e;
+                    console.warn('학습 정리: 3.5 Flash 실패 → 채점 모델로', e);
+                    raw = await callGeminiGrade(prompt, system, schema, 0);
+                }
+                const r = extractAndParseJson(raw);
+                if (!r || !r.did) throw new Error('BAD_JSON');
+                studyReports[p.key] = { date: getLocalDateString(), at: new Date().toISOString(), upto: p.to, sec: Math.round((Date.now() - t0) / 100) / 10, r };
+                s3('misc', 'studyReports');
+                saveToStorage();
+            } catch (e) {
+                console.warn('학습 정리 실패', e);
+                showToast(describeGeminiError(e), "error");
+            } finally {
+                studyReportBusy = '';
+                renderStudyReport();
+            }
+        }
+
+        function setStudyReportTab(tab) { studyReportTab = tab; renderStudyReport(); }
+
+        function renderStudyReport() {
+            const box = document.getElementById('study-report-box');
+            if (!box) return;
+            const p = studyReportPeriod(studyReportTab);
+            const s = studyPeriodStats(p.from, p.to);
+            const rep = studyReports[p.key];
+            const today = getLocalDateString();
+            const ongoing = p.to < p.end;
+            //   진행 중이면 하루 한 번, 끝났으면 끝나기 전에 쓴 것만 한 번 더
+            const canWrite = !rep || (ongoing ? rep.date !== today : (rep.upto || rep.date) < p.end);
+            const busy = studyReportBusy === p.key;
+
+            const tabs = [['m0', '이번 달'], ['m1', '지난달'], ['y0', '올해']].map(([k, lb]) =>
+                `<button type="button" onclick="setStudyReportTab('${k}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${k === studyReportTab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}">${lb}</button>`).join('');
+            const chip = (label, val) => `<div class="bg-white/80 rounded-xl px-2.5 py-1.5 text-center min-w-[64px]"><div class="text-sm font-black text-slate-700">${val}</div><div class="text-[10px] text-slate-400 font-bold">${label}</div></div>`;
+            const chips = `<div class="flex flex-wrap gap-1.5 mb-3">
+                ${chip('공부한 날', s.days + '일')}${chip('새 단어', s.newWords)}${chip('마스터', s.newMastered)}${chip('첨삭', s.essays + '문장')}${chip('정답률', s.acc && s.acc.pct != null ? s.acc.pct + '%' : '—')}
+            </div>`;
+            const btn = busy
+                ? `<button disabled class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400"><i class="fa-solid fa-spinner animate-spin mr-1"></i>쓰는 중…</button>`
+                : (canWrite
+                    ? `<button type="button" onclick="writeStudyReport('${studyReportTab}')" class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white transition-colors"><i class="fa-solid fa-pen-nib mr-1"></i>${rep ? '다시 쓰기' : '정리 쓰기'}</button>`
+                    : `<span class="text-[10px] text-slate-400">${ongoing ? '오늘 이미 썼어요 · 내일 다시 쓸 수 있어요' : '확정된 정리예요'}</span>`);
+
+            let body;
+            if (busy) {
+                body = `<p class="text-[11px] text-slate-400 py-3"><i class="fa-solid fa-spinner animate-spin mr-1"></i>${p.label} 기록과 첨삭 문장을 읽고 있어요… (10~30초)</p>`;
+            } else if (rep && rep.r) {
+                const r = rep.r;
+                const para = (icon, title, text) => text ? `<div class="mt-3">
+                    <p class="text-[11px] font-bold text-slate-500 mb-1">${icon} ${title}</p>
+                    <p class="text-[12px] text-slate-700 leading-relaxed whitespace-pre-line">${escapeHtml(text)}</p></div>` : '';
+                const mistakes = (r.mistakes || []).filter(m => m && m.what).map(m => `<li class="bg-white/80 rounded-xl px-3 py-2">
+                    <p class="text-[12px] font-bold text-rose-600">${escapeHtml(m.what)}</p>
+                    ${m.example ? `<p class="text-[11px] text-slate-600 mt-0.5">${escapeHtml(m.example)}</p>` : ''}
+                    ${m.tip ? `<p class="text-[11px] text-slate-500 mt-0.5">💡 ${escapeHtml(m.tip)}</p>` : ''}</li>`).join('');
+                const focus = (r.focus || []).filter(Boolean).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+                body = `${r.headline ? `<p class="text-sm font-black text-slate-800">${escapeHtml(r.headline)}</p>` : ''}
+                    ${para('📅', '한 일', r.did)}
+                    ${para('🎯', '내 수준', r.level)}
+                    ${para('✍️', '첨삭 평가', r.writing)}
+                    ${mistakes ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">🔁 자주 틀린 것</p><ul class="space-y-1.5">${mistakes}</ul></div>` : ''}
+                    ${focus ? `<div class="mt-3"><p class="text-[11px] font-bold text-slate-500 mb-1">👉 다음 ${p.unit}에 집중할 것</p><ul class="list-disc pl-5 text-[12px] text-slate-700 space-y-0.5">${focus}</ul></div>` : ''}
+                    <p class="text-[10px] text-slate-300 mt-3">${fmtDateSlash(rep.date)}에 썼어요${rep.upto && rep.upto !== rep.date ? ` (${fmtDateSlash(rep.upto)}까지 기록)` : ''}</p>`;
+            } else {
+                body = `<p class="text-[11px] text-slate-400 py-2">${s.days ? `'정리 쓰기' 를 누르면 AI가 ${p.label} 기록과 첨삭 문장을 읽고 말로 정리해 드려요.` : `${p.label}에는 공부한 기록이 없어요.`}</p>`;
+            }
+
+            box.innerHTML = `<div class="flex items-center justify-between gap-2 mb-3">
+                    <div class="flex bg-slate-100/80 rounded-xl p-0.5">${tabs}</div>${s.days ? btn : ''}
+                </div>${chips}<div class="bg-white/70 rounded-2xl p-4">${body}</div>`;
         }
 
         function toggleChartCard(bodyId, btnEl) {
