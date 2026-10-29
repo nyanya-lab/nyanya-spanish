@@ -1598,19 +1598,12 @@ ${examples.map(x => '· ' + x).join('\n')}${notYet.includes('indefinido') ? `
             //    같은 미션에 답을 두 번 낸 것이었다 — 첨삭 노트가 둘로 남았을 뿐이다.)
             //   ⚠️ 그래서 '짜임을 바꿔라' 고 하면 안 된다. 복습 중인 문법을 피하라는 말이 된다.
             //   바꿀 것은 소재뿐이다.
-            //   최근에 낸 문장을 그대로 보여주고 '이것들과 겹치지 마라' 고 못박는다.
-            //   기록은 첨삭 노트(aiNotes)에 이미 남아 있으므로 따로 저장할 것이 없다.
-            const recentAsks = (typeof aiNotes !== 'undefined' ? (aiNotes || []) : [])
-                .filter(n => n && n.mode === 'ko-es' && n.ask)
-                .map(n => String(n.ask).trim()).filter(Boolean).slice(0, 6);
-            const recentBlock = recentAsks.length ? `
-[최근에 낸 문장 — 이것들과 겹치지 마세요]
-${recentAsks.map(a => '· ' + a).join('\n')}
-바꿔야 할 것은 **소재**입니다 — 장소·사람·행동·시간대·상황을 위 목록과 겹치지 않게 잡으세요.
-⚠️ 문장의 **짜임**은 바꾸지 마세요. 짜임은 아래 문법이 정합니다. 같은 문법을 여러 번 연습하는 중이라
-비슷한 짜임이 나오는 것은 맞습니다 — 그때도 소재만은 매번 달라야 합니다.
-(예: 수동태를 또 연습하더라도 '작가가 쓴 책' 다음엔 '요리사가 만든 요리' 말고 아예 다른 소재로)
-` : '';
+            //   그때는 최근에 낸 문장(aiNotes 의 ask 6개)을 보여주고 '이것들과 겹치지 마라' 고 못박았다.
+            //   ⚠️ [냐냐 결정] 이 목록은 뺐다 (2026-10-29). '보고서를 프랑스어로 발표했어' 를 목록 맨 위에
+            //   '겹치지 마' 로 보여줬는데 바로 다음 문장이 또 보고서였다 — 보여준 낱말이 오히려 떠오른다.
+            //   최근 120문장을 훑어보니 목록이 있어도 겹침은 드물었고(계절·수업 요일 정도), 9/4 의 진짜 원인
+            //   (대목 예문 소재 베끼기)은 아래 '대목의 소재는 옮겨오지 마세요' 가 따로 막는다.
+            //   소재를 앱이 정해 주는 안은 '문법과 안 맞아 엉뚱해진다' 고 반려. 다시 넣을 땐 냐냐님과 상의.
             // [냐냐 요청] 복습 문장은 중간 길이로 (2026-10-26) — "문장이 길고 어려워서 실력은 느는데 부담스러워".
             //   최근 25개 중 절반 넘게가 '~해서/~는데, ~했어' 두 마디(평균 40자, 길면 59자)였다.
             //   복습은 매일 하는 몫이라 25~35자 한 이야기로, 랜덤 문장 생성(자유 연습)은 지금처럼 길게 둔다.
@@ -1631,7 +1624,7 @@ ${recentAsks.map(a => '· ' + a).join('\n')}
             const prompt = `짧고 일상적인 구어체 한국어 문장을 1개 만들어주세요. 실제로 친구한테 말할 법한 자연스러운 문장으로, 너무 길지 않게.
             매우 중요: 문장은 100% 순수한 한국어로만 작성하고, 스페인어 단어나 알파벳, 영어를 절대 섞지 마세요. 학생이 이 한국어 문장을 보고 스스로 스페인어로 번역해야 하므로, 정답이 될 스페인어 철자를 한국어 문장 안에 노출하면 절대 안 됩니다.
             뭉뚱그린 문장은 안 됩니다 — '그것 · 저것 · 어떤 물건' 처럼 소재를 흐리면 학생이 무엇을 옮겨야 할지 알 수 없습니다. 무엇을 말하는 문장인지 한국어만 읽고도 분명해야 합니다.
-${recentBlock}${grammarContext ? `
+${grammarContext ? `
 [이번에 같이 연습할 문법 — 학생이 직접 정리해 둔 노트입니다]
 제목: ${grammarNote.title || ''}
 ${grammarContext}
@@ -2736,6 +2729,12 @@ ${buildLearnerProfileSummary()}`;
             Sharing one word with an expression is NOT using it: "Cuando salgo llevo el móvil" does not use "llevar [시간] + [현재분사]", and "es mi casa" does not use "ser [시간/날짜]".
             A sentence with a second clause (que, y, porque, cuando…) often uses two or three expressions — judge each id on its own; finding one says nothing about the others.
             Verdict per id: "ok" = used correctly, "bad" = the student clearly reached for it but got the expression's own words wrong, "no" = not used. When unsure, "no".
+            HOW TO DECIDE ok vs bad — two checks, nothing else:
+            (1) the FIXED words (everything outside [ ] / ( )): present, spelled right, in the right order?
+            (2) each slot: holds the right KIND of thing (a verb where it says [동사], a place where it says [장소] …)?
+            Both yes → "ok". Do NOT look at how well the slot filler itself is spelled or conjugated: a wrong participle, a wrong person ending, a misspelled noun INSIDE a slot is a word error that is graded elsewhere, never this expression's error.
+            So these are all "ok" for "todavía no + [동사]": "todavía no he escribido el informe" (escribido→escrito), "mi hermano todavía no ha hacido la tarea" (hacido→hecho), "ellos todavía no sabe nada" (sabe→saben).
+            "bad" only when check (1) fails: "todavía he no escrito", "no todavía he comido".
             Write each verdict as "I<n>=ok", "I<n>=bad" or "I<n>=no" — one per id, none skipped.`;
             const schema = { type: "OBJECT", properties: { verdicts: { type: "ARRAY", items: { type: "STRING" },
                 description: "후보마다 하나씩 차례대로 — 'I1=no' · 'I2=ok' · 'I3=bad'" } }, required: ["verdicts"] };
