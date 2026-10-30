@@ -7324,11 +7324,17 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
             writeExamMark(s, w, false);
             //   [냐냐 요청] 활용형 문제 — 동사는 알았나? (2026-10-29)
-            //   '낱말은 맞아요 · 재귀대명사 · 악센트 · 철자' 로 한 번 되물었거나(꼴 가까이 왔다),
-            //   끝내 쓴 답이 같은 동사의 다른 꼴이면 알았다고 본다. 과제는 복제본이라 표시해도 단어장엔 안 남는다.
+            //   '낱말은 맞아요 · 재귀대명사' 로 되물었거나(knewVerbHint), 끝내 쓴 답이 같은 동사의 다른 꼴이면 알았다고 본다.
+            //   [냐냐 지적] 철자로 되물은 것은 틀린 자리를 본다 (2026-10-30) — gozan 에 mozan 을 쓰고
+            //   2바퀴에서 '동사는 알고 있어요' 가 떴다. 첫머리부터 틀렸으면 동사를 못 떠올린 것이라 원형으로,
+            //   첫 두 글자가 맞으면(어미·악센트 쪽 실수) 동사는 안 것으로 본다.
+            //   과제는 복제본이라 표시해도 단어장엔 안 남는다.
             if (w._isConjTask && w._conjOf) {
                 const hit = (mine && typeof findVocabWordByForm === 'function') ? findVocabWordByForm(mine) : null;
-                if ((s.usedRetries && s.usedRetries.typo) || s.knewVerbHint || (hit && hit.id === w._conjOf.id)) w._knewVerb = true;
+                const head2 = (x) => normalizeWriteAnswer(String(x || '')).slice(0, 2);
+                const startOk = (a) => { const h = head2(a); return h.length === 2 && (h === head2(w.word) || h === head2(w._conjOf.word)); };
+                const typoNear = !!(s.usedRetries && s.usedRetries.typo) && (startOk(s.hintMine) || startOk(mine));
+                if (s.knewVerbHint || typoNear || (hit && hit.id === w._conjOf.id)) w._knewVerb = true;
             }
             s.wrongPool.push(w);
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
@@ -7482,6 +7488,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     return;
                 }
                 if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
+                s.knewVerbHint = true;   // 동사는 맞았다 — 2바퀴를 활용형으로
                 writeAskRetry('typo', `✏️ 동사는 맞아요! <b>재귀대명사</b>가 빠졌어요. 다시 한 번 써볼까요?`, userAnswer);
                 return;
             }
@@ -7510,6 +7517,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     //      철자로 이미 한 번 봐줬으면(used.typo) 그때는 그대로 오답이다.
                     if (used.typo) { writeFirstRoundFail(w, userAnswer); return; }
                     const p = writePrefixHint(userAnswer, w.word);
+                    if (w._isConjTask) s.knewVerbHint = true;   // 같은 동사의 다른 꼴 — 2바퀴를 활용형으로
                     writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요. 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }
@@ -7636,6 +7644,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     && String(other.word || '').trim() + 'se' === String(baseW.word || '').trim();
                 if (!other || other.id === baseW.id || twin) {
                     const p = writePrefixHint(userAnswer, w.word);
+                    if (w._isConjTask) s.knewVerbHint = true;   // 같은 동사의 다른 꼴 — 2바퀴를 활용형으로
                     writeAskRetry('typo', `✏️ 낱말은 맞아요! 형태가 조금 달라요. 다시 한 번 써볼까요?`, userAnswer);
                     return;
                 }

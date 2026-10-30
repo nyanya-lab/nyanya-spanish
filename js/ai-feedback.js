@@ -697,6 +697,15 @@
             }
         }
 
+        //   [냐냐 요청] 질문 글에서 단어장에 없는 낱말은 초록 밑줄 — 눌러서 찾아보거나 등록 (2026-10-30).
+        //   문법 노트의 '안 등록 낱말 표시' 와 같은 장치(linkVocabIn)이고, 동사·관용구는 점선으로 이어진다.
+        //   질문이 짧아서 늘 켠다. 단어를 저장하면 refreshGrammarUnregMarks 가 여기 밑줄도 바로 지운다.
+        function markQuestionWords() {
+            const el = document.getElementById('question-display-text');
+            if (!el || typeof linkVocabIn !== 'function') return;
+            try { linkVocabIn(el, null, { unreg: true }); } catch (e) { console.warn('질문 낱말 표시 실패', e); }
+        }
+
         async function pickRandomQuestion() {
             if (customQuestions.length === 0) {
                 showToast("먼저 '질문 관리'에서 질문을 등록해 주세요!", "error");
@@ -725,6 +734,7 @@
             currentQuestionForAnswer = picked;
             updateSaveAiQuestionBtn();
             document.getElementById('question-display-text').innerText = currentQuestionForAnswer.question;
+            markQuestionWords();
             aiGradedKeys.delete(aiMissionKey('question', currentQuestionForAnswer.question));   // 다시 뽑힌 질문은 처음처럼 채점
             // [냐냐 PATCH] 주제는 기본적으로 숨김 (정답 유추 방지) — '주제 보기' 눌러야 보임
             const topicBadge = document.getElementById('question-topic-badge');
@@ -874,6 +884,7 @@
                 currentQuestionForAnswer = { question: data.followupQuestion, _isFollowup: true, koreanHint: data.koreanHint || '' };
                 updateSaveAiQuestionBtn(); // 연관 질문은 대화 흐름용이라 저장 버튼을 감춘다
                 document.getElementById('question-display-text').innerText = data.followupQuestion;
+                markQuestionWords();
                 // 주제 배지를 한국어 힌트로 활용
                 const topicBadge = document.getElementById('question-topic-badge');
                 if (topicBadge) topicBadge.innerText = '주제 보기';

@@ -8915,18 +8915,28 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
         //   단어 저장 뒤 화면의 초록 낱말만 다시 본다 — 등록된 것은 밑줄을 풀고 동사·관용구 잇기를 다시 돌린다.
         //   노트를 다시 그리지 않으니 스크롤·펼침은 그대로다.
         function refreshGrammarUnregMarks() {
-            const box = document.getElementById('grammar-tables-container');
-            const marks = box ? box.querySelectorAll('.ny-unreg[data-unreg]') : [];
-            if (!marks.length) return;
-            vlinkIndex();                    // 단어장이 바뀌었으면 색인·표를 새로 (열쇠가 바뀐다)
-            _unregHave = null;               // 이름만 고친 저장은 열쇠가 그대로라 표를 직접 버린다
-            let undone = 0;
-            marks.forEach(sp => {
-                if (vlinkIsUnregistered(sp.getAttribute('data-unreg'))) return;
-                sp.replaceWith(document.createTextNode(sp.textContent));
-                undone++;
+            //   [냐냐 요청] 첨삭 '질문에 답하기' 의 질문 글도 같은 표시를 쓴다 (2026-10-30) — 같이 다시 본다
+            const places = [
+                [document.getElementById('grammar-tables-container'), GRAMMAR_VLINK_SEL, null],
+                [document.getElementById('question-display-text'), null, { unreg: true }]
+            ];
+            let fresh = false;
+            places.forEach(([box, sel, opts]) => {
+                const marks = box ? box.querySelectorAll('.ny-unreg[data-unreg]') : [];
+                if (!marks.length) return;
+                if (!fresh) {
+                    vlinkIndex();                    // 단어장이 바뀌었으면 색인·표를 새로 (열쇠가 바뀐다)
+                    _unregHave = null;               // 이름만 고친 저장은 열쇠가 그대로라 표를 직접 버린다
+                    fresh = true;
+                }
+                let undone = 0;
+                marks.forEach(sp => {
+                    if (vlinkIsUnregistered(sp.getAttribute('data-unreg'))) return;
+                    sp.replaceWith(document.createTextNode(sp.textContent));
+                    undone++;
+                });
+                if (undone) { box.normalize(); linkVocabIn(box, sel, opts); }
             });
-            if (undone) { box.normalize(); linkVocabIn(box, GRAMMAR_VLINK_SEL); }
         }
         const VLINK_UNREG_SKIP = /^(ej|inf|adj|adv|ud|uds|vd|vds|etc|pl|sg|masc|fem|pres|pret|imp|fut|cond|subj|ind)$/;
         let _unregHave = null, _unregCache = new Map(), _unregKey = '';
@@ -9009,10 +9019,11 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             if (last < text.length) out.push(document.createTextNode(text.slice(last)));
             return out;
         }
-        function linkVocabIn(root, selector) {
+        //   opts.unreg — 노트의 켜고 끄기와 상관없이 안 등록 낱말을 표시한다 (질문에 답하기의 질문 글)
+        function linkVocabIn(root, selector, opts) {
             if (!root || typeof vocabulary === 'undefined') return;
             const idx = vlinkIndex();
-            const unreg = grammarMarkUnreg && selector === GRAMMAR_VLINK_SEL;
+            const unreg = !!(opts && opts.unreg) || (grammarMarkUnreg && selector === GRAMMAR_VLINK_SEL);
             //   [안 등록 표시] 이름(Juan·Nancy)은 문장 첫머리에 와서 '문장 가운데 대문자' 로는 못 거른다.
             //   이 화면 어디에서도 소문자로 안 나오는 낱말은 이름으로 보고 뺀다
             const lower = new Set();
@@ -13464,6 +13475,7 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
                     if (typeof updateSaveAiQuestionBtn === 'function') updateSaveAiQuestionBtn();
                     const d = document.getElementById('question-display-text');
                     if (d) d.innerText = currentQuestionForAnswer.question;
+                    if (typeof markQuestionWords === 'function') markQuestionWords();   // 안 등록 낱말 초록 밑줄
                     const badge = document.getElementById('question-topic-badge');
                     if (badge) badge.innerText = '주제 보기';
                     setBox('question-answer-input', s.question.text);
