@@ -8539,7 +8539,9 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             const menu = document.getElementById('sidebar-menu');
             const icon = document.getElementById('menu-toggle-icon');
             menu.classList.add('hidden', 'md:flex');
-            icon.className = "fa-solid fa-chevron-down text-sm";
+            icon.className = "fa-solid fa-bars text-sm";
+            const label = document.getElementById('menu-toggle-label');
+            if (label) label.textContent = '메뉴';
             isMenuCollapsed = true;
         }
 
@@ -8547,7 +8549,9 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             const menu = document.getElementById('sidebar-menu');
             const icon = document.getElementById('menu-toggle-icon');
             menu.classList.remove('hidden');
-            icon.className = "fa-solid fa-chevron-up text-sm";
+            icon.className = "fa-solid fa-xmark text-sm";
+            const label = document.getElementById('menu-toggle-label');
+            if (label) label.textContent = '닫기';
             isMenuCollapsed = false;
         }
 
