@@ -1197,13 +1197,13 @@ let vocabulary = [];
                 let answer = '';
                 const pend = askAiMessages.find(m => m.role === 'pending');
                 try {
-                    answer = await streamGemini(prompt, sys, 'low', (t) => {
+                    answer = await streamGeminiWithBackup(prompt, sys, (t) => {
                         if (pend) { pend.text = t; renderAskAiThread(); }
                     });
                 } catch (se) {
-                    if (String(se && se.message || '').includes('NO_API_KEY') || se.status === 401 || se.status === 403 || se.status === 429) throw se;
+                    if (String(se && se.message || '').includes('NO_API_KEY') || se.status === 401 || se.status === 403 || se.status === 429 || se.status >= 500 || se.timedOut) throw se;
                     console.warn('AI 질문하기: 흘려 받기 실패 → 한 번에 받기', se);
-                    answer = await callGemini(prompt, sys, null, 'low');
+                    answer = await callGeminiWithBackup(prompt, sys, null, BACKUP_CHAT);
                 }
                 askAiMessages = askAiMessages.filter(m => m.role !== 'pending');
                 askAiMessages.push({ role: 'ai', text: (answer || '').toString().trim() || '답을 받지 못했어요.' });

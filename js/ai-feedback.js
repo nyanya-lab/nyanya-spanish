@@ -682,7 +682,7 @@
                 required: ["question", "koreanHint", "topic"]
             };
             try {
-                const data = extractAndParseJson(await callGeminiMission(prompt, system, schema));
+                const data = extractAndParseJson(await callGeminiWithBackup(prompt, system, schema));
                 if (!data || !String(data.question || '').trim()) return null;
                 return {
                     id: 'ai-' + Date.now(),
@@ -1687,7 +1687,7 @@ ${reviewLengthBlock}
 
             try {
                 const askOnce = async () => {
-                    const result = extractAndParseJson(await callGeminiMission(prompt, system, schema));
+                    const result = extractAndParseJson(await callGeminiWithBackup(prompt, system, schema));
                     return (result.sentence || '').trim();
                 };
                 let candidateSentence = await askOnce();
@@ -2164,9 +2164,9 @@ ${buildLearnerProfileSummary()}`;
                 ...(hasSlot ? { slotFill: { type: "STRING", description: "빈칸마다 '빈칸 → 문장 속 들어갈 한국어 말' (예: '[수량/상태] → 서른 명'). 한글로만" } } : {})
             }, required: hasSlot ? ["sentence", "slotFill"] : ["sentence"] };
             try {
-                let res = extractAndParseJson(await callGeminiMission(prompt, system, schema));
+                let res = extractAndParseJson(await callGeminiWithBackup(prompt, system, schema));
                 if (hasSlot && !String((res && res.slotFill) || '').replace(/[\[\]()→\s-]/g, '').trim()) {
-                    res = extractAndParseJson(await callGeminiMission(prompt, system, schema));
+                    res = extractAndParseJson(await callGeminiWithBackup(prompt, system, schema));
                 }
                 const sentence = String((res && res.sentence) || '').trim();
                 if (!sentence) throw new Error('EMPTY');
@@ -6645,7 +6645,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
             contextPrompt += `\n학생(냐냐)의 새로운 질문: "${question}"\n\n위 질문에 대해 스페인어 선생님으로서 상냥하고 정확하게 답변해 주세요.`;
 
             try {
-                const response = await callGemini(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely. IMPORTANT: Do NOT greet or start with phrases like '냐냐님 안녕하세요' — this is an ongoing conversation, so answer the question directly without any greeting.", null, 'low');
+                const response = await callGeminiWithBackup(contextPrompt, "You are a friendly, encouraging Spanish tutor. Talk in natural, warm Korean to the student '냐냐님'. Give clear and accurate grammar answers, concisely. IMPORTANT: Do NOT greet or start with phrases like '냐냐님 안녕하세요' — this is an ongoing conversation, so answer the question directly without any greeting.", null, BACKUP_CHAT);
                 aiChatHistory.push({ role: "assistant", content: response.trim() });
                 AudioFX.playSuccess();
                 renderChatThread();

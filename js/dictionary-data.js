@@ -499,32 +499,35 @@
         // [냐냐 지적] 문장 만들기 — 3.1 이 막히면 3.5 가 받는다 (2026-10-31).
         //   "복습 랜덤 문장 생성 실패했다고 계속 나와" — 그 시각 3.1 Flash-Lite 는 503(high demand) 이거나 40초 넘게 무응답,
         //   3.5 Flash-Lite 0.8초 · 3.5 Flash 3초로 멀쩡했다. 미션·질문 생성은 3.1 하나뿐이라 그대로 실패로 끝났다.
-        //   평소엔 지금처럼 3.1 low. 5xx·429·15초 넘김이면 다시 시도하지 않고 3.5 Lite medium → 3.5 Flash low 로 넘긴다.
+        //   평소엔 지금처럼 3.1 low. 5xx·429·15초 넘김이면 다시 시도하지 않고 3.5 쪽으로 넘긴다 (순서는 아래).
         //   ⚠️ 3.5 Lite 는 low 면 생각이 꺼져 흐릿한 문장이 나오니 medium 으로. 시간 넘김은 10분 기억해 3.1 을 또 기다리지 않는다.
-        //   ⚠️ 문장 만들기에만 쓴다 — 단어 등록 활용표는 3.5 가 깨뜨린 적이 있어서(10/6) 여기로 돌리지 말 것.
+        //   ⚠️ 문장 만들기와 AI 대화(같은 날 냐냐님 요청)에만 쓴다 — 단어 등록 활용표는 3.5 가 깨뜨린 적이 있어서(10/6) 여기로 돌리지 말 것.
         // ============================================================
-        const MISSION_LITE_LIMIT_MS = 15000;
-        const MISSION_BACKUP_LIMIT_MS = 25000;
-        const MISSION_LITE_SKIP_MS = 10 * 60 * 1000;
-        let missionLiteSkipUntil = 0;
-        async function callGeminiMission(promptText, systemInstruction, jsonSchema) {
-            const isBusy = (e) => !!e && (e.timedOut || e.status === 429 || e.status >= 500);
-            if (Date.now() >= missionLiteSkipUntil) {
+        const WITH_BACKUP_LITE_MS = 15000;
+        const WITH_BACKUP_NEXT_MS = 25000;
+        const WITH_BACKUP_SKIP_MS = 10 * 60 * 1000;
+        let liteSkipUntil = 0;
+        //   대화(스페인어 설명)는 3.5 Flash 부터 — 3.5 Lite medium 은 같은 질문 3번에 'todav&iacute;a' · 'todavίa'(그리스 글자) 가 섞여 나왔다.
+        //   한글 문장 만들기는 Lite 부터 — Flash 는 첨삭 경주와 하루 한도를 같이 쓴다.
+        const BACKUP_SENTENCE = [[GEMINI_MODEL_GRADE, 'medium'], ['gemini-3.5-flash', 'low']];
+        const BACKUP_CHAT = [['gemini-3.5-flash', 'low'], [GEMINI_MODEL_GRADE, 'medium']];
+        function isGeminiBusy(e) { return !!e && (e.timedOut || e.status === 429 || e.status >= 500); }
+        async function callGeminiWithBackup(promptText, systemInstruction, jsonSchema, backups = BACKUP_SENTENCE) {
+            const tries = [[GEMINI_MODEL_FLASH_LITE, 'low'], ...backups];
+            let last = null;
+            for (const [model, level] of tries) {
+                const isLite = model === GEMINI_MODEL_FLASH_LITE;
+                if (isLite && Date.now() < liteSkipUntil) continue;
                 try {
-                    return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'low', GEMINI_MODEL_FLASH_LITE, MISSION_LITE_LIMIT_MS, true);
+                    return await callGeminiRaw(promptText, systemInstruction, jsonSchema, level, model, isLite ? WITH_BACKUP_LITE_MS : WITH_BACKUP_NEXT_MS, true);
                 } catch (e) {
-                    if (!isBusy(e)) throw e;
-                    if (e.timedOut) missionLiteSkipUntil = Date.now() + MISSION_LITE_SKIP_MS;
-                    console.warn(`문장 만들기: ${GEMINI_MODEL_FLASH_LITE} 막힘 → 3.5 로`, e);
+                    if (!isGeminiBusy(e)) throw e;
+                    if (isLite && e.timedOut) liteSkipUntil = Date.now() + WITH_BACKUP_SKIP_MS;
+                    console.warn(`${model} 막힘 → 다음 모델로`, e);
+                    last = e;
                 }
             }
-            try {
-                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'medium', GEMINI_MODEL_GRADE, MISSION_BACKUP_LIMIT_MS, true);
-            } catch (e) {
-                if (!isBusy(e)) throw e;
-                console.warn(`문장 만들기: ${GEMINI_MODEL_GRADE} 막힘 → 3.5 Flash 로`, e);
-                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'low', 'gemini-3.5-flash', MISSION_BACKUP_LIMIT_MS, true);
-            }
+            throw last;
         }
 
         // ============================================================
@@ -602,42 +605,82 @@
         //   흘려 받기(streamGenerateContent, SSE)로 바꿔 글자가 만들어지는 대로 보여준다. 모델·생각 수준은 그대로.
         //   onText(지금까지 받은 글 전부) 를 받을 때마다 부른다. 실패하면 던진다 — 부르는 쪽이 예전 방식으로 다시 묻는다.
         // ============================================================
-        async function streamGemini(promptText, systemInstruction, thinkingLevel, onText, model) {
+        //   firstTextMs: 첫 글자가 올 때까지의 상한 (없으면 제한 없음). 글이 오기 시작하면 끊지 않는다. 넘기면 err.timedOut.
+        async function streamGemini(promptText, systemInstruction, thinkingLevel, onText, model, firstTextMs = 0) {
             const apiKey = getGeminiApiKey();
             if (!apiKey) throw new Error('NO_API_KEY');
             const m = model || GEMINI_MODEL_FLASH_LITE;
             const payload = { contents: [{ parts: [{ text: promptText }] }],
                 generationConfig: { thinkingConfig: { thinkingLevel: String(thinkingLevel || 'low').toUpperCase() }, maxOutputTokens: 4096 } };
             if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse&key=${apiKey}`,
-                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!res.ok || !res.body) {
-                const err = new Error(`API response status ${res.status}`);
-                err.status = res.status;
-                try { err.body = await res.text(); } catch (e) {}
-                throw err;
+            const ctl = firstTextMs ? new AbortController() : null;
+            let timer = ctl ? setTimeout(() => ctl.abort(), firstTextMs) : null;
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse&key=${apiKey}`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: ctl ? ctl.signal : undefined });
+                if (!res.ok || !res.body) {
+                    const err = new Error(`API response status ${res.status}`);
+                    err.status = res.status;
+                    try { err.body = await res.text(); } catch (e) {}
+                    throw err;
+                }
+                const reader = res.body.getReader();
+                const dec = new TextDecoder();
+                let buf = '', text = '';
+                for (;;) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+                    let i;
+                    while ((i = buf.indexOf('\n')) >= 0) {
+                        const line = buf.slice(0, i).trim();
+                        buf = buf.slice(i + 1);
+                        if (!line.startsWith('data:')) continue;
+                        try {
+                            const j = JSON.parse(line.slice(5).trim());
+                            const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+                            const add = parts.filter(p => p && !p.thought && typeof p.text === 'string').map(p => p.text).join('');
+                            if (add) {
+                                clearTimeout(timer);
+                                text += add;
+                                if (typeof onText === 'function') onText(text);
+                            }
+                        } catch (e) { /* 덜 온 줄 — 다음 조각과 이어진다 */ }
+                    }
+                }
+                return text;
+            } catch (e) {
+                if (ctl && e.name === 'AbortError') {
+                    const err = new Error(`No text after ${firstTextMs}ms`);
+                    err.timedOut = true;
+                    throw err;
+                }
+                throw e;
+            } finally {
+                clearTimeout(timer);
             }
-            const reader = res.body.getReader();
-            const dec = new TextDecoder();
-            let buf = '', text = '';
-            for (;;) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buf += dec.decode(value, { stream: true });
-                let i;
-                while ((i = buf.indexOf('\n')) >= 0) {
-                    const line = buf.slice(0, i).trim();
-                    buf = buf.slice(i + 1);
-                    if (!line.startsWith('data:')) continue;
-                    try {
-                        const j = JSON.parse(line.slice(5).trim());
-                        const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
-                        const add = parts.filter(p => p && !p.thought && typeof p.text === 'string').map(p => p.text).join('');
-                        if (add) { text += add; if (typeof onText === 'function') onText(text); }
-                    } catch (e) { /* 덜 온 줄 — 다음 조각과 이어진다 */ }
+        }
+
+        // [냐냐 요청] AI 질문하기도 3.1 이 막히면 3.5 가 받는다 (2026-10-31) — callGeminiWithBackup 과 같은 차례를 흘려 받기로.
+        //   앞 모델이 글을 조금 보내다 끊겨도 다음 모델의 글이 onText 로 그 자리를 덮는다.
+        async function streamGeminiWithBackup(promptText, systemInstruction, onText) {
+            const tries = [[GEMINI_MODEL_FLASH_LITE, 'low'], ...BACKUP_CHAT];
+            let last = null;
+            for (const [model, level] of tries) {
+                const isLite = model === GEMINI_MODEL_FLASH_LITE;
+                if (isLite && Date.now() < liteSkipUntil) continue;
+                try {
+                    const text = await streamGemini(promptText, systemInstruction, level, onText, model, isLite ? WITH_BACKUP_LITE_MS : WITH_BACKUP_NEXT_MS);
+                    if (text) return text;
+                } catch (e) {
+                    if (!isGeminiBusy(e)) throw e;
+                    if (isLite && e.timedOut) liteSkipUntil = Date.now() + WITH_BACKUP_SKIP_MS;
+                    console.warn(`AI 질문하기: ${model} 막힘 → 다음 모델로`, e);
+                    last = e;
                 }
             }
-            return text;
+            if (last) throw last;
+            return '';
         }
 
         // [PATCH-에러분류] callGemini가 던진 에러를 사용자에게 보여줄 정확한 한국어 메시지로 변환
