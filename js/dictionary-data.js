@@ -496,6 +496,38 @@
         }
 
         // ============================================================
+        // [냐냐 지적] 문장 만들기 — 3.1 이 막히면 3.5 가 받는다 (2026-10-31).
+        //   "복습 랜덤 문장 생성 실패했다고 계속 나와" — 그 시각 3.1 Flash-Lite 는 503(high demand) 이거나 40초 넘게 무응답,
+        //   3.5 Flash-Lite 0.8초 · 3.5 Flash 3초로 멀쩡했다. 미션·질문 생성은 3.1 하나뿐이라 그대로 실패로 끝났다.
+        //   평소엔 지금처럼 3.1 low. 5xx·429·15초 넘김이면 다시 시도하지 않고 3.5 Lite medium → 3.5 Flash low 로 넘긴다.
+        //   ⚠️ 3.5 Lite 는 low 면 생각이 꺼져 흐릿한 문장이 나오니 medium 으로. 시간 넘김은 10분 기억해 3.1 을 또 기다리지 않는다.
+        //   ⚠️ 문장 만들기에만 쓴다 — 단어 등록 활용표는 3.5 가 깨뜨린 적이 있어서(10/6) 여기로 돌리지 말 것.
+        // ============================================================
+        const MISSION_LITE_LIMIT_MS = 15000;
+        const MISSION_BACKUP_LIMIT_MS = 25000;
+        const MISSION_LITE_SKIP_MS = 10 * 60 * 1000;
+        let missionLiteSkipUntil = 0;
+        async function callGeminiMission(promptText, systemInstruction, jsonSchema) {
+            const isBusy = (e) => !!e && (e.timedOut || e.status === 429 || e.status >= 500);
+            if (Date.now() >= missionLiteSkipUntil) {
+                try {
+                    return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'low', GEMINI_MODEL_FLASH_LITE, MISSION_LITE_LIMIT_MS, true);
+                } catch (e) {
+                    if (!isBusy(e)) throw e;
+                    if (e.timedOut) missionLiteSkipUntil = Date.now() + MISSION_LITE_SKIP_MS;
+                    console.warn(`문장 만들기: ${GEMINI_MODEL_FLASH_LITE} 막힘 → 3.5 로`, e);
+                }
+            }
+            try {
+                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'medium', GEMINI_MODEL_GRADE, MISSION_BACKUP_LIMIT_MS, true);
+            } catch (e) {
+                if (!isBusy(e)) throw e;
+                console.warn(`문장 만들기: ${GEMINI_MODEL_GRADE} 막힘 → 3.5 Flash 로`, e);
+                return await callGeminiRaw(promptText, systemInstruction, jsonSchema, 'low', 'gemini-3.5-flash', MISSION_BACKUP_LIMIT_MS, true);
+            }
+        }
+
+        // ============================================================
         // [냐냐 요청] 첨삭 채점은 Flash 두 개에 같이 묻고 먼저 온 답을 쓴다 (2026-10-17)
         //   '너희들, 어제 내가 빌린…' 미션에서 3.5 Flash-Lite 가 앞의 Vosotros 를 주어로 보고 pedié → pedisteis,
         //   맞게 쓴 dároslas → 틀린 'voy a os las dar' 로 고쳤다. 같은 프롬프트로 재보니(10/17, 8번):

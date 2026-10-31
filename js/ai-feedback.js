@@ -682,7 +682,7 @@
                 required: ["question", "koreanHint", "topic"]
             };
             try {
-                const data = extractAndParseJson(await callGemini(prompt, system, schema, 'low'));
+                const data = extractAndParseJson(await callGeminiMission(prompt, system, schema));
                 if (!data || !String(data.question || '').trim()) return null;
                 return {
                     id: 'ai-' + Date.now(),
@@ -1687,7 +1687,7 @@ ${reviewLengthBlock}
 
             try {
                 const askOnce = async () => {
-                    const result = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                    const result = extractAndParseJson(await callGeminiMission(prompt, system, schema));
                     return (result.sentence || '').trim();
                 };
                 let candidateSentence = await askOnce();
@@ -2164,9 +2164,9 @@ ${buildLearnerProfileSummary()}`;
                 ...(hasSlot ? { slotFill: { type: "STRING", description: "빈칸마다 '빈칸 → 문장 속 들어갈 한국어 말' (예: '[수량/상태] → 서른 명'). 한글로만" } } : {})
             }, required: hasSlot ? ["sentence", "slotFill"] : ["sentence"] };
             try {
-                let res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                let res = extractAndParseJson(await callGeminiMission(prompt, system, schema));
                 if (hasSlot && !String((res && res.slotFill) || '').replace(/[\[\]()→\s-]/g, '').trim()) {
-                    res = extractAndParseJson(await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE));
+                    res = extractAndParseJson(await callGeminiMission(prompt, system, schema));
                 }
                 const sentence = String((res && res.sentence) || '').trim();
                 if (!sentence) throw new Error('EMPTY');
