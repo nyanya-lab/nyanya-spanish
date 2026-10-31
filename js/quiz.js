@@ -813,7 +813,8 @@ let quizSession = null;
         //   "a la derecha de [장소/사물]" 에 "a la derecha del banco" 를 쓰면 틀렸다고 했다 —
         //   de + el 이 del 로 붙으면 고정 낱말 de 가 사라진 것처럼 보였다. ir a [장소] → "ir al cine" 도 같았다.
         //   → 답과 틀 양쪽에서 del → de el, al → a el 로 풀고 견준다.
-        const CONTRACTION_SPLIT = { del: ['de', 'el'], al: ['a', 'el'] };
+        //   ⚠️ 빈 바탕 객체로 — 그냥 {} 면 낱말 'constructor' 가 내장 함수로 읽혀 채점이 멈췄다 (ser constructor de [사물], 2026-10-31)
+        const CONTRACTION_SPLIT = Object.assign(Object.create(null), { del: ['de', 'el'], al: ['a', 'el'] });
         function templateTokens(raw, keepAccents) {
             let s = String(raw || '').toLowerCase().trim().normalize('NFC').replace(RE_QA_MARKER, '');
             if (!keepAccents) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -843,6 +844,9 @@ let quizSession = null;
             if (String(correctRaw || '').search(RE_PLACEHOLDER) < 0) return false;
             const T = templateTokens(correctRaw, keepAccents);
             if (!T.some(t => t.slot) || !T.some(t => !t.slot)) return false;
+            return templateTokensMatch(T, userRaw, keepAccents, lenientVerbs);
+        }
+        function templateTokensMatch(T, userRaw, keepAccents, lenientVerbs) {
             const U = [];
             normalizeSpanishAnswer(userRaw, keepAccents).split(' ').filter(Boolean)
                 .forEach(u => (CONTRACTION_SPLIT[u] || [u]).forEach(p => U.push(p)));
@@ -868,6 +872,32 @@ let quizSession = null;
                 return ok;
             };
             return go(0, 0);
+        }
+
+        // ============================================================
+        // [냐냐 결정] 관용구에서 낱말 하나만 빠뜨렸으면 오타처럼 한 번 더 (2026-10-31, 쓰기 복습).
+        //   재보니 낱말 하나 뺀 답 2,154가지 중 43가지만 되물었고 나머지는 AI 를 거쳐 대개 오답이었다.
+        //   세 낱말 이상만 — 두 낱말은 한 낱말만 남아서(por completo → completo) 표현을 알고 쓴 건지 알 수 없다
+        //   (624낱말 중 476개가 단어장에 따로 있다. isOtherWholeAnswer 의 después de 와 같은 까닭).
+        //   틀 표현은 고정 낱말이 둘 이상일 때, 하나만 없어도 나머지가 차례대로 있으면. 답은 두 낱말 이상이어야 한다.
+        //   ⚠️ 동사 자리는 lenientVerbs 를 끈다 — 켜면 아무 낱말이나 동사로 받아 'comer pan' 도 tener que [동사] 로 읽힌다.
+        // ============================================================
+        function idiomOneWordMissing(userRaw, correctRaw) {
+            const U = normalizeSpanishAnswer(userRaw).split(' ').filter(Boolean);
+            if (U.length < 2) return false;
+            if (String(correctRaw || '').search(RE_PLACEHOLDER) >= 0) {
+                const T = templateTokens(correctRaw, false);
+                const fixed = T.map((t, i) => (t.slot ? -1 : i)).filter(i => i >= 0);
+                if (!T.some(t => t.slot) || fixed.length < 2) return false;
+                if (templateTokensMatch(T, userRaw, false, true)) return false;   // 고정 낱말이 다 있다 — 빠진 게 아니다
+                return fixed.some(i => templateTokensMatch(T.filter((t, j) => j !== i), userRaw, false, false));
+            }
+            const mine = U.join(' ');
+            return spanishAnswerVariants(correctRaw).some(v => {
+                const V = v.split(' ').filter(Boolean);
+                if (V.length < 3 || U.length !== V.length - 1) return false;
+                return V.some((t, i) => V.filter((x, j) => j !== i).join(' ') === mine);
+            });
         }
 
         function submitMcAnswer(choice, btnEl) {

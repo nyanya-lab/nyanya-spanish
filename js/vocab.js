@@ -7191,9 +7191,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   (맞힘 −1.5 와 끝내 틀림 −2.5 사이). 1바퀴와 같은 잣대(writeLooksLikeTypo)로 본다.
             s.r3Typo = s.r3Typo || {};
             const r3Key = writeFailKey(w);
-            if (!isMatch && !s.r3Typo[r3Key] && writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase))) {
+            const r3Missing = !isMatch && w._isIdiomTask && idiomOneWordMissing(el.value, w.word);
+            if (!isMatch && !s.r3Typo[r3Key] && (r3Missing || writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase)))) {
                 s.r3Typo[r3Key] = 'asked';
-                s.hint = '✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?';
+                s.hint = r3Missing ? '✏️ 낱말이 하나 빠졌어요! 다시 한 번 써볼까요?' : '✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?';
                 s.hintMine = el.value.trim();
                 el.value = '';
                 renderWritePractice();
@@ -7558,6 +7559,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     writeAskRetry('synonym', `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${p ? ' ' + hintStartHtml(p) : ''} 다시 한 번 써볼까요?${synonymAwardNote(got)}`, userAnswer);
                     return;
                 }
+            }
+
+            // 3-2-0) [냐냐 결정] 관용구에서 낱말 하나만 빠짐 — 오타와 같은 대접 (2026-10-31). 어느 낱말인지는 말하지 않는다.
+            if (!used.typo && w._isIdiomTask && idiomOneWordMissing(userAnswer, w.word)) {
+                writeAskRetry('typo', `✏️ 낱말이 하나 빠졌어요! 다시 한 번 써볼까요?`, userAnswer);
+                return;
             }
 
             // 3-2) 철자가 살짝 틀린 것 — AI 를 안 부르고 그 자리에서 되묻는다 (기다림 0초)
