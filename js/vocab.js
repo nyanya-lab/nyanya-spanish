@@ -5695,6 +5695,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     const rec = key ? (idiomReview || {})[key] : null;
                     return !(rec && rec.lastWrongDate && (rec.stage || 0) < REVIEW_INTERVALS.length);
                 }
+                case 'all': {
+                    //   [냐냐 결정] '전체' 도 곡선 안의 표현은 뺀다 (2026-10-31) — 단어와 같이
+                    const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
+                    const rec = key ? (idiomReview || {})[key] : null;
+                    return !(rec && rec.lastWrongDate && (rec.stage || 0) < REVIEW_INTERVALS.length);
+                }
                 case 'graduated': {
                     const key = (typeof idiomKey === 'function') ? idiomKey(id, text) : null;
                     const rec = key ? (idiomReview || {})[key] : null;
@@ -6439,6 +6445,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   (재보니 1216개 중 304개가 곡선 안이었다. 졸업한 것은 곡선 밖이라 남긴다.)
             if (writeScope === 'not-mastered') return vocabulary.filter(w => !w.mastered
                 && !(w.lastWrongDate && (w.reviewStage || 0) < REVIEW_INTERVALS.length));
+            //   [냐냐 결정] '전체' 도 곡선 안은 뺀다 (2026-10-31) — 재보니 1696개 중 541개가 곡선 안, 그중 309개가 30일 칸 대기.
+            //   맞혀도 곡선은 안 가고, 틀리면 차례도 아닌 단어가 한 칸 뒤로 간다. 졸업한 것과 곡선 밖 마스터는 남긴다.
+            if (writeScope === 'all') return vocabulary.filter(w => !(w.lastWrongDate && (w.reviewStage || 0) < REVIEW_INTERVALS.length));
             return vocabulary.slice();
         }
 

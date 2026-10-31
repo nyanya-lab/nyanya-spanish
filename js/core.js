@@ -13775,7 +13775,23 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             el.style.textTransform = f.upper ? 'uppercase' : 'none';
             el.style.letterSpacing = f.spacing || 'normal';
             el.dataset.meaning = ko;
+            el.dataset.baseSize = f.size;
+            fitDailyTitle();
         }
+        //   [폰] 긴 제목이 ⚙ 단추 밑으로 들어가 잘렸다 (2026-10-31, '☰ 메뉴' 로 단추가 넓어지며 더 심해짐) — 자리에 맞게 글씨를 줄인다.
+        //   글꼴이 늦게 받아지면 폭이 달라지니 글꼴이 다 온 뒤에도, 화면 폭이 바뀔 때도 다시 잰다.
+        function fitDailyTitle() {
+            const el = document.getElementById('app-title');
+            const gear = document.getElementById('settings-menu-btn');
+            if (!el || !gear) return;
+            const base = Number(el.dataset.baseSize) || 24;
+            el.style.fontSize = base + 'px';
+            const a = el.getBoundingClientRect();
+            const room = gear.getBoundingClientRect().left - a.left - 8;
+            if (room > 0 && a.width > room) el.style.fontSize = Math.max(12, Math.floor(base * room / a.width * 10) / 10) + 'px';
+        }
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitDailyTitle);
+        window.addEventListener('resize', fitDailyTitle);
         //   [냐냐 요청] 제목을 누르면 뜻이 제목 밑 말풍선으로 2초쯤 (2026-10-13).
         //   예전엔 마우스를 올리고 1초 기다려야 나오는 title 풍선이었다 — 기다려야 하는 줄 모르셨고 폰에선 아예 안 나왔다.
         //   그 title 풍선은 없앴다 (냐냐님 요청).
