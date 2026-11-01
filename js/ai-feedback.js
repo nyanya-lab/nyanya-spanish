@@ -3922,15 +3922,21 @@ ${buildLearnerProfileSummary()}`;
             const idx = new Map();     // 정규화한 꼴 → Set(시제키)
             const lemma = new Map();   // 정규화한 꼴 → 원형(정규화)
             const nonVerb = new Set(); // 단어장에 동사 아닌 품사로 등록된 꼴 (단·복수까지)
-            if (typeof vocabulary === 'undefined') return { idx, lemma, nonVerb };
+            const exact = new Map();   // 악센트까지 남긴 꼴 → Set(시제키) — tarde 와 tardé 를 가른다
+            if (typeof vocabulary === 'undefined') return { idx, lemma, nonVerb, exact };
             const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
                 ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            const nzExact = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x, true) : String(x || '').toLowerCase().trim();
             const put = (form, key, inf) => {
                 const f = nz(form);
                 if (!f) return;
                 if (!idx.has(f)) idx.set(f, new Set());
                 idx.get(f).add(key);
                 if (inf && !lemma.has(f)) lemma.set(f, nz(inf));
+                const e = nzExact(form);
+                if (!exact.has(e)) exact.set(e, new Set());
+                exact.get(e).add(key);
             };
             // [냐냐 지적] 'las comidas'(음식)를 comer 의 과거분사로 잡았다 (2026-09-04).
             //   규칙형 계산이 comido → comida/comidos/comidas 를 다 넣는데, comida 는 단어장에
@@ -3986,7 +3992,7 @@ ${buildLearnerProfileSummary()}`;
                     }
                 }
             });
-            return { idx, lemma, nonVerb };
+            return { idx, lemma, nonVerb, exact };
         }
 
         // [냐냐 요청] 짜임을 만드는 동사와, 활용표에 없어도 알아봐야 하는 심한 불규칙.
@@ -4036,8 +4042,38 @@ ${buildLearnerProfileSummary()}`;
             const nz = (x) => (typeof normalizeSpanishAnswer === 'function')
                 ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
             const toks = String(text).replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-            const { idx, lemma, nonVerb } = buildVerbFormIndex();
+            const { idx, lemma, nonVerb, exact } = buildVerbFormIndex();
             const mark = (key, ev) => { if (!out.has(key)) out.set(key, ev); };
+            // ============================================================
+            // [냐냐 확인] 'regalo'(선물)가 부정과거 +1 을 받았다 (2026-11-01).
+            //   악센트를 떼고 찾아서 regaló 로 읽혔다. 첨삭 300개를 재보니 tarde(tardé) 9번·
+            //   trabajo(trabajó) 6번·calle(callé) 4번·frío(frió) 3번이 같은 식으로 시제에 걸려 있었다.
+            //   시제(활용표)는 이제 악센트까지 같은 꼴만 인정한다.
+            //   단, 악센트를 빠뜨리고 쓰신 것은 살린다 — AI 가 그 낱말의 악센트만 고쳐줬으면
+            //   ('desperto' → 'despertó') 뜻한 꼴은 고친 쪽이다.
+            //   ⚠️ 글자가 똑같아 못 가르는 둘은 코드가 안 정하고 AI 판정에 맡긴다:
+            //     현재와 같은 꼴 (hablamos·vivimos)  ·  명사로도 등록된 꼴 (vino·traje)
+            // ============================================================
+            const nzExact = (x) => (typeof normalizeSpanishAnswer === 'function')
+                ? normalizeSpanishAnswer(x, true) : String(x || '').toLowerCase().trim();
+            const fixedSpell = new Map();   // 악센트 뗀 꼴 → 고친 문장에 적힌 꼴들
+            String(corrected || '').replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean).forEach(w => {
+                const k = nz(w);
+                if (!fixedSpell.has(k)) fixedSpell.set(k, new Set());
+                fixedSpell.get(k).add(nzExact(w));
+            });
+            const meantSpelling = (raw, t) => {
+                const mine = nzExact(raw);
+                const fx = fixedSpell.get(t);
+                return (fx && fx.size === 1 && !fx.has(mine)) ? [...fx][0] : mine;
+            };
+            const tenseOk = (key, raw, t) => {
+                const sp = meantSpelling(raw, t);
+                const got = exact.get(sp);
+                if (!got || !got.has(key)) return false;
+                if (key === 'presente') return true;
+                return !got.has('presente') && !(sp === t && nonVerb.has(t));
+            };
             let estarTok = '', haberTok = '', gerTok = '', partTok = '';
             //   [냐냐 요청] 보조동사가 '무슨 시제로 왔나' 를 같이 담는다 - 현재진행/과거진행을 가르는 열쇠다
             const auxTenses = {};
@@ -4053,7 +4089,10 @@ ${buildLearnerProfileSummary()}`;
                 const b = bare(t);
                 const keys = idx.get(t);
                 //   ⚠️ 과거분사는 여기서 통째로 표시하지 않는다 — 명사 자리인지 아래에서 가려야 한다.
-                if (keys) keys.forEach(k => { if (k !== 'participio') mark(k, raw); });
+                if (keys) keys.forEach(k => {
+                    if (k === 'participio') return;
+                    if (k === 'gerundio' || tenseOk(k, raw, t)) mark(k, raw);
+                });
                 // 현재분사는 어미가 유일하게 안전하다 — 틀리게 쓴 꼴(pediendo)도 여기서 잡힌다.
                 const isGer = t.length >= 6 && /(ando|iendo|yendo)$/.test(b);
                 if (isGer) { mark('gerundio', raw); if (!gerTok) gerTok = raw; }
@@ -4285,6 +4324,22 @@ ${buildLearnerProfileSummary()}`;
             });
             return mask;
         }
+        //   낱말마다 '거리·가게·사람 이름의 일부인가' — 아래 raws 와 차례가 같다.
+        //   ⚠️ 대문자만으로는 안 가른다 — 냐냐님이 달·요일을 문장 중간에도 대문자로 쓰신다 ('al tenis Julio').
+        //      첨삭 300개를 재보니 대문자만 볼 때 빠지는 건 그 Julio 하나였고 진짜 이름은 없었다.
+        const NAME_BEFORE = new Set(['calle', 'avenida', 'plaza', 'paseo', 'barrio', 'carretera',
+            'hotel', 'restaurante', 'bar', 'café', 'cafetería', 'tienda', 'farmacia', 'hospital', 'mercado',
+            'don', 'doña', 'señor', 'señora']);
+        function properNounTokens(text) {
+            const s = String(text || '').replace(/<[^>]*>/g, ' ');
+            const out = [];
+            let prev = '';
+            for (const m of s.matchAll(/[\p{L}\p{N}]+/gu)) {
+                out.push(NAME_BEFORE.has(prev) && /^\p{Lu}/u.test(m[0]));
+                prev = m[0].toLowerCase();
+            }
+            return out;
+        }
         // 문장이 건드린 노트 → { 노트id: 근거 낱말 }
         function detectNoteCellsInText(text, notes) {
             const out = new Map();
@@ -4308,17 +4363,25 @@ ${buildLearnerProfileSummary()}`;
             //   활용형(아래)에만 걸리고, 원형 글자가 칸과 똑같으면 여기서 그냥 걸렸다.
             //   '-se' 로 끝나는 원형(levantarse)은 대명사를 제 안에 달고 있으니 그대로 둔다.
             const LW0 = _noteCellIndex.lemmaWords;
-            const hasClitic = raws.some(r => CLITIC_PRONOUNS.has(nz(r)));
+            //   [냐냐 확인] 대명사는 그 동사 바로 앞(세 낱말 안)에 있어야 한다 (2026-11-01).
+            //   문장 어디에든 있으면 열어줬더니, 상황극처럼 말을 이어 붙인 글에서
+            //   '¿Cuánto cuesta?' 가 딴 문장의 me 로 역구조동사 +1 을 받았다. ('me ha sentado' 는 두 칸 앞)
+            const cliticNear = (i) => {
+                for (let j = Math.max(0, i - 3); j < i; j++) if (CLITIC_PRONOUNS.has(nz(raws[j]))) return true;
+                return false;
+            };
+            //   [냐냐 확인] 이름의 일부는 문법이 아니다 — 'calle Mayor' 가 비교급 +1 을 받았다 (2026-11-01).
+            const nameTok = properNounTokens(text);
             //   [냐냐 지적] 'por eso' 의 eso 로 지시사 노트 +1 이 붙었다 (2026-10-06).
             //   단어장에 굳은 표현으로 등록된 '전치사·접속사로 시작하는 구'(por eso · sin embargo · a veces …) 안의 낱말은
             //   한 낱말 칸 훑기에서 뺀다. 'esta mañana' 처럼 지시사로 시작하는 구는 그대로 둔다 — 그건 진짜 지시사다.
             const fixedTok = fixedPhraseTokenMask(raws.map(nz));
             raws.forEach((raw, ri) => {
                 const k = nz(raw);
-                if (!k || fixedTok[ri]) return;
+                if (!k || fixedTok[ri] || nameTok[ri]) return;
                 const id = _noteCellIndex.words.get(k);
                 if (!id || out.has(id)) return;
-                if (LW0 && LW0.get(k) === id && !hasClitic && !/se$/.test(k)) return;
+                if (LW0 && LW0.get(k) === id && !cliticNear(ri) && !/se$/.test(k)) return;
                 out.set(id, raw);
             });
             // 표 이름이 동사를 말하는 칸 — 그 동사가 문장에 같이 있을 때만 인정한다.
@@ -4350,9 +4413,9 @@ ${buildLearnerProfileSummary()}`;
                 if (lemma) {
                     const nzs = (x) => (typeof normalizeSpanishAnswer === 'function')
                         ? normalizeSpanishAnswer(x) : nz(x);
-                    raws.forEach(raw => {
+                    raws.forEach((raw, ri) => {
                         const l = lemma.get(nzs(raw));
-                        if (!l) return;
+                        if (!l || !cliticNear(ri)) return;
                         const id = LW.get(l);
                         if (id && !out.has(id)) out.set(id, raw);   // 근거는 쓰신 그 활용형으로
                     });
@@ -4464,7 +4527,7 @@ ${buildLearnerProfileSummary()}`;
                 const fixedForms = detectVerbFormsInText(feedback && feedback.correctedText);
                 const already = new Set(parsed.map(x => x.note.id));
                 const extra = [];
-                const mineForms = detectVerbFormsInText(feedback && feedback.originalMarked);
+                const mineForms = detectVerbFormsInText(feedback && feedback.originalMarked, feedback && feedback.correctedText);
                 //   보조동사 시제까지 넘긴다 - 'Estaba comiendo'(과거진행)가 현재진행 노트로 새지 않게
                 const auxT = mineForms.auxTenses || null;
                 //   [냐냐 지적] 두 조각짜리는 **보조동사 조각만** 본다 (2026-09-15).
@@ -5864,7 +5927,7 @@ Give the fragment in "ev".`;
             const mine = (aiLastFeedbackForAdd && aiLastFeedbackForAdd.originalMarked) || '';
             let ev = '';
             if (mine && typeof detectVerbFormsInText === 'function') {
-                const mf = detectVerbFormsInText(mine);
+                const mf = detectVerbFormsInText(mine, aiLastFeedbackForAdd && aiLastFeedbackForAdd.correctedText);
                 mf.forEach((word, key) => {
                     if (ev) return;
                     if ((notesTeachingVerbForm(key, notes, mf.auxTenses || null) || []).some(x => x.id === noteId)) ev = word;
