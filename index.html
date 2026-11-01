@@ -8,10 +8,10 @@
     <!-- [냐냐 요청] 로고는 책에 턱 괸 푸들 그림 (2026-09-23). 탭 아이콘·작업표시줄·홈 화면도 같은 그림.
          앱으로 설치하면(작업표시줄·홈 화면) Chrome 은 아래 icon 이 아니라 manifest 의 PNG 를 쓴다 —
          manifest 가 없으면 글자 아이콘을 만들어 버린다 (왓치로그에서 겪은 일). 원본은 .claude/logo/ -->
-    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202610312352">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202610312352">
-    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202610312352">
-    <link rel="manifest" href="manifest.webmanifest?v=202610312352">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png?v=202611010932">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png?v=202611010932">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=202611010932">
+    <link rel="manifest" href="manifest.webmanifest?v=202611010932">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
     
     <!-- ?v= 는 브라우저 캐시를 갈아치우는 표시. 이 값이 그대로면 브라우저가 옛 파일을 계속 쓴다.
          js/css 를 고쳐 커밋하면 .githooks/pre-commit 이 아래 값들을 한꺼번에 올린다. -->
-    <link rel="stylesheet" href="css/style.css?v=202610312352">
+    <link rel="stylesheet" href="css/style.css?v=202611010932">
     <!-- [냐냐 요청] 앱 전체 스크롤바 숨김. scrollbar-gutter: stable은 유지해서 화면 떨림 방지 -->
     <style>
         html {
@@ -85,7 +85,7 @@
                          진한 네모는 걷었다. 누르면 새로고침.
                          크기는 44px — 줄 높이(52px)는 그대로 두라셔서 위아래를 4px 씩 여백 쪽으로 내민다(-my-1) -->
                     <div id="header-logo" class="w-11 h-11 -my-1 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 shrink-0" onclick="logoClicked()" title="눌러서 강력 새로고침 (최신 판을 받아와요)">
-                        <img src="img/icon-192.png?v=202610312352" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
+                        <img src="img/icon-192.png?v=202611010932" alt="" width="44" height="44" class="w-11 h-11 select-none" draggable="false">
                     </div>
                     <!-- [냐냐 요청] 제목 '¡○○, Ñaña!' — 문구도 글꼴도 날마다 바뀐다 (core.js renderDailyTitle).
                          브라우저 탭 이름은 '냐냐의 스페인어 공부방' 그대로 둔다 -->
@@ -970,7 +970,7 @@
                          그래서 sm(640px) 미만에서는 고정을 풀고 페이지와 같이 스크롤시킨다. -->
                     <div id="ai-input-sticky" class="static sm:sticky sm:top-14 z-30 bg-[#f8fafc] pt-[7px] pb-3 -mt-[7px] space-y-4">
                         <!-- Premium Mode Switcher Tabs -->
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
                             <button id="ai-mode-btn-ko-es" onclick="switchAiMode('ko-es')" class="py-2.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-sm">
                                 🇰🇷 한 ➡️ 🇪🇸 스 (랜덤 미션)
                             </button>
@@ -983,6 +983,10 @@
                             </button>
                             <button id="ai-mode-btn-question" onclick="switchAiMode('question')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
                                 💬 질문에 답하기
+                            </button>
+                            <!-- [냐냐 요청] 상황극 (2026-11-01) — 앱이 상황을 뽑고 AI 와 주고받은 뒤 첨삭 -->
+                            <button id="ai-mode-btn-roleplay" onclick="switchAiMode('roleplay')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
+                                🎭 상황극
                             </button>
                             <!-- [냐냐 요청] 연습이 아니라 되돌아보기. 첨삭받은 문장이 여기 쌓인다 -->
                             <button id="ai-mode-btn-note" onclick="switchAiMode('note')" class="py-2.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-900">
@@ -1213,6 +1217,46 @@
                         </div>
                     </div>
                     </div><!-- /sticky 입력 영역 (폰에서는 고정 안 됨) -->
+
+                    <!-- MODE F: 상황극 — 대화가 길어지므로 첨삭 노트처럼 sticky 밖에 둔다 -->
+                    <div id="ai-pane-roleplay" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                <span>스페인어 상황극</span>
+                            </h3>
+                            <button id="ai-rp-new-btn" onclick="newRoleplay()" class="shrink-0 bg-orange-50 hover:bg-orange-100 text-orange-600 px-4 py-2 rounded-xl text-xs font-bold border border-orange-200 transition-all active:scale-95 flex items-center gap-1 disabled:opacity-60">
+                                <span>🎲 상황 뽑기</span>
+                            </button>
+                        </div>
+                        <div id="ai-rp-card"></div>
+                        <div id="ai-rp-chat" class="space-y-2.5"></div>
+                        <div id="ai-rp-input-wrap" class="hidden space-y-2">
+                            <div id="ai-rp-hint-box" class="hidden bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl text-xs text-amber-900 font-semibold"></div>
+                            <div class="relative">
+                                <textarea id="ai-rp-input" data-es rows="2" autocomplete="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendRoleplayLine();}" placeholder="스페인어로 답해 보세요 (엔터로 보내기, Shift+엔터 줄바꿈)" class="w-full bg-slate-50 px-4 py-3 pr-9 rounded-2xl border border-slate-200 text-base focus:outline-none focus:ring-2 focus:ring-orange-400 font-semibold"></textarea>
+                                <button type="button" onclick="clearInputField('ai-rp-input')" title="전체 지우기" class="absolute top-2.5 right-2.5 text-slate-300 hover:text-slate-500 transition-colors"><i class="fa-solid fa-circle-xmark"></i></button>
+                            </div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span id="ai-rp-count" class="text-[11px] font-black text-orange-600"></span>
+                                <button id="ai-rp-hint-btn" type="button" onclick="toggleRoleplayHint()" class="hidden bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1.5 rounded-xl text-xs font-bold border border-amber-200 transition-all">💡 뭐라고 하지?</button>
+                                <div class="ml-auto flex gap-2">
+                                    <button id="ai-rp-stop-btn" type="button" onclick="gradeRoleplay()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-60">그만하고 첨삭</button>
+                                    <button id="ai-rp-send-btn" type="button" onclick="sendRoleplayLine()" class="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md disabled:opacity-60">
+                                        <i class="fa-solid fa-paper-plane"></i>
+                                        <span>보내기</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="ai-rp-after" class="hidden flex justify-end">
+                            <button id="ai-rp-grade-btn" type="button" onclick="gradeRoleplay()" class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md disabled:opacity-60">
+                                <i class="fa-solid fa-spell-check"></i>
+                                <span>첨삭 받기</span>
+                            </button>
+                            <button id="ai-rp-next-btn" type="button" onclick="newRoleplay()" class="hidden bg-orange-50 hover:bg-orange-100 text-orange-600 px-6 py-3 rounded-xl text-sm font-bold border border-orange-200 transition-all active:scale-95">🎲 다음 상황</button>
+                        </div>
+                    </div>
 
                     <!-- MODE E: 첨삭 노트 — 입력이 없는 화면이라 위 sticky 밖에 둔다 (목록이 길다) -->
                     <div id="ai-pane-note" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
@@ -2862,15 +2906,16 @@
             }
         })();
     </script>
-    <script src="js/dictionary-data.js?v=202610312352"></script>
-    <script src="js/creatures.js?v=202610312352"></script>
-    <script src="js/core.js?v=202610312352"></script>
-    <script src="js/store3.js?v=202610312352"></script>
-    <script src="js/vocab.js?v=202610312352"></script>
-    <script src="js/flashcards.js?v=202610312352"></script>
-    <script src="js/quiz.js?v=202610312352"></script>
-    <script src="js/games.js?v=202610312352"></script>
-    <script src="js/ai-feedback.js?v=202610312352"></script>
-    <script src="js/es-keys.js?v=202610312352"></script>
+    <script src="js/dictionary-data.js?v=202611010932"></script>
+    <script src="js/creatures.js?v=202611010932"></script>
+    <script src="js/core.js?v=202611010932"></script>
+    <script src="js/store3.js?v=202611010932"></script>
+    <script src="js/vocab.js?v=202611010932"></script>
+    <script src="js/flashcards.js?v=202611010932"></script>
+    <script src="js/quiz.js?v=202611010932"></script>
+    <script src="js/games.js?v=202611010932"></script>
+    <script src="js/ai-feedback.js?v=202611010932"></script>
+    <script src="js/roleplay.js?v=202611010932"></script>
+    <script src="js/es-keys.js?v=202611010932"></script>
 </body>
 </html>

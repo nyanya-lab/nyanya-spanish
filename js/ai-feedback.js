@@ -197,11 +197,13 @@
             const btnQuestion = document.getElementById('ai-mode-btn-question');
             const btnIdiom = document.getElementById('ai-mode-btn-idiom');
             const btnNote = document.getElementById('ai-mode-btn-note');
+            const btnRoleplay = document.getElementById('ai-mode-btn-roleplay');
             const paneKoEs = document.getElementById('ai-pane-ko-es');
             const paneEsKo = document.getElementById('ai-pane-es-ko');
             const paneQuestion = document.getElementById('ai-pane-question');
             const paneIdiom = document.getElementById('ai-pane-idiom');
             const paneNote = document.getElementById('ai-pane-note');
+            const paneRoleplay = document.getElementById('ai-pane-roleplay');
             const resultBox = document.getElementById('ai-feedback-result');
 
             resultBox.classList.add('hidden');
@@ -213,6 +215,7 @@
             btnQuestion.className = mode === 'question' ? activeClass : inactiveClass;
             if (btnIdiom) btnIdiom.className = mode === 'idiom' ? activeClass : inactiveClass;
             if (btnNote) btnNote.className = mode === 'note' ? activeClass : inactiveClass;
+            if (btnRoleplay) btnRoleplay.className = mode === 'roleplay' ? activeClass : inactiveClass;
             paneKoEs.classList.toggle('hidden', mode !== 'ko-es');
             paneEsKo.classList.toggle('hidden', mode !== 'es-ko');
             paneQuestion.classList.toggle('hidden', mode !== 'question');
@@ -220,6 +223,7 @@
             // 첨삭 노트는 쓰는 화면이 아니라 보는 화면이라 sticky 바깥에 있다.
             //   입력칸 넷이 다 접히므로 위에는 버튼 줄만 남는다.
             if (paneNote) paneNote.classList.toggle('hidden', mode !== 'note');
+            if (paneRoleplay) paneRoleplay.classList.toggle('hidden', mode !== 'roleplay');
 
             if (mode === 'ko-es') {
                 resetKoEsMissionState();
@@ -236,6 +240,9 @@
                 aiNoteShown = AI_NOTE_PAGE;
                 aiNoteOpen = {};
                 renderAiNoteList();
+            } else if (mode === 'roleplay') {
+                //   다른 탭 갔다 와도 하던 대화는 그대로 둔다
+                renderRoleplay();
             }
         }
 
@@ -5187,7 +5194,7 @@ ${buildLearnerProfileSummary()}`;
             _lastAiNoteKey = stamp;
             aiNotes.unshift({
                 t: stamp,
-                mode: mode,                                   // 'question' | 'ko-es' | 'idiom' | 'es-ko' (옛 기록엔 'example')
+                mode: mode,                                   // 'question' | 'ko-es' | 'idiom' | 'es-ko' | 'roleplay' (옛 기록엔 'example')
                 ask: plain(ask),                              // 질문·미션 (자유 작문은 빈 값)
                 mine: mineText,                               // 내가 쓴 문장
                 fixed: plain(feedback.correctedText),         // 교정본
@@ -5248,6 +5255,7 @@ ${buildLearnerProfileSummary()}`;
             'es-ko':    { label: '자유 작문',   cls: 'bg-sky-100 text-sky-600' },
             'question': { label: '질문 답하기', cls: 'bg-emerald-100 text-emerald-600' },
             'idiom':    { label: '관용구 미션', cls: 'bg-pink-100 text-pink-600' },
+            'roleplay': { label: '상황극',     cls: 'bg-orange-100 text-orange-600' },
             'example':  { label: '예문 연습',   cls: 'bg-amber-100 text-amber-600' }   // 옛 기록용 (탭은 2026-10-02 에 지웠다)
         };
 
@@ -6152,8 +6160,9 @@ Give the fragment in "ev".`;
             renderAiZeroAllBtn();   // [냐냐 요청] '전부 0점' 버튼의 이름·노출도 같이 맞춘다
         }
 
-        async function submitAiTranslationEsKo() {
-            const userEsText = document.getElementById('ai-free-input-es').value.trim();
+        //   rp = 상황극(roleplay.js)에서 부를 때 { text, countText, ask, head } — 채점은 같고 갈래만 둔다. 끝까지 채점되면 true 를 돌려준다.
+        async function submitAiTranslationEsKo(rp) {
+            const userEsText = rp ? rp.text : document.getElementById('ai-free-input-es').value.trim();
             if (!userEsText) {
                 showToast("검사받을 스페인어 문장을 적어주세요!", "error");
                 return;
@@ -6165,7 +6174,7 @@ Give the fragment in "ev".`;
                 return;
             }
 
-            const submitBtn = document.getElementById('ai-es-ko-submit-btn');
+            const submitBtn = document.getElementById(rp ? 'ai-rp-grade-btn' : 'ai-es-ko-submit-btn');
             const originalHtml = submitBtn.innerHTML;
 
             // 지난 결과의 문법·단어 카드가 새 채점을 기다리는 동안 남아 있지 않게
@@ -6173,7 +6182,7 @@ Give the fragment in "ev".`;
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
-            showToast("Gemini AI가 자유 문장의 문법을 분석하고 있습니다...", "info");
+            showToast(rp ? "Gemini AI가 상황극 대사를 분석하고 있습니다..." : "Gemini AI가 자유 문장의 문법을 분석하고 있습니다...", "info");
             AudioFX.playPunch();
 
             // [냐냐 요청] 내가 등록해 둔 문법 노트 제목을 주고, 이 문장이 실제로 쓰는 문법을 짚게 한다.
@@ -6185,7 +6194,7 @@ Give the fragment in "ev".`;
             //   예전엔 단어장에서 앞글자가 비슷한 것을 추려 보여줬는데, parece 의 'pare' 에
             //   pareja·pared 가 걸려 엉뚱한 단어가 섞였고 AI 가 그 목록에서 고르려는 유인도 생겼다.
             //   그냥 '문장에 실제로 쓴 단어'를 사전형으로 돌려받아 단어장과 대조한다.
-            const prompt = `Student's Free Spanish Sentence: "${userEsText}"
+            const prompt = `${rp ? rp.head : `Student's Free Spanish Sentence: "${userEsText}"`}
 
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class='text-red-600 font-extrabold underline'>...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". Write the tag with SINGLE quotes exactly as shown — a double quote inside a JSON string breaks the whole response, and the student then sees a sentence that stops mid-way. The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. When you EXTEND a sentence, tag only the words you actually added: for "Ayer vi una película." → "Ayer vi una película con mi amigo y cenamos juntos.", the tags go on "con mi amigo y cenamos juntos" alone — "vi una película" stayed exactly as the student wrote it and must stay plain. Split "changes" the same way, one row per piece that really differs; never write a row whose "from" repeats words that did not change. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class='line-through text-slate-400'>...</span>' tags; correct words stay plain.
 ${noteListText}${aiIdiomJudgeStart(userEsText)}
@@ -6281,15 +6290,17 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                     coachIcon.innerText = "📝🟠";
                     coachVerdict.className = "text-sm font-bold text-red-600";
                     correctionBox.classList.remove('hidden');
-                    originalRender.innerHTML = feedback.originalMarked || userEsText;
-                    correctedRender.innerHTML = feedback.correctedText;
+                    //   상황극은 학생 말이 여러 줄이다 — 점수 쪽이 읽는 값은 그대로 두고 화면에서만 줄을 나눈다
+                    const showLines = (v) => rp ? String(v).replace(/\n/g, '<br>') : v;
+                    originalRender.innerHTML = showLines(feedback.originalMarked || userEsText);
+                    correctedRender.innerHTML = showLines(feedback.correctedText);
                     renderAiChanges(feedback);
                 }
 
                 coachVerdict.innerText = feedback.verdict;
                 // [냐냐 PATCH] AI 코멘트 위에 '냐냐님 문장의 추정 해석' 표시 (의도 확인용)
                 // [냐냐 요청] 코멘트 박스엔 '추정 해석'만 남긴다 (위 질문 답변 화면과 같은 이유)
-                coachMsg.innerHTML = feedback.interpretation
+                coachMsg.innerHTML = (feedback.interpretation && !rp)
                     ? `<span class="text-[11px] font-bold text-sky-500">📝 추정 해석</span> <span class="font-semibold text-slate-800">${feedback.interpretation}</span>`
                     : `<span>${feedback.message}</span>`;
 
@@ -6307,17 +6318,18 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
 
                 aiChatHistory = [
                     { role: "system", content: "당신은 냐냐님의 상냥하고 친절한 스페인어 선생님입니다. 이전 자유 작문 첨삭 결과에 이어지는 냐냐님의 추가 질문에 친절하고 정확하게 한국어로 대답해주세요." },
-                    { role: "assistant", content: `<b>냐냐님 자유 문장:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
+                    { role: "assistant", content: `${rp ? `<b>상황극:</b> ${rp.ask}<br>` : ''}<b>냐냐님 ${rp ? '상황극 대사' : '자유 문장'}:</b> ${userEsText}<br><b>선생님 피드백:</b> ${feedback.message}<br><b>추천 교정본:</b> ${feedback.correctedText.replace(/<[^>]*>/g, '')}${aiChatNaturalLine(feedback)}` }
                 ];
                 renderChatThread();
 
-                recordAiNote('es-ko', '', userEsText, feedback);
-                if (typeof noteEssaySentences === 'function') noteEssaySentences(userEsText);   // 보물상자: 문장마다 4점
+                recordAiNote(rp ? 'roleplay' : 'es-ko', rp ? rp.ask : '', userEsText, feedback);
+                if (typeof noteEssaySentences === 'function') noteEssaySentences(rp ? rp.countText : userEsText);   // 보물상자: 문장마다 4점
                 logAction('ai');
                 saveToStorage();
                 updateStats();
                 scrollAiResultIntoView();
-                showToast("자유 문장 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
+                showToast(rp ? "상황극 첨삭이 끝났어요! 궁금한 점은 아래 대화창에 남겨 보세요! ✨" : "자유 문장 검토가 끝났습니다! 의문점은 바로 하단 대화창에 남겨보세요! ✨", "success");
+                return true;
             } catch (e) {
                 console.error(e);
                 showToast(describeGeminiError(e), "error");

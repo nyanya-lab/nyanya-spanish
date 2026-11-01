@@ -13408,6 +13408,9 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
                 }
                 const free = boxValue('ai-free-input-es');
                 if (free.trim() && keepGraded('es-ko')) s.esKo = { text: free };
+                if (typeof aiRoleplay !== 'undefined' && aiRoleplay && keepGraded('roleplay')) {
+                    s.roleplay = { st: aiRoleplay, text: boxValue('ai-rp-input') };
+                }
                 //   [냐냐 요청] 문법 편집창도 살린다 (2026-10-07) — 저장이 막혀 새로고침할 때 쓴 노트가 날아가면 안 된다.
                 //   표 칸은 칠 때마다 상태에 들어가 있고, 글 덩어리·제목·표 제목만 화면에서 읽어 온다 (저장 때와 같은 자리).
                 if (typeof grammarEditorState !== 'undefined' && grammarEditorState && isShown('grammar-editor-modal')) {
@@ -13485,6 +13488,7 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
                     setBox('question-answer-input', s.question.text);
                 }
                 if (s.esKo) setBox('ai-free-input-es', s.esKo.text);
+                if (s.roleplay && typeof restoreRoleplay === 'function') restoreRoleplay(s.roleplay.st, s.roleplay.text);
                 let locked = 0;
                 if (s.result && s.result.date === getLocalDateString()) {
                     const box = document.getElementById('ai-feedback-result');
