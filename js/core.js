@@ -595,7 +595,7 @@ let vocabulary = [];
                 learnerProfile = payload.learnerProfile || { totalAnswered: 0, totalCorrect: 0, wrongByPos: {}, wrongByGrammarType: {} };
                 if (!learnerProfile.wrongByGrammarType) learnerProfile.wrongByGrammarType = {}; // 예전 데이터 마이그레이션
                 aiNotes = Array.isArray(payload.aiNotes) ? payload.aiNotes : [];   // [냐냐 요청] 첨삭 노트
-                if (typeof writeSession !== 'undefined') writeSession = payload.writeSession || null;   // [냐냐 요청] 쓰기 복습 이어하기
+                if (typeof writeSession !== 'undefined') writeSession = writeSessionSafeKeys(payload.writeSession) || null;   // [냐냐 요청] 쓰기 복습 이어하기
                 idiomReview = payload.idiomReview || {};                            // [냐냐 요청] 관용구 망각곡선
                 idiomScores = payload.idiomScores || {};                             // [냐냐 요청] 관용구 점수
                 deleResult = payload.deleResult || null;                            // [냐냐 요청] DELE 가늠

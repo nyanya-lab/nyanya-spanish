@@ -7095,8 +7095,24 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function writeLogKind(s) {
             return (s && s.isTodayReview) ? 'review' : 'practice';
         }
+        //   ⚠️ 이 값이 writeSession 의 칸 이름이 된다. 서버는 . # $ [ ] / 가 든 칸 이름을 통째로 거절해서
+        //   'de manga larga/corta' 를 틀린 창의 저장이 새로고침 때까지 전부 멈췄다 (2026-11-03)
+        function writeFailKeySafe(k) {
+            return String(k).replace(/[.#$\[\]\/]/g, '_');
+        }
         function writeFailKey(w) {
-            return String((w && w.id) || '') + '::' + String((w && w.word) || '');
+            return writeFailKeySafe(String((w && w.id) || '') + '::' + String((w && w.word) || ''));
+        }
+        //   고치기 전에 이 기기에 저장된 판에는 옛 칸 이름이 남아 있을 수 있다 — 불러올 때 바꿔 둔다
+        function writeSessionSafeKeys(ws) {
+            if (!ws) return ws;
+            ['failedOnce', 'gradeBeforeFail'].forEach(f => {
+                if (!ws[f]) return;
+                const out = {};
+                Object.keys(ws[f]).forEach(k => { out[writeFailKeySafe(k)] = ws[f][k]; });
+                ws[f] = out;
+            });
+            return ws;
         }
 
         //   [냐냐 요청] 동사는 알고 꼴만 틀렸으면(_knewVerb) 2바퀴도 그 활용형으로 익힌다 (2026-10-29).
