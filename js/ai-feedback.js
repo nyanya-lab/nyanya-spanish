@@ -1041,7 +1041,7 @@
                     ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "changes", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -1856,7 +1856,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                     ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "changes", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
@@ -6365,7 +6365,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                     ...aiScoringSchemaProps(),
                     ...aiNaturalSchemaProps()
                 },
-                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
+                required: ["isCorrect", "verdict", "correctedText", "originalMarked", "changes", "message", "breakdown", "tip", "issueType", ...AI_SCORING_REQUIRED, ...AI_NATURAL_REQUIRED]
             };
 
             try {
