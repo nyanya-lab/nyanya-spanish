@@ -1048,6 +1048,7 @@
                 const responseText = await callGeminiEssay(prompt, system, schema);   // [냐냐 요청] 첨삭은 Flash 두 개 경주
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
+                applyListedChangesToFixed(feedback);   // [냐냐 지적] 바뀐 부분에 적은 고침은 고친 문장에도 넣는다
 
                 // [냐냐 요청] 이 답변이 쓴 단어·문법에 점수를 반영하고 결과에 보여준다 (해제 버튼 포함)
                 if (regrade) showAiRegradeNotice();
@@ -1863,6 +1864,7 @@ ${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
+                applyListedChangesToFixed(feedback);   // [냐냐 지적] 바뀐 부분에 적은 고침은 고친 문장에도 넣는다
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
@@ -3151,6 +3153,7 @@ ${buildLearnerProfileSummary()}`;
         //   고친 문장을 내 순서로 되돌리고, 철자 고침이 있으면 그것만 남긴다.
         //   ⚠️ 뜻이 바뀌는 형용사(gran/grande·viejo·pobre…)를 옮긴 건 진짜 수정일 수 있어 건드리지 않는다.
         const AI_POSITION_MEANING_ADJ = /^(gran|grande|grandes|viejo|vieja|viejos|viejas|pobre|pobres|nuevo|nueva|nuevos|nuevas|mismo|misma|mismos|mismas|único|única|únicos|únicas|antiguo|antigua|antiguos|antiguas|cierto|cierta|ciertos|ciertas|propio|propia|propios|propias)$/i;
+        const AI_REORDER_ARTICLES = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas']);
         function undoReorderOnlyChanges(feedback) {
             if (!feedback || !Array.isArray(feedback.changes) || typeof feedback.correctedText !== 'string') return;
             const bare = (t) => String(t || '').toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]/gu, '');
@@ -3160,6 +3163,9 @@ ${buildLearnerProfileSummary()}`;
                 const toT = String((c && c.to) || '').trim().split(/\s+/).filter(Boolean);
                 if (fromT.length < 2 || fromT.length !== toT.length) return true;
                 if (toT.some(t => AI_POSITION_MEANING_ADJ.test(bare(t)))) return true;
+                //   [냐냐 확인] 기능어가 끼면 진짜 어순 교정이다 (2026-11-02). 'Lo no sé → No lo sé' 를 되돌려서
+                //   고친 문장이 'lo No sé' 가 되고 설명 줄까지 지워졌다. 되돌릴 것은 명사·형용사 자리뿐이다 (관사는 같이 옮겨도 된다).
+                if (fromT.some(t => AI_FUNCTION_WORDS.has(bare(t)) && !AI_REORDER_ARTICLES.has(bare(t)))) return true;
                 //   내 낱말 하나하나를 고친 쪽 낱말에 짝지어 본다 (같거나 철자만 살짝 다름)
                 const used = new Array(toT.length).fill(false);
                 const pairs = fromT.map(f => {
@@ -3179,6 +3185,44 @@ ${buildLearnerProfileSummary()}`;
                 const fixedPairs = fromT.map((f, k) => [bare(f), bare(toT[pairs[k]])]).filter(([a, b]) => a !== b);
                 const covered = fixedPairs.every(([a, b]) => feedback.changes.some(o => o !== c && bare(o.from) === a && bare(o.to) === b));
                 return !covered;
+            });
+        }
+        // ============================================================
+        // [냐냐 지적] 바뀐 부분과 고친 문장이 달랐다 (2026-11-02).
+        //   'Piensas que Qué → Qué piensas que' 라고 적어 놓고 고친 문장은 '¿Piensas que qué es…' 그대로였다.
+        //   AI 가 바뀐 부분에 적은 고침을 고친 문장에 안 넣은 것이다. 그대로 넣어 준다.
+        //   ⚠️ 내 문장과 고친 문장에 from 이 딱 한 번씩 있고 to 는 고친 문장에 없을 때만 — 'es' 같은 짧은 말이
+        //      딴 자리에도 있으면 어디를 고칠지 모르니 건드리지 않는다.
+        // ============================================================
+        function applyListedChangesToFixed(feedback) {
+            if (!feedback || !Array.isArray(feedback.changes) || typeof feedback.correctedText !== 'string') return;
+            const keys = (s) => String(s || '').replace(/<[^>]*>/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+                .map(t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
+            const countRun = (hay, run) => {
+                let n = 0;
+                for (let i = 0; i + run.length <= hay.length; i++) if (run.every((w, k) => hay[i + k] === w)) n++;
+                return n;
+            };
+            const SOFT = { a: '[aá]', e: '[eé]', i: '[ií]', o: '[oó]', u: '[uúü]', n: '[nñ]' };
+            const mine = keys(feedback.originalMarked);
+            feedback.changes.forEach(c => {
+                const to = String((c && c.to) || '').replace(/<[^>]*>/g, ' ').trim();
+                const fromT = keys(c && c.from), toT = keys(to);
+                if (!fromT.length || !toT.length || fromT.join(' ') === toT.join(' ')) return;
+                const fixed = keys(feedback.correctedText);
+                if (countRun(fixed, toT) > 0) return;                                       // 이미 들어가 있다
+                if (countRun(fixed, fromT) !== 1 || countRun(mine, fromT) !== 1) return;
+                const body = fromT.map(t => t.replace(/./gu, ch => SOFT[ch] || ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+                    .join('(?:[^\\p{L}\\p{N}<]|<[^>]*>)+');
+                const m = feedback.correctedText.match(new RegExp('(?<![\\p{L}\\p{N}])' + body + '(?![\\p{L}\\p{N}])', 'iu'));
+                if (!m) return;
+                const tagsIn = (s, re) => (s.match(re) || []).length;
+                const OPEN = /<span\b/gi, CLOSE = /<\/span>/gi;
+                if (tagsIn(m[0], OPEN) !== tagsIn(m[0], CLOSE)) return;                     // 태그가 어긋나게 잘린다
+                const before = feedback.correctedText.slice(0, m.index);
+                const inSpan = tagsIn(before, OPEN) > tagsIn(before, CLOSE);
+                const put = inSpan ? to : `<span class='text-red-600 font-extrabold underline'>${to}</span>`;
+                feedback.correctedText = before + put + feedback.correctedText.slice(m.index + m[0].length);
             });
         }
         //   단어장 뜻 두 개가 겹치나 — '~라고 생각한다' 와 '생각하다' 처럼 끝말만 다른 것도 같은 걸로 본다.
@@ -5138,7 +5182,7 @@ ${buildLearnerProfileSummary()}`;
         //   [냐냐 지적] 팁에는 terceira, 고친 문장에는 tercera 처럼 같은 낱말을 다르게 적어 보낸 적이 있다.
         //   어느 쪽이 맞는지 알 수 없으니 배우는 사람만 헷갈린다. 네 모드 프롬프트가 같이 쓴다.
         const AI_SPELLING_CONSISTENCY_RULE = `
-            SPELLING CONSISTENCY: every Spanish word you write in "tip", "message" or "changes" must be spelled EXACTLY as it appears in "correctedText" — same letters, same accents. Before output, re-read your own text and fix any word that differs. Writing "tercera" in one place and "terceira" in another teaches the student the wrong word.
+            SPELLING CONSISTENCY: every Spanish word you write in "tip", "message" or "changes" must be spelled EXACTLY as it appears in "correctedText" — same letters, same accents. Before output, re-read your own text and fix any word that differs. Writing "tercera" in one place and "terceira" in another teaches the student the wrong word. Every item in "changes" must actually be applied in "correctedText": if you list "A -> B", then B is what appears in "correctedText" and A does not.
 
             DO NOT SAY THE SAME THING THREE TIMES. "message", "naturalWhy" and "tip" are three different slots and each must carry something the other two do not:
             - "message": the verdict on THIS answer — what the student got right, and what the main error was. One or two sentences.
@@ -6329,6 +6373,7 @@ ${noteListText}${aiIdiomJudgeStart(userEsText)}
                 // 안전 파서 작동
                 const feedback = extractAndParseJson(responseText);
                 undoReorderOnlyChanges(feedback);   // [냐냐 지적] 순서만 바꾼 '수정' 은 되돌린다
+                applyListedChangesToFixed(feedback);   // [냐냐 지적] 바뀐 부분에 적은 고침은 고친 문장에도 넣는다
 
                 const resultBox = document.getElementById('ai-feedback-result');
                 const correctionBox = document.getElementById('ai-coach-correction-box');
