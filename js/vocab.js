@@ -2209,6 +2209,12 @@ Output one item per line, same id, no line skipped.`;
         }
 
         // ============================================================
+        // [냐냐 지적] "관용구 AI 추천 안 돌아" (2026-11-03) — 3.1 Flash-Lite 가 잠깐 멈춰서 보완 ✨ 가 45초 넘게 돌았다.
+        //   관용구 ✨ 세 버튼(보완·줄 ✨·예문 ✨)은 callGeminiWithBackup 으로 — 평소엔 3.1, 15초 넘거나 바쁘면 3.5 로 넘긴다.
+        //   ⚠️ 활용표 채우기는 넣지 않는다 (3.5 가 깨뜨린 적이 있다, dictionary-data.js 의 callGeminiWithBackup 설명).
+        // ============================================================
+
+        // ============================================================
         // [냐냐 요청] 늦게 온 AI 답 (2026-11-03)
         //   관용구 ✨ 를 누르고 답이 오기 전에 저장하면, 답이 저장한 단어엔 안 들어가고 다음에 연 단어 창에 들어갔다.
         //   창마다 번호를 매겨, 답이 왔을 때 번호가 바뀌었으면 — 저장한 창의 관용구 답은 그 단어에 넣고, 나머지는 버린다.
@@ -2506,7 +2512,7 @@ Output one item per line, same id, no line skipped.`;
 관용구 "${idiom}" 자체가 맞는 표현이면 그 낱말은 그대로 써야 해.`
                     : `스페인어 관용구 "${idiom}"(뜻: ${mean}) 를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 예문 한 문장과 한국어 번역을 만들어줘. 대괄호 자리는 알맞은 말로 채우고, 동사는 문장에 맞게 활용할 것.
 관용구의 낱말(전치사 포함)은 바꾸지 말고 그대로 쓸 것. fixNote 는 빈 문자열.`;
-                const res = await callGemini(prompt, "You are a careful Spanish (Spain) teacher. Output strictly the JSON schema. Korean translation. No markdown.", schema);
+                const res = await callGeminiWithBackup(prompt, "You are a careful Spanish (Spain) teacher. Output strictly the JSON schema. Korean translation. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
                 //   창이 바뀌었으면 — 적어 둔 예문은 이미 저장됐으니 번역만, 비어 있었으면 예문까지 저장한 단어에
@@ -2556,7 +2562,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
 ② add: 이 단어로 실제로 자주 쓰는 관용구·굳은 표현 가운데 위 목록에 없는 것을 0~3개. 억지로 만들지 말 것.
    '단어 + 빈칸' 뿐인 것이나 당연한 전치사 짝(en [장소], de [재료] 같은 것)은 넣지 말 것. 영어 뜻을 섞지 말 것.
 예문은 그 관용구를 그 뜻 그대로 쓴 짧고 자연스러운 스페인어 한 문장, exampleMeaning 은 한국어 번역. idiomMeaning 에 예문을 넣지 말 것.`;
-                const res = await callGemini(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
+                const res = await callGeminiWithBackup(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
                 if (wordFormGone(seq)) {
@@ -2630,7 +2636,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
 대괄호 [ ] 안의 글자(빈칸 이름)는 적힌 그대로 둬 — [사람]을 [alguien] 처럼 바꾸지 마.`
                     : `스페인어 단어 "${word}"${meaning ? `(뜻: ${meaning})` : ''} 를 쓰는 자주 쓰이는 관용구나 표현을 하나만 추천해줘.${others.length ? ` 다음과 겹치지 않게: ${others.join(', ')}` : ''}`;
                 const sys = "You are a precise Spanish dictionary. Output strictly the JSON schema. Korean meaning. No markdown, no extra text.";
-                const res = await callGemini(prompt, sys, schema);
+                const res = await callGeminiWithBackup(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
                 //   창이 바뀌었으면 — 적어 둔 줄은 빈 뜻·예문만 (철자 교정은 저장한 글자를 건드리니 안 한다), 빈 줄이었으면 추천을 붙인다
