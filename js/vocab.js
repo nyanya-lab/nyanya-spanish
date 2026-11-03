@@ -1649,6 +1649,7 @@ Output one item per line, same id, no line skipped.`;
             const tense = tenseSel.value;
             const label = tenseSel.selectedOptions[0].text;
             const orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i>';
+            const seq = _wordFormSeq;
             try {
                 if (isSingleTense(tense)) {
                     // [냐냐 요청] 1칸짜리 시제는 형태와 함께 불규칙 갈래도 같이 받아 콤보박스에 채운다
@@ -1657,12 +1658,14 @@ Output one item per line, same id, no line skipped.`;
                     const schema = { type: "OBJECT", properties: { form: { type: "STRING" }, irregular: { type: "STRING", enum: irregularTypesFor(tense) } }, required: ["form", "irregular"] };
                     const resp = await callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${infinitive}". JSON: {"form":"...","irregular":"..."}`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
+                    if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
                     const el = block.querySelector('[data-person="form"]'); if (el && !el.value.trim()) el.value = (data.form || '').trim();
                     applySingleTenseIrregular(block, tense, data.irregular);
                 } else {
                     const schema = { type: "OBJECT", properties: { yo: { type: "STRING" }, tu: { type: "STRING" }, el: { type: "STRING" }, nos: { type: "STRING" }, vos: { type: "STRING" }, ellos: { type: "STRING" } }, required: ["yo", "tu", "el", "nos", "vos", "ellos"] };
                     const resp = await callGemini(`${tenseRulePrompt(tense)}\n\nVerb: "${infinitive}". Return JSON: {"yo","tu","el","nos","vos","ellos"}`, `Return ONLY JSON.`, schema, 'minimal');
                     const data = extractAndParseJson(resp);
+                    if (wordFormGone(seq)) return;
                     CONJ_PERSON_KEYS.forEach(p => { const el = block.querySelector(`[data-person="${p}"]`); if (el && !el.value.trim()) el.value = (data[p] || '').trim(); });
                 }
                 showToast(`${label} 추천 완료! (빈칸만 채웠어요)`, "success");
@@ -2205,7 +2208,59 @@ Output one item per line, same id, no line skipped.`;
             if (id && typeof goToWord === 'function') goToWord(id);
         }
 
+        // ============================================================
+        // [냐냐 요청] 늦게 온 AI 답 (2026-11-03)
+        //   관용구 ✨ 를 누르고 답이 오기 전에 저장하면, 답이 저장한 단어엔 안 들어가고 다음에 연 단어 창에 들어갔다.
+        //   창마다 번호를 매겨, 답이 왔을 때 번호가 바뀌었으면 — 저장한 창의 관용구 답은 그 단어에 넣고, 나머지는 버린다.
+        //   (뜻·예문·유의어·활용 칸의 답은 저장한 단어에 안 넣는다 — 냐냐님이 고르신 건 관용구다)
+        // ============================================================
+        let _wordFormSeq = 0;
+        const _wordFormSavedAs = {};   // { 창 번호: 저장한 단어 id }
+        function wordFormNext() { _wordFormSeq++; }
+        function wordFormGone(seq) { return seq !== _wordFormSeq; }
+        //   items: [{ idiom, idiomMeaning, example, exampleMeaning, onlyFill }] — 같은 글자의 관용구가 있으면 빈 칸만 채우고,
+        //   없으면 새로 붙인다. onlyFill 은 적어 둔 줄을 채우던 답이라 그 줄이 없으면(저장 전에 글자를 고쳤으면) 버린다.
+        function applyLateIdioms(seq, items) {
+            const w = vocabulary.find(v => v.id === _wordFormSavedAs[seq]);
+            if (!w) return;   // 취소로 닫은 창
+            const key = t => normalizeSpanishAnswer(String(t || ''));
+            if (!Array.isArray(w.idioms)) w.idioms = [];
+            const prev = { idioms: w.idioms.map(it => Object.assign({}, it)) };
+            let filled = 0, added = 0;
+            (items || []).forEach(x => {
+                if (!x || !String(x.idiom || '').trim()) return;
+                const k = key(x.idiom);
+                const mine = w.idioms.find(it => it && key(it.idiom) === k);
+                if (mine) {
+                    [['idiomMeaning', x.idiomMeaning], ['example', x.example], ['exampleMeaning', x.exampleMeaning]].forEach(([f, v]) => {
+                        if (!String(mine[f] || '').trim() && String(v || '').trim()) { mine[f] = String(v).trim(); filled++; }
+                    });
+                    return;
+                }
+                if (x.onlyFill) return;
+                //   다른 단어에 이미 있는 관용구는 붙이지 않는다 — 저장할 때처럼 어느 단어에 둘지 묻는 창을 여기선 못 띄운다
+                if (vocabulary.some(o => (o.idioms || []).some(it => it && key(it.idiom) === k))) return;
+                const it = { idiom: String(x.idiom).trim(), idiomMeaning: String(x.idiomMeaning || '').trim(), addedAt: Date.now() };
+                if (String(x.example || '').trim()) it.example = String(x.example).trim();
+                if (String(x.exampleMeaning || '').trim()) it.exampleMeaning = String(x.exampleMeaning).trim();
+                w.idioms.push(it);
+                added++;
+            });
+            if (!filled && !added) return;
+            if (typeof ensureIdiomIds === 'function') ensureIdiomIds(w);
+            s3('word', w);
+            saveToStorage();
+            vetIdiomsAfterSave(w, prev);
+            renderWordList();
+            updateStats();
+            const bits = [];
+            if (added) bits.push(`관용구 ${added}개를 더하고`);
+            if (filled) bits.push(`빈 칸 ${filled}개를 채우고`);
+            showToast(`늦게 온 AI 답 — "${w.word}" 에 ${bits.join(' ')} 저장했어요 ✨`, "success");
+        }
+
         function openWordModal(wordId = null) {
+            wordFormNext();
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // 모달 열 때 초기화
@@ -2431,6 +2486,7 @@ Output one item per line, same id, no line skipped.`;
             if (!idiom.trim()) { showToast("먼저 관용구를 적어주세요!", "error"); return; }
             if (!hasGeminiApiKey()) { showToast("AI 추천은 설정에서 API 키를 등록해야 써요!", "error"); return; }
             const cur = exInp ? exInp.value.trim() : '';
+            const seq = _wordFormSeq;
             await withSpinner(row.querySelector('[onclick^="autofillIdiomExample"]'), async () => {
                 const schema = { type: "OBJECT", properties: { example: { type: "STRING" }, exampleMeaning: { type: "STRING" },
                     fixNote: { type: "STRING", description: "예문을 고쳤으면 무엇을 왜 고쳤는지 한국어 한 줄 (예: 'pensar 는 en 을 써요: pienso de → pienso en'). 안 고쳤으면 빈 문자열" } },
@@ -2449,6 +2505,11 @@ Output one item per line, same id, no line skipped.`;
                 const res = await callGemini(prompt, "You are a careful Spanish (Spain) teacher. Output strictly the JSON schema. Korean translation. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                //   창이 바뀌었으면 — 적어 둔 예문은 이미 저장됐으니 번역만, 비어 있었으면 예문까지 저장한 단어에
+                if (wordFormGone(seq)) {
+                    applyLateIdioms(seq, [{ idiom, example: cur ? '' : data.example, exampleMeaning: data.exampleMeaning, onlyFill: true }]);
+                    return;
+                }
                 let fixMsg = '';
                 if (exInp && data.example) {
                     const next = data.example.trim();
@@ -2478,6 +2539,7 @@ Output one item per line, same id, no line skipped.`;
             const cur = rows.map((r, i) => ({ i, r, idiom: (r.querySelector('[data-idiom-field="idiom"]') || {}).value.trim(),
                 mean: (r.querySelector('[data-idiom-field="meaning"]') || {}).value.trim(),
                 ex: ((r.querySelector('[data-idiom-field="example"]') || {}).value || '').trim() })).filter(x => x.idiom);
+            const seq = _wordFormSeq;
             await withSpinner(btn, async () => {
                 const item = { type: "OBJECT", properties: { idiom: { type: "STRING" }, idiomMeaning: { type: "STRING" }, example: { type: "STRING" }, exampleMeaning: { type: "STRING" } }, required: ["idiom", "idiomMeaning", "example", "exampleMeaning"] };
                 const schema = { type: "OBJECT", properties: {
@@ -2493,6 +2555,13 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                 const res = await callGemini(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                if (wordFormGone(seq)) {
+                    applyLateIdioms(seq, (data.fill || []).map(f => {
+                        const x = cur.find(c => c.i === f.i);
+                        return x && { idiom: x.idiom, idiomMeaning: f.idiomMeaning, example: f.example, exampleMeaning: f.exampleMeaning, onlyFill: true };
+                    }).concat(data.add || []));
+                    return;
+                }
                 let filled = 0, added = 0;
                 (data.fill || []).forEach(f => {
                     const x = cur.find(c => c.i === f.i); if (!x) return;
@@ -2529,6 +2598,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
             const icon = btn ? btn.querySelector('i') : null;
             const prevCls = icon ? icon.className : '';
             if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+            const seq = _wordFormSeq;
 
             try {
                 const cur = idiomInp ? idiomInp.value.trim() : '';
@@ -2559,6 +2629,11 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                //   창이 바뀌었으면 — 적어 둔 줄은 빈 뜻·예문만 (철자 교정은 저장한 글자를 건드리니 안 한다), 빈 줄이었으면 추천을 붙인다
+                if (wordFormGone(seq)) {
+                    applyLateIdioms(seq, [{ idiom: cur || data.idiom, idiomMeaning: data.meaning, example: data.example, exampleMeaning: data.exampleMeaning, onlyFill: !!cur }]);
+                    return;
+                }
 
                 if (idiomInp && data.idiom) {
                     //   빈칸 이름은 적어 둔 그대로 — 대괄호 수가 같으면 차례대로 되돌려 끼운다 ([alguien] → [사람])
@@ -2593,6 +2668,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
             const icon = btn ? btn.querySelector('i') : null;
             const prevCls = icon ? icon.className : '';
             if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+            const seq = _wordFormSeq;
 
             try {
                 const cur = spInp ? spInp.value.trim() : '';
@@ -2612,6 +2688,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
 
                 if (spInp && data.example) spInp.value = data.example.trim();
                 if (meInp && data.meaning) meInp.value = data.meaning.trim();
@@ -2794,6 +2871,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
             const icon = btn ? btn.querySelector('i') : null;
             const prevCls = icon ? icon.className : '';
             if (icon) icon.className = 'fa-solid fa-spinner fa-spin text-xs';
+            const seq = _wordFormSeq;
 
             try {
                 const bare = raw.replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/i, '');
@@ -2827,6 +2905,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
                 const res = await callGemini(prompt, sys, schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
                 //   그래도 다른 낱말을 들고 오면(원래 단어로 · 세 글자 넘게 다른 낱말로) 아무것도 안 채운다 —
                 //   뜻·품사도 그 낱말의 것이라 섞이면 더 헷갈린다.
                 const bareKey = s => stripAccents(String(s || '').toLowerCase().trim()).replace(/^(el|la|los|las|un|una|unos|unas)\s+/, '');
@@ -2876,6 +2955,7 @@ ${cur.length ? cur.map(x => `${x.i}. ${x.idiom} = ${x.mean || '(뜻 없음)'} | 
             const rows = [...document.querySelectorAll('#syn-entries-box > div')];
             const get = (r, f) => ((r.querySelector(`[data-syn-field="${f}"]`) || {}).value || '').trim();
             const cur = rows.map((r, i) => ({ i, r, word: get(r, 'word'), type: get(r, 'type') || 'synonym', mean: get(r, 'meaning'), diff: get(r, 'difference') })).filter(x => x.word);
+            const seq = _wordFormSeq;
             await withSpinner(btn, async () => {
                 const schema = { type: "OBJECT", properties: {
                     fill: { type: "ARRAY", items: { type: "OBJECT", properties: { i: { type: "INTEGER" }, meaning: { type: "STRING" }, difference: { type: "STRING" } }, required: ["i", "meaning", "difference"] } },
@@ -2892,6 +2972,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const res = await callGemini(prompt, "You are a precise Spanish (Spain) dictionary. Output strictly the JSON schema. Korean meanings. No markdown.", schema);
                 const data = (typeof res === 'string') ? extractAndParseJson(res) : res;
                 if (!data) { showToast("AI 응답을 이해하지 못했어요. 다시 시도해주세요", "error"); return; }
+                if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
                 let filled = 0, added = 0;
                 (data.fill || []).forEach(f => {
                     const x = cur.find(c => c.i === f.i); if (!x) return;
@@ -3102,6 +3183,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
 
         function closeWordModal() {
+            wordFormNext();
             document.getElementById('word-modal').classList.add('hidden');
             hideAiLoadingOverlay();
             // [냐냐 요청] 단어 연결 화면에서 올려뒀던 경우 — 층·배경을 되돌리고,
@@ -3198,6 +3280,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const btn = document.getElementById('ai-autofill-btn');
             const originalHtml = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 찾는 중...`; }
+            const seq = _wordFormSeq;
 
             const prompt = `한국어 뜻 "${meaningText}" 에 해당하는 스페인어 단어·표현을 찾아주세요.
             - 실제로 쓰이는 것만 1~4개. 억지로 개수를 채우지 말 것.
@@ -3235,6 +3318,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
             try {
                 const responseText = await callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE);
+                if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
                 const result = extractAndParseJson(responseText);
                 const list = (result.candidates || []).filter(c => c && (c.word || '').trim()).slice(0, 4);
                 if (!list.length) {
@@ -3374,6 +3458,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             btn.disabled = true;
             btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> 분석 중...`;
             showAiLoadingOverlay();
+            const seq = _wordFormSeq;
 
             // [PATCH-속도개선] 프롬프트를 간결하게 줄여서 모델이 더 빠르게 응답하도록 함
             //   [냐냐 요청] 품사를 직접 골라뒀으면 그 품사의 뜻으로만 채우게 한다.
@@ -3565,6 +3650,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 // 대화형 응답이나 블록 헤더가 섞여 있어도 완벽하게 추출하여 분석
                 const result = extractAndParseJson(responseText);
                 if (result && result.pos === 'verb') await mergeFocusedConj(result, rawWord, conjAsks);
+                if (wordFormGone(seq)) return;   // 창이 바뀌었다 — 다른 단어 창에 넣지 않는다
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
@@ -3712,13 +3798,18 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 }
             } catch (e) {
                 console.warn("AI API 통신 실패: 오프라인 추측으로 자동 전환", e);
-                showToast(`${describeGeminiError(e)} 오프라인 추측으로 대체합니다.`, "error");
-                runOfflineAutofill(rawWord);
+                if (!wordFormGone(seq)) {
+                    showToast(`${describeGeminiError(e)} 오프라인 추측으로 대체합니다.`, "error");
+                    runOfflineAutofill(rawWord);
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
-                hideAiLoadingOverlay();
-                aiAutofillCompleted = true; // [냐냐 PATCH] AI 추천 완료 → 이제 엔터로 저장 가능
+                //   창이 바뀌었으면 새 창의 가림막·엔터 저장은 그 창 것이다
+                if (!wordFormGone(seq)) {
+                    hideAiLoadingOverlay();
+                    aiAutofillCompleted = true; // [냐냐 PATCH] AI 추천 완료 → 이제 엔터로 저장 가능
+                }
             }
         }
 
@@ -4831,6 +4922,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 logAction('new-word', null, wordObj.id); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
             }
 
+            //   이 창에서 아직 기다리는 관용구 AI 답은 이제 저장한 이 단어로 간다 (applyLateIdioms)
+            _wordFormSavedAs[_wordFormSeq] = wordObj.id;
+            wordFormNext();
+
             applyIdiomMoves(wordObj);   // 관용구 중복 창에서 '지금 단어로 옮기기' 를 고른 것
             applyIdiomLinks(wordObj, linkedIdiomRows, prevWordForIdioms);   // 다른 단어와 같이 쓰는 관용구
 
@@ -4925,6 +5020,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
         // [냐냐 PATCH] 다음 단어를 바로 입력할 수 있게 폼 초기화 + 커서 이동
         function prepareNextWordEntry() {
+            wordFormNext();
             document.getElementById('modal-word-id').value = '';
             document.getElementById('input-word').value = '';
             document.getElementById('input-meaning').value = '';
