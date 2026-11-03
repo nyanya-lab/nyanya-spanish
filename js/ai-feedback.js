@@ -3337,6 +3337,14 @@ ${buildLearnerProfileSummary()}`;
                 //   arribar(도착하다)의 3인칭 꼴로 읽혀 −2 가 붙었다. AI 가 동사가 아니라고 했으면 받지 않는다.
                 const back = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(k) : null;
                 if (back && pos && pos !== 'verb' && String(back.pos || '').toLowerCase() === 'verb') return null;
+                //   [냐냐 지적] 'sí'(네) 를 쓴 문장에 'si'(만약) 가 +2 를 받았다 (2026-11-03).
+                //   findVocabWordByForm 은 악센트를 떼고 찾아서 sí → si 가 된다. 악센트만 다른 사전형에 닿았는데
+                //   고친 문장에도 내 꼴 그대로 남았으면 그건 철자 실수가 아니라 다른 낱말이다 — 안 받는다.
+                //   (고친 문장에서 악센트가 바뀌었으면 instántaneo 처럼 철자 실수라 그대로 받아 −2 로 간다)
+                if (back) {
+                    const bw = norm(back.word), strip = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+                    if (bw !== k && strip(bw) === strip(k) && fixedSet.has(k)) return null;
+                }
                 return back;
             };
 
