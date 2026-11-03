@@ -1158,8 +1158,51 @@ let vocabulary = [];
             thread.scrollTop = thread.scrollHeight;
         }
 
+        // ============================================================
+        // [냐냐 요청] 글 쓰는 칸: Alt+엔터도 줄바꿈 · 쓴 만큼 칸이 늘어난다 (2026-11-03).
+        //   data-autogrow 를 단 textarea 에만 건다 (첨삭 다섯 칸 + AI 질문). 값은 늘어날 수 있는 최대 높이 (비우면 50vh).
+        //   ① Alt+엔터: 칸마다 달린 onkeydown 은 'Shift 가 아니면 제출' 이라 그대로면 제출된다 —
+        //      문서 쪽 capture 단계에서 먼저 받아 줄을 넣고 거기서 멈춘다.
+        //   ② 높이: 칠 때마다 내용에 맞추고, 제출 뒤 코드가 값을 비우면(input 이벤트가 안 난다) 그때도 맞추게
+        //      처음 칸에 들어올 때 그 칸의 value 쓰기를 감싼다.
+        // ============================================================
+        function autogrowFit(el) {
+            el.style.height = 'auto';
+            const border = el.offsetHeight - el.clientHeight;
+            el.style.height = (el.scrollHeight + border) + 'px';
+            el.style.overflowY = (el.scrollHeight + border > el.offsetHeight + 1) ? 'auto' : 'hidden';
+        }
+        function autogrowInstall(el) {
+            if (el._autogrow) return;
+            el._autogrow = true;
+            el.style.maxHeight = el.dataset.autogrow || '50vh';
+            const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+            Object.defineProperty(el, 'value', {
+                configurable: true,
+                get() { return desc.get.call(this); },
+                set(v) { desc.set.call(this, v); autogrowFit(this); }
+            });
+        }
+        document.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (el && el.matches && el.matches('textarea[data-autogrow]')) { autogrowInstall(el); autogrowFit(el); }
+        });
+        document.addEventListener('input', (e) => {
+            const el = e.target;
+            if (el && el.matches && el.matches('textarea[data-autogrow]')) { autogrowInstall(el); autogrowFit(el); }
+        });
+        document.addEventListener('keydown', (e) => {
+            const el = e.target;
+            if (e.key !== 'Enter' || !e.altKey || !el || !el.matches || !el.matches('textarea[data-autogrow]')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            el.setRangeText('\n', el.selectionStart, el.selectionEnd, 'end');
+            autogrowFit(el);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, true);
+
         function askAiKeydown(e) {
-            // 엔터로 전송 (줄바꿈은 Shift+Enter)
+            // 엔터로 전송 (줄바꿈은 Shift+Enter · Alt+Enter)
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 submitAskAi();
