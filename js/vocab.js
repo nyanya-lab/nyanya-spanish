@@ -2218,6 +2218,9 @@ Output one item per line, same id, no line skipped.`;
         const _wordFormSavedAs = {};   // { 창 번호: 저장한 단어 id }
         function wordFormNext() { _wordFormSeq++; }
         function wordFormGone(seq) { return seq !== _wordFormSeq; }
+        //   [냐냐 요청] 첨삭 카드에서 연 등록 창이면 그 첨삭의 노트 열쇠 (2026-11-03). 새 단어를 저장하면 그 카드 점수 목록에 −2 로 들어간다.
+        //   창을 열거나 닫을 때 지운다 — '계속 등록' 으로 이어 적는 단어도 같은 첨삭에서 온 것으로 친다.
+        let _wordFormFromAiCard = null;
         //   items: [{ idiom, idiomMeaning, example, exampleMeaning, onlyFill }] — 같은 글자의 관용구가 있으면 빈 칸만 채우고,
         //   없으면 새로 붙인다. onlyFill 은 적어 둔 줄을 채우던 답이라 그 줄이 없으면(저장 전에 글자를 고쳤으면) 버린다.
         function applyLateIdioms(seq, items) {
@@ -2261,6 +2264,7 @@ Output one item per line, same id, no line skipped.`;
 
         function openWordModal(wordId = null) {
             wordFormNext();
+            _wordFormFromAiCard = null;
             document.getElementById('word-modal').classList.remove('hidden');
             document.getElementById('word-suggestions').classList.add('hidden');
             aiAutofillCompleted = false; // 모달 열 때 초기화
@@ -3184,6 +3188,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
         function closeWordModal() {
             wordFormNext();
+            _wordFormFromAiCard = null;
             document.getElementById('word-modal').classList.add('hidden');
             hideAiLoadingOverlay();
             // [냐냐 요청] 단어 연결 화면에서 올려뒀던 경우 — 층·배경을 되돌리고,
@@ -4920,6 +4925,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (typeof ensureWordDeleLevel === 'function') ensureWordDeleLevel(wordObj.id);
                 // 등록도 끝낼 때 한 번만 알린다 (아래 토스트 또는 '계속 등록?' 확인창이 이미 말해준다)
                 logAction('new-word', null, wordObj.id); // [냐냐 PATCH] 오늘 새로 등록한 단어 수 추적
+                //   첨삭 카드에서 연 창이면 그 카드 점수 목록에 넣는다 (카드는 아래 renderEsKoGrammarRefs 가 다시 그린다)
+                if (_wordFormFromAiCard && typeof addRegisteredWordToAiCard === 'function') addRegisteredWordToAiCard(wordObj, _wordFormFromAiCard);
             }
 
             //   이 창에서 아직 기다리는 관용구 AI 답은 이제 저장한 이 단어로 간다 (applyLateIdioms)

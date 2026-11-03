@@ -2629,11 +2629,30 @@ ${buildLearnerProfileSummary()}`;
         //   냐냐님이 원하신 건 '등록' 이 아니었다. 칩을 눌러 직접 등록하는 길만 남긴다.
         //   ⚠️ 다시 넣자는 말씀이 없는 한 되살리지 않는다 (director → directora 같은 성 변형까지 들어왔다).
 
+        // [냐냐 요청] 첨삭 카드에서 등록한 단어는 그 카드 점수 목록에 바로 −2 로 넣는다 (2026-11-03).
+        //   추천 칩으로 등록했든 '단어장에 등록' 으로 따로 쳤든 — 몰라서 찾아본 낱말이니 틀린 것으로 쳐서 곡선에 들인다.
+        //   점수는 다른 줄처럼 ↺ 로 바꾼다 (+2 → 0 → −2). 다른 첨삭으로 넘어간 뒤에 저장하면 넣지 않는다.
+        function openAiCardWordRegister(word) {
+            openQuickWordRegister(word);
+            _wordFormFromAiCard = _lastAiNoteKey || null;
+        }
+        function addRegisteredWordToAiCard(w, noteKey) {
+            if (!w || !noteKey || noteKey !== _lastAiNoteKey) return;
+            if ((aiLastEsKoWords || []).some(e => e.word.id === w.id)) return;
+            const prev = snapshotWordScoreState(w);
+            const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
+            const delta = WORD_SPELL_BAD;
+            addWordScore(w, delta, { correct: false });
+            pushWordEntry({ word: w, ok: false, delta, baseDelta: WORD_SPELL_OK,
+                prev, gradeBefore, groupDelta: delta, state: 'normal', undone: false, manual: true, registered: true });
+            if (typeof saveToStorage === 'function') saveToStorage();
+        }
+
         function aiSuggestHtml() {
             const s = aiLastSuggest || { idioms: [], newWords: [] };
             //   [냐냐 요청] 추천이 못 잡은 낱말도 여기서 바로 등록하게 '직접 추가' 버튼 (2026-10-29).
             //   추천이 하나도 없어도 줄은 남긴다 — 그때가 오히려 이 버튼이 필요한 때다.
-            const addBtn = `<button type="button" onclick="openQuickWordRegister('')" title="단어 등록 창 열기" class="shrink-0 px-2 py-0.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-600 text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-0.5"></i> 단어장에 등록</button>`;
+            const addBtn = `<button type="button" onclick="openAiCardWordRegister('')" title="단어 등록 창 열기" class="shrink-0 px-2 py-0.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-600 text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-0.5"></i> 단어장에 등록</button>`;
             if (!s.newWords.length) {
                 return `<div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
                     <p class="text-[11px] font-bold text-slate-400">추천할 새 낱말은 없어요</p>${addBtn}
@@ -2650,7 +2669,7 @@ ${buildLearnerProfileSummary()}`;
                         <span class="text-[10px] text-slate-300">${escapeHtml(x.mean)}</span>
                     </button>`;
                 }
-                return `<button type="button" onclick="openQuickWordRegister(this.dataset.w)" data-w="${escapeAttr(x.word)}" title="눌러서 등록하기" class="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
+                return `<button type="button" onclick="openAiCardWordRegister(this.dataset.w)" data-w="${escapeAttr(x.word)}" title="눌러서 등록하기" class="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-colors">
                     <i class="fa-solid fa-plus text-[9px]"></i><b>${escapeHtml(x.word)}</b>
                     <span class="text-[10px] text-slate-400">${escapeHtml(x.mean)}</span>
                 </button>`;
@@ -6180,6 +6199,7 @@ Give the fragment in "ev".`;
                                     <span class="text-[11px] font-extrabold text-slate-800">${escapeHtml(w.word.word || '')}</span>${mean ? `<span class="text-[10px] text-slate-400 ml-1">${escapeHtml(mean)}</span>` : ''}
                                 </button>
                                 ${moved ? `<span class="text-[10px] font-black ${w.delta > 0 ? 'text-emerald-600' : (w.delta < 0 ? 'text-rose-500' : 'text-slate-400')}">${fmtDelta(w.delta)}</span>` : ''}
+                                ${w.registered ? `<span title="이 첨삭에서 새로 등록한 단어" class="shrink-0 text-[9px] font-black text-emerald-700 bg-emerald-100 rounded-full px-1.5 py-0.5">🆕 등록</span>` : ''}
                                 ${w.alsoReviewed ? `<span title="${w.delta > 0 ? '오늘 차례였던 단어 — 오늘 복습으로 쳤어요 (한 칸 앞으로)' : '오늘 차례였던 단어 — 철자가 틀려 복습 실패로 쳤어요 (한 칸 뒤로)'}" class="shrink-0 text-[9px] font-black rounded-full px-1.5 py-0.5 ${w.delta > 0 ? 'text-amber-700 bg-amber-100' : 'text-rose-600 bg-rose-100'}">🔁 ${w.delta > 0 ? '오늘 복습' : '복습 실패'}</span>` : ''}
                                 ${aiCurveChip(aiWordCurveShift(w), true)}
                                 ${w.locked ? lockMark : `<button type="button" onclick="cycleWordEntry(${i})" title="점수 바꾸기 (+2 → 0 → −2)" class="w-4 h-4 rounded-full hover:bg-slate-100 text-[9px] text-slate-400 hover:text-violet-600 transition-colors"><i class="fa-solid fa-rotate-left"></i></button>`}
