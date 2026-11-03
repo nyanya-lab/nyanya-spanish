@@ -2629,21 +2629,44 @@ ${buildLearnerProfileSummary()}`;
         //   냐냐님이 원하신 건 '등록' 이 아니었다. 칩을 눌러 직접 등록하는 길만 남긴다.
         //   ⚠️ 다시 넣자는 말씀이 없는 한 되살리지 않는다 (director → directora 같은 성 변형까지 들어왔다).
 
-        // [냐냐 요청] 첨삭 카드에서 등록한 단어는 그 카드 점수 목록에 바로 −2 로 넣는다 (2026-11-03).
-        //   추천 칩으로 등록했든 '단어장에 등록' 으로 따로 쳤든 — 몰라서 찾아본 낱말이니 틀린 것으로 쳐서 곡선에 들인다.
+        // [냐냐 요청] 첨삭 카드에서 등록한 단어는 그 카드 점수 목록에 바로 넣는다 (2026-11-03).
+        //   추천 칩으로 등록했든 '단어장에 등록' 으로 따로 쳤든. 점수는 내 문장·고친 문장을 견줘 가른다 —
+        //   단어 훑기와 같은 잣대: 내 문장에 있고 고친 문장에도 남음 +2 / 내 문장에 있었는데 바뀜 0 /
+        //   내 문장에 없음(철자가 틀렸거나 선생님이 넣은 낱말, 따로 친 낱말) −2.
         //   점수는 다른 줄처럼 ↺ 로 바꾼다 (+2 → 0 → −2). 다른 첨삭으로 넘어간 뒤에 저장하면 넣지 않는다.
         function openAiCardWordRegister(word) {
             openQuickWordRegister(word);
             _wordFormFromAiCard = _lastAiNoteKey || null;
+        }
+        //   글에 이 단어가 (성·수 변형·활용형까지) 나오나. 활용표가 비어 있으면 동사 꼴을 못 찾는다 — 그땐 ↺ 로.
+        function aiTextHasWord(html, w) {
+            const lc = (s) => String(s || '').toLowerCase().normalize('NFC');
+            const toks = aiStripTags(html || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(lc);
+            if (!toks.length) return false;
+            const key = lc(w.word).replace(/\[[^\]]*\]/g, ' ')
+                .replace(/^(el\/la|los\/las|un\/una|unos\/unas|el|la|los|las|un|una|unos|unas)\s+/, '')
+                .replace(/\s+/g, ' ').trim();
+            if (!key) return false;
+            if (key.indexOf(' ') >= 0) return (' ' + toks.join(' ') + ' ').indexOf(' ' + key + ' ') >= 0;
+            const vars = (key.length >= 4) ? spanishFormVariants(key) : [key];
+            return toks.some((t, i) => vars.indexOf(t) >= 0
+                || findVocabWordByForm(t, [w]) === w
+                || (i > 0 && findVocabWordByForm(toks[i - 1] + ' ' + t, [w]) === w));   // 'me lavo' 처럼 재귀대명사가 앞에 따로
+        }
+        function registeredWordDelta(w) {
+            const fb = aiLastFeedbackForAdd;
+            if (!fb) return WORD_SPELL_BAD;
+            if (!aiTextHasWord(fb.originalMarked || fb.userText, w)) return WORD_SPELL_BAD;
+            return aiTextHasWord(fb.correctedText, w) ? WORD_SPELL_OK : 0;
         }
         function addRegisteredWordToAiCard(w, noteKey) {
             if (!w || !noteKey || noteKey !== _lastAiNoteKey) return;
             if ((aiLastEsKoWords || []).some(e => e.word.id === w.id)) return;
             const prev = snapshotWordScoreState(w);
             const gradeBefore = (typeof getWordGrade === 'function') ? getWordGrade(w) : null;
-            const delta = WORD_SPELL_BAD;
-            addWordScore(w, delta, { correct: false });
-            pushWordEntry({ word: w, ok: false, delta, baseDelta: WORD_SPELL_OK,
+            const delta = registeredWordDelta(w);
+            if (delta) addWordScore(w, delta, { correct: delta > 0, subjective: delta > 0 });
+            pushWordEntry({ word: w, ok: delta > 0, noScore: delta === 0, delta, baseDelta: WORD_SPELL_OK,
                 prev, gradeBefore, groupDelta: delta, state: 'normal', undone: false, manual: true, registered: true });
             if (typeof saveToStorage === 'function') saveToStorage();
         }

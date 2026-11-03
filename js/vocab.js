@@ -2218,7 +2218,7 @@ Output one item per line, same id, no line skipped.`;
         const _wordFormSavedAs = {};   // { 창 번호: 저장한 단어 id }
         function wordFormNext() { _wordFormSeq++; }
         function wordFormGone(seq) { return seq !== _wordFormSeq; }
-        //   [냐냐 요청] 첨삭 카드에서 연 등록 창이면 그 첨삭의 노트 열쇠 (2026-11-03). 새 단어를 저장하면 그 카드 점수 목록에 −2 로 들어간다.
+        //   [냐냐 요청] 첨삭 카드에서 연 등록 창이면 그 첨삭의 노트 열쇠 (2026-11-03). 새 단어를 저장하면 그 카드 점수 목록에 들어간다 (점수는 addRegisteredWordToAiCard 가 가른다).
         //   창을 열거나 닫을 때 지운다 — '계속 등록' 으로 이어 적는 단어도 같은 첨삭에서 온 것으로 친다.
         let _wordFormFromAiCard = null;
         //   items: [{ idiom, idiomMeaning, example, exampleMeaning, onlyFill }] — 같은 글자의 관용구가 있으면 빈 칸만 채우고,
