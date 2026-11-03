@@ -9586,8 +9586,16 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             const norm = (s) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(s, true) : String(s || '').toLowerCase().trim();
             const u = norm(userRaw);
             if (!u) return null;
+            const want = askedWord.meaning || base.meaning;
             const hit = vocabulary.find(w => w.id !== base.id && norm(w.word) === u);
-            return (hit && meaningItemsExactMatch(hit.meaning, askedWord.meaning || base.meaning)) ? hit : null;
+            if (hit && meaningItemsExactMatch(hit.meaning, want)) return hit;
+            //   [냐냐 지적] 등록해 둔 관용구도 본다 (2026-11-03) — cuidadosamente(조심스럽게…) 에 쓴 con cuidado(el cuidado 의 관용구,
+            //   조심스럽게)가 AI '틀림' 으로 바로 오답이었다. 관용구 글자가 답과 같고 뜻 한 항목이 통째로 같으면 되묻는다.
+            for (const w of vocabulary) {
+                const it = (w.idioms || []).find(x => x && norm(x.idiom) === u && meaningItemsExactMatch(x.idiomMeaning, want));
+                if (it) return { id: w.id, word: it.idiom, meaning: it.idiomMeaning, _idiomOf: w };
+            }
+            return null;
         }
         function looksLikeSpellMiss(userRaw, correctRaw) {
             const user = String(userRaw || '').trim();
