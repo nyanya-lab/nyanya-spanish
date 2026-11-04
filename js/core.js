@@ -5470,9 +5470,11 @@ let vocabulary = [];
             obj.lastWrongDate = today;
             obj.lastReviewDate = null;
         }
-        function undoHandCurve(obj, kind) {
+        function undoHandCurve(obj, kind, fromManual) {
             const u = obj && obj.handCurveUndo;
             if (!u) return;
+            //   📅 버튼으로 넣은 건 등급을 돌려도 안 빠진다 — 그 버튼으로만 뺀다
+            if (u.manual && !fromManual) return;
             delete obj.handCurveUndo;
             const stageKey = HAND_CURVE_FIELDS[kind][0];
             const untouched = u.on === getLocalDateString() && obj.lastWrongDate === u.on
@@ -5507,6 +5509,66 @@ let vocabulary = [];
             if (id) recHandGradeCurve(grammarReview, id, 'grammar', getGrammarGrade(id), getGrammarReviewRec);
         }
         const isWeakGrade = (g) => g === 'weak' || g === 'critical';
+
+        // ============================================================
+        // [냐냐 요청] 점수는 그대로, 곡선에만 넣기 (2026-11-04) — 단어 카드·관용구 줄의 📅 칩.
+        //   예전엔 약점으로 눌러야 곡선에 들어가서 점수가 −5/−8 로 같이 바뀌었다.
+        //   - 곡선 밖(처음이거나 졸업)이면 첫 칸에 → 내일 복습에 나온다 (약점 손질과 같은 enterCurveByHand)
+        //   - 곡선 안이면 누를 수 없고 몇 일 칸인지·다음 복습 날만 보인다
+        //   - 같은 날, 아직 복습 전이면 다시 눌러 뺄 수 있다 (넣기 전 모습으로)
+        //   점수·등급·틀린 횟수·정답률은 안 건드린다.
+        // ============================================================
+        function curveStateOf(rec, kind) {
+            const stage = (rec && rec[HAND_CURVE_FIELDS[kind][0]]) || 0;
+            const u = rec && rec.handCurveUndo;
+            const today = getLocalDateString();
+            if (u && u.manual && u.on === today && rec.lastWrongDate === today && !rec.lastReviewDate && !stage) return { manualToday: true };
+            if (!rec || curveNeedsHandEntry(rec.lastWrongDate, stage)) return { out: true, graduated: !!(rec && rec.lastWrongDate) };
+            const base = rec.lastReviewDate || rec.lastWrongDate;
+            const d = new Date(base + 'T00:00:00');
+            d.setDate(d.getDate() + REVIEW_INTERVALS[stage]);
+            const next = `${d.getMonth() + 1}/${d.getDate()}`;
+            return { inCurve: true, days: REVIEW_INTERVALS[stage], next, due: daysSince(base) >= REVIEW_INTERVALS[stage] };
+        }
+        function curveManualChipHtml(rec, kind, onclick) {
+            const st = curveStateOf(rec, kind);
+            const base = 'shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black whitespace-nowrap transition-colors';
+            if (st.manualToday) return `<button type="button" onclick="${onclick}" title="오늘 넣은 것 — 누르면 곡선에서 빼요" class="${base} bg-amber-100 text-amber-700 hover:bg-amber-200">📅 내일 복습 · 빼기</button>`;
+            if (st.inCurve) return `<span title="곡선 ${st.days}일 칸 — 이미 복습이 잡혀 있어요" class="${base} bg-slate-100 text-slate-400">📅 ${st.days}일 칸 · ${st.due ? '오늘 복습' : st.next}</span>`;
+            return `<button type="button" onclick="${onclick}" title="점수는 그대로 두고 곡선 첫 칸에 넣어요 — 내일 복습에 나와요" class="${base} bg-white border border-violet-200 text-violet-600 hover:bg-violet-50">📅 곡선에 넣기</button>`;
+        }
+        function toggleCurveManual(rec, kind) {
+            if (curveStateOf(rec, kind).manualToday) { undoHandCurve(rec, kind, true); return 'out'; }
+            if (!curveNeedsHandEntry(rec.lastWrongDate, rec[HAND_CURVE_FIELDS[kind][0]])) return '';
+            enterCurveByHand(rec, kind);
+            if (rec.handCurveUndo) rec.handCurveUndo.manual = true;
+            return 'in';
+        }
+        function toggleWordCurveManual(wordId, event) {
+            if (event) event.stopPropagation();
+            const w = (typeof wordById === 'function') ? wordById(wordId) : vocabulary.find(v => v.id === wordId);
+            if (!w) return;
+            s3('word', w);
+            const r = toggleCurveManual(w, 'word');
+            if (r) showToast(r === 'in' ? `"${w.word}" 곡선에 넣었어요 — 내일 복습에 나와요 📅` : `"${w.word}" 곡선에서 뺐어요`, r === 'in' ? 'success' : 'info');
+            afterCurveManual();
+        }
+        function toggleIdiomCurveManual(wordId, ref, event) {
+            if (event) event.stopPropagation();
+            const key = idiomKey(wordId, ref);
+            s3('idiom', key);
+            const rec = getIdiomReviewRec(key);
+            const r = toggleCurveManual(rec, 'idiom');
+            //   빼고 나니 빈 껍데기면 (넣으며 새로 만든 기록) 통째로 치운다 — recHandGradeCurve 와 같다
+            if (r === 'out' && Object.keys(rec).every(k => ['stage', 'lastWrongDate', 'lastReviewDate'].includes(k) && !rec[k])) delete idiomReview[key];
+            if (r) showToast(r === 'in' ? `"${ref}" 곡선에 넣었어요 — 내일 복습에 나와요 📅` : `"${ref}" 곡선에서 뺐어요`, r === 'in' ? 'success' : 'info');
+            afterCurveManual();
+        }
+        function afterCurveManual() {
+            if (typeof logAction === 'function') logAction('snapshot');
+            if (typeof renderWordList === 'function') renderWordList();   // 관용구 사전 모드·오늘 복습 숫자도 이 안에서 다시 그린다
+            saveToStorage();
+        }
 
         // 기존 데이터 → 통합 점수로 1회 변환 (score = 마스터점수 - 약점점수)
         function migrateWordScores() {

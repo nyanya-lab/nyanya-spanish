@@ -6666,6 +6666,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const cb = writePracticeState && writePracticeState.onClose;
             if (writePracticeState && writePracticeState.feedbackTimer) clearTimeout(writePracticeState.feedbackTimer);
             writePracticeState = null;
+            writeReleaseKeyboard();
             const play = document.getElementById('write-play-area');
             if (play) { play.classList.add('hidden'); play.innerHTML = ''; }
             const setup = document.getElementById('write-setup');
@@ -6679,10 +6680,49 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (typeof cb === 'function') { try { cb(); } catch (e) {} }
         }
 
+        // [냐냐 요청] 폰에서 엔터를 칠 때마다 입력칸을 다시 눌러야 했다 (2026-11-04).
+        //   화면을 다시 그리면 입력칸이 새로 만들어지는데, iOS 는 사람이 누른 그 순간이 아니면 focus() 로 자판을 못 연다
+        //   (아래 setTimeout 의 focus 는 PC 에서만 먹혔다). 그래서 엔터·'다음' 을 누른 그 순간에 안 보이는 칸(자판 붙잡이)으로
+        //   먼저 옮겨 자판을 띄운 채로 두고, 새 입력칸이 그려지면 그리로 넘긴다 — 자판이 떠 있을 땐 넘기는 게 막히지 않는다.
+        //   결과 화면에선 붙잡이에 머문다. 거기서 자판의 엔터를 치면 '다음' 을 누른다. PC(마우스)는 예전 그대로.
+        function writeIsTouch() { return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); }
+        function writeKeepKeyboard() {
+            if (!writeIsTouch()) return;
+            let k = document.getElementById('write-kbd-keep');
+            if (!k) {
+                k = document.createElement('input');
+                k.id = 'write-kbd-keep';
+                k.type = 'text';
+                k.tabIndex = -1;
+                k.setAttribute('autocomplete', 'off'); k.setAttribute('autocapitalize', 'off'); k.setAttribute('spellcheck', 'false'); k.setAttribute('aria-hidden', 'true');
+                //   글자 16px — 그보다 작으면 iOS 가 화면을 확대한다 (style.css 와 같은 까닭)
+                k.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;border:0;padding:0;pointer-events:none;';
+                k.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    const b = document.getElementById('write-next-btn') || document.getElementById('write-gate-btn');
+                    if (b) b.click();
+                });
+                k.addEventListener('input', () => { k.value = ''; });   // 채점 중에 친 글자는 버린다
+                document.body.appendChild(k);
+            }
+            try { k.focus({ preventScroll: true }); } catch (e) { k.focus(); }
+        }
+        function writeReleaseKeyboard() {
+            const k = document.getElementById('write-kbd-keep');
+            if (k && document.activeElement === k) k.blur();
+        }
+
         function renderWritePractice() {
             const s = writePracticeState;
             const body = document.getElementById('write-play-area');
             if (!s || !body) return;
+            //   입력칸에서 엔터를 친 그 순간이면 (곧 이 칸이 지워진다) 자판을 붙잡이로 옮겨 둔다
+            if (document.activeElement && document.activeElement.id === 'write-practice-input') writeKeepKeyboard();
+            //   다 끝난 결과 화면처럼 쓸 칸도 넘길 버튼도 없으면 자판을 내린다
+            setTimeout(() => {
+                if (!['write-practice-input', 'write-next-btn', 'write-gate-btn'].some(id => document.getElementById(id))) writeReleaseKeyboard();
+            }, 80);
 
             // [냐냐 요청] 인라인 카드 껍데기 — 다른 복습 모드(깜빡이·단어빈칸)와 같은 골격
             const wrap = (inner) => `
@@ -6701,9 +6741,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         <div class="text-5xl">${emoji}</div>
                         <p class="text-lg font-bold text-slate-900">${title}</p>
                         <p class="text-xs font-bold text-slate-500 leading-relaxed">${desc}</p>
-                        <button id="write-gate-btn" onclick="renderWritePractice()" class="w-full ${cls} text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">${btnText} (Enter) →</button>
+                        <button id="write-gate-btn" onclick="writeKeepKeyboard(); renderWritePractice()" class="w-full ${cls} text-white py-3 rounded-xl text-sm font-bold transition-all active:scale-95">${btnText} (Enter) →</button>
                     </div>`);
-                setTimeout(() => { const b = document.getElementById('write-gate-btn'); if (b) b.focus(); }, 60);
+                //   폰에서 자판이 떠 있으면 붙잡이에 머문다 (자판 엔터 = 이 버튼)
+                setTimeout(() => { const b = document.getElementById('write-gate-btn'); if (b && !(writeIsTouch() && document.activeElement && document.activeElement.id === 'write-kbd-keep')) b.focus(); }, 60);
             };
 
             if (s.index >= s.pool.length) {
@@ -7034,7 +7075,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
             setTimeout(() => {
                 const nextBtn = document.getElementById('write-next-btn');
-                if (nextBtn) { nextBtn.focus(); return; }   // 채점 결과 화면에선 '다음' 버튼에 포커스
+                //   채점 결과 화면에선 '다음' 버튼에 포커스 — 폰은 버튼으로 옮기면 자판이 닫히니 붙잡이에 머문다
+                if (nextBtn) { if (!(writeIsTouch() && document.activeElement && document.activeElement.id === 'write-kbd-keep')) nextBtn.focus(); return; }
                 const el = document.getElementById('write-practice-input'); if (el) el.focus();
             }, 60);
             // [냐냐 요청] 익히기 바퀴(보고 쓰기)에선 매 시도마다 읽어줌 (1회차 제출 후 2회차에도 한 번 더).
@@ -7490,6 +7532,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         function writeFirstRoundNext() {
             const s = writePracticeState;
             if (!s) return;
+            writeKeepKeyboard();   // '다음' 을 누른 그 순간에 자판을 잡아 둔다 — 다음 입력칸으로 넘긴다 (폰만)
             if (s.feedbackTimer) { clearTimeout(s.feedbackTimer); s.feedbackTimer = null; }
             s.feedback = null;
             s.retryReason = null;
@@ -8116,6 +8159,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Palabra (원단어)</span>
                             ${ownerLines}
                         </div>
+                        ${/* [냐냐 요청] 점수는 그대로, 곡선에만 넣기 (2026-11-04) */''}
+                        <div class="flex justify-end">${curveManualChipHtml((idiomReview || {})[idiomKey(r.owner.id, idRef)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -8567,7 +8612,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                     </span>
                                     ${deleLevelBadgeHtml(item.dele)}
                                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(oid, ref)}</span>
-                                </div>`;
+                                </div>
+                                <div class="flex justify-end mt-1">${curveManualChipHtml((idiomReview || {})[idiomKey(oid, ref)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(oid))}', '${escapeAttr(String(ref))}', event)`)}</div>`;
                             }).join('');
                             return `
                         <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
@@ -8587,6 +8633,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         <!-- 핵심만 정리된 노트 -->
                         ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/60 p-2.5 rounded-2xl text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                         ${isDisplayOn('synonyms') ? buildSynonymChipsHtml(w) : ''}
+                        ${/* [냐냐 요청] 점수는 그대로, 곡선에만 넣기 (2026-11-04). 오른쪽 아래는 점수 뱃지 자리라 왼쪽에 */''}
+                        <div class="flex pt-0.5">${curveManualChipHtml(w, 'word', `toggleWordCurveManual('${w.id}', event)`)}</div>
                         `;
         }
 
