@@ -4655,6 +4655,7 @@ let vocabulary = [];
                 badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
                 if (label) { label.classList.add('text-amber-600'); label.classList.remove('text-slate-400'); }
             }
+            mirrorMobileReviewBtns();
         }
 
         // [냐냐 요청] 문법 곡선 현황 — 학습기록 카드의 오른쪽 반을 채운다.
@@ -4916,6 +4917,20 @@ let vocabulary = [];
                 badge.classList.add('text-amber-700'); badge.classList.remove('text-slate-400');
                 if (label) { label.classList.add('text-amber-600'); label.classList.remove('text-slate-400'); }
             }
+            mirrorMobileReviewBtns();
+        }
+
+        // [냐냐 요청] 폰 복습 줄 (2026-11-04) — 헤더 복습 버튼의 모양·숫자·잠김을 그대로 베낀다.
+        //   안쪽 글자의 id 는 떼어서 같은 id 가 둘이 되지 않게 한다. 폰에선 손가락으로 누르니 조금 크게.
+        function mirrorMobileReviewBtns() {
+            [['today-review-btn', 'today-review-btn-m'], ['grammar-review-btn', 'grammar-review-btn-m']].forEach(([src, dst]) => {
+                const a = document.getElementById(src), b = document.getElementById(dst);
+                if (!a || !b) return;
+                b.className = a.className.replace(/\bpx-2 py-0\.5\b/, 'px-3 py-1');
+                b.disabled = a.disabled;
+                b.title = a.title;
+                b.innerHTML = a.innerHTML.replace(/\sid="[^"]*"/g, '');
+            });
         }
 
         // ============================================================
