@@ -1377,8 +1377,10 @@
                             </div>
 
                             <div class="flex gap-2">
-                                <input type="text" id="ai-followup-input" onkeydown="if(event.key==='Enter'){event.preventDefault();sendFollowupQuestion();}" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" autocomplete="off" class="flex-1 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                <button onclick="sendFollowupQuestion()" id="ai-chat-send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
+                                <input type="text" id="ai-followup-input" onkeydown="if(event.key==='Enter'){event.preventDefault();sendFollowupQuestion();}" placeholder="예: 여기서 por 대신 para를 쓰면 뜻이 달라지나요?" autocomplete="off" class="flex-1 min-w-0 bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <!-- [냐냐 요청] 폰에서 전송 버튼이 카드 밖으로 밀려 나갔다 (2026-11-04). 폰은 입력칸 글자가 16px 로
+                                     커지는데(style.css) 입력칸이 제 기본 너비 밑으로 안 줄어서다 — 입력칸 min-w-0, 버튼 shrink-0 -->
+                                <button onclick="sendFollowupQuestion()" id="ai-chat-send-btn" class="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1">
                                     <i class="fa-solid fa-paper-plane"></i>
                                     <span>전송</span>
                                 </button>
@@ -1986,7 +1988,7 @@
         <div id="ask-ai-thread" class="flex-1 min-h-0 overflow-y-auto no-scrollbar p-3 space-y-2.5"></div>
 
         <div class="p-3 border-t border-slate-100 shrink-0 space-y-2">
-            <textarea id="ask-ai-input" data-autogrow="10rem" rows="2"onkeydown="askAiKeydown(event)" placeholder="예) por랑 para 차이가 뭐야?" class="w-full px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300 resize-none"></textarea>
+            <textarea id="ask-ai-input" data-autogrow="10rem" rows="2" onkeydown="askAiKeydown(event)" placeholder="예) por랑 para 차이가 뭐야?" class="w-full px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300 resize-none"></textarea>
             <button id="ask-ai-send-btn" onclick="submitAskAi()" class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2 rounded-xl text-xs font-bold transition-all active:scale-95">물어보기 (Enter)</button>
         </div>
     </div>
