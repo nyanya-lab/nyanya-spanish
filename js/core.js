@@ -9506,12 +9506,16 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
         }
         // 단어장에서 이 답의 뜻을 찾아본다 (없으면 null)
         function lookupAnswerMeaning(raw) {
+            const hit = lookupAnswerWord(raw);
+            return (hit && hit.meaning) ? hit.meaning : null;
+        }
+        function lookupAnswerWord(raw) {
             if (typeof vocabulary === 'undefined' || !raw) return null;
             const n = (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(raw) : String(raw).toLowerCase().trim();
             if (!n) return null;
             let hit = vocabulary.find(w => ((typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(w.word) : String(w.word).toLowerCase()) === n);
             if (!hit && typeof findVocabWordByForm === 'function') hit = findVocabWordByForm(raw);
-            return (hit && hit.meaning) ? hit.meaning : null;
+            return hit || null;
         }
         // 사람이 칠 수 있는 형태만 남긴다 — 자리표시자 대괄호·괄호와 한글은 뺀다.
         //   (악센트·대소문자·문장부호는 그대로. 철자를 짚어주려면 원형이 필요하다)
@@ -9663,8 +9667,12 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             }
 
             // 아예 다른 단어 — 단어장에 있으면 그 뜻을, 없으면 AI 판단을 쓴다
-            const known = lookupAnswerMeaning(user);
+            const knownWord = lookupAnswerWord(user);
+            const known = (knownWord && knownWord.meaning) || null;
             const meaning = known || (opts.aiMeaning || '').trim();
+            //   [냐냐 지적] el examen(시험) 에 probado 를 쓰자 '같은 뜻이지만' 이라고 했다 (2026-11-04).
+            //   probado 는 probar(시험하다)의 과거분사라 '시험' 이 글자로 겹쳤을 뿐이다. 품사가 다르면 같은 뜻이라 하지 않는다.
+            const posDiffers = !!(knownWord && knownWord.pos && opts.correctPos && knownWord.pos !== opts.correctPos);
             const isReal = known ? true : (opts.aiIsRealWord === true);
             // 받침에 따라 '이라는/라는' — "'개'이라는" 처럼 나오면 안 되니까
             const josa = (str) => {
@@ -9682,11 +9690,15 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             const aiSaidWrong = /^(wrong|typo)$/i.test(String(opts.verdict || ''));
             //   단, 단어장 뜻 한 항목이 통째로 같으면(de ↔ desde '~로부터') AI 가 틀렸다고 해도 '같은 뜻' 으로 적는다
             const exactSame = !!(known && opts.correctMeaning && meaningItemsExactMatch(known, opts.correctMeaning));
-            const sameMeaning = !!(isReal && meaning && opts.correctMeaning && !(known && aiSaidWrong && !exactSame)
+            const sameMeaning = !!(isReal && meaning && opts.correctMeaning && !posDiffers && !(known && aiSaidWrong && !exactSame)
                 && typeof meaningsOverlap === 'function' && meaningsOverlap(meaning, opts.correctMeaning));
             const kind = /\s/.test(target) ? '표현' : '낱말';
+            //   활용형으로 찾은 단어면 원형을 같이 적는다 — 'probado 는 probar(시험하다, 맛보다)의 꼴이에요'
+            const fromForm = !!(knownWord && knownWord.word && normalizeSpanishAnswer(knownWord.word) !== normalizeSpanishAnswer(user));
             const head = (sameMeaning && known)
                 ? `💡 <b>${escapeHtml(user)}</b>도 같은 뜻이지만, 지금 외우는 건 다른 ${kind}이에요.`
+                : (known && fromForm && !sameMeaning)
+                ? `❌ <b>${escapeHtml(user)}</b>는 <b class="text-slate-800">${escapeHtml(typeableForm(knownWord.word) || knownWord.word)}</b>('${escapeHtml(known)}')의 꼴이에요.`
                 : (isReal && meaning && !sameMeaning)
                 ? `❌ <b>${escapeHtml(user)}</b>는 <b class="text-slate-800">'${escapeHtml(meaning)}'</b>${josa(meaning)} 뜻이에요.`
                 : (opts.aiIsRealWord === false

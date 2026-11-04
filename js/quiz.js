@@ -1309,8 +1309,7 @@ let quizSession = null;
         function aiGradeRace(prompt, system, schema) {
             const t0 = Date.now();
             const miss = [];
-            const lab = (m) => /3\.5/.test(m) ? '3.5' : '3.1';
-            const ok = (txt) => { const d = extractAndParseJson(txt); if (!d || !d.verdict) throw new Error('BAD_JSON'); return txt; };
+            const ok =(txt) => { const d = extractAndParseJson(txt); if (!d || !d.verdict) throw new Error('BAD_JSON'); return txt; };
             const tries = [];
             //   3.5 가 '10분 건너뛰기' 중이면 그 요청도 3.1 로 가서 같은 걸 두 번 묻게 된다 — 그땐 3.1 하나만
             const gradeDown = (typeof isGradeModelDown === 'function') && isGradeModelDown();
@@ -1318,14 +1317,31 @@ let quizSession = null;
                 tries.push(callGemini(prompt, system, schema, AI_GRADE_THINKING, GEMINI_MODEL_GRADE, 20000).then(ok).then(v => [v, GEMINI_MODEL_GRADE], e => { throw Object.assign(e || {}, { _m: GEMINI_MODEL_GRADE }); }));
             }
             tries.push(callGemini(prompt, system, schema, 'low', GEMINI_MODEL_FLASH_LITE, 0).then(ok).then(v => [v, GEMINI_MODEL_FLASH_LITE], e => { throw Object.assign(e || {}, { _m: GEMINI_MODEL_FLASH_LITE }); }));
+            //   [냐냐 지적] 3.5 Lite 가 '건너뛰기' 중일 때 3.1 하나만 남아 41.6초 기다리다 503 으로 실패 (2026-11-04).
+            //   그래서 6초가 지나도 답이 없거나 남은 쪽이 다 실패하면 3.5 Flash 를 한 번 더 건다 (다른 모델이라 붐빔을 같이 타지 않는다).
+            //   끊지는 않는다 — 먼저 온 답을 쓴다. 평소엔 6초 안에 끝나서 Flash 하루 한도(첨삭이 쓴다)를 거의 안 먹는다.
+            const BACKUP_MODEL = 'gemini-3.5-flash', BACKUP_AFTER_MS = 6000;
+            const lab = (m) => m === BACKUP_MODEL ? '3.5F' : /3\.5/.test(m) ? '3.5' : '3.1';
             return new Promise((resolve, reject) => {
-                let left = tries.length, done = false;
-                tries.forEach(p => p.then(([v, m]) => {
-                    if (!done) { done = true; lastAiGradeInfo = { m: lab(m), s: Math.round((Date.now() - t0) / 100) / 10, miss: miss.slice() }; resolve(v); }
+                let left = 0, done = false, backupTimer = null, backedUp = false;
+                const finish = () => { done = true; clearTimeout(backupTimer); };
+                const stamp = (m) => ({ m: m ? lab(m) : '', s: Math.round((Date.now() - t0) / 100) / 10, miss: miss.slice() });
+                const watch = (p) => { left++; p.then(([v, m]) => {
+                    if (!done) { finish(); lastAiGradeInfo = stamp(m); resolve(v); }
                 }, e => {
                     miss.push(lab(e && e._m || '') + ' ' + (e && (e.status || (e.timedOut ? '시간초과' : '')) || '실패'));
-                    if (--left === 0 && !done) { done = true; lastAiGradeInfo = { m: '', s: Math.round((Date.now() - t0) / 100) / 10, miss: miss.slice() }; reject(e); }
-                }));
+                    if (--left > 0 || done) return;
+                    //   키·요청 오류(400·403)는 다른 모델로 물어도 같다 — 바로 실패로
+                    if (!backedUp && !(e && (e.status === 400 || e.status === 403))) { startBackup(); return; }
+                    finish(); lastAiGradeInfo = stamp(''); reject(e);
+                }); };
+                const startBackup = () => {
+                    if (backedUp || done) return;
+                    backedUp = true;
+                    watch(callGemini(prompt, system, schema, 'low', BACKUP_MODEL, 0).then(ok).then(v => [v, BACKUP_MODEL], e => { throw Object.assign(e || {}, { _m: BACKUP_MODEL }); }));
+                };
+                tries.forEach(watch);
+                backupTimer = setTimeout(startBackup, BACKUP_AFTER_MS);
             });
         }
         async function aiGradeSubjective(userAnswer, q) {
@@ -1587,7 +1603,8 @@ Return JSON: { "verdict": "correct"|"synonym"|"typo"|"wrong", "comment": "짧은
                 aiMeaning: ai.answerMeaning,
                 comment: ai.comment,
                 verdict: ai.verdict,   // AI 가 처음 준 판정 — 설명 한 줄을 낼지 가른다
-                correctMeaning: (q.idiomData && q.idiomData.idiomMeaning) || (q.word && q.word.meaning) || ''
+                correctMeaning: (q.idiomData && q.idiomData.idiomMeaning) || (q.word && q.word.meaning) || '',
+                correctPos: (!q.idiomData && q.word && q.word.pos) || ''
             });
 
             // 낱말이 빠진 표현은 AI가 정답이라 해도 받아주지 않는다 (한 번은 다시 쓸 기회)

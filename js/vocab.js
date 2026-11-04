@@ -7476,7 +7476,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             // 오답은 정답을 보여주고, 엔터를 눌러야 넘어간다 (그냥 지나가면 뭘 틀렸는지 모른다)
             // [냐냐 요청] 왜 틀렸는지까지 — 철자면 틀린 자리 표시, 다른 단어면 그 단어의 뜻
             const why = (typeof buildWrongAnswerHtml === 'function')
-                ? buildWrongAnswerHtml(mine || '', w.word, Object.assign({ correctMeaning: w.meaning || '' }, aiInfo || {})) : '';
+                ? buildWrongAnswerHtml(mine || '', w.word, Object.assign({ correctMeaning: w.meaning || '', correctPos: (!w._isIdiomTask && w.pos) || '' }, aiInfo || {})) : '';
             s.feedback = { correct: false, answer: w.word, meaning: w.meaning || '', mine: mine || '', why, base: writeBaseForm(w) };
             writePracticeSave();
             renderWritePractice();
