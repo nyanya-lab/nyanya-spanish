@@ -6842,7 +6842,15 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         <p class="text-xs font-black text-indigo-700 mb-1.5">🎓 망각곡선 졸업 ${gradRows.length}개</p>
                         <div class="-m-0.5">${gradRows.map(r => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold bg-indigo-50 border-indigo-300 text-indigo-800">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}${r.meaning ? `<span class="font-semibold text-slate-400"> ${escapeHtml(String(r.meaning).split('\n')[0])}</span>` : ''}</span>`).join('')}</div>
                     </div>` : '';
-                const shiftLists = (gradInner || shiftInner) ? `<div class="pt-2 mt-2 border-t border-slate-100 space-y-3">${gradInner}${shiftInner}</div>` : '';
+                //   [냐냐 요청] 졸업 실패 — 30일 칸에서 미끄러진 것 (2026-11-05). 틀린 순간 알림만 잠깐 떠서 놓쳤다
+                const gradFailRows = shiftRows.filter(r => r.gradFail);
+                const gradFailBack = REVIEW_INTERVALS[REVIEW_INTERVALS.length - 2];
+                const gradFailInner = gradFailRows.length ? `
+                    <div class="text-left">
+                        <p class="text-xs font-black text-rose-600 mb-1.5">😢 졸업 실패 ${gradFailRows.length}개 <span class="font-bold text-slate-400">· ${gradFailBack}일 칸으로</span></p>
+                        <div class="-m-0.5">${gradFailRows.map(r => `<span class="inline-block m-0.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold bg-rose-50 border-rose-300 text-rose-700">${r.isIdiom ? '<span class="text-[9px] font-black text-violet-500 mr-1">관용구</span>' : ''}${escapeHtml(r.word)}${r.meaning ? `<span class="font-semibold text-slate-400"> ${escapeHtml(String(r.meaning).split('\n')[0])}</span>` : ''}</span>`).join('')}</div>
+                    </div>` : '';
+                const shiftLists = (gradInner || gradFailInner || shiftInner) ? `<div class="pt-2 mt-2 border-t border-slate-100 space-y-3">${gradInner}${gradFailInner}${shiftInner}</div>` : '';
 
                 //   [냐냐 요청] 쓰기 시험 — 이 회차로 끝났으면 기록 한 줄, 아니면 어디까지 왔는지
                 let examLine = '';
@@ -7258,7 +7266,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         //   고치기 전에 이 기기에 저장된 판에는 옛 칸 이름이 남아 있을 수 있다 — 불러올 때 바꿔 둔다
         function writeSessionSafeKeys(ws) {
             if (!ws) return ws;
-            ['failedOnce', 'gradeBeforeFail'].forEach(f => {
+            ['failedOnce', 'gradeBeforeFail', 'gradFail'].forEach(f => {
                 if (!ws[f]) return;
                 const out = {};
                 Object.keys(ws[f]).forEach(k => { out[writeFailKeySafe(k)] = ws[f][k]; });
@@ -7384,7 +7392,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: r3TypoFixed ? -2 : -1.5, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: r3TypoFixed ? -2 : -1.5, gradFail: !!(s.gradFail || {})[writeFailKey(w)], ...shift });
                 s.hint = ''; s.hintMine = '';
                 s.index++;
                 s.done = 0;
@@ -7405,7 +7413,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2.5, ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2.5, gradFail: !!(s.gradFail || {})[writeFailKey(w)], ...shift });
                 //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
                 //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
                 if (typeof speakSpanishVoice === 'function') {
@@ -7429,17 +7437,19 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         //   맞은/틀린 것만 보여줘서 그 변화를 알 수가 없었다. 점수를 매기기 전후의 등급을
         //   재두었다가 결과 화면에서 짚어준다.
         //   (재는 것도 그리는 것도 core.js 의 withGradeShift / gradeShiftHtml 을 같이 쓴다)
+        //   과제의 지금 곡선 칸 — 관용구는 그 표현의 곡선, 나머지는 단어 곡선. inCurve 는 한 번이라도 틀려 곡선에 들어왔는지.
+        function writeCurveSpot(w) {
+            if (w._isIdiomTask && w._idiomOf) {
+                const rec = (idiomReview || {})[idiomKey(w._idiomOf.id, w.word)];
+                return { stage: rec ? (rec.stage || 0) : 0, inCurve: !!(rec && rec.lastWrongDate) };
+            }
+            const real = (vocabulary || []).find(v => v.id === w.id);
+            return { stage: real ? (real.reviewStage || 0) : 0, inCurve: !!(real && real.lastWrongDate) };
+        }
         function writeFirstRoundPass(w, gain) {
             const s = writePracticeState;
             //   [냐냐 요청] 이번에 곡선을 졸업했는지 결과 화면에 짚는다 (2026-09-23) — 밀기 전후 칸을 잰다
-            const curveStage = () => {
-                if (w._isIdiomTask && w._idiomOf) {
-                    const rec = (idiomReview || {})[idiomKey(w._idiomOf.id, w.word)];
-                    return rec ? (rec.stage || 0) : 0;
-                }
-                const real = (vocabulary || []).find(v => v.id === w.id);
-                return real ? (real.reviewStage || 0) : 0;
-            };
+            const curveStage = () => writeCurveSpot(w).stage;
             const stageBefore = curveStage();
             // [냐냐 기준] 그 표현을 맞혔으면 곡선을 한 칸 앞으로 — 단, 관용구 복습으로 시작했을 때만.
             //   단어 복습에 섞여 나온 관용구나 퀴즈에서 맞힌 건 점수만 준다 (단어·문법과 같은 기준).
@@ -7470,6 +7480,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         }
         function writeFirstRoundFail(w, mine, aiInfo) {
             const s = writePracticeState;
+            //   [냐냐 요청] 졸업 실패도 결과 화면에 짚는다 (2026-11-05) — 30일 칸에서 미끄러진 것 (showGraduationFail 과 같은 잣대)
+            const spotBefore = writeCurveSpot(w);
             // [냐냐 요청] 관용구는 제 망각곡선을 따로 갖는다 (단어 곡선과 별개).
             //   '다시 만나기' 는 그 곡선이 맡으므로 따로 표시해 둘 필요가 없다.
             if (w._isIdiomTask && w._idiomOf) {
@@ -7497,6 +7509,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 }
                 // 관용구 과제는 단어 곡선을 건드리지 않는다 (그 표현의 곡선은 위에서 이미 밀었다)
                 if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                const last = REVIEW_INTERVALS.length - 1;
+                if (spotBefore.inCurve && spotBefore.stage === last && writeCurveSpot(w).stage < last) {
+                    s.gradFail = s.gradFail || {};
+                    s.gradFail[failKey] = true;
+                }
                 //   [냐냐 요청] 1바퀴 결과를 정답률에도 넣는다. 이 가드 안이라 한 낱말당 한 번이다
                 if (typeof logAction === 'function') { logAction(writeLogKind(s), null, writeTaskKey(w)); logAction('write', false); }
             }
@@ -7887,7 +7904,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 d: getLocalDateString(), at: Date.now(), phase, done,
                 pool: rest.map(writeTaskDesc).filter(Boolean),
                 wrongPool: s.wrongPool.map(writeTaskDesc).filter(Boolean),
-                results: s.results || [], failedOnce: s.failedOnce || {}, gradeBeforeFail: s.gradeBeforeFail || {},
+                results: s.results || [], failedOnce: s.failedOnce || {}, gradeBeforeFail: s.gradeBeforeFail || {}, gradFail: s.gradFail || {},
                 wrongCount: s.wrongCount || 0, totalCount: s.totalCount || 0, batchSize: s.batchSize || 0,
                 isTodayReview: !!s.isTodayReview, scopeContinue: !!s.scopeContinue, idiomReview: !!s.idiomReview
             };
@@ -7928,6 +7945,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.results = Array.isArray(ws.results) ? ws.results : [];
             s.failedOnce = ws.failedOnce || {};
             s.gradeBeforeFail = ws.gradeBeforeFail || {};
+            s.gradFail = ws.gradFail || {};
             s.wrongCount = ws.wrongCount || 0;
             s.totalCount = ws.totalCount || pool.length;
             renderWritePractice();
