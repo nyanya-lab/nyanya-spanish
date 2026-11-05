@@ -5554,7 +5554,7 @@ let vocabulary = [];
             s3('word', w);
             const r = toggleCurveManual(w, 'word');
             if (r) showToast(r === 'in' ? `"${w.word}" 곡선에 넣었어요 — 내일 복습에 나와요 📅` : `"${w.word}" 곡선에서 뺐어요`, r === 'in' ? 'success' : 'info');
-            afterCurveManual();
+            afterCurveManual(event, w, 'word');
         }
         function toggleIdiomCurveManual(wordId, ref, event) {
             if (event) event.stopPropagation();
@@ -5564,12 +5564,20 @@ let vocabulary = [];
             const r = toggleCurveManual(rec, 'idiom');
             //   빼고 나니 빈 껍데기면 (넣으며 새로 만든 기록) 통째로 치운다 — recHandGradeCurve 와 같다
             if (r === 'out' && Object.keys(rec).every(k => ['stage', 'lastWrongDate', 'lastReviewDate'].includes(k) && !rec[k])) delete idiomReview[key];
-            if (r) showToast(r === 'in' ? `"${ref}" 곡선에 넣었어요 — 내일 복습에 나와요 📅` : `"${ref}" 곡선에서 뺐어요`, r === 'in' ? 'success' : 'info');
-            afterCurveManual();
+            //   [냐냐 지적] ref 는 관용구 id(iid)일 때가 많아 알림에 이상한 글자가 떴다 (2026-11-05) — 표현 글자를 찾아 쓴다
+            const owner = (typeof wordById === 'function') ? wordById(wordId) : null;
+            const it = owner && (Array.isArray(owner.idioms) ? owner.idioms : []).find(x => x && (x.iid === ref || x.idiom === ref));
+            const label = (it && it.idiom) || ref;
+            if (r) showToast(r === 'in' ? `"${label}" 곡선에 넣었어요 — 내일 복습에 나와요 📅` : `"${label}" 곡선에서 뺐어요`, r === 'in' ? 'success' : 'info');
+            afterCurveManual(event, idiomReview[key], 'idiom');
         }
-        function afterCurveManual() {
+        //   [냐냐 지적] 목록을 통째로 다시 그리면 펼쳐 둔 카드가 접혔다 (2026-11-05).
+        //   누른 아이콘 하나만 새 모양으로 바꾸고, 머리 줄 복습 숫자만 다시 센다.
+        function afterCurveManual(event, rec, kind) {
+            const el = event && event.currentTarget;
+            if (el && el.isConnected) el.outerHTML = curveManualChipHtml(rec, kind, el.getAttribute('onclick'));
             if (typeof logAction === 'function') logAction('snapshot');
-            if (typeof renderWordList === 'function') renderWordList();   // 관용구 사전 모드·오늘 복습 숫자도 이 안에서 다시 그린다
+            if (typeof renderTodayReview === 'function') renderTodayReview();
             saveToStorage();
         }
 
