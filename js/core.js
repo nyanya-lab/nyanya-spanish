@@ -5530,12 +5530,15 @@ let vocabulary = [];
             const next = `${d.getMonth() + 1}/${d.getDate()}`;
             return { inCurve: true, days: REVIEW_INTERVALS[stage], next, due: daysSince(base) >= REVIEW_INTERVALS[stage] };
         }
+        //   [냐냐 요청] 글자 없이 아이콘만, DELE 뱃지 옆에 같은 크기로 (2026-11-05).
+        //   크기는 deleLevelBadgeHtml 과 같은 값 — 테는 ring 으로 그려야 높이가 안 늘어난다.
+        //   뜻은 title 에만 남긴다.
         function curveManualChipHtml(rec, kind, onclick) {
             const st = curveStateOf(rec, kind);
-            const base = 'shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black whitespace-nowrap transition-colors';
-            if (st.manualToday) return `<button type="button" onclick="${onclick}" title="오늘 넣은 것 — 누르면 곡선에서 빼요" class="${base} bg-amber-100 text-amber-700 hover:bg-amber-200">📅 내일 복습 · 빼기</button>`;
-            if (st.inCurve) return `<span title="곡선 ${st.days}일 칸 — 이미 복습이 잡혀 있어요" class="${base} bg-slate-100 text-slate-400">📅 ${st.days}일 칸 · ${st.due ? '오늘 복습' : st.next}</span>`;
-            return `<button type="button" onclick="${onclick}" title="점수는 그대로 두고 곡선 첫 칸에 넣어요 — 내일 복습에 나와요" class="${base} bg-white border border-violet-200 text-violet-600 hover:bg-violet-50">📅 곡선에 넣기</button>`;
+            const base = 'shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-lg text-[11px] font-black pointer-events-auto transition-colors';
+            if (st.manualToday) return `<button type="button" onclick="${onclick}" title="오늘 곡선에 넣었어요 (내일 복습) — 누르면 빼요" class="${base} bg-amber-200 hover:bg-amber-300">📅</button>`;
+            if (st.inCurve) return `<span title="곡선 ${st.days}일 칸 · ${st.due ? '오늘 복습' : st.next + ' 복습'} — 이미 잡혀 있어요" class="${base} bg-slate-100 opacity-40 grayscale">📅</span>`;
+            return `<button type="button" onclick="${onclick}" title="곡선에 넣기 — 점수는 그대로, 내일 복습에 나와요" class="${base} bg-white ring-1 ring-inset ring-violet-200 hover:bg-violet-50">📅</button>`;
         }
         function toggleCurveManual(rec, kind) {
             if (curveStateOf(rec, kind).manualToday) { undoHandCurve(rec, kind, true); return 'out'; }

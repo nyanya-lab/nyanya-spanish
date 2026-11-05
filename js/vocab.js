@@ -8150,6 +8150,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                 <button onclick="speakText(event, '${escapeAttr(r.text)}')" class="text-slate-400 hover:text-violet-500 transition-colors py-0.5 px-1"><i class="fa-solid fa-volume-high text-sm"></i></button>
                                 ${gradeCycleBtnHtml(grade, `cycleIdiomGrade('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}
                                 ${acc === null ? '' : `<span class="text-[10px] font-bold text-slate-300">${acc}%</span>`}
+                                ${/* [냐냐 요청] 점수는 그대로, 곡선에만 넣기 — DELE 옆 아이콘 (2026-11-05) */''}
+                                ${curveManualChipHtml((idiomReview || {})[idiomKey(r.owner.id, idRef)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}
                                 <span class="inline-flex items-center">${deleLevelBadgeHtml(r.it.dele)}</span>
                                 <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 이 표현의 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatIdiomScore(r.owner.id, idRef)}</span>
                             </span>
@@ -8159,8 +8161,6 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             <span class="block text-[8px] font-black text-violet-500 uppercase mb-1">Palabra (원단어)</span>
                             ${ownerLines}
                         </div>
-                        ${/* [냐냐 요청] 점수는 그대로, 곡선에만 넣기 (2026-11-04) */''}
-                        <div class="flex justify-end">${curveManualChipHtml((idiomReview || {})[idiomKey(r.owner.id, idRef)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(r.owner.id))}', '${escapeAttr(String(idRef))}', event)`)}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -8390,6 +8390,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             감싸개에 inline-flex 를 줘서 안쪽 뱃지가 그대로 서게 한다. */''}
                     <div data-card-badges="${w.id}" class="absolute bottom-2.5 right-3.5 flex items-center gap-1.5 pointer-events-none select-none ${expandedAll ? '' : 'hidden'}">
                         ${accHtml}
+                        ${/* [냐냐 요청] 곡선에만 넣기 — DELE 옆 아이콘 (2026-11-05). 감싸개가 pointer-events-none 이라 칩이 스스로 켠다 */''}
+                        ${curveManualChipHtml(w, 'word', `toggleWordCurveManual('${w.id}', event)`)}
                         <span data-dele="${w.id}" class="inline-flex items-center">${(typeof deleLevelBadgeHtml === 'function') ? deleLevelBadgeHtml(w.deleLevel) : ''}</span>
                         <span class="px-2 py-0.5 text-[11px] font-black rounded-lg ${gi.badge}" title="${gi.label} · 통합 점수 (${SCORE_MIN} ~ ${SCORE_MAX})">${formatScore(w)}</span>
                     </div>
@@ -8610,10 +8612,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                         <p class="font-bold text-slate-800 select-all">${item.idiom}</p>
                                         <p class="text-slate-400 italic">${item.idiomMeaning || ''}</p>
                                     </span>
+                                    ${curveManualChipHtml((idiomReview || {})[idiomKey(oid, ref)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(oid))}', '${escapeAttr(String(ref))}', event)`)}
                                     ${deleLevelBadgeHtml(item.dele)}
                                     <span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-black ${gi.badge}" title="${gi.label} · 이 표현의 점수">${formatIdiomScore(oid, ref)}</span>
-                                </div>
-                                <div class="flex justify-end mt-1">${curveManualChipHtml((idiomReview || {})[idiomKey(oid, ref)], 'idiom', `toggleIdiomCurveManual('${escapeAttr(String(oid))}', '${escapeAttr(String(ref))}', event)`)}</div>`;
+                                </div>`;
                             }).join('');
                             return `
                         <div class="bg-slate-50 border-l-2 border-violet-500 rounded-r-xl p-2.5 text-xs">
@@ -8633,8 +8635,6 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         <!-- 핵심만 정리된 노트 -->
                         ${(w.notes && isDisplayOn('notes')) ? `<div class="bg-amber-50/60 p-2.5 rounded-2xl text-[13px] text-amber-900 leading-snug whitespace-pre-wrap font-medium"><span class="font-bold text-amber-700 block text-[10px] uppercase tracking-wider mb-1.5"><i class="fa-solid fa-thumbtack text-[9px]"></i> NOTE</span>${w.notes}</div>` : ''}
                         ${isDisplayOn('synonyms') ? buildSynonymChipsHtml(w) : ''}
-                        ${/* [냐냐 요청] 점수는 그대로, 곡선에만 넣기 (2026-11-04). 오른쪽 아래는 점수 뱃지 자리라 왼쪽에 */''}
-                        <div class="flex pt-0.5">${curveManualChipHtml(w, 'word', `toggleWordCurveManual('${w.id}', event)`)}</div>
                         `;
         }
 
