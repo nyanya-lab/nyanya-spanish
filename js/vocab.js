@@ -6940,7 +6940,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const conjBack = (w._isConjTask && w._conjSlot)
                     ? (w._knewVerb
                         ? `<p class="text-[11px] font-bold text-indigo-500">동사(<b>${escapeHtml((w._conjOf && w._conjOf.word) || '')}</b>)는 알고 있어요 — 이 꼴을 익혀요</p>`
-                        : `<p class="text-[11px] font-bold text-indigo-500">원형부터 익히고, 다음 바퀴에서 이 꼴로 다시 물어봐요</p>`)
+                        : `<p class="text-[11px] font-bold text-indigo-500">원형부터 익혀요 — 다음 바퀴도 원형으로 물어봐요</p>`)
                     : '';
                 //   [냐냐 요청] 관용구는 어느 낱말에서 나온 표현인지 밑에 같이 보여준다 (2026-09-11).
                 //   표현만 덩그러니 있으면 뿌리가 안 보인다. 활용형 과제에 원형을 보여주는 것과 같은 결이다.
@@ -6965,36 +6965,42 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = learnWord;
             } else if (!s.retry) {
+                //   3바퀴에서 원형으로 묻는 활용형 문제는 뜻도 시제 꼬리표를 뗀 것으로 (writeRoundTarget)
+                const asksBase = s.phase === 3 && w._isConjTask && w._conjOf && writeRoundTarget(w, 3) !== w.word;
                 cardHtml = `
                     <div class="bg-violet-50 rounded-2xl border border-violet-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-violet-300 tracking-widest select-none">? ? ?</p>
-                        ${writeMeaningHtml(w.meaning, 'text-base font-extrabold text-slate-800')}
+                        ${writeMeaningHtml(asksBase ? (w._conjOf.meaning || '') : w.meaning, 'text-base font-extrabold text-slate-800')}
+                        ${asksBase ? `<p class="text-[11px] font-bold text-indigo-500">동사 원형으로 써요</p>` : ''}
                     </div>`;
                 inputLabel = '떠올려서 쓰세요 (엔터)';
                 placeholder = '스페인어로...';
             } else {
                 // [냐냐 요청] 내가 쓴 오답을 같이 보여줘서 어디가 틀렸는지 바로 비교
                 const mine = (s.lastWrong || '').trim();
+                //   3바퀴를 원형으로 물었으면 정답도 원형이다 (writeRoundTarget)
+                const ans = writeRoundTarget(w, 3);
+                const ansMean = (ans !== w.word && w._conjOf) ? (w._conjOf.meaning || '') : w.meaning;
                 // [냐냐 요청] 틀린 자리만 빨갛게 — 어디가 다른지 눈으로 바로 보이게
                 const mineHtml = mine
-                    ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, w.word), 'user') : escapeHtml(mine)}</p>`
+                    ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, ans), 'user') : escapeHtml(mine)}</p>`
                     : `<p class="text-xs font-bold text-slate-300">(빈칸으로 제출했어요)</p>`;
                 //   [냐냐 요청] 정답 쪽에도 표시 (2026-10-19) — 내 답 쪽 빨강은 '잘못·더 쓴 글자' 만 보여서,
                 //   빠뜨린 글자(homre → hombre 의 b)는 어디에도 안 보였다. 정답에서 내가 안 쓴 글자를 초록 밑줄로.
                 //   관사를 안 썼으면 관사는 표시하지 않는다 (관사는 안 써도 되는 자리라 '빠뜨림' 이 아니다)
                 const artRe = /^(el\/la|los\/las|el|la|los|las|un|una|unos|unas)\s+/i;
-                const artM = artRe.exec(w.word);
+                const artM = artRe.exec(ans);
                 const ansHead = (artM && !artRe.test(mine)) ? artM[0] : '';
                 const ansHtml = (mine && typeof charDiffOps === 'function')
-                    ? escapeHtml(ansHead) + charDiffOps(mine, w.word.slice(ansHead.length)).filter(([t]) => t === 'same' || t === 'ins')
+                    ? escapeHtml(ansHead) + charDiffOps(mine, ans.slice(ansHead.length)).filter(([t]) => t === 'same' || t === 'ins')
                         .map(([t, ch]) => t === 'same' ? escapeHtml(ch) : `<span class="text-emerald-600 underline decoration-[3px] underline-offset-4">${escapeHtml(ch)}</span>`).join('')
-                    : escapeHtml(w.word);
+                    : escapeHtml(ans);
                 cardHtml = `
                     <div class="bg-rose-50 rounded-2xl border border-rose-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-rose-600 break-words">${ansHtml}</p>
-                        ${writeMeaningHtml(w.meaning, 'text-sm font-bold text-slate-500')}
+                        ${writeMeaningHtml(ansMean, 'text-sm font-bold text-slate-500')}
                         <div class="pt-2 mt-2 border-t border-rose-200 space-y-0.5">
                             <p class="text-[10px] font-bold text-slate-400">내가 쓴 답 <span class="font-normal">(빨강 = 잘못 쓴 글자 · 위 초록 밑줄 = 빠뜨렸거나 다르게 쓴 글자)</span></p>
                             ${mineHtml}
@@ -7002,7 +7008,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                         <p class="text-[10px] font-bold text-rose-400 pt-1">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
                     </div>`;
                 inputLabel = '정답을 보고 한 번 더 (엔터)';
-                placeholder = w.word;
+                placeholder = ans;
             }
 
             // [냐냐 요청] 1바퀴는 맞았는지 틀렸는지를 보여주고 넘어간다.
@@ -7238,7 +7244,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
         // [냐냐 요청] 활용형 문제를 틀리면 2바퀴(익히기)는 '원형' 으로 익힌다 (2026-09-03).
         //   활용을 틀렸다는 건 대개 원형부터 흔들린다는 뜻이라, 익히기 바퀴에서 뿌리를 잡는다.
-        //   3바퀴는 1바퀴에 냈던 그 시제로 다시 묻는다 — 과제 객체를 그대로 쓰므로 저절로 같다.
+        //   3바퀴는 2바퀴와 같은 꼴로 묻는다 — 꼴만 틀렸으면 1바퀴의 그 시제, 동사를 몰랐으면 원형 (writeRoundTarget).
         //   과제 하나를 가리키는 열쇠. 같은 단어라도 관용구·활용형은 다른 과제라 글자까지 본다.
         //   [냐냐 요청] 활용형을 틀렸다고 알려줄 때 원형도 같이 적는다 — 활용형만 보면
         //   어느 동사였는지 몰라서 '뭘 틀렸는지' 가 안 남는다.
@@ -7277,8 +7283,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
         //   [냐냐 요청] 동사는 알고 꼴만 틀렸으면(_knewVerb) 2바퀴도 그 활용형으로 익힌다 (2026-10-29).
         //   동사 자체를 못 떠올렸을 때만 원형으로 — 뿌리부터 잡아야 하는 건 그때뿐이다.
+        //   [냐냐 요청] 3바퀴도 같은 갈래로 (2026-11-06) — 원형을 몰랐으면 3바퀴도 원형으로 묻는다.
+        //   2바퀴에서 원형만 익히고 3바퀴에서 갑자기 활용형을 물으니, 원형조차 안 잡힌 채 또 틀렸다.
         function writeRoundTarget(w, phase) {
-            if (phase === 2 && w && w._isConjTask && !w._knewVerb && w._conjOf && w._conjOf.word) return w._conjOf.word;
+            if ((phase === 2 || phase === 3) && w && w._isConjTask && !w._knewVerb && w._conjOf && w._conjOf.word) return w._conjOf.word;
             return (w && w.word) || '';
         }
 
@@ -7417,7 +7425,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
                 //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
                 if (typeof speakSpanishVoice === 'function') {
-                    setTimeout(() => speakSpanishVoice(w.word), 150);
+                    setTimeout(() => speakSpanishVoice(writeRoundTarget(w, 3)), 150);
                 }
             }
             writePracticeSave();
