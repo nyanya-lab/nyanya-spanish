@@ -6751,11 +6751,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 // ── 1바퀴(테스트) 끝 → 틀린 게 있으면 2바퀴(익히기)로, 없으면 바로 결과 ──
                 if (s.phase === 1 && s.wrongPool.length > 0) {
                     s.phase = 2;
-                    s.pool = s.wrongPool.slice();
+                    s.pool = writeLearnPool(s.wrongPool);
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
                     s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
-                    gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
-                        `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
+                    gate('✍️', `틀린 ${s.wrongPool.length}개만 익혀볼게요`,
+                        `단어를 보면서 써요. 한 바퀴 다 쓰고 처음부터 한 번 더 돌아요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
                     return;
                 }
@@ -6888,8 +6888,12 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const w = s.pool[s.index];
             const isTest = (s.phase === 1 || s.phase === 3);   // 가리고 쓰는 바퀴
             const dotsCount = isTest ? 1 : WRITE_PRACTICE_TIMES;
+            //   2바퀴는 같은 과제가 순서표에 두 번 있다 (writeLearnPool) — 남은 차례 수로 몇 번째인지 센다.
+            //   이어하기로 불러오면 과제 객체가 새로 만들어지니 객체 대신 열쇠로 본다.
+            const doneDots = isTest ? s.done
+                : WRITE_PRACTICE_TIMES - s.pool.slice(s.index).filter(x => writeFailKey(x) === writeFailKey(w)).length;
             const dots = Array.from({ length: dotsCount }, (_, k) =>
-                `<span class="w-2.5 h-2.5 rounded-full ${k < s.done ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
+                `<span class="w-2.5 h-2.5 rounded-full ${k < doneDots ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
             const pct = Math.round(s.index / s.pool.length * 100);
 
             // [냐냐 요청] 품사 뱃지
@@ -7281,6 +7285,15 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return ws;
         }
 
+        //   [냐냐 요청] 2바퀴는 한 단어를 연달아 두 번 쓰지 않고 A→B→C→A→B→C 로 돈다 (2026-11-06).
+        //   연달아 쓰면 두 번째는 방금 본 걸 옮겨 적는 것뿐이다. 사이에 다른 단어가 끼어야 다시 떠올린다.
+        //   순서표에 같은 과제를 두 벌 이어 붙인다 — 이어하기는 남은 순서표를 그대로 적으므로 따로 챙길 게 없다.
+        function writeLearnPool(list) {
+            let out = [];
+            for (let k = 0; k < WRITE_PRACTICE_TIMES; k++) out = out.concat(list);
+            return out;
+        }
+
         //   [냐냐 요청] 동사는 알고 꼴만 틀렸으면(_knewVerb) 2바퀴도 그 활용형으로 익힌다 (2026-10-29).
         //   동사 자체를 못 떠올렸을 때만 원형으로 — 뿌리부터 잡아야 하는 건 그때뿐이다.
         //   [냐냐 요청] 3바퀴도 같은 갈래로 (2026-11-06) — 원형을 몰랐으면 3바퀴도 원형으로 묻는다.
@@ -7308,9 +7321,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
                 if (isMatch) {
-                    s.done++;
-                    if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; }
-                    else el.value = '';
+                    s.index++; s.done = 0;   // 두 번째 차례는 순서표 뒤쪽에 있다 (writeLearnPool)
                     renderWritePractice();
                 } else {
                     writePracticeFlashWrong(el);
@@ -7904,7 +7915,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             let phase = s.phase, rest = s.pool.slice(s.index + (graded ? 1 : 0)), done = graded ? 0 : (s.done || 0);
             //   이 바퀴를 다 풀었으면 다음 바퀴 모양으로 적는다 (renderWritePractice 의 바퀴 넘김과 같은 규칙)
             if (!rest.length) {
-                if (phase === 1 && s.wrongPool.length) { phase = 2; rest = s.wrongPool.slice(); done = 0; }
+                if (phase === 1 && s.wrongPool.length) { phase = 2; rest = writeLearnPool(s.wrongPool); done = 0; }
                 else if (phase === 2) { phase = 3; rest = s.wrongPool.slice(); done = 0; }
                 else { writeSessionClear(); return; }
             }
@@ -7934,7 +7945,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const age = (typeof daysSince === 'function') ? daysSince(ws.d) : 1;
             if (!wrong.length || age > 3) return null;
             //   지난날 것 — 2바퀴부터 (3바퀴 중이었으면 남은 3바퀴 그대로)
-            const pool = ws.phase === 3 ? ws.pool : wrong;
+            const pool = ws.phase === 3 ? ws.pool : writeLearnPool(wrong);
             return Object.assign({}, ws, { phase: ws.phase === 3 ? 3 : 2, pool, done: ws.phase === 3 ? ws.done : 0, stale: true });
         }
         function resumeWriteSession() {
@@ -7969,7 +7980,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!box) return;
             const ws = writeSessionLive();
             if (!ws || writePracticeState) { box.innerHTML = ''; box.classList.add('hidden'); return; }
-            const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · ${ws.pool.length}개` : `3바퀴(다시 가리고) · ${ws.pool.length}개`);
+            const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · 남은 ${ws.pool.length}번` : `3바퀴(다시 가리고) · ${ws.pool.length}개`);
             const wrong = (ws.wrongPool || []).length;
             const title = ws.stale ? `지난번 쓰기 복습에서 틀린 ${wrong}개가 남았어요` : '아까 하던 쓰기 복습이 있어요';
             box.classList.remove('hidden');
