@@ -1223,7 +1223,8 @@ let quizSession = null;
                     // 접힌 상태 — 이름과 규칙/불규칙만 보이고, 누르면 표가 펴진다.
                     //   [냐냐 지적] 그 시제만은 펴 둔다 — 원형으로 익히는 바퀴라 불규칙 꼴이
                     //   화면에 없으면 외울 수가 없다. 정렬이 이미 맨 위로 올려놨다.
-                    const open = !!(opts.openAsked && isAsked);
+                    //   opts.openKeys — 이 시제들도 펴 둔다 (쓰기 2바퀴: 3·4바퀴 시험이 고른 시제에서 새로 뽑으므로)
+                    const open = !!(opts.openAsked && isAsked) || (opts.openKeys || []).includes(k);
                     return `
                 <div class="bg-white border ${isAsked ? 'border-2 border-violet-400' : 'border-slate-200'} rounded-xl overflow-hidden">
                     <button type="button" onclick="toggleConjTenseBlock(this)" class="w-full ${headCls} hover:brightness-95 transition-all">

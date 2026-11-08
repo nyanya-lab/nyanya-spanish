@@ -6729,7 +6729,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
                     <div class="flex items-center justify-between">
                         <button onclick="closeWritePractice()" class="text-xs font-bold text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left"></i> 나가기</button>
-                        <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-pen-to-square text-amber-500 mr-1"></i>테스트 → 틀린 것만 익히기 → 다시 테스트</span>
+                        <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-pen-to-square text-amber-500 mr-1"></i>시험 → 익히기 → 중간 시험 → 마지막 시험</span>
                     </div>
                     ${inner}
                 </div>`;
@@ -6751,23 +6751,37 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 // ── 1바퀴(테스트) 끝 → 틀린 게 있으면 2바퀴(익히기)로, 없으면 바로 결과 ──
                 if (s.phase === 1 && s.wrongPool.length > 0) {
                     s.phase = 2;
-                    s.pool = writeLearnPool(s.wrongPool);
+                    s.pool = s.wrongPool.slice();
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
                     s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
-                    gate('✍️', `틀린 ${s.wrongPool.length}개만 익혀볼게요`,
-                        `단어를 보면서 써요. 한 바퀴 다 쓰고 처음부터 한 번 더 돌아요.<br>그 다음 다시 가리고 확인합니다.`,
+                    gate('✍️', `틀린 ${s.pool.length}개만 익혀볼게요`,
+                        `단어를 보면서 ${WRITE_PRACTICE_TIMES}번씩 써요.<br>그 다음 다시 가리고 확인합니다.`,
                         '2바퀴 시작', 'bg-indigo-600 hover:bg-indigo-700');
                     return;
                 }
                 // ── 2바퀴(익히기) 끝 → 3바퀴(재테스트)로 ──
+                //   [냐냐 요청] 활용형은 시제·인칭을 새로 뽑고, 오타는 안 봐준다 (2026-11-08, writeRerollTask 위 설명)
+                const hasConj = (list) => list.some(x => x && x._isConjTask);
                 if (s.phase === 2) {
                     s.phase = 3;
-                    s.pool = shuffleArray(s.wrongPool.slice());
+                    s.pool = shuffleArray(s.wrongPool.map(writeRerollTask));
+                    s.finalPool = [];
                     s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
                     s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
-                    gate('🙈', '이제 가리고 써볼 차례!',
-                        '뜻만 보고 스페인어를 떠올려서 쓰세요.<br>순서는 다시 섞었어요.',
+                    gate('🙈', '중간 시험!',
+                        `뜻만 보고 스페인어를 떠올려서 쓰세요.${hasConj(s.pool) ? '<br>동사는 시제·인칭을 새로 뽑았어요.' : ''}<br>오타도 틀림이에요 — 유의어만 한 번 더 기회를 줘요.`,
                         '3바퀴 시작', 'bg-violet-600 hover:bg-violet-700');
+                    return;
+                }
+                // ── 3바퀴(중간 시험) 끝 → 틀린 게 있으면 4바퀴(마지막 시험)로 ──
+                if (s.phase === 3 && (s.finalPool || []).length) {
+                    s.phase = 4;
+                    s.pool = shuffleArray(s.finalPool.map(writeRerollTask));
+                    s.index = 0; s.done = 0; s.retry = false; s.lastWrong = '';
+                    s.retryReason = null; s.usedRetries = {}; s.synonymTried = []; s.knewVerbHint = false; s.hint = ''; s.hintMine = ''; s.grading = false; s.feedback = null;
+                    gate('🏁', `마지막 시험 · ${s.pool.length}개`,
+                        `중간 시험에서 틀린 것만 한 번 더 가리고 써요.${hasConj(s.pool) ? '<br>동사는 시제·인칭을 또 새로 뽑았어요.' : ''}`,
+                        '4바퀴 시작', 'bg-rose-500 hover:bg-rose-600');
                     return;
                 }
                 // ── 끝 → 결과 ──
@@ -6817,8 +6831,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const groups = [
                     ['한 번에',      nBy(2),   '+2',   'text-emerald-600'],
                     ['오타 고쳐서',  nBy(1),   '+1',   'text-emerald-600'],
-                    ['익혀서',       nBy(-1.5), '−1.5', 'text-amber-600'],
-                    ['3바퀴 오타 고쳐서', nBy(-2), '−2', 'text-amber-600'],   // [냐냐 요청] 2026-10-21
+                    ['중간 시험에서', nBy(-1.5), '−1.5', 'text-amber-600'],
+                    ['마지막 시험에서', nBy(-2), '−2', 'text-amber-600'],   // [냐냐 요청] 2026-11-08 네 바퀴 (예전엔 '3바퀴 오타 고쳐서')
                     ['끝내',         nBy(-2.5), '−2.5', 'text-rose-500']   // 9/21 부터 −2.5 인데 여기만 −2 로 세고 있었다
                 ].filter(g => g[1] > 0).map(([label, n, pts, cls]) => `<span class="${cls}">${label} ${n}개 (${pts})</span>`);
                 const scoreLine = groups.length ? `<p class="text-sm font-bold text-slate-600">${groups.join(' · ')}</p>` : '';
@@ -6886,14 +6900,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
 
             const w = s.pool[s.index];
-            const isTest = (s.phase === 1 || s.phase === 3);   // 가리고 쓰는 바퀴
-            const dotsCount = isTest ? 1 : WRITE_PRACTICE_TIMES;
-            //   2바퀴는 같은 과제가 순서표에 두 번 있다 (writeLearnPool) — 남은 차례 수로 몇 번째인지 센다.
-            //   이어하기로 불러오면 과제 객체가 새로 만들어지니 객체 대신 열쇠로 본다.
-            const doneDots = isTest ? s.done
-                : WRITE_PRACTICE_TIMES - s.pool.slice(s.index).filter(x => writeFailKey(x) === writeFailKey(w)).length;
+            const isTest = (s.phase === 1 || s.phase === 3 || s.phase === 4);   // 가리고 쓰는 바퀴
+            //   틀린 뒤 다시 쓰기는 3바퀴면 2번, 4바퀴면 1번 (writeLaterRetryTimes)
+            const dotsCount = s.retry ? writeLaterRetryTimes(s) : (isTest ? 1 : WRITE_PRACTICE_TIMES);
             const dots = Array.from({ length: dotsCount }, (_, k) =>
-                `<span class="w-2.5 h-2.5 rounded-full ${k < doneDots ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
+                `<span class="w-2.5 h-2.5 rounded-full ${k < s.done ? 'bg-emerald-500' : 'bg-slate-200'}"></span>`).join('');
             const pct = Math.round(s.index / s.pool.length * 100);
 
             // [냐냐 요청] 품사 뱃지
@@ -6944,7 +6955,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const conjBack = (w._isConjTask && w._conjSlot)
                     ? (w._knewVerb
                         ? `<p class="text-[11px] font-bold text-indigo-500">동사(<b>${escapeHtml((w._conjOf && w._conjOf.word) || '')}</b>)는 알고 있어요 — 이 꼴을 익혀요</p>`
-                        : `<p class="text-[11px] font-bold text-indigo-500">원형부터 익혀요 — 다음 바퀴도 원형으로 물어봐요</p>`)
+                        : `<p class="text-[11px] font-bold text-indigo-500">원형부터 익혀요</p>`)
+                      + `<p class="text-[11px] font-bold text-slate-400">시험은 고른 시제에서 시제·인칭을 새로 뽑아 물어봐요 — 아래 표들도 같이 봐 두세요</p>`
                     : '';
                 //   [냐냐 요청] 관용구는 어느 낱말에서 나온 표현인지 밑에 같이 보여준다 (2026-09-11).
                 //   표현만 덩그러니 있으면 뿌리가 안 보인다. 활용형 과제에 원형을 보여주는 것과 같은 결이다.
@@ -6969,23 +6981,22 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 inputLabel = '보고 그대로 쓰세요 (엔터)';
                 placeholder = learnWord;
             } else if (!s.retry) {
-                //   3바퀴에서 원형으로 묻는 활용형 문제는 뜻도 시제 꼬리표를 뗀 것으로 (writeRoundTarget)
-                const asksBase = s.phase === 3 && w._isConjTask && w._conjOf && writeRoundTarget(w, 3) !== w.word;
+                //   3·4바퀴 활용형은 꼴을 새로 뽑았다 — 1바퀴와 다른 시제라 놀라지 않게 짚어 둔다 (writeRerollTask)
+                const rerolled = s.phase >= 3 && w._isConjTask;
                 cardHtml = `
                     <div class="bg-violet-50 rounded-2xl border border-violet-200 p-5 text-center space-y-1">
                         ${posHtml}
                         <p class="text-2xl font-extrabold text-violet-300 tracking-widest select-none">? ? ?</p>
-                        ${writeMeaningHtml(asksBase ? (w._conjOf.meaning || '') : w.meaning, 'text-base font-extrabold text-slate-800')}
-                        ${asksBase ? `<p class="text-[11px] font-bold text-indigo-500">동사 원형으로 써요</p>` : ''}
+                        ${writeMeaningHtml(w.meaning, 'text-base font-extrabold text-slate-800')}
+                        ${rerolled ? `<p class="text-[11px] font-bold text-indigo-400">🎲 새로 뽑은 꼴</p>` : ''}
                     </div>`;
                 inputLabel = '떠올려서 쓰세요 (엔터)';
                 placeholder = '스페인어로...';
             } else {
                 // [냐냐 요청] 내가 쓴 오답을 같이 보여줘서 어디가 틀렸는지 바로 비교
                 const mine = (s.lastWrong || '').trim();
-                //   3바퀴를 원형으로 물었으면 정답도 원형이다 (writeRoundTarget)
-                const ans = writeRoundTarget(w, 3);
-                const ansMean = (ans !== w.word && w._conjOf) ? (w._conjOf.meaning || '') : w.meaning;
+                const ans = w.word;
+                const ansMean = w.meaning;
                 // [냐냐 요청] 틀린 자리만 빨갛게 — 어디가 다른지 눈으로 바로 보이게
                 const mineHtml = mine
                     ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, ans), 'user') : escapeHtml(mine)}</p>`
@@ -7009,9 +7020,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             <p class="text-[10px] font-bold text-slate-400">내가 쓴 답 <span class="font-normal">(빨강 = 잘못 쓴 글자 · 위 초록 밑줄 = 빠뜨렸거나 다르게 쓴 글자)</span></p>
                             ${mineHtml}
                         </div>
-                        <p class="text-[10px] font-bold text-rose-400 pt-1">아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요</p>
+                        <p class="text-[10px] font-bold text-rose-400 pt-1">${s.phase === 3 ? '아쉬워요! 정답을 보고 2번 쓰고, 마지막 시험에서 다시 만나요' : '아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요'}</p>
                     </div>`;
-                inputLabel = '정답을 보고 한 번 더 (엔터)';
+                inputLabel = s.phase === 3 ? '정답을 보고 2번 (엔터)' : '정답을 보고 한 번 더 (엔터)';
                 placeholder = ans;
             }
 
@@ -7043,7 +7054,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-[11px] font-bold ${isTest ? 'text-violet-500' : 'text-slate-400'}">${s.phase === 1 ? '1바퀴 · 가리고 쓰기' : (s.phase === 2 ? '2바퀴 · 보고 쓰기' : '3바퀴 · 다시 가리고 쓰기')} &nbsp;${s.index + 1} / ${s.pool.length}</span>
+                            <span class="text-[11px] font-bold ${isTest ? 'text-violet-500' : 'text-slate-400'}">${s.phase === 1 ? '1바퀴 · 가리고 쓰기' : (s.phase === 2 ? '2바퀴 · 보고 쓰기' : (s.phase === 3 ? '3바퀴 · 중간 시험' : '4바퀴 · 마지막 시험'))} &nbsp;${s.index + 1} / ${s.pool.length}</span>
                             <span class="flex items-center gap-1.5">${dots}</span>
                         </div>
                         <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -7070,7 +7081,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             onkeydown="writePracticeKeydown(event)" ${s.grading ? 'disabled' : ''}
                             class="w-full px-3 py-2.5 rounded-xl border-2 ${isTest && !s.retry ? 'border-violet-300 bg-violet-50/40 focus:ring-violet-400' : 'border-indigo-300 bg-indigo-50/40 focus:ring-indigo-400'} text-base font-bold focus:outline-none focus:ring-2 disabled:opacity-50"
                             placeholder="${escapeHtml(placeholder)}">
-                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">${s.phase === 1 ? '유의어나 오타는 한 번 더 기회를 줘요' : '악센트까지 정확히 써야 넘어가요'}${s.gradeStamp ? `<span class="ml-2 font-semibold text-slate-300">${escapeHtml(s.gradeStamp)}</span>` : ''}</p>
+                        <p id="write-practice-hint" class="text-[11px] font-bold text-slate-400">${s.phase === 1 ? '유의어나 오타는 한 번 더 기회를 줘요' : ((s.phase >= 3 && !s.retry) ? '오타는 안 봐줘요 · 유의어만 한 번 더' : '악센트까지 정확히 써야 넘어가요')}${s.gradeStamp ? `<span class="ml-2 font-semibold text-slate-300">${escapeHtml(s.gradeStamp)}</span>` : ''}</p>
                     </div>`}
 
                     <div class="flex gap-2">
@@ -7088,8 +7099,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const askedTense = (w._isConjTask && w._conjSlot) ? { tenseKey: w._conjSlot.tense, person: w._conjSlot.person } : null;
                 renderQuizConjugation(w, askedTense, 'write-conj-box',
                     { collapsed: true, openAsked: true, askedLabel: '틀린 꼴', only: 'asked' });
+                //   [냐냐 요청] 3·4바퀴 시험은 고른 시제에서 새로 뽑아 묻는다 (2026-11-08) — 그 시제들 표는 펴 둔다
                 renderQuizConjugation(w, askedTense, 'write-conj-rest',
-                    { collapsed: true, only: 'rest' });
+                    { collapsed: true, only: 'rest', openKeys: (typeof ensureWriteTenses === 'function') ? ensureWriteTenses() : [] });
             }
             setTimeout(() => {
                 const nextBtn = document.getElementById('write-next-btn');
@@ -7271,6 +7283,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return String(k).replace(/[.#$\[\]\/]/g, '_');
         }
         function writeFailKey(w) {
+            if (w && w._failKey) return w._failKey;   // 3·4바퀴에서 꼴을 새로 뽑은 과제 — 처음 과제의 열쇠 (writeRerollTask)
             return writeFailKeySafe(String((w && w.id) || '') + '::' + String((w && w.word) || ''));
         }
         //   고치기 전에 이 기기에 저장된 판에는 옛 칸 이름이 남아 있을 수 있다 — 불러올 때 바꿔 둔다
@@ -7285,22 +7298,40 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             return ws;
         }
 
-        //   [냐냐 요청] 2바퀴는 한 단어를 연달아 두 번 쓰지 않고 A→B→C→A→B→C 로 돈다 (2026-11-06).
-        //   연달아 쓰면 두 번째는 방금 본 걸 옮겨 적는 것뿐이다. 사이에 다른 단어가 끼어야 다시 떠올린다.
-        //   순서표에 같은 과제를 두 벌 이어 붙인다 — 이어하기는 남은 순서표를 그대로 적으므로 따로 챙길 게 없다.
-        function writeLearnPool(list) {
-            let out = [];
-            for (let k = 0; k < WRITE_PRACTICE_TIMES; k++) out = out.concat(list);
-            return out;
-        }
-
         //   [냐냐 요청] 동사는 알고 꼴만 틀렸으면(_knewVerb) 2바퀴도 그 활용형으로 익힌다 (2026-10-29).
         //   동사 자체를 못 떠올렸을 때만 원형으로 — 뿌리부터 잡아야 하는 건 그때뿐이다.
-        //   [냐냐 요청] 3바퀴도 같은 갈래로 (2026-11-06) — 원형을 몰랐으면 3바퀴도 원형으로 묻는다.
-        //   2바퀴에서 원형만 익히고 3바퀴에서 갑자기 활용형을 물으니, 원형조차 안 잡힌 채 또 틀렸다.
+        //   3·4바퀴 시험은 꼴을 새로 뽑아 묻는다 (writeRerollTask) — 원형으로 묻지 않는다.
         function writeRoundTarget(w, phase) {
-            if ((phase === 2 || phase === 3) && w && w._isConjTask && !w._knewVerb && w._conjOf && w._conjOf.word) return w._conjOf.word;
+            if (phase === 2 && w && w._isConjTask && !w._knewVerb && w._conjOf && w._conjOf.word) return w._conjOf.word;
             return (w && w.word) || '';
+        }
+
+        // ============================================================
+        // [냐냐 요청] 쓰기 복습 네 바퀴 (2026-11-08)
+        //   1 시험 → 2 익히기(연달아 2번) → 3 중간 시험 → (틀리면 바로 2번 쓰기) → 4 마지막 시험(3바퀴에서 틀린 것만)
+        //   · 3·4바퀴는 오타를 안 봐준다. 유의어만 한 번 되묻는다 (비슷한 뜻이 둘일 수 있어서 — 등록 유의어, 아니면 AI).
+        //   · 활용형 과제는 3·4바퀴마다 고른 시제 안에서 시제·인칭을 새로 뽑는다 — 1바퀴에 물은 꼴 하나만 외워서
+        //     맞히는 걸 막는다. 되도록 바로 전에 물은 꼴은 피한다.
+        //   · 점수(그 단어 합): 3바퀴에서 맞힘 −1.5 · 마지막 시험에서 맞힘 −2 · 끝내 틀림 −2.5
+        //   ⚠️ 꼴을 새로 뽑으면 글자가 바뀐다. '1바퀴에서 이미 −2 를 적었다'(failedOnce) · 졸업 실패 같은 기록은
+        //      writeFailKey(과제 글자 포함)에 묶여 있어서, 새 과제에 처음 열쇠(_failKey)를 넘겨 둔다.
+        //      안 그러면 다른 문제로 보고 −2 와 곡선을 또 적는다.
+        // ============================================================
+        function writeRerollTask(w) {
+            if (!w || !w._isConjTask || !w._conjOf) return w;
+            const prev = w._conjSlot || {};
+            let slot = null;
+            for (let i = 0; i < 8; i++) {
+                const s2 = pickConjSlot(w._conjOf);
+                if (!s2) break;
+                slot = s2;
+                if (s2.tense !== prev.tense || s2.person !== prev.person) break;
+            }
+            if (!slot) return w;
+            const t = makeWriteConjTask(w._conjOf, slot);
+            t._failKey = writeFailKey(w);
+            if (w._knewVerb) t._knewVerb = true;
+            return t;
         }
 
         function writePracticeKeydown(e) {
@@ -7314,14 +7345,17 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const w = s.pool[s.index];
             //   2바퀴에서 활용형 문제는 원형을 쓴다 (writeRoundTarget)
             //   [냐냐 요청] 2바퀴에서 물어본 그 꼴(틀린 꼴)로 써도 받아 준다 (2026-10-16) — 원형이든 그 꼴이든
+            //   [냐냐 요청] 3·4바퀴에서 틀린 뒤 다시 쓰기도 익히는 자리라 원형이든 그 꼴이든 받는다 (2026-11-08)
             const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase))
-                || (s.phase === 2 && w && w._isConjTask && (writeAnswerMatches(el.value, w.word)
+                || ((s.phase === 2 || s.retry) && w && w._isConjTask && (writeAnswerMatches(el.value, w.word)
                     || (w._conjOf && w._conjOf.word && writeAnswerMatches(el.value, w._conjOf.word))));
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
                 if (isMatch) {
-                    s.index++; s.done = 0;   // 두 번째 차례는 순서표 뒤쪽에 있다 (writeLearnPool)
+                    s.done++;
+                    if (s.done >= WRITE_PRACTICE_TIMES) { s.index++; s.done = 0; }
+                    else el.value = '';
                     renderWritePractice();
                 } else {
                     writePracticeFlashWrong(el);
@@ -7329,9 +7363,11 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 return;
             }
 
-            // ── 3바퀴에서 틀린 뒤 '정답 보고 한 번 더' — 정확히 써야 넘어감 (점수 없음) ──
+            // ── 3·4바퀴에서 틀린 뒤 '정답 보고 쓰기' — 정확히 써야 넘어감 (점수 없음). 3바퀴는 2번, 4바퀴는 1번 ──
             if (s.retry) {
                 if (isMatch) {
+                    s.done++;
+                    if (s.done < writeLaterRetryTimes(s)) { el.value = ''; renderWritePractice(); return; }
                     s.retry = false; s.lastWrong = ''; s.index++; s.done = 0;
                     s.hint = ''; s.hintMine = '';   // 지난 안내를 걷는다 (아래 [냐냐 지적] 참고)
                     renderWritePractice();
@@ -7365,8 +7401,76 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   바로 채점하고 끝나서 '빈칸이에요…' 안내가 다음 단어까지 따라다녔다.
             //   (빈칸으로 엔터를 두 번 치면 위 else-if 를 안 거치고 여기로 떨어진다)
             s.hint = ''; s.hintMine = '';
+            gradeWriteLaterRound(el.value);
+        }
 
-            // ── 3바퀴: 다시 가리고 쓰기 (최종) ──
+        //   틀린 뒤 정답 보고 쓰는 횟수 — 3바퀴(중간 시험)는 2번(익히기와 같게), 4바퀴(마지막)는 1번
+        function writeLaterRetryTimes(s) {
+            return (s && s.phase === 3) ? WRITE_PRACTICE_TIMES : 1;
+        }
+
+        // [냐냐 요청] 3·4바퀴는 오타를 안 봐주고 유의어만 한 번 되묻는다 (2026-11-08) — 비슷한 뜻의 낱말이 둘일 수 있다.
+        //   돌려주는 것: 'correct' (AI 가 맞다고 함) · 되물을 안내 글 · '' (그대로 채점)
+        //   등록 유의어·뜻이 통째로 같은 등록 낱말은 AI 없이, 그 밖은 AI 에게 묻는다.
+        //   ⚠️ 오타·같은 낱말의 다른 꼴은 AI 를 부를 것도 없이 그대로 채점한다 — 그게 이 바퀴가 묻는 바로 그것이다.
+        async function writeLaterSynonymCheck(userAnswer, w) {
+            const s = writePracticeState;
+            if (writeLooksLikeTypo(userAnswer, w.word) || (w._isIdiomTask && idiomOneWordTypo(userAnswer, w.word))) return '';
+            const baseW = w._idiomOf || w._conjOf || w;
+            const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(userAnswer) : null;
+            if (hit && baseW && hit.id === baseW.id) return '';
+            const start = () => { const p = writePrefixHint(userAnswer, writeHintBase(w)); return p ? ' ' + hintStartHtml(p) : ''; };
+            const syn = writeRegisteredSynonym(userAnswer, w);
+            if (syn) return `💡 <b>${escapeHtml(syn.word)}</b> 도 맞는 말이지만, 지금 외우려는 건 다른 낱말이에요.${start()} 다시 한 번 써볼까요?`;
+            if (typeof registeredSameMeaningWord === 'function' && registeredSameMeaningWord(userAnswer, w)) {
+                return `💡 그것도 같은 뜻이에요! 지금 외우려는 다른 낱말을 떠올려 볼까요?${start()}`;
+            }
+            if (typeof aiGradeSubjective !== 'function' || !s) return '';
+            s.grading = true;
+            renderWritePractice();
+            let ai = null;
+            try { ai = await aiGradeSubjective(userAnswer, { word: w }); } catch (err) { console.warn(err); }
+            s.grading = false;
+            const gi = (typeof lastAiGradeInfo !== 'undefined') ? lastAiGradeInfo : null;
+            s.gradeStamp = gi ? `채점 ${gi.m ? gi.m + ' · ' : '실패 · '}${gi.s}초` : '';
+            if (!ai) return '';
+            const v = String(ai.verdict || '').toLowerCase();
+            if (v === 'correct' && !(typeof phraseAnswerIncomplete === 'function' && phraseAnswerIncomplete(userAnswer, w.word))) return 'correct';
+            if (v === 'synonym' && (typeof synonymClaimIsReal !== 'function' || synonymClaimIsReal(userAnswer, w, ai.answerMeaning))) {
+                return `💡 그것도 같은 뜻이에요! 지금 외우려는 다른 낱말을 떠올려 볼까요?${start()}`;
+            }
+            return '';
+        }
+
+        async function gradeWriteLaterRound(userRaw) {
+            const s = writePracticeState;
+            if (!s) return;
+            const w = s.pool[s.index];
+            if (!w) return;
+            s.gradeStamp = '';
+            const userAnswer = (typeof collapseAltShorthand === 'function') ? collapseAltShorthand(String(userRaw || '').trim(), w.word) : String(userRaw || '').trim();
+            let isMatch = writeAnswerMatches(userAnswer, w.word);
+            const key = writeFailKey(w);
+            if (!isMatch && userAnswer) {
+                s.laterSyn = s.laterSyn || {};
+                const synKey = s.phase + ':' + key;
+                if (!s.laterSyn[synKey]) {
+                    const r = await writeLaterSynonymCheck(userAnswer, w);
+                    if (writePracticeState !== s || s.pool[s.index] !== w) return;   // 채점 중에 나갔거나 넘어갔다
+                    if (r === 'correct') isMatch = true;
+                    else if (r) {
+                        s.laterSyn[synKey] = true;
+                        s.hint = r; s.hintMine = userAnswer;
+                        const inp = document.getElementById('write-practice-input');
+                        if (inp) inp.value = '';
+                        renderWritePractice();
+                        return;
+                    }
+                }
+            }
+            const final = s.phase === 4;
+
+            // ── 3·4바퀴: 다시 가리고 쓰기 ──
             //   [냐냐 요청] 1바퀴에서 틀린 단어의 기록을 여기서 한꺼번에 반영한다.
             //   correct:false 로 부르는 건 "1바퀴에서 못 떠올렸다"는 사실을 지금 적는 것이다 —
             //   오답 횟수·틀린 날짜가 남고 망각곡선이 한 칸 뒤로 간다. 3바퀴에서 맞혔다고
@@ -7381,45 +7485,48 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const idiomTask = !!w._isIdiomTask;
             // [냐냐 지적] 1바퀴에서 틀린 순간 −2 와 곡선을 이미 적었다. 여기서는 차액만 반영한다:
             //   3바퀴에서 맞히면 +1 (합 −1), 끝내 틀리면 더할 게 없다 (합 −2). 곡선은 다시 안 민다.
-            const already = !!s.failedOnce[writeFailKey(w)];
-            // [냐냐 요청] 3바퀴에도 오타 기회 한 번 (2026-10-21). 힌트 없이 되묻기만 — 고쳐 맞히면 합 −2
-            //   (맞힘 −1.5 와 끝내 틀림 −2.5 사이). 1바퀴와 같은 잣대(writeLooksLikeTypo)로 본다.
-            s.r3Typo = s.r3Typo || {};
-            const r3Key = writeFailKey(w);
-            const r3Missing = !isMatch && w._isIdiomTask && idiomOneWordMissing(el.value, w.word);
-            if (!isMatch && !s.r3Typo[r3Key] && (r3Missing || writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase))
-                    || (w._isIdiomTask && idiomOneWordTypo(el.value, w.word)))) {
-                s.r3Typo[r3Key] = 'asked';
-                s.hint = r3Missing ? '✏️ 낱말이 하나 빠졌어요! 다시 한 번 써볼까요?' : '✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?';
-                s.hintMine = el.value.trim();
-                el.value = '';
-                renderWritePractice();
-                return;
-            }
-            const r3TypoFixed = isMatch && s.r3Typo[r3Key] === 'asked';
+            const already = !!s.failedOnce[key];
+            //   [냐냐 요청] 3바퀴 오타 기회(2026-10-21)는 없앴다 (2026-11-08) — 3·4바퀴는 오타를 안 봐준다.
+            //   그 자리의 −2 (예전 '3바퀴 오타 고쳐 맞힘') 는 이제 '마지막 시험에서 맞힘' 이다.
             if (isMatch) {
                 const shift = withTaskGradeShift(w, () => {
                     if (typeof addWordScore !== 'function') return;
                     // ⚠️ 1바퀴에서 이미 적었으면 여기서는 '점수 차액'만 돌려준다.
                     //   correct 를 넘기면 오답 횟수가 두 번 세어지고 곡선도 또 뒤로 간다.
                     const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
-                    //   [냐냐 요청] 익혀서 맞히면 합이 −1.5 (2026-09-17, 예전 −1): 1바퀴 −2 에 +0.5 를 돌려준다
-                    //   3바퀴 오타를 고쳐 맞히면 합 −2: 1바퀴 −2 에 더할 것 없음
-                    const back = r3TypoFixed ? 0 : 0.5;
+                    //   [냐냐 요청] 중간 시험에서 맞히면 합이 −1.5 (2026-09-17, 예전 −1): 1바퀴 −2 에 +0.5 를 돌려준다
+                    //   마지막 시험에서 맞히면 합 −2: 1바퀴 −2 에 더할 것 없음 (2026-11-08)
+                    const back = final ? 0 : 0.5;
                     if (already) { if (back) addWordScore(w.id, back, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf }); }
                     else addWordScore(w.id, -2 + back, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
-                if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
+                if (already && s.gradeBeforeFail && s.gradeBeforeFail[key] != null) shift.gradeBefore = s.gradeBeforeFail[key];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: r3TypoFixed ? -2 : -1.5, gradFail: !!(s.gradFail || {})[writeFailKey(w)], ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: true, firstTry: false, gain: final ? -2 : -1.5, gradFail: !!(s.gradFail || {})[key], ...shift });
                 s.hint = ''; s.hintMine = '';
                 s.index++;
                 s.done = 0;
+            } else if (!final) {
+                // ── 3바퀴(중간 시험)에서 틀림 → 그 자리에서 정답 보고 2번 쓰고, 마지막 시험으로 ──
+                //   점수는 아직 안 매긴다 — 마지막 시험 결과로 합이 정해진다 (−2 / −2.5).
+                //   1바퀴 기록이 없으면(옛 이어하기) 1바퀴 몫(−2·곡선)을 지금 적어 둔다 — 마지막 시험은 차액만 얹는다.
+                if (!already) {
+                    const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
+                    if (typeof addWordScore === 'function') addWordScore(w.id, -2, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
+                    if (!idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
+                    if (typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
+                    s.failedOnce[key] = true;
+                }
+                s.finalPool = s.finalPool || [];
+                s.finalPool.push(w);
+                s.retry = true; s.done = 0;
+                s.lastWrong = userAnswer;
+                if (typeof speakSpanishVoice === 'function') setTimeout(() => speakSpanishVoice(w.word), 150);
             } else {
                 s.wrongCount++;
-                s.retry = true;
-                s.lastWrong = el.value.trim();   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
+                s.retry = true; s.done = 0;
+                s.lastWrong = userAnswer;   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
                 const shift = withTaskGradeShift(w, () => {
                     if (typeof addWordScore !== 'function') return;
                     const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
@@ -7430,14 +7537,14 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     if (already) addWordScore(w.id, -0.5, { correctCount: 0, wrongCount: 0, skipReviewDate: true, idiom: idiomOf });
                     else addWordScore(w.id, -2.5, { correct: false, skipReviewDate: idiomTask, idiom: idiomOf });
                 });
-                if (already && s.gradeBeforeFail && s.gradeBeforeFail[writeFailKey(w)] != null) shift.gradeBefore = s.gradeBeforeFail[writeFailKey(w)];
+                if (already && s.gradeBeforeFail && s.gradeBeforeFail[key] != null) shift.gradeBefore = s.gradeBeforeFail[key];
                 if (!already && !idiomTask && typeof markWordReviewedToday === 'function') markWordReviewedToday(w.id, false);
                 if (!already && typeof logAction === 'function') logAction(writeLogKind(s), null, writeTaskKey(w));
-                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2.5, gradFail: !!(s.gradFail || {})[writeFailKey(w)], ...shift });
+                s.results.push({ word: w.word, meaning: w.meaning || '', baseWord: (w._idiomOf || w._conjOf || w).word, baseMeaning: (w._idiomOf || w._conjOf || w).meaning || '', isIdiom: !!w._isIdiomTask, correct: false, firstTry: false, gain: -2.5, gradFail: !!(s.gradFail || {})[key], ...shift });
                 //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
                 //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
                 if (typeof speakSpanishVoice === 'function') {
-                    setTimeout(() => speakSpanishVoice(writeRoundTarget(w, 3)), 150);
+                    setTimeout(() => speakSpanishVoice(w.word), 150);
                 }
             }
             writePracticeSave();
@@ -7891,7 +7998,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const it = (Array.isArray(w._idiomOf.idioms) ? w._idiomOf.idioms : []).find(x => x && String(x.idiom || '').trim() === w.word);
                 return { id: w._idiomOf.id, k: 'i', iid: (it && it.iid) || '', t: w.word };
             }
-            if (w._isConjTask && w._conjOf) return Object.assign({ id: w._conjOf.id, k: 'c', slot: w._conjSlot }, w._knewVerb ? { kv: 1 } : {});
+            if (w._isConjTask && w._conjOf) return Object.assign({ id: w._conjOf.id, k: 'c', slot: w._conjSlot }, w._knewVerb ? { kv: 1 } : {}, w._failKey ? { fk: w._failKey } : {});
             return { id: w.id, k: 'w' };
         }
         function writeTaskFromDesc(d) {
@@ -7906,6 +8013,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 if (!d.slot || !d.slot.form) return null;
                 const t = makeWriteConjTask(w, d.slot);
                 if (d.kv) t._knewVerb = true;   // 동사는 알았던 것 — 2바퀴를 활용형으로
+                if (d.fk) t._failKey = d.fk;    // 3·4바퀴에서 새로 뽑은 꼴 — 처음 과제의 열쇠 (writeRerollTask)
                 return t;
             }
             return w;
@@ -7917,14 +8025,16 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             let phase = s.phase, rest = s.pool.slice(s.index + (graded ? 1 : 0)), done = graded ? 0 : (s.done || 0);
             //   이 바퀴를 다 풀었으면 다음 바퀴 모양으로 적는다 (renderWritePractice 의 바퀴 넘김과 같은 규칙)
             if (!rest.length) {
-                if (phase === 1 && s.wrongPool.length) { phase = 2; rest = writeLearnPool(s.wrongPool); done = 0; }
-                else if (phase === 2) { phase = 3; rest = s.wrongPool.slice(); done = 0; }
+                if (phase === 1 && s.wrongPool.length) { phase = 2; rest = s.wrongPool.slice(); done = 0; }
+                else if (phase === 2) { phase = 3; rest = s.wrongPool.map(writeRerollTask); done = 0; }
+                else if (phase === 3 && (s.finalPool || []).length) { phase = 4; rest = s.finalPool.map(writeRerollTask); done = 0; }
                 else { writeSessionClear(); return; }
             }
             writeSession = {
                 d: getLocalDateString(), at: Date.now(), phase, done,
                 pool: rest.map(writeTaskDesc).filter(Boolean),
                 wrongPool: s.wrongPool.map(writeTaskDesc).filter(Boolean),
+                finalPool: (s.finalPool || []).map(writeTaskDesc).filter(Boolean),   // 3바퀴에서 틀린 것 — 4바퀴(마지막 시험) 몫
                 results: s.results || [], failedOnce: s.failedOnce || {}, gradeBeforeFail: s.gradeBeforeFail || {}, gradFail: s.gradFail || {},
                 wrongCount: s.wrongCount || 0, totalCount: s.totalCount || 0, batchSize: s.batchSize || 0,
                 isTodayReview: !!s.isTodayReview, scopeContinue: !!s.scopeContinue, idiomReview: !!s.idiomReview
@@ -7946,9 +8056,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const wrong = Array.isArray(ws.wrongPool) ? ws.wrongPool : [];
             const age = (typeof daysSince === 'function') ? daysSince(ws.d) : 1;
             if (!wrong.length || age > 3) return null;
-            //   지난날 것 — 2바퀴부터 (3바퀴 중이었으면 남은 3바퀴 그대로)
-            const pool = ws.phase === 3 ? ws.pool : writeLearnPool(wrong);
-            return Object.assign({}, ws, { phase: ws.phase === 3 ? 3 : 2, pool, done: ws.phase === 3 ? ws.done : 0, stale: true });
+            //   지난날 것 — 2바퀴부터 (3·4바퀴 중이었으면 남은 그 바퀴 그대로)
+            const later = ws.phase >= 3;
+            const pool = later ? ws.pool : wrong;
+            return Object.assign({}, ws, { phase: later ? ws.phase : 2, pool, done: later ? ws.done : 0, stale: true });
         }
         function resumeWriteSession() {
             const ws = writeSessionLive();
@@ -7963,6 +8074,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.phase = ws.phase || 1;
             s.done = ws.done || 0;
             s.wrongPool = wrongPool;
+            s.finalPool = (ws.finalPool || []).map(writeTaskFromDesc).filter(Boolean);
             s.results = Array.isArray(ws.results) ? ws.results : [];
             s.failedOnce = ws.failedOnce || {};
             s.gradeBeforeFail = ws.gradeBeforeFail || {};
@@ -7982,7 +8094,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             if (!box) return;
             const ws = writeSessionLive();
             if (!ws || writePracticeState) { box.innerHTML = ''; box.classList.add('hidden'); return; }
-            const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · 남은 ${ws.pool.length}번` : `3바퀴(다시 가리고) · ${ws.pool.length}개`);
+            const where = ws.phase === 1 ? `1바퀴 · 남은 ${ws.pool.length}개` : (ws.phase === 2 ? `2바퀴(익히기) · ${ws.pool.length}개` : (ws.phase === 3 ? `3바퀴(중간 시험) · ${ws.pool.length}개` : `4바퀴(마지막 시험) · ${ws.pool.length}개`));
             const wrong = (ws.wrongPool || []).length;
             const title = ws.stale ? `지난번 쓰기 복습에서 틀린 ${wrong}개가 남았어요` : '아까 하던 쓰기 복습이 있어요';
             box.classList.remove('hidden');
@@ -7990,7 +8102,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     <span class="text-2xl">✍️</span>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-black text-violet-800">${title}</p>
-                        <p class="text-[11px] font-bold text-violet-500">${ws.stale ? (ws.phase === 3 ? `3바퀴(다시 가리고 쓰기)부터 · ${ws.pool.length}개` : '2바퀴(보고 쓰기)부터 익혀요') : `${where}${wrong ? ` · 틀린 것 ${wrong}개` : ''}`}</p>
+                        <p class="text-[11px] font-bold text-violet-500">${ws.stale ? (ws.phase >= 3 ? `${where}부터` : '2바퀴(보고 쓰기)부터 익혀요') : `${where}${wrong ? ` · 틀린 것 ${wrong}개` : ''}`}</p>
                     </div>
                     <button type="button" onclick="discardWriteSession()" class="shrink-0 px-2.5 py-2 rounded-xl bg-white border border-violet-200 text-violet-500 text-xs font-bold hover:bg-violet-100">새로 시작</button>
                     <button type="button" onclick="resumeWriteSession()" class="shrink-0 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-black">이어서 하기</button>
