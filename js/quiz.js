@@ -856,7 +856,8 @@ let quizSession = null;
                 const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(u) : null;
                 return !!hit && t.alts.indexOf(normalizeSpanishAnswer(hit.word, keepAccents)) >= 0;
             };
-            const tokOk = (t, u) => t.alts.indexOf(u) >= 0 || (t.verb && verbOk(t, u));
+            const tokOk = (t, u) => t.alts.indexOf(u) >= 0 || (t.verb && verbOk(t, u))
+                || (t.fuzzy && t.alts.some(a => idiomNearTypo(a, u)));
             const memo = new Map();
             const go = (ti, ui) => {
                 if (ti === T.length) return ui === U.length;
@@ -882,10 +883,27 @@ let quizSession = null;
         //   틀 표현은 고정 낱말이 둘 이상일 때, 하나만 없어도 나머지가 차례대로 있으면. 답은 두 낱말 이상이어야 한다.
         //   ⚠️ 동사 자리는 lenientVerbs 를 끈다 — 켜면 아무 낱말이나 동사로 받아 'comer pan' 도 tener que [동사] 로 읽힌다.
         // ============================================================
+        //   [냐냐 지적] 철자 틀린 걸 '낱말이 빠졌어요' 라고 했다 (2026-11-08).
+        //   틀 표현의 빈칸은 0개 이상의 낱말을 받아서, 빈칸 옆 고정 낱말을 잘못 쓰면(tener ganas da comer)
+        //   그 낱말을 뺀 틀(tener ganas [동사])의 빈칸이 'da comer' 를 통째로 삼켜 '빠짐' 으로 읽혔다.
+        //   고정 낱말 하나가 오타 거리(한두 글자)로 그 자리에 있으면 빠진 게 아니라 철자다.
+        function idiomNearTypo(a, u) {
+            if (!a || !u || a === u) return false;
+            const d = levenshtein(a, u);
+            return d > 0 && d <= (a.length >= 4 ? 2 : 1);
+        }
+        function idiomOneWordTypo(userRaw, correctRaw) {
+            if (String(correctRaw || '').search(RE_PLACEHOLDER) < 0) return false;   // 틀 아닌 표현은 통째 오타 잣대(writeLooksLikeTypo)가 본다
+            const T = templateTokens(correctRaw, false);
+            if (!T.some(t => t.slot)) return false;
+            return T.some((t, i) => !t.slot
+                && templateTokensMatch(T.map((x, j) => (j === i ? Object.assign({}, x, { fuzzy: true }) : x)), userRaw, false, false));
+        }
         function idiomOneWordMissing(userRaw, correctRaw) {
             const U = normalizeSpanishAnswer(userRaw).split(' ').filter(Boolean);
             if (U.length < 2) return false;
             if (String(correctRaw || '').search(RE_PLACEHOLDER) >= 0) {
+                if (idiomOneWordTypo(userRaw, correctRaw)) return false;   // 빠진 게 아니라 철자다
                 const T = templateTokens(correctRaw, false);
                 const fixed = T.map((t, i) => (t.slot ? -1 : i)).filter(i => i >= 0);
                 if (!T.some(t => t.slot) || fixed.length < 2) return false;

@@ -7387,7 +7387,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             s.r3Typo = s.r3Typo || {};
             const r3Key = writeFailKey(w);
             const r3Missing = !isMatch && w._isIdiomTask && idiomOneWordMissing(el.value, w.word);
-            if (!isMatch && !s.r3Typo[r3Key] && (r3Missing || writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase)))) {
+            if (!isMatch && !s.r3Typo[r3Key] && (r3Missing || writeLooksLikeTypo(el.value, writeRoundTarget(w, s.phase))
+                    || (w._isIdiomTask && idiomOneWordTypo(el.value, w.word)))) {
                 s.r3Typo[r3Key] = 'asked';
                 s.hint = r3Missing ? '✏️ 낱말이 하나 빠졌어요! 다시 한 번 써볼까요?' : '✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?';
                 s.hintMine = el.value.trim();
@@ -7773,7 +7774,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             }
 
             // 3-2) 철자가 살짝 틀린 것 — AI 를 안 부르고 그 자리에서 되묻는다 (기다림 0초)
-            if (!used.typo && writeLooksLikeTypo(userAnswer, w.word)) {
+            //   틀 표현은 통째 거리로는 못 잰다 (빈칸 자리에 무엇을 넣었느냐가 섞인다) — 고정 낱말 하나씩 본다 (idiomOneWordTypo)
+            if (!used.typo && (writeLooksLikeTypo(userAnswer, w.word) || (w._isIdiomTask && idiomOneWordTypo(userAnswer, w.word)))) {
                 writeAskRetry('typo', `✏️ 철자가 살짝 틀렸어요! 다시 한 번 써볼까요?`, userAnswer);
                 return;
             }

@@ -977,7 +977,7 @@
 
             const prompt = `Question (may be in Spanish or Korean): "${currentQuestionForAnswer.question}"
             Student's Spanish Answer: "${userAnswer}"
-
+${aiVerbSlipText(userAnswer)}
             Evaluate whether the student's Spanish answer is grammatically correct AND is a sensible, appropriate response to the question (content relevance matters, not just grammar).
             For "correctedText": output the corrected sentence; wrap ONLY the words you actually changed/added inside '<span class='text-red-600 font-extrabold underline'>...</span>' tags. Already-correct words stay plain.
             For "originalMarked": output the student's ORIGINAL answer verbatim; wrap ONLY the wrong words inside '<span class='line-through text-slate-400'>...</span>' tags. Correct words stay plain.
@@ -1795,7 +1795,7 @@ ${reviewLengthBlock}
             if (aiIdiomJudge) aiIdiomJudge.reviewKey = (isIdiom && idiomMission.review) ? idiomMission.key : null;
             const prompt = `Korean Mission: "${missionSentence}"
             Student's Spanish Answer: "${userText}"
-${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}
+${koEsNoteListText}${idiomJudgeText}${refGrammar}${refWords}${aiVerbSlipText(userText)}
             COMPLETENESS: the Spanish must carry EVERY piece of the Korean mission — each clause, each modifier, each object. If something in the Korean is missing from the answer (a dropped noun, a dropped "~하고 있는", a dropped reason), that is a mistranslation: set isCorrect=false, add the missing part in "correctedText", and say in "message" what was left out. Do not call a shortened answer "완벽" just because the Spanish it does contain is grammatical.
             There is NO required vocabulary word. The mission is a Korean sentence to translate, and any wording that is grammatical and carries the same meaning is correct — never ask the student to have used some other word just because you would have picked it. (If the student's word changes the MEANING — e.g. writing "name" where the Korean says "surname" — that is a mistranslation, and you say so as a meaning error.)
             Check the grammar is correct.
@@ -4237,6 +4237,69 @@ ${buildLearnerProfileSummary()}`;
             //   원형은 악센트를 떼고 맞춘다 — 문장 쪽 원형(sentenceVerbLemmas)도 뗀 꼴이라서다 (oír → oir)
             return m ? m[1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') : '';
         }
+        // ============================================================
+        // [냐냐 지적] 'Esta novela, la traducí…' 를 맞다고 했다 (2026-11-08) — traduje 인데.
+        //   단어장 활용표엔 traduje 가 제대로 있었다. AI(3.5 Flash)가 놓쳤고, 코드 훑기는 표에 있는 꼴만 알아봐서
+        //   표에 없는 틀린 꼴은 그냥 지나갔다.
+        //   불규칙 동사를 규칙형으로 쓴 꼴을 코드가 찾아 채점 지시문에 짚어 준다 — 판정은 AI 가 한다 (냐냐님이 1번 고름).
+        //   ⚠️ 코드가 직접 고치지 않는 까닭: 찾는 잣대가 헛짚을 수 있다. jugar 의 규칙형 'jugo' 는 '주스' 이기도 하다.
+        //      짚어만 주면 AI 가 문장을 보고 걸러 준다.
+        //   현재·부정과거만 — 규칙형을 계산할 수 있는 시제가 이 둘이다. ser·ir·estar·haber 는 규칙형이 말이 안 돼서 뺀다.
+        // ============================================================
+        const SLIP_ENDINGS = {
+            presente:   { ar: ['o', 'as', 'a', 'amos', 'áis', 'an'], er: ['o', 'es', 'e', 'emos', 'éis', 'en'], ir: ['o', 'es', 'e', 'imos', 'ís', 'en'] },
+            indefinido: { ar: ['é', 'aste', 'ó', 'amos', 'asteis', 'aron'], er: ['í', 'iste', 'ió', 'imos', 'isteis', 'ieron'], ir: ['í', 'iste', 'ió', 'imos', 'isteis', 'ieron'] }
+        };
+        const SLIP_PERSONS = ['yo', 'tu', 'el', 'nos', 'vos', 'ellos'];
+        const SLIP_PERSON_LABEL = { yo: 'yo', tu: 'tú', el: 'él/ella', nos: 'nosotros', vos: 'vosotros', ellos: 'ellos' };
+        const SLIP_TENSE_LABEL = { presente: 'present indicative (직설법 현재)', indefinido: 'preterite (부정과거)' };
+        const SLIP_SKIP = new Set(['ser', 'ir', 'estar', 'haber']);
+        function regularizedVerbSlips(text) {
+            if (typeof vocabulary === 'undefined') return [];
+            const nz = (x) => (typeof normalizeSpanishAnswer === 'function') ? normalizeSpanishAnswer(x) : String(x || '').toLowerCase().trim();
+            //   악센트 뗀 꼴 → 쓰신 그대로의 꼴 (지시문에는 쓰신 글자로 보여 준다: traduci 가 아니라 traducí)
+            const toks = new Map();
+            (String(text || '').toLowerCase().normalize('NFC').match(/[a-záéíóúüñ]+/g) || []).forEach(raw => {
+                const k = nz(raw);
+                if (k.length >= 4 && !toks.has(k)) toks.set(k, raw);
+            });
+            if (!toks.size) return [];
+            let index = null;
+            try { index = buildVerbFormIndex(); } catch (e) { return []; }
+            const bare = (s) => String(s || '').trim().toLowerCase().normalize('NFC').replace(/^(me|te|se|nos|os)\s+/, '');
+            const slips = new Map();   // 틀린 꼴(악센트 뗀) → 짚을 말
+            vocabulary.forEach(v => {
+                if (v.pos !== 'verb') return;
+                const inf = bare(v.word).replace(/se$/, '');
+                const plain = inf.replace(/[áéíóú]/g, ch => 'aeiou'['áéíóú'.indexOf(ch)]);
+                if (/\s/.test(plain) || SLIP_SKIP.has(plain)) return;
+                const stem = plain.slice(0, -2), type = plain.slice(-2);
+                const tenses = verbTensesOf(v);
+                Object.keys(SLIP_ENDINGS).forEach(tk => {
+                    const forms = tenses[tk], end = SLIP_ENDINGS[tk][type];
+                    if (!forms || !end || !stem) return;
+                    SLIP_PERSONS.forEach((pk, i) => {
+                        const right = bare(forms[pk]);
+                        const wrong = nz(stem + end[i]);
+                        if (!right || nz(right) === wrong) return;      // 그 칸은 규칙형 그대로다
+                        if (!toks.has(wrong)) return;
+                        if (index.idx.has(wrong) || index.nonVerb.has(wrong)) return;   // 단어장의 다른 맞는 꼴·낱말이다
+                        if (!slips.has(wrong)) slips.set(wrong, { form: toks.get(wrong), inf: String(v.word || '').trim(), tense: tk, person: pk, right });
+                    });
+                });
+            });
+            return [...slips.values()];
+        }
+        function aiVerbSlipText(text) {
+            const list = regularizedVerbSlips(text);
+            if (!list.length) return '';
+            return `
+            VERB FORM CHECK — taken from the student's own conjugation tables. Check every line below; do not skip it:
+${list.map(f => `            - "${f.form}" looks like a REGULAR-pattern ${SLIP_TENSE_LABEL[f.tense]} of "${f.inf}", but ${f.inf} is irregular there: the ${SLIP_PERSON_LABEL[f.person]} form is "${f.right}".`).join('\n')}
+            If the student meant that verb in that tense, it is a conjugation error: fix it in correctedText, add a "changes" row for it, set isCorrect=false, and judge the note that teaches that tense as wrongly used. If in this sentence the word is really something else (another word, a name), ignore that line.
+`;
+        }
+
         // 문장에 나온 동사들의 원형 (활용표 역추적 + 심한 불규칙 넷은 글자로)
         function sentenceVerbLemmas(raws) {
             const set = new Set();
@@ -6358,7 +6421,7 @@ Give the fragment in "ev".`;
             const prompt = `${rp ? rp.head : `Student's Free Spanish Sentence: "${userEsText}"`}
 
             Analyze this sentence. Identify any grammar/word order issues (like placing 'no' after verbs, wrong gender-number agreements) and provide a perfect natural translation to Korean. For "correctedText": wrap ONLY the words you actually changed/added inside '<span class='text-red-600 font-extrabold underline'>...</span>' tags; already-correct words stay plain. BEFORE OUTPUT, walk the two sentences word by word: if a word appears in the student's sentence and in your correction in the SAME form, it was NOT changed — leave it plain. Marking an unchanged word is a mistake; the student reads the red as "this is what I got wrong". Write the tag with SINGLE quotes exactly as shown — a double quote inside a JSON string breaks the whole response, and the student then sees a sentence that stops mid-way. The reverse is just as bad: EVERY word you changed, added or re-formed must be wrapped — es→está, el pie→mis pies and an added "mucho" all get tags. Count the differences between the two sentences, count your tags, and make the two numbers match. When you EXTEND a sentence, tag only the words you actually added: for "Ayer vi una película." → "Ayer vi una película con mi amigo y cenamos juntos.", the tags go on "con mi amigo y cenamos juntos" alone — "vi una película" stayed exactly as the student wrote it and must stay plain. Split "changes" the same way, one row per piece that really differs; never write a row whose "from" repeats words that did not change. Then give "changes" one row per difference, in the same order — a change you made but never explained leaves the student guessing why their sentence was rewritten. For "originalMarked": output the student original sentence verbatim, wrapping ONLY the wrong words inside '<span class='line-through text-slate-400'>...</span>' tags; correct words stay plain.
-${noteListText}${aiIdiomJudgeStart(userEsText)}
+${noteListText}${aiIdiomJudgeStart(userEsText)}${aiVerbSlipText(userEsText)}
             ${buildLearnerProfileSummary()}`;
             
             const system = `You are an expert Spanish tutor evaluating a student named "냐냐".
