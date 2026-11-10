@@ -3523,11 +3523,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             - 여성명사인데 강세 있는 a-/ha-로 시작해서 단수에서 el을 쓰는 단어(agua, águila, alma, hambre, aula 등)는 usesElDespiteFeminine=true로 표시.
             - **의문사(qué, quién, dónde, cuándo, cómo, cuánto, por qué, cuál 등)와 의문사가 들어간 의문 구문은 품사를 무조건 pos="interrogative"(의문사)로 할 것.** 부사/대명사/구문으로 분류하지 말 것.
             - example은 실제로 쓰일 법한 자연스러운 스페인어 문장 1개, exampleMeaning은 그 정확한 한국어 번역.
-            - **meaning 의 뜻 하나하나에 쓰임 표시를 붙일 것 (동사일 때):**
-              · 그 뜻이 **역구조동사**(gustar 처럼 '간접목적대명사 + 동사 + 주어' 로 쓰는 뜻)면 그 뜻 바로 **앞**에 "(역)"
-              · 그 뜻이 **재귀형(-se)으로만** 쓰이면 그 뜻 바로 **앞**에 "(재)"
-              · 예: tocar → "만지다, 연주하다, (역)~가 당첨되다, (역)~가 할 차례다" / quedar → "남다, 만나기로 하다, (재)머무르다"
-              · 입력 단어가 이미 -se 로 끝나는 재귀동사면 (재)는 붙이지 말 것 (전부 재귀라 뜻이 없다). 그 밖의 뜻엔 아무것도 붙이지 말 것.
+            - **역구조 표시 (동사일 때):** 그 뜻이 **역구조동사**(gustar 처럼 '간접목적대명사 + 동사 + 주어' 로 쓰는 뜻)면 그 뜻 바로 **앞**에 "(역)". 그 밖의 뜻엔 붙이지 말 것.
+              · 예: tocar → "만지다, 연주하다, (역)~가 당첨되다, (역)~가 할 차례다"
+            - **재귀형(-se)으로만 쓰는 뜻은 meaning 에 넣지 말 것** — -se 동사는 학생이 따로 등록한다. 예: quedar → "남다, 만나기로 하다" ('머무르다' 는 quedarse 의 뜻이라 빼야 함). 입력이 -se 동사면 그 동사의 뜻을 그대로.
             - **지역 표시 (모든 품사):** 그 뜻이 **중남미에서만** 쓰이면 뜻 바로 앞에 "(남)", **스페인에서만** 쓰이면 "(스)".
               스페인·중남미 **양쪽에서 다 쓰는 뜻엔 절대 붙이지 말 것** — 확실할 때만. 대부분의 뜻은 표시가 없어야 한다.
               · 예: recién → "갓·막 ~한(+과거분사), (남)방금 ~했다, (남)~에야 비로소" / el zumo → "(스)주스" / el jugo → "(남)주스, 즙" / la casa → "집" (표시 없음)
@@ -3570,7 +3568,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const schema = {
                 type: "OBJECT",
                 properties: {
-                    meaning: { type: "STRING", description: "핵심 한글 뜻 (명사는 복수로 입력해도 기본 뜻으로 — libros 도 '책'이지 '책들' 이 아님). 동사면 역구조로 쓰는 뜻 앞에 (역), 재귀형으로만 쓰는 뜻 앞에 (재) — 예: 만지다, (역)~가 당첨되다. 중남미에서만 쓰는 뜻 앞에 (남), 스페인에서만 쓰는 뜻 앞에 (스) — 양쪽 다 쓰면 표시 없음. 구어 뜻 앞에 (구), 속어 뜻 앞에 (속)" },
+                    meaning: { type: "STRING", description: "핵심 한글 뜻 (명사는 복수로 입력해도 기본 뜻으로 — libros 도 '책'이지 '책들' 이 아님). 동사면 역구조로 쓰는 뜻 앞에 (역) — 예: 만지다, (역)~가 당첨되다. 재귀형(-se)으로만 쓰는 뜻은 넣지 않는다 (-se 동사는 따로 등록). 중남미에서만 쓰는 뜻 앞에 (남), 스페인에서만 쓰는 뜻 앞에 (스) — 양쪽 다 쓰면 표시 없음. 구어 뜻 앞에 (구), 속어 뜻 앞에 (속)" },
                     correctedSpelling: { type: "STRING", description: "입력된 스페인어 단어에 명백한 철자 오류가 있으면 올바른 철자를 여기에 (관사 없이 단어만). 오타가 없으면 빈 문자열. 예: 입력이 'hblar'면 'hablar', 입력이 'comer'면 빈 문자열" },
                     pos: { type: "STRING", enum: ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "pronoun", "phrase"] },
                     gender: { type: "STRING", enum: ["none", "masculine", "feminine"] },
@@ -3693,10 +3691,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
-                //   [냐냐 지적] -se 동사는 전부 재귀라 (재) 를 안 붙이기로 했는데 AI 가 붙여 온다 (quejarse → '(재)투덜대다', 2026-11-11).
-                //   지시문엔 이미 적혀 있다 — 코드로 뗀다.
-                if (result && typeof result.meaning === 'string' && /(ar|er|ir|ír)se$/i.test(rawWord.trim()))
-                    result.meaning = result.meaning.replace(/\(재\)/g, '');
+                //   [냐냐 결정] (재) 표시는 없앴다 (2026-11-11) — -se 동사는 따로 등록하고(71개), (재) 는 -se 동사에 잘못 붙은 4개뿐이었다
+                //   (quejarse → '(재)투덜대다'). 지시문에서 빼고, 그래도 붙여 오면 여기서 뗀다.
+                if (result && typeof result.meaning === 'string') result.meaning = result.meaning.replace(/\(재\)/g, '');
                 //   [냐냐 요청] 복수가 다른 뜻이면 메모에 한 줄 (2026-10-06). notes 에 쓰라고만 하면 AI 가 자주 빠뜨려서 칸을 따로 받는다.
                 //   AI 가 같은 말을 notes 에 제 말로 또 적어 와서(· 아내 외에 수갑이라는 뜻이 있음 · 항상 복수형으로 사용됨)
                 //   복수 이야기를 맡는 칸이 있을 땐 notes 의 복수 이야기 줄을 걷어낸다.
