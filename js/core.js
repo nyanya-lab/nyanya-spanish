@@ -8666,7 +8666,13 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             else collapseMobileMenu();
         }
 
+        //   [냐냐 요청] 폰에서 메뉴는 페이지 맨 위에 펼쳐져서, 탭을 고르려면 위로 끝까지 올라가야 한다.
+        //   그래서 탭을 바꿀 때 적는 자리가 늘 맨 위였다 (문법 노트 보다가 갔다 오면 맨 위, 2026-11-10).
+        //   메뉴를 펼치는 그 순간의 자리를 따로 적어 두고 changeTab 이 이걸 쓴다.
+        let menuOpenScroll = null;   // {tab, y}
+
         function collapseMobileMenu() {
+            menuOpenScroll = null;
             const menu = document.getElementById('sidebar-menu');
             const icon = document.getElementById('menu-toggle-icon');
             menu.classList.add('hidden', 'md:flex');
@@ -8677,6 +8683,8 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
         }
 
         function expandMobileMenu() {
+            //   펼치기 전에 적는다 — 메뉴가 위에 끼면 브라우저가 스크롤을 밀어 숫자가 바뀐다
+            if (activeTab) menuOpenScroll = { tab: activeTab, y: window.scrollY };
             const menu = document.getElementById('sidebar-menu');
             const icon = document.getElementById('menu-toggle-icon');
             menu.classList.remove('hidden');
@@ -13235,7 +13243,9 @@ ${sent.lines.length ? sent.lines.join('\n') : '(이 기간엔 첨삭 기록이 �
             if (tabId === 'list' && _viewsDirty.list) { _viewsDirty.list = false; if (typeof renderWordList === 'function') setTimeout(renderWordList, 0); }
             if (tabId === 'grammar') _viewsDirty.grammar = false;
             // 떠나기 전에 지금 보던 자리를 적어둔다 (깎이기 전에)
-            if (activeTab && activeTab !== tabId) tabScrollTop[activeTab] = window.scrollY;
+            //   폰 메뉴를 펼쳐서 온 거면 펼치던 때 자리를 쓴다 (지금은 메뉴 보려고 맨 위로 올라와 있다)
+            if (activeTab && menuOpenScroll && menuOpenScroll.tab === activeTab) tabScrollTop[activeTab] = menuOpenScroll.y;
+            else if (activeTab && activeTab !== tabId) tabScrollTop[activeTab] = window.scrollY;
             activeTab = tabId;
             document.querySelectorAll('main > section > div').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
