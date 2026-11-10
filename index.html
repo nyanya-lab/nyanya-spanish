@@ -66,6 +66,11 @@
         <button id="quick-word-fab" onclick="toggleQuickWord()" class="w-11 h-11 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg flex items-center justify-center transition-all active:scale-90" title="단어 찾기 · 등록 (어디서든)">
             <i id="quick-word-fab-icon" class="fa-solid fa-magnifying-glass"></i>
         </button>
+        <!-- [냐냐 요청] 등록은 돋보기 → '등록창 열기' 두 번이라 바로 여는 버튼 (2026-11-10) -->
+        <!--   폰은 화면이 좁아 버튼 셋이면 글자를 가려서 넓은 화면(md 이상)에서만 보인다 -->
+        <button id="quick-register-fab" onclick="openQuickWordRegister('')" class="hidden md:flex w-11 h-11 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg items-center justify-center transition-all active:scale-90" title="단어 등록">
+            <i class="fa-solid fa-plus"></i>
+        </button>
     </div>
 
     <!-- [냐냐 PATCH] 맨 위로 가기 버튼 -->
