@@ -176,17 +176,44 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
             });
         }
         //   먼저 온 멀쩡한 답 (JSON 으로 읽히는 것). 둘 다 실패하면 마지막 오류를 던진다.
+        //   [냐냐 지적] "아직 돌고 있어" — 103초 (2026-11-10). 그때 3.1 은 503(high demand)만 11초씩 끌다 내고
+        //   다시 시도를 거듭했고, 3.5 Lite 는 30초를 넘겨 끊겼다. 같은 때 3.5 Flash 는 2초.
+        //   WORD_SUGGEST_BACKUP_MS 안에 답이 없거나 둘 다 실패하면 3.5 Flash 도 같이 건다 (먼저 온 것).
+        //   3.5 Flash 는 첨삭 경주와 하루 한도를 같이 써서 늦을 때만 — 한도에 걸린 날은 첨삭처럼 건너뛴다.
+        const WORD_SUGGEST_BACKUP_MS = 12000;
+        const WORD_SUGGEST_BACKUP_MODEL = 'gemini-3.5-flash';
         function wordSuggestRace(prompt, system, schema) {
             const tries = [];
             if (!(typeof isGradeModelDown === 'function' && isGradeModelDown())) tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 30000));
             tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE));
             return new Promise((resolve, reject) => {
-                let left = tries.length, done = false, lastErr = null;
-                tries.forEach(p => p.then(t => {
-                    if (done) return;
-                    if (extractAndParseJson(t)) { done = true; resolve(t); }
-                    else if (--left <= 0) reject(lastErr || new Error('빈 답'));
-                }).catch(e => { lastErr = e; if (!done && --left <= 0) reject(e); }));
+                let left = 0, done = false, lastErr = null, backupOn = false, timer = null;
+                const finish = () => { done = true; clearTimeout(timer); };
+                const lose = (e) => {
+                    if (e) lastErr = e;
+                    if (done || --left > 0) return;
+                    if (!backupOn) startBackup();
+                    if (left <= 0) { finish(); reject(lastErr || new Error('빈 답')); }
+                };
+                const run = (p) => {
+                    left++;
+                    p.then(t => {
+                        if (done) return;
+                        if (extractAndParseJson(t)) { finish(); resolve(t); } else lose(null);
+                    }).catch(lose);
+                };
+                const startBackup = () => {
+                    if (backupOn || done) return;
+                    backupOn = true;
+                    const blocked = (typeof essayBlocks === 'function') && essayBlocks()[WORD_SUGGEST_BACKUP_MODEL] > Date.now();
+                    if (blocked) return;
+                    console.warn(`단어 추천: 답이 늦어 ${WORD_SUGGEST_BACKUP_MODEL} 도 같이 묻습니다`);
+                    //   503 이면 다시 시도한다 (30초 안에서) — 재보니 3.5 Flash 도 한 번 503 을 내고 바로 다음엔 3초에 답했다
+                    run(callGeminiRaw(prompt, system, schema, 'low', WORD_SUGGEST_BACKUP_MODEL, 30000)
+                        .catch(e => { if (e && e.status === 429 && typeof blockEssayModel === 'function') blockEssayModel(WORD_SUGGEST_BACKUP_MODEL, e); throw e; }));
+                };
+                tries.forEach(run);
+                timer = setTimeout(startBackup, WORD_SUGGEST_BACKUP_MS);
             });
         }
         //   [냐냐 지적] 따로 묻는 활용표에 시간 제한이 없어서, 3.5 가 늘어지면 본 답이 와도 그걸 끝없이 기다렸다 (2026-10-22, 1분).
