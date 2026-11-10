@@ -3693,6 +3693,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   [냐냐 요청] (역)·(재) 는 뜻 **앞** 에 (2026-09-29, 처음엔 뒤였다가 앞으로 통일).
                 //   AI 가 자리를 헷갈려 뒤에 붙여 오기도 해서 뜻마다 앞으로 옮기고 띄어쓰기도 붙인다.
                 if (result && typeof result.meaning === 'string') result.meaning = normalizeMeaningMarks(result.meaning);
+                //   [냐냐 지적] -se 동사는 전부 재귀라 (재) 를 안 붙이기로 했는데 AI 가 붙여 온다 (quejarse → '(재)투덜대다', 2026-11-11).
+                //   지시문엔 이미 적혀 있다 — 코드로 뗀다.
+                if (result && typeof result.meaning === 'string' && /(ar|er|ir|ír)se$/i.test(rawWord.trim()))
+                    result.meaning = result.meaning.replace(/\(재\)/g, '');
                 //   [냐냐 요청] 복수가 다른 뜻이면 메모에 한 줄 (2026-10-06). notes 에 쓰라고만 하면 AI 가 자주 빠뜨려서 칸을 따로 받는다.
                 //   AI 가 같은 말을 notes 에 제 말로 또 적어 와서(· 아내 외에 수갑이라는 뜻이 있음 · 항상 복수형으로 사용됨)
                 //   복수 이야기를 맡는 칸이 있을 땐 notes 의 복수 이야기 줄을 걷어낸다.
