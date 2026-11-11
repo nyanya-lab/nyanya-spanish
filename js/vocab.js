@@ -6960,17 +6960,19 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
 
             // [냐냐 요청] 바퀴별 카드 — 테스트(1·3): 가림(뜻만) / 익히기(2): 전체 정보 / 3바퀴 틀림: 정답 공개
             let cardHtml, inputLabel, placeholder;
+            //   단어 설명(배지·관용구·노트·예문) — 2바퀴 카드와 3·4바퀴 틀린 뒤 다시 쓰기 카드가 같이 쓴다
+            const showInfo = s.phase === 2 || !!s.retry;
+            const badges = (showInfo && typeof buildWordBadgesHtml === 'function')
+                ? buildWordBadgesHtml(w, { align: 'left', idiom: (w._isIdiomTask && w._idiomOf) ? { wordId: w._idiomOf.id, text: w.word } : null })
+                : '';
+            //   [냐냐 요청] 예문은 맨 밑으로 — 위쪽은 낱말·활용을 먼저 보는 자리로 둔다
+            const notes = (showInfo && typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { skipExample: true }) : '';
+            const exampleOf = (w._isConjTask && w._conjOf) ? w._conjOf : w;
+            const example = (showInfo && typeof buildExampleHtml === 'function') ? buildExampleHtml(exampleOf) : '';
+            //   [냐냐 요청] 활용표를 관용구·노트 위로 올린다 — 이 바퀴에서 외울 게 그 표라
+            //   아래에 두면 카드가 스크롤돼서 정작 안 보였다. 품사 칩만 낱말 옆에 남긴다.
+            const parts = [notes, example].filter(x => x && x.trim());
             if (s.phase === 2) {
-                const badges = (typeof buildWordBadgesHtml === 'function')
-                    ? buildWordBadgesHtml(w, { align: 'left', idiom: (w._isIdiomTask && w._idiomOf) ? { wordId: w._idiomOf.id, text: w.word } : null })
-                    : '';
-                //   [냐냐 요청] 예문은 맨 밑으로 — 위쪽은 낱말·활용을 먼저 보는 자리로 둔다
-                const notes = (typeof buildNotesHtml === 'function') ? buildNotesHtml(w, { skipExample: true }) : '';
-                const exampleOf = (w._isConjTask && w._conjOf) ? w._conjOf : w;
-                const example = (typeof buildExampleHtml === 'function') ? buildExampleHtml(exampleOf) : '';
-                //   [냐냐 요청] 활용표를 관용구·노트 위로 올린다 — 이 바퀴에서 외울 게 그 표라
-                //   아래에 두면 카드가 스크롤돼서 정작 안 보였다. 품사 칩만 낱말 옆에 남긴다.
-                const parts = [notes, example].filter(x => x && x.trim());
                 //   [냐냐 요청] 활용형 문제는 익히기 바퀴에서 원형으로 — 뜻도 시제 꼬리표를 뗀 것으로
                 const learnWord = writeRoundTarget(w, 2);
                 const slotCue = (w._isConjTask && w._conjSlot)
@@ -7023,8 +7025,16 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             } else {
                 // [냐냐 요청] 내가 쓴 오답을 같이 보여줘서 어디가 틀렸는지 바로 비교
                 const mine = (s.lastWrong || '').trim();
-                const ans = w.word;
-                const ansMean = w.meaning;
+                //   [냐냐 요청] 동사는 방금 쓴 답으로 무엇을 쓸지 정한다 (2026-11-11) — 꼴만 틀렸으면 그 꼴, 동사를 몰랐으면 원형
+                const ans = writeRetryTarget(s, w);
+                const toBase = ans !== w.word;
+                const ansMean = toBase ? ((w._conjOf && w._conjOf.meaning) || '') : w.meaning;
+                const times = writeLaterRetryTimes(s) === 1 ? '한 번' : '2번';
+                const conjCue = w._isConjTask
+                    ? (toBase
+                        ? `<p class="text-[11px] font-bold text-indigo-500 pt-1">원형부터 ${times} 써요 — 마지막 시험은 고른 시제에서 꼴을 새로 뽑아 물어요</p>`
+                        : `<p class="text-[11px] font-bold text-indigo-500 pt-1">동사(<b>${escapeHtml((w._conjOf && w._conjOf.word) || '')}</b>)는 알고 있어요 — 이 꼴을 ${times} 써요</p>`)
+                    : '';
                 // [냐냐 요청] 틀린 자리만 빨갛게 — 어디가 다른지 눈으로 바로 보이게
                 const mineHtml = mine
                     ? `<p class="text-xs font-bold text-slate-600 break-words">${(typeof charDiffOps === 'function') ? renderCharDiff(charDiffOps(mine, ans), 'user') : escapeHtml(mine)}</p>`
@@ -7048,7 +7058,15 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                             <p class="text-[10px] font-bold text-slate-400">내가 쓴 답 <span class="font-normal">(빨강 = 잘못 쓴 글자 · 위 초록 밑줄 = 빠뜨렸거나 다르게 쓴 글자)</span></p>
                             ${mineHtml}
                         </div>
+                        ${conjCue}
                         <p class="text-[10px] font-bold text-rose-400 pt-1">${s.phase === 3 ? '아쉬워요! 정답을 보고 2번 쓰고, 마지막 시험에서 다시 만나요' : '아쉬워요! 정답을 보고 한 번 더 쓰면 넘어가요'}</p>
+                    </div>
+                    ${/* [냐냐 요청] 틀린 뒤에도 2바퀴처럼 단어 설명을 같이 (2026-11-11) */''}
+                    <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-1 max-h-[34vh] overflow-y-auto no-scrollbar">
+                        ${badges && badges.trim() ? badges : ''}
+                        <div id="write-conj-box" class="hidden"></div>
+                        ${parts.length ? '<div class="border-t border-slate-100 my-3"></div>' + parts.join('<div class="border-t border-slate-100 my-3"></div>') : ''}
+                        <div id="write-conj-rest" class="hidden pt-3"></div>
                     </div>`;
                 inputLabel = s.phase === 3 ? '정답을 보고 2번 (엔터)' : '정답을 보고 한 번 더 (엔터)';
                 placeholder = ans;
@@ -7122,7 +7140,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             //   표만으로 카드가 가득 차서 정작 낱말이 안 보였다. 궁금한 시제만 펴서 본다.
             //   [냐냐 지적] 틀린 시제는 맨 위에 펴 둔다 — 2바퀴는 퀴즈가 아니라 베껴 쓰는
             //   바퀴라, 불규칙 꼴이 화면에 있어야 외워진다. 이름만 적힌 배지로는 안 보인다.
-            if (s.phase === 2 && typeof renderQuizConjugation === 'function') {
+            if ((s.phase === 2 || s.retry) && typeof renderQuizConjugation === 'function') {
                 //   [냐냐 요청] 틀린 시제뿐 아니라 그 인칭 칸까지 짚는다 (2026-10-16)
                 const askedTense = (w._isConjTask && w._conjSlot) ? { tenseKey: w._conjSlot.tense, person: w._conjSlot.person } : null;
                 renderQuizConjugation(w, askedTense, 'write-conj-box',
@@ -7373,10 +7391,13 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             const w = s.pool[s.index];
             //   2바퀴에서 활용형 문제는 원형을 쓴다 (writeRoundTarget)
             //   [냐냐 요청] 2바퀴에서 물어본 그 꼴(틀린 꼴)로 써도 받아 준다 (2026-10-16) — 원형이든 그 꼴이든
-            //   [냐냐 요청] 3·4바퀴에서 틀린 뒤 다시 쓰기도 익히는 자리라 원형이든 그 꼴이든 받는다 (2026-11-08)
-            const isMatch = writeAnswerMatches(el.value, writeRoundTarget(w, s.phase))
-                || ((s.phase === 2 || s.retry) && w && w._isConjTask && (writeAnswerMatches(el.value, w.word)
-                    || (w._conjOf && w._conjOf.word && writeAnswerMatches(el.value, w._conjOf.word))));
+            //   [냐냐 요청] 3·4바퀴에서 틀린 뒤 다시 쓰기는 정한 꼴 하나만 받는다 (2026-11-11, 11/8 엔 아무거나) —
+            //   꼴만 틀렸으면 그 꼴, 동사를 몰랐으면 원형 (writeRetryTarget). 아무거나 받으면 꼴을 익히는 자리가 안 된다.
+            const isMatch = s.retry
+                ? writeAnswerMatches(el.value, writeRetryTarget(s, w))
+                : (writeAnswerMatches(el.value, writeRoundTarget(w, s.phase))
+                    || (s.phase === 2 && w && w._isConjTask && (writeAnswerMatches(el.value, w.word)
+                        || (w._conjOf && w._conjOf.word && writeAnswerMatches(el.value, w._conjOf.word)))));
 
             // ── 2바퀴: 보면서 2번 쓰기 (익히기 — 점수 없음) ──
             if (s.phase === 2) {
@@ -7435,6 +7456,22 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
         //   틀린 뒤 정답 보고 쓰는 횟수 — 3바퀴(중간 시험)는 2번(익히기와 같게), 4바퀴(마지막)는 1번
         function writeLaterRetryTimes(s) {
             return (s && s.phase === 3) ? WRITE_PRACTICE_TIMES : 1;
+        }
+
+        //   [냐냐 요청] 3·4바퀴에서 틀린 동사는 방금 쓴 답으로 다시 쓸 꼴을 정한다 (2026-11-11).
+        //   같은 동사의 다른 꼴(원형 포함)이나 그 꼴의 철자 실수면 = 동사는 안다 → 그 꼴. 다른 낱말·빈칸이면 → 원형.
+        //   (1바퀴의 _knewVerb 와 같은 결 — 거긴 오타 기회가 있어 오타로 보고, 여긴 철자 실수도 '꼴을 틀린 것' 으로 본다)
+        function writeRetryKnewVerb(w, mine) {
+            if (!w || !w._isConjTask || !w._conjOf) return true;
+            const m = String(mine || '').trim();
+            if (!m) return false;
+            const hit = (typeof findVocabWordByForm === 'function') ? findVocabWordByForm(m) : null;
+            if (hit && hit.id === w._conjOf.id) return true;
+            return writeLooksLikeTypo(m, w.word) || writeLooksLikeTypo(m, w._conjOf.word);
+        }
+        function writeRetryTarget(s, w) {
+            if (w && w._isConjTask && w._conjOf && w._conjOf.word && s && s.retryBase) return w._conjOf.word;
+            return w ? w.word : '';
         }
 
         // [냐냐 요청] 3·4바퀴는 오타를 안 봐주고 유의어만 한 번 되묻는다 (2026-11-08) — 비슷한 뜻의 낱말이 둘일 수 있다.
@@ -7550,11 +7587,13 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 s.finalPool.push(w);
                 s.retry = true; s.done = 0;
                 s.lastWrong = userAnswer;
-                if (typeof speakSpanishVoice === 'function') setTimeout(() => speakSpanishVoice(w.word), 150);
+                s.retryBase = !writeRetryKnewVerb(w, userAnswer);
+                if (typeof speakSpanishVoice === 'function') setTimeout(() => speakSpanishVoice(writeRetryTarget(s, w)), 150);
             } else {
                 s.wrongCount++;
                 s.retry = true; s.done = 0;
                 s.lastWrong = userAnswer;   // [냐냐 요청] 다시 쓰기 화면에 내가 쓴 오답 보여주기
+                s.retryBase = !writeRetryKnewVerb(w, userAnswer);
                 const shift = withTaskGradeShift(w, () => {
                     if (typeof addWordScore !== 'function') return;
                     const idiomOf = idiomTask ? { wordId: (w._idiomOf || {}).id, text: w.word } : null;
@@ -7572,7 +7611,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   [냐냐 지적] 3바퀴에서 틀렸을 때는 안 읽어줬다 (2026-09-21).
                 //   1바퀴 오답과 같은 자리다 — 화면에 정답이 이미 떠 있으니 새어나갈 게 없다.
                 if (typeof speakSpanishVoice === 'function') {
-                    setTimeout(() => speakSpanishVoice(w.word), 150);
+                    setTimeout(() => speakSpanishVoice(writeRetryTarget(s, w)), 150);
                 }
             }
             writePracticeSave();
