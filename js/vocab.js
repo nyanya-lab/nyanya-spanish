@@ -3533,6 +3533,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
               "(구어)"·"(속어)"·"구어체" 같은 꼬리 글은 쓰지 말고 이 표시로만. 글에도 쓰는 보통 말엔 붙이지 말 것.
               · 예: la pasta → "파스타, 면류, (구)돈" / la caña → "지팡이, 사탕수수, (구)맥주 한 잔"
             - correctedSpelling: 입력 단어에 명백한 철자 오류가 있으면 올바른 철자만 여기에, 오타가 없으면 빈 문자열로 둘 것.
+            - verbInfinitive: 동사인데 입력이 원형이 아니라 활용형이거나 대명사가 붙은 꼴이면(hablo, comí, mudarnos, dámelo) 사전 표제형 원형을 여기에. 재귀로 쓰인 꼴(mudarnos = 우리가 이사하다, me levanto)이면 -se 원형(mudarse, levantarse). 이미 원형이면(hablar, levantarse) 빈 문자열. 이때 meaning·example·활용표는 전부 그 원형 기준으로 채울 것.
             - adjMasculineBase: 형용사인데 입력이 여성형/복수형이면 사전 표제형인 남성 단수형을 여기에(관사 없이). 이미 남성 단수형이거나 성별로 안 변하는 형용사(feliz, azul 등)면 빈 문자열. 오타 교정(correctedSpelling)과는 별개로, 형태만 여성→남성으로 바꾸는 용도임.
             - idioms에는 (1) 진짜 흔한 관용구/숙어뿐 아니라 (2) 이 단어의 "핵심 문형/구문 패턴"도 넣을 것.
               구문 패턴 예시:
@@ -3580,6 +3581,9 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                     usesElDespiteFeminine: { type: "BOOLEAN", description: "여성명사이지만 강세 있는 a-/ha-로 시작해서 단수에서 정관사 el을 쓰는 경우 true (예: agua, águila, alma, hambre, aula → el agua, el águila). 그 외에는 false. 남성명사이거나 복수형이면 false" },
                     adjAgreement: { type: "STRING", enum: ["full", "no-gender", "no-number", "invariable"], description: "형용사일 때만 사용. full=성·수 둘 다 변화(bueno/buena/buenos/buenas). no-gender=성별로는 안 변하고 수(단/복수)만 변화 — 보통 -e, -ista, -l, -z 로 끝남(tolerante→tolerantes, feliz→felices, fácil→fáciles, optimista→optimistas). no-number=수로는 안 변하고 성만 변화(매우 드묾). invariable=완전 불변. ⚠️주의: 남성형/여성형이 똑같으면(성별로 안 변하면) no-gender임. tolerante는 남녀 동일하고 tolerantes로 복수화되므로 반드시 no-gender. 형용사가 아니면 'full'" },
                     adjMasculineBase: { type: "STRING", description: "형용사이고 입력이 여성형(또는 복수형)이면, 사전 표제형인 '남성 단수형'을 여기에 (관사 없이). 예: 입력이 'buena'/'buenas'/'buenos'면 'bueno', 'roja'면 'rojo'. 이미 남성 단수형이거나(bueno) 성별로 안 변하는 형용사(feliz, azul, tolerante)이거나 형용사가 아니면 빈 문자열." },
+                    //   [냐냐 지적] 문법 노트에서 mudarnos 를 눌러 등록하니 원형으로 안 바뀌었다 (2026-11-23).
+                    //   형용사·명사는 표제형을 묻는데 동사만 없었다. 필수로 둔다 — 안 그러면 AI 가 칸을 빼먹는다 (correctedSpelling 과 같은 까닭).
+                    verbInfinitive: { type: "STRING", description: "동사일 때만. 입력이 활용형이거나 대명사가 붙은 꼴이면 사전 표제형 원형 (hablo→hablar, comí→comer, dámelo→dar). 재귀로 쓰인 꼴이면 -se 원형 (mudarnos→mudarse, me levanto→levantarse). 이미 원형(hablar, levantarse)이거나 동사가 아니면 빈 문자열" },
                     verbClass: { type: "STRING", enum: ["regular", "irregular"] },
                     irregularType: { type: "STRING", enum: ["1인칭", "e ➡️ ie", "o ➡️ ue", "e ➡️ i", "u ➡️ ue", "악센트 변형", "완전 불규칙", "1인칭 및 e ➡️ ie", "1인칭 및 e ➡️ i", "1인칭 및 o ➡️ ue", "기타 변형"] },
                     conjugations: {
@@ -3672,7 +3676,7 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   재보니 AI 가 다섯 번에 두 번은 correctedSpelling 칸을 아예 빼고 답했다 —
                 //   필수가 아니라서 빠지면 '오타 없음' 으로 지나갔다. 필수로 두면 오타가 없을 땐 빈 문자열이 온다.
                 //   nounUsualForm · pluralMeaning 도 같은 까닭으로 필수 (2026-10-06) — 빼두니 esposa 의 '수갑' 을 세 번 다 빠뜨렸다.
-                required: ["meaning", "correctedSpelling", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes", "nounUsualForm", "pluralMeaning"]
+                required: ["meaning", "correctedSpelling", "verbInfinitive", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes", "nounUsualForm", "pluralMeaning"]
             };
 
             try {
@@ -3712,6 +3716,15 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 const corrected = (result.correctedSpelling || '').trim();
                 const bareInput = rawWord.replace(/^(el|la|los|las|un|una|unos|unas)\s+/i, '').trim().toLowerCase();
                 let isRealCorrection = corrected && corrected.toLowerCase() !== bareInput && corrected.toLowerCase() !== rawWord.toLowerCase();
+
+                //   [냐냐 지적] 동사 활용형(mudarnos) → 원형(mudarse) 건의 (2026-11-23). 형용사 남성형 건의와 같은 모양.
+                //   AI 가 원형을 '오타 교정' 칸에 같이 넣어 오기도 하니, 그 둘이 같으면 오타가 아니라 이쪽으로 돌린다.
+                //   바꾸면 원형으로 **다시 묻는다** — 활용형으로 물은 답은 표가 그 꼴 기준이라 (재귀 대명사 me·te 가 빠지기도 한다)
+                //   믿을 수가 없고, 원형이면 시제별로 따로 묻는 활용표(startFocusedConjAsks)도 돈다.
+                const verbInf = String((result.pos === 'verb' && result.verbInfinitive) || '').trim().toLowerCase();
+                const isConjugatedVerb = !!verbInf && /^[a-záéíóúüñ]+(ar|er|ir|ír)(se)?$/.test(verbInf)
+                    && stripAccents(verbInf) !== stripAccents(bareInput);
+                if (isConjugatedVerb && isRealCorrection && stripAccents(corrected.toLowerCase()) === stripAccents(verbInf)) isRealCorrection = false;
 
                 // [냐냐 PATCH] 형용사 여성형/복수형 → 남성 단수 기본형 건의 (오타와 별개)
                 const mascBase = (result.adjMasculineBase || '').trim();
@@ -3765,6 +3778,27 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                                 applyAutofillResult(result, force);
                                 saveAiWordCache(rawWord, result);
                                 showToast("입력한 철자 그대로 정보를 적용했어요", "info");
+                            }
+                        }
+                    );
+                } else if (isConjugatedVerb) {
+                    showConfirm(
+                        `동사 원형 "${verbInf}"(으)로 바꿀까요?`,
+                        `동사는 원형으로 등록해요. 입력하신 "${rawWord}"는 "${verbInf}"의 활용형 같아서, 원형으로 바꿔 다시 분석할지 여쭤봐요. (그대로를 누르면 입력한 형태로 둡니다)`,
+                        () => {
+                            if (wordFormGone(seq)) return;
+                            document.getElementById('input-word').value = verbInf;
+                            if (typeof handleWordInput === 'function') handleWordInput(verbInf);
+                            triggerAiAutofill(force);
+                        },
+                        {
+                            okLabel: '원형으로',
+                            cancelLabel: '그대로',
+                            okStyle: 'primary',
+                            onCancel: () => {
+                                applyAutofillResult(result, force);
+                                saveAiWordCache(rawWord, result);
+                                showToast("입력하신 형태 그대로 적용했어요", "info");
                             }
                         }
                     );
