@@ -3723,7 +3723,10 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   바꾸면 원형으로 **다시 묻는다** — 활용형으로 물은 답은 표가 그 꼴 기준이라 (재귀 대명사 me·te 가 빠지기도 한다)
                 //   믿을 수가 없고, 원형이면 시제별로 따로 묻는 활용표(startFocusedConjAsks)도 돈다.
                 const verbInf = String((result.pos === 'verb' && result.verbInfinitive) || '').trim().toLowerCase();
+                //   [냐냐 지적] ocuparse 를 넣었는데 '원형이 아닌 것 같다' 고 떴다 (2026-11-24) — AI 가 se 를 뗀 ocupar 를 원형이라 했다.
+                //   입력이 이미 원형 꼴(-ar/-er/-ir, -se 포함)이면 묻지 않는다. mudarnos·dámelo 같은 꼴만 여기 걸린다.
                 const isConjugatedVerb = !!verbInf && /^[a-záéíóúüñ]+(ar|er|ir|ír)(se)?$/.test(verbInf)
+                    && !/^[a-záéíóúüñ]+(ar|er|ir|ír)(se)?$/i.test(bareInput)
                     && stripAccents(verbInf) !== stripAccents(bareInput);
                 if (isConjugatedVerb && isRealCorrection && stripAccents(corrected.toLowerCase()) === stripAccents(verbInf)) isRealCorrection = false;
 
