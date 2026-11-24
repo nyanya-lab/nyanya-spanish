@@ -2194,7 +2194,7 @@
             if (opts && opts.silent) return;
             //   숫자를 바꾸면 '몇 번' 도 그 자리에서 다시 잡아준다 (창을 닫았다 열 필요 없이)
             const due = getTodayReviewTasks();
-            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / todayReviewBatch)));
+            todayReviewParts = reviewPartsFor(due.length);
             renderReviewSplitModal();
             if (typeof saveToStorage === 'function') saveToStorage();
         }
@@ -2220,6 +2220,10 @@
         // 고른 나눔을 회차 사이에 기억해 둔다. '다음 N개 이어서'가 이 계획을 따라간다.
         let todayReviewPlan = null;   // { counts: [21,21,21,20], index: 0 }
         let todayReviewParts = 1;     // 팝업에서 고르는 중인 횟수
+        //   [냐냐 지적] "450개인데 5번 안에 못 돌려" (2026-11-24) — 횟수가 5번에서 막혀 한 번에 100개씩이 됐다.
+        //   이제 상한은 '한 번에 1개' 가 될 때까지. 처음 잡히는 횟수는 톱니바퀴 숫자(한 번에 몇 개)로 나눈 값 그대로.
+        function reviewPartsMax() { return Math.max(1, getTodayReviewTasks().length); }
+        function reviewPartsFor(n) { return Math.max(1, Math.ceil(Math.max(1, n) / todayReviewBatch)); }
 
         // ============================================================
         // [냐냐 요청] 오늘의 복습은 단어와 관용구를 한 묶음으로 낸다 (2026-09-02).
@@ -2245,7 +2249,7 @@
             todayReviewPick = Object.assign({ words: true, idioms: true }, todayReviewPick, { [kind]: !!on });
             if (typeof s3 === 'function') s3('misc', 'todayReviewPick');   // [v3] 10/26 — 새 저장소에 안 실리던 설정
             const due = getTodayReviewTasks();
-            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(Math.max(1, due.length) / todayReviewBatch)));
+            todayReviewParts = reviewPartsFor(due.length);
             renderReviewSplitModal();
             if (typeof saveToStorage === 'function') saveToStorage();
         }
@@ -2279,13 +2283,13 @@
             todayReviewPlan = null;
             // [냐냐 요청] 적어도 창은 띄운다 (2026-09-08). 예전엔 스무 개 이하면 건너뛰었는데,
             //   이 창에 시제 고르는 자리가 생겨서 건너뛰면 그걸 만질 데가 없어진다.
-            todayReviewParts = Math.min(5, Math.max(1, Math.ceil(due.length / todayReviewBatch)));
+            todayReviewParts = reviewPartsFor(due.length);
             renderReviewSplitModal();
             document.getElementById('review-split-modal').classList.remove('hidden');
         }
 
         function changeReviewSplit(delta) {
-            todayReviewParts = Math.min(5, Math.max(1, todayReviewParts + delta));
+            todayReviewParts = Math.min(reviewPartsMax(), Math.max(1, todayReviewParts + delta));
             renderReviewSplitModal();
         }
 
@@ -2327,7 +2331,7 @@
             const minus = document.getElementById('review-split-minus');
             const plus = document.getElementById('review-split-plus');
             if (minus) minus.disabled = todayReviewParts <= 1;
-            if (plus) plus.disabled = todayReviewParts >= 5;
+            if (plus) plus.disabled = todayReviewParts >= reviewPartsMax();
             // [냐냐 요청] 시작하기 전에 여기서 시제를 고칠 수 있다 (쓰기 연습 탭과 같은 값)
             if (typeof renderWriteTenses === 'function') renderWriteTenses();
         }
