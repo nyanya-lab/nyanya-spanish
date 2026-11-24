@@ -183,9 +183,13 @@ Also classify the irregularity as EXACTLY one of: ${irregularTypesFor(tense).map
         const WORD_SUGGEST_BACKUP_MS = 12000;
         const WORD_SUGGEST_BACKUP_MODEL = 'gemini-3.5-flash';
         function wordSuggestRace(prompt, system, schema) {
-            const tries = [];
-            if (!(typeof isGradeModelDown === 'function' && isGradeModelDown())) tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 30000));
-            tries.push(callGemini(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE));
+            //   [냐냐 지적] "130초 돌파" (2026-11-24) — 3.5 Lite '10분 건너뛰기' 가 켜져 있으면 3.1 하나만 물었고, 그 3.1 엔 시간 제한이 없었다.
+            //   3.1 이 늘어지고 받침(3.5 Flash)마저 하루 한도(429)면 끝없이 기다렸다. 경주라서 둘 다 물어도 기다림은 안 는다 —
+            //   건너뛰기 표시는 보지 않고 둘 다 30초 제한을 건다. 둘 다 못 받으면 오프라인 추측으로 넘어간다.
+            const tries = [
+                callGeminiRaw(prompt, system, schema, 'minimal', GEMINI_MODEL_GRADE, 30000, true),
+                callGeminiRaw(prompt, system, schema, 'minimal', GEMINI_MODEL_FLASH_LITE, 30000)
+            ];
             return new Promise((resolve, reject) => {
                 let left = 0, done = false, lastErr = null, backupOn = false, timer = null;
                 const finish = () => { done = true; clearTimeout(timer); };
