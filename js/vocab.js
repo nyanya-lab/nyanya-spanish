@@ -3676,7 +3676,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
                 //   재보니 AI 가 다섯 번에 두 번은 correctedSpelling 칸을 아예 빼고 답했다 —
                 //   필수가 아니라서 빠지면 '오타 없음' 으로 지나갔다. 필수로 두면 오타가 없을 땐 빈 문자열이 온다.
                 //   nounUsualForm · pluralMeaning 도 같은 까닭으로 필수 (2026-10-06) — 빼두니 esposa 의 '수갑' 을 세 번 다 빠뜨렸다.
-                required: ["meaning", "correctedSpelling", "verbInfinitive", "pos", "gender", "verbClass", "example", "exampleMeaning", "notes", "nounUsualForm", "pluralMeaning"]
+                //   [냐냐 지적] astronauta 에 el/la 가 안 붙었다 (2026-11-24) — 재보니 네 번에 한 번 isCommonGender 칸을 빼고 답했다. 그래서 필수.
+                required: ["meaning", "correctedSpelling", "verbInfinitive", "pos", "gender", "isCommonGender", "verbClass", "example", "exampleMeaning", "notes", "nounUsualForm", "pluralMeaning"]
             };
 
             try {
@@ -3965,6 +3966,8 @@ difference 는 유의어일 때만, 반드시 "${word.replace(/^(el|la|los|las)\
             togglePosFields();
 
             if (result.pos === 'noun') {
+                //   그래도 칸이 빠진 채 성별 'none' 이면 남녀 공통으로 친다 — 성별 없는 명사는 그것뿐이다
+                if (typeof result.isCommonGender !== 'boolean' && (!result.gender || result.gender === 'none')) result.isCommonGender = true;
                 const genderInput = document.getElementById('input-gender');
                 // 남녀 공통 명사(estudiante 등)는 성별 없음으로 저장
                 const effectiveGender = result.isCommonGender ? 'none' : (result.gender || 'none');
